@@ -16,7 +16,6 @@ import {
 	runVcsDiff,
 	stageFile,
 	startAnnotateServer,
-	startPlanReviewServer,
 	startReviewServer,
 	type DiffType,
 	type VcsSelection,
@@ -41,23 +40,11 @@ import {
 export { getLastAssistantMessageText } from "./assistant-message.js";
 
 export type AnnotateMode = "annotate" | "annotate-folder" | "annotate-last";
-export interface PlanReviewDecision {
-	approved: boolean;
-	feedback?: string;
-	savedPath?: string;
-	agentSwitch?: string;
-	permissionMode?: string;
-}
 
 export interface BrowserDecisionSession<T> {
 	url: string;
 	waitForDecision: () => Promise<T>;
 	stop: () => void;
-}
-
-export interface PlanReviewBrowserSession extends BrowserDecisionSession<PlanReviewDecision> {
-	reviewId: string;
-	onDecision: (listener: (result: PlanReviewDecision) => void | Promise<void>) => () => void;
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -83,8 +70,6 @@ function delay(ms: number): Promise<void> {
 export function hasAnnotationBrowserHtml(): boolean {
 	return Boolean(annotationHtmlContent);
 }
-
-export const hasPlanBrowserHtml = hasAnnotationBrowserHtml;
 
 export function hasReviewBrowserHtml(): boolean {
 	return Boolean(reviewHtmlContent);
@@ -116,28 +101,6 @@ async function buildLocalWorkspaceReview(
 		stageFile,
 		unstageFile,
 	}, root, options);
-}
-
-async function openBrowserAndWait<T>(
-	server: { url: string; stop: () => void },
-	ctx: ExtensionContext,
-	waitForResult: () => Promise<T>,
-): Promise<T> {
-	await openBrowserForServer(server.url, ctx);
-	return waitForDecisionWithCleanup(server, waitForResult);
-}
-
-async function waitForDecisionWithCleanup<T>(
-	server: { url: string; stop: () => void },
-	waitForResult: () => Promise<T>,
-): Promise<T> {
-	try {
-		const result = await waitForResult();
-		await delay(1500);
-		return result;
-	} finally {
-		server.stop();
-	}
 }
 
 function startBrowserDecisionSession<T>(
@@ -180,43 +143,6 @@ function startBrowserDecisionSession<T>(
 		},
 		stop,
 	};
-}
-
-export async function startPlanReviewBrowserSession(
-	ctx: ExtensionContext,
-	planContent: string,
-): Promise<PlanReviewBrowserSession> {
-	if (!ctx.hasUI || !annotationHtmlContent) {
-		throw new Error("Plannotator browser review is unavailable in this session.");
-	}
-
-	const server = await startPlanReviewServer({
-		plan: planContent,
-		htmlContent: annotationHtmlContent,
-		origin: "pi",
-		sharingEnabled: resolveSharingEnabled(loadConfig()),
-		shareBaseUrl: process.env.PLANNOTATOR_SHARE_URL || undefined,
-		pasteApiUrl: process.env.PLANNOTATOR_PASTE_URL || undefined,
-	});
-
-	const session = startBrowserDecisionSession(server, ctx, server.waitForDecision);
-	server.onDecision(() => {
-		setTimeout(() => session.stop(), 1500);
-	});
-
-	return {
-		...session,
-		reviewId: server.reviewId,
-		onDecision: server.onDecision,
-	};
-}
-
-export async function openPlanReviewBrowser(
-	ctx: ExtensionContext,
-	planContent: string,
-): Promise<PlanReviewDecision> {
-	const session = await startPlanReviewBrowserSession(ctx, planContent);
-	return session.waitForDecision();
 }
 
 export function shouldUseLocalPrCheckout(options: { useLocal?: boolean }): boolean {
@@ -597,31 +523,4 @@ export async function startLastMessageAnnotationSession(
 		undefined,
 		recentMessages,
 	);
-}
-
-export async function openArchiveBrowserAction(
-	ctx: ExtensionContext,
-	customPlanPath?: string,
-): Promise<{ opened: boolean }> {
-	if (!ctx.hasUI || !annotationHtmlContent) {
-		throw new Error("Plannotator archive browser is unavailable in this session.");
-	}
-
-	const server = await startPlanReviewServer({
-		plan: "",
-		htmlContent: annotationHtmlContent,
-		origin: "pi",
-		mode: "archive",
-		customPlanPath,
-		sharingEnabled: resolveSharingEnabled(loadConfig()),
-		shareBaseUrl: process.env.PLANNOTATOR_SHARE_URL || undefined,
-		pasteApiUrl: process.env.PLANNOTATOR_PASTE_URL || undefined,
-	});
-
-	return openBrowserAndWait(server, ctx, async () => {
-		if (server.waitForDone) {
-			await server.waitForDone();
-		}
-		return { opened: true };
-	});
 }
