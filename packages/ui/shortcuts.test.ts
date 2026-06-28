@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { annotateSettingsShortcutRegistry, planEditorShortcuts, planReviewSettingsShortcutRegistry } from '../editor/shortcuts';
+import { annotateSettingsShortcutRegistry, annotationEditorShortcuts } from '../editor/shortcuts';
 import { reviewSettingsShortcutRegistry } from '../review-editor/shortcuts';
 import {
   createShortcutRegistry,
@@ -66,17 +66,9 @@ describe('shortcuts', () => {
     expect(() => createShortcutRegistry([duplicateScope, duplicateScope])).toThrow();
   });
 
-  it('lists plan review, annotate, and review sections from assembled registries', () => {
-    const planReviewSections = listRegistryShortcutSections(planReviewSettingsShortcutRegistry);
+  it('lists annotate and review sections from assembled registries', () => {
     const annotateSections = listRegistryShortcutSections(annotateSettingsShortcutRegistry);
     const reviewSections = listRegistryShortcutSections(reviewSettingsShortcutRegistry);
-
-    expect(planReviewSections.map(section => section.title)).toEqual([
-      'Actions',
-      'Input Method',
-      'Annotations',
-      'Image Annotator',
-    ]);
 
     expect(annotateSections.map(section => section.title)).toEqual([
       'Actions',
@@ -85,10 +77,8 @@ describe('shortcuts', () => {
       'Image Annotator',
     ]);
 
-    expect(getShortcut(planReviewSettingsShortcutRegistry, 'plan-review-editor-settings', 'submitPlan')?.description).toBe('Approve / Send feedback');
-    expect(getShortcut(planReviewSettingsShortcutRegistry, 'plan-review-editor-settings', 'submitAnnotations')).toBeUndefined();
-    expect(getShortcut(annotateSettingsShortcutRegistry, 'annotate-editor-settings', 'submitAnnotations')?.description).toBe('Send annotations');
-    expect(getShortcut(annotateSettingsShortcutRegistry, 'annotate-editor-settings', 'submitPlan')).toBeUndefined();
+    expect(getShortcut(annotateSettingsShortcutRegistry, 'annotation-editor-settings', 'submitAnnotations')?.description).toBe('Send annotations');
+    expect(getShortcut(annotateSettingsShortcutRegistry, 'annotation-editor-settings', 'submitPlan')).toBeUndefined();
 
     expect(reviewSections.map(section => section.title)).toEqual([
       'Actions',
@@ -101,7 +91,6 @@ describe('shortcuts', () => {
       'Suggestion Editor',
       'AI Assistant',
       'PR Comments',
-      'Tour',
     ]);
   });
 
@@ -125,16 +114,16 @@ describe('shortcuts', () => {
     const calls: string[] = [];
     const event = { key: 'Enter', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
 
-    const handled = dispatchShortcutEvent(planReviewSettingsShortcutRegistry[0], {
-      submitPlan: () => calls.push('submitPlan'),
+    const handled = dispatchShortcutEvent(annotateSettingsShortcutRegistry[0], {
+      submitAnnotations: () => calls.push('submitAnnotations'),
       quickSave: () => calls.push('quickSave'),
     }, event);
 
     expect(handled).toBe(true);
-    expect(calls).toEqual(['submitPlan']);
+    expect(calls).toEqual(['submitAnnotations']);
   });
 
-  it('can dispatch annotate submit after plan submit declines the same binding', () => {
+  it('can dispatch guarded annotate submit', () => {
     const calls: string[] = [];
     const event = {
       key: 'Enter',
@@ -145,11 +134,7 @@ describe('shortcuts', () => {
       preventDefault: () => calls.push('preventDefault'),
     } as unknown as KeyboardEvent;
 
-    const handled = dispatchShortcutEvent(planEditorShortcuts, {
-      submitPlan: {
-        when: () => false,
-        handle: () => calls.push('submitPlan'),
-      },
+    const handled = dispatchShortcutEvent(annotationEditorShortcuts, {
       submitAnnotations: {
         when: () => true,
         handle: () => {

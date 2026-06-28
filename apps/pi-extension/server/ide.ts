@@ -1,5 +1,5 @@
 /**
- * IDE integration — open plan diffs in VS Code.
+ * IDE integration — open file diffs in VS Code.
  * Node.js equivalent of packages/server/ide.ts.
  */
 

@@ -18,9 +18,9 @@ import { getPlatformLabel, getMRLabel, getMRNumberLabel, getDisplayRepo } from '
 import type { SemanticDiffAdvert } from '@plannotator/shared/semantic-diff-types';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
 import { loadDiffFont } from '@plannotator/ui/utils/diffFonts';
-import { getAgentSwitchSettings, getEffectiveAgentName } from '@plannotator/ui/utils/agentSwitch';
 import {
   getAIProviderSettings,
+  isPiProvider,
   resolveAIModelForProvider,
   resolveAIProviderSelection,
   saveAIProviderSelection,
@@ -44,7 +44,6 @@ import { extractLinesFromPatch } from './utils/patchParser';
 import { isTypingTarget, useReviewSearch, type ReviewSearchMatch } from './hooks/useReviewSearch';
 import { useEditorAnnotations } from '@plannotator/ui/hooks/useEditorAnnotations';
 import { useExternalAnnotations } from '@plannotator/ui/hooks/useExternalAnnotations';
-import { useAgentJobs } from '@plannotator/ui/hooks/useAgentJobs';
 import { exportEditorAnnotations } from '@plannotator/ui/utils/parser';
 import { ResizeHandle } from '@plannotator/ui/components/ResizeHandle';
 import { FolderTree } from 'lucide-react';
@@ -53,7 +52,6 @@ import { ReviewHeaderMenu } from './components/ReviewHeaderMenu';
 import { ReviewSidebar } from './components/ReviewSidebar';
 import type { ReviewSidebarTab } from './components/ReviewSidebar';
 import { SparklesIcon } from '@plannotator/ui/components/SparklesIcon';
-import { ReviewAgentsIcon } from '@plannotator/ui/components/ReviewAgentsIcon';
 import { useSidebar } from '@plannotator/ui/hooks/useSidebar';
 import { FileTree } from './components/FileTree';
 import { StackedPRLabel } from './components/StackedPRLabel';
@@ -68,14 +66,12 @@ import { exportReviewFeedback } from './utils/exportFeedback';
 import { parseDiffToFiles } from './utils/diffParser';
 import { ReviewSubmissionDialog, buildReviewSubmission, type ReviewSubmission, type SubmissionTarget } from './components/ReviewSubmissionDialog';
 import { ReviewStateProvider, type ReviewState } from './dock/ReviewStateContext';
-import { JobLogsProvider } from './dock/JobLogsContext';
 import { reviewPanelComponents } from './dock/reviewPanelComponents';
 import { ReviewDockTabRenderer } from './dock/ReviewDockTabRenderer';
 import { usePRContext } from './hooks/usePRContext';
 import {
   REVIEW_PANEL_TYPES,
   REVIEW_DIFF_PANEL_ID,
-  makeReviewAgentJobPanelId,
   getReviewDiffPanelFilePath,
   isReviewDiffPanelId,
   REVIEW_PR_SUMMARY_PANEL_ID,
@@ -91,8 +87,6 @@ import type { DiffOption, WorktreeInfo, GitContext } from '@plannotator/shared/t
 import type { PRMetadata } from '@plannotator/shared/pr-types';
 import type { PRDiffScope, PRDiffScopeOption, PRStackInfo, PRStackTree } from '@plannotator/shared/pr-stack';
 import { altKey } from '@plannotator/ui/utils/platform';
-import { TourDialog } from './components/tour/TourDialog';
-import { DEMO_TOUR_ID } from './demoTour';
 
 declare const __APP_VERSION__: string;
 
@@ -290,11 +284,6 @@ const ReviewApp: React.FC = () => {
   // The same !!origin proxy is used elsewhere in this file (draft hook, feedback guard, conditional UI)
   // so this should be addressed as a broader refactor.
   const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations<CodeAnnotation>({ enabled: !!origin });
-  const agentJobs = useAgentJobs({ enabled: !!origin });
-
-  // Tour dialog state — opens as an overlay instead of a dock panel
-  const [tourDialogJobId, setTourDialogJobId] = useState<string | null>(null);
-
   // Dockview center panel API for the review workspace.
   const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
   const filesRef = useRef(files);
@@ -513,10 +502,14 @@ const ReviewApp: React.FC = () => {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.available) {
-          setAiAvailable(true);
-          const providers = data.providers ?? [];
+          const providers = (data.providers ?? []).filter(isPiProvider);
+          setAiAvailable(providers.length > 0);
+          const defaultProvider = typeof data.defaultProvider === 'string' &&
+            providers.some(provider => provider.id === data.defaultProvider)
+            ? data.defaultProvider
+            : null;
           setAiProviders(providers);
-          setAiDefaultProvider(data.defaultProvider ?? null);
+          setAiDefaultProvider(defaultProvider);
         }
       })
       .catch(() => {});
@@ -705,58 +698,6 @@ const ReviewApp: React.FC = () => {
     event.api.onDidLayoutChange(updateHeaders);
     updateHeaders();
   }, []);
-
-  // Open agent job detail as center dock panel
-  const handleOpenJobDetail = useCallback((jobId: string) => {
-    const api = dockApi;
-    if (!api) return;
-    const panelId = makeReviewAgentJobPanelId(jobId);
-    const existing = api.getPanel(panelId);
-    if (existing) {
-      existing.api.setActive();
-      return;
-    }
-    const job = agentJobs.jobs.find(j => j.id === jobId);
-    api.addPanel({
-      id: panelId,
-      component: REVIEW_PANEL_TYPES.AGENT_JOB_DETAIL,
-      title: job?.label ?? `Job ${jobId.slice(0, 8)}`,
-      params: { jobId },
-    });
-  }, [dockApi, agentJobs.jobs]);
-
-  // Open tour as a dialog overlay
-  const handleOpenTour = useCallback((jobId: string) => {
-    setTourDialogJobId(jobId);
-  }, []);
-
-  // Dev-only: Cmd/Ctrl+Shift+T toggles the demo tour for fast UI iteration.
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
-        e.preventDefault();
-        setTourDialogJobId(prev => (prev === DEMO_TOUR_ID ? null : DEMO_TOUR_ID));
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
-
-  // Auto-open tour dialog when a tour job completes
-  const tourAutoOpenRef = useRef(new Set<string>());
-  useEffect(() => {
-    for (const job of agentJobs.jobs) {
-      if (
-        job.provider === 'tour' &&
-        job.status === 'done' &&
-        !tourAutoOpenRef.current.has(job.id)
-      ) {
-        tourAutoOpenRef.current.add(job.id);
-        setTourDialogJobId(job.id);
-      }
-    }
-  }, [agentJobs.jobs]);
 
   // Open PR panel as center dock panel
   const handleOpenPRPanel = useCallback((type: 'summary' | 'comments' | 'checks') => {
@@ -1646,7 +1587,6 @@ const ReviewApp: React.FC = () => {
     onClickAIMarker: handleClickAIMarker,
     aiHistoryForSelection,
     getAIHistoryForFile,
-    agentJobs: agentJobs.jobs,
     prMetadata,
     prContext,
     isPRContextLoading,
@@ -1661,7 +1601,6 @@ const ReviewApp: React.FC = () => {
     onSemanticDiffUnavailable: handleSemanticDiffUnavailable,
     onSemanticDiffLoadError: handleSemanticDiffLoadError,
     onSemanticDiffLoadSuccess: handleSemanticDiffLoadSuccess,
-    openTourPanel: handleOpenTour,
     onCodeNavRequest: handleCodeNavRequest,
     codeNavResult: codeNav.result,
     codeNavIsLoading: codeNav.isLoading,
@@ -1679,15 +1618,14 @@ const ReviewApp: React.FC = () => {
     activeFileSearchMatches, activeSearchMatchId, activeSearchMatch, searchMatches,
     aiAvailable, aiMessages, aiIsCreatingSession, aiIsStreaming,
     handleAskAI, handleAskAIForFile, handleViewAIResponse, handleClickAIMarker,
-    aiHistoryForSelection, getAIHistoryForFile, agentJobs.jobs, prMetadata, prContext,
+    aiHistoryForSelection, getAIHistoryForFile, prMetadata, prContext,
     isPRContextLoading, prContextError, fetchPRContext, platformUser, openDiffFile,
-    handleOpenTour, isAllFilesActive, isSemanticDiffActive, semanticDiffAvailable,
+    isAllFilesActive, isSemanticDiffActive, semanticDiffAvailable,
     handleSemanticDiffUnavailable, handleSemanticDiffLoadError, handleSemanticDiffLoadSuccess, handleAddAnnotationForFile,
     handleCodeNavRequest, codeNav.result, codeNav.isLoading, codeNav.activeSymbol,
   ]);
 
   // Separate context for high-frequency job logs — prevents re-rendering all panels on every SSE event
-  const jobLogsValue = useMemo(() => ({ jobLogs: agentJobs.jobLogs }), [agentJobs.jobLogs]);
 
   // Copy raw diff to clipboard
   const handleCopyDiff = useCallback(async () => {
@@ -1739,9 +1677,6 @@ const ReviewApp: React.FC = () => {
     }
     setIsSendingFeedback(true);
     try {
-      const agentSwitchSettings = getAgentSwitchSettings();
-      const effectiveAgent = getEffectiveAgentName(agentSwitchSettings);
-
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1750,7 +1685,6 @@ const ReviewApp: React.FC = () => {
           approved: false,
           feedback: feedbackMarkdown,
           annotations: allAnnotations,
-          ...(effectiveAgent && { agentSwitch: effectiveAgent }),
         }),
       });
       if (res.ok) {
@@ -1882,8 +1816,6 @@ const ReviewApp: React.FC = () => {
         for (const url of openUrls) window.open(url, '_blank');
       }
 
-      const agentSwitchSettings = getAgentSwitchSettings();
-      const effectiveAgent = getEffectiveAgentName(agentSwitchSettings);
       const prLinks = openUrls.join(', ');
       const statusMessage = action === 'approve'
         ? `${mrLabel === 'MR' ? 'Merge request' : 'Pull request'} approved on ${platformLabel}${prLinks ? ': ' + prLinks : ''}`
@@ -1896,7 +1828,6 @@ const ReviewApp: React.FC = () => {
           approved: false,
           feedback: statusMessage,
           annotations: [],
-          ...(effectiveAgent && { agentSwitch: effectiveAgent }),
         }),
       }).catch(() => {});
     } catch (err) {
@@ -2021,7 +1952,6 @@ const ReviewApp: React.FC = () => {
     <ThemeProvider defaultTheme="dark">
       <TooltipProvider delayDuration={200} skipDelayDuration={100}>
       <ReviewStateProvider value={reviewStateValue}>
-      <JobLogsProvider value={jobLogsValue}>
       {isSwitchingPRScope && <PRSwitchOverlay />}
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         {/* Header */}
@@ -2406,23 +2336,6 @@ const ReviewApp: React.FC = () => {
                 )}
               </button>
             )}
-            {agentJobs.capabilities?.available && (
-              <button
-                onClick={() => reviewSidebar.toggleTab('agents')}
-                className={`relative p-1.5 rounded-md transition-all ${
-                  reviewSidebar.isOpen && reviewSidebar.activeTab === 'agents'
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-                title="Review Agents"
-              >
-                <ReviewAgentsIcon className="w-4 h-4" />
-                {agentJobs.jobs.some(j => j.status === 'running' || j.status === 'starting') && !(reviewSidebar.isOpen && reviewSidebar.activeTab === 'agents') && (
-                  <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                )}
-              </button>
-            )}
-
             <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
 
             <ReviewHeaderMenu
@@ -2613,13 +2526,7 @@ const ReviewApp: React.FC = () => {
                 aiConfig={aiConfig}
                 onAIConfigChange={handleAIConfigChange}
                 hasAISession={!!aiSessionId}
-                agentJobs={agentJobs.jobs}
-                agentCapabilities={agentJobs.capabilities}
-                onAgentLaunch={agentJobs.launchJob}
-                onAgentKillJob={agentJobs.killJob}
-                onAgentKillAll={agentJobs.killAll}
                 externalAnnotations={externalAnnotations}
-                onOpenJobDetail={handleOpenJobDetail}
                 onOpenPRPanel={handleOpenPRPanel}
               />
             </div>
@@ -2686,7 +2593,7 @@ const ReviewApp: React.FC = () => {
             wide
             message={
               <div className="space-y-3">
-                <p>This PR is checked out locally so review agents have full file access.</p>
+                <p>This PR is checked out locally so file actions can use the checked-out source.</p>
                 <div>
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">Path</span>
                   <button
@@ -2810,35 +2717,8 @@ const ReviewApp: React.FC = () => {
           platformLabel={platformLabel}
         />
       </div>
-
-      {/* Tour dialog overlay */}
-      <TourDialog jobId={tourDialogJobId} onClose={() => setTourDialogJobId(null)} />
-
-      {/* Dev-only: open a fully-formed demo tour without running the agent.
-          Stripped from production builds via import.meta.env.DEV. */}
-      {import.meta.env.DEV && (
-        <button
-          onClick={() => setTourDialogJobId(tourDialogJobId === DEMO_TOUR_ID ? null : DEMO_TOUR_ID)}
-          title="Open the demo tour (dev only). Cmd+Shift+T also works."
-          className="fixed bottom-3 right-3 z-[60] px-2.5 py-1 rounded-md bg-foreground/80 text-background text-[10px] font-mono uppercase tracking-wider shadow-lg hover:bg-foreground transition-colors"
-        >
-          {tourDialogJobId === DEMO_TOUR_ID ? 'Close tour' : 'Demo tour'}
-        </button>
-      )}
-
-    <Toaster
-      position="bottom-center"
-      toastOptions={{
-        style: {
-          '--normal-bg': 'var(--card)',
-          '--normal-border': 'var(--border)',
-          '--normal-text': 'var(--foreground)',
-        } as React.CSSProperties,
-      }}
-    />
-    </JobLogsProvider>
-    </ReviewStateProvider>
-    </TooltipProvider>
+      </ReviewStateProvider>
+      </TooltipProvider>
     </ThemeProvider>
   );
 };

@@ -11,7 +11,7 @@ describe("supportsAnnotateAgentTerminalMode", () => {
     expect(supportsAnnotateAgentTerminalMode("annotate")).toBe(true);
     expect(supportsAnnotateAgentTerminalMode("annotate-folder")).toBe(true);
     expect(supportsAnnotateAgentTerminalMode("annotate-last")).toBe(false);
-    expect(supportsAnnotateAgentTerminalMode("archive")).toBe(false);
+    expect(supportsAnnotateAgentTerminalMode("review")).toBe(false);
     expect(supportsAnnotateAgentTerminalMode(undefined)).toBe(false);
   });
 });

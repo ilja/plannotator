@@ -1,9 +1,8 @@
 /**
  * Core types for the Plannotator AI provider layer.
  *
- * This module defines the abstract interfaces that any agent runtime
- * (Claude Agent SDK, OpenCode, future providers) must implement to
- * power AI features inside Plannotator's plan review and code review UIs.
+ * This module defines the abstract interfaces for the Pi-backed runtime that
+ * powers AI features inside Plannotator's review and annotation UIs.
  */
 
 // ---------------------------------------------------------------------------
@@ -11,36 +10,17 @@
 // ---------------------------------------------------------------------------
 
 /** The surface the user is interacting with when they invoke AI. */
-export type AIContextMode = "plan-review" | "code-review" | "annotate";
+export type AIContextMode = "code-review" | "annotate";
 
 /**
- * Describes the parent agent session that originally produced the plan or diff.
+ * Describes the parent agent session that originally produced the diff or document.
  * Used to fork conversations with full history.
  */
 export interface ParentSession {
-  /** Session ID from the host agent (e.g. Claude Code session UUID). */
+  /** Session ID from the host agent. */
   sessionId: string;
   /** Working directory the parent session was running in. */
   cwd: string;
-}
-
-/**
- * Snapshot of plan-review-specific context.
- * Passed when AIContextMode is "plan-review".
- */
-export interface PlanContext {
-  /** The full plan markdown as submitted by the agent. */
-  plan: string;
-  /** Previous plan version (if this is a resubmission). */
-  previousPlan?: string;
-  /** The version number in the plan's history. */
-  version?: number;
-  /** Total number of versions in the plan's history. */
-  totalVersions?: number;
-  /** Project/repository label used for plan history. */
-  project?: string;
-  /** Annotations the user has made so far (serialised for the prompt). */
-  annotations?: string;
 }
 
 /**
@@ -83,7 +63,6 @@ export interface AnnotateContext {
  * Union of mode-specific contexts, discriminated by `mode`.
  */
 export type AIContext =
-  | { mode: "plan-review"; plan: PlanContext; parent?: ParentSession }
   | { mode: "code-review"; review: CodeReviewContext; parent?: ParentSession }
   | { mode: "annotate"; annotate: AnnotateContext; parent?: ParentSession };
 
@@ -217,7 +196,7 @@ export interface AIProviderCapabilities {
 }
 
 export interface CreateSessionOptions {
-  /** The context (plan, diff, file) to seed the session with. */
+  /** The context (diff or document) to seed the session with. */
   context: AIContext;
   /**
    * Working directory override for the agent session.
@@ -238,11 +217,6 @@ export interface CreateSessionOptions {
    * Maximum budget in USD for this session.
    */
   maxBudgetUsd?: number;
-  /**
-   * Reasoning effort level (Codex only).
-   * Controls how much thinking the model does before responding.
-   */
-  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
 /**
@@ -254,10 +228,10 @@ export interface CreateSessionOptions {
  * 3. Streaming responses back as AIMessage events
  *
  * Providers are registered by name and selected at runtime based on the
- * host environment (Claude Code → "claude-agent-sdk", OpenCode → "opencode-sdk").
+ * host environment.
  */
 export interface AIProvider {
-  /** Unique name for this provider (e.g. "claude-agent-sdk"). */
+  /** Unique name for this provider (e.g. "pi-sdk"). */
   readonly name: string;
 
   /** What this provider can do. */
@@ -319,47 +293,6 @@ export interface AIProviderConfig {
   model?: string;
 }
 
-export interface ClaudeAgentSDKConfig extends AIProviderConfig {
-  type: "claude-agent-sdk";
-  /**
-   * Tools the AI session is allowed to use.
-   * Defaults to read-only tools for safety in inline chat.
-   */
-  allowedTools?: string[];
-  /**
-   * Permission mode for the session.
-   * Defaults to "default" (inherits user's existing permission rules).
-   */
-  permissionMode?: "default" | "plan" | "bypassPermissions";
-  /**
-   * Explicit path to the claude CLI binary.
-   * Required when running inside a compiled binary where PATH resolution
-   * doesn't work the same way (e.g., bun build --compile).
-   */
-  claudeExecutablePath?: string;
-  /**
-   * Setting sources to load permission rules from.
-   * Loads user's existing Claude Code permission rules so inline chat
-   * inherits what they've already approved.
-   */
-  settingSources?: string[];
-}
-
-export interface CodexSDKConfig extends AIProviderConfig {
-  type: "codex-sdk";
-  /**
-   * Sandbox mode controls what the Codex agent can do.
-   * Defaults to "read-only" for safety in inline chat.
-   */
-  sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
-  /**
-   * Explicit path to the codex CLI binary.
-   * Required when running inside a compiled binary where PATH resolution
-   * doesn't work the same way (e.g., bun build --compile).
-   */
-  codexExecutablePath?: string;
-}
-
 export interface PiSDKConfig extends AIProviderConfig {
   type: "pi-sdk";
   /**
@@ -368,12 +301,4 @@ export interface PiSDKConfig extends AIProviderConfig {
    * doesn't work the same way (e.g., bun build --compile).
    */
   piExecutablePath?: string;
-}
-
-export interface OpenCodeConfig extends AIProviderConfig {
-  type: "opencode-sdk";
-  /** Hostname for the OpenCode server. Default: "127.0.0.1". */
-  hostname?: string;
-  /** Port for the OpenCode server. Default: 4096. */
-  port?: number;
 }

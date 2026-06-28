@@ -7,7 +7,6 @@
 
 export const REVIEW_PANEL_TYPES = {
   DIFF: 'review-diff',
-  AGENT_JOB_DETAIL: 'review-agent-job-detail',
   PR_SUMMARY: 'review-pr-summary',
   PR_COMMENTS: 'review-pr-comments',
   PR_CHECKS: 'review-pr-checks',
@@ -21,9 +20,6 @@ export const REVIEW_DIFF_PANEL_ID = 'review-diff';
 export interface ReviewDiffPanelParams {
   filePath: string;
 }
-
-export const makeReviewAgentJobPanelId = (jobId: string) =>
-  `review-agent-job:${jobId}`;
 
 export const REVIEW_PR_SUMMARY_PANEL_ID = 'review-pr-summary';
 export const REVIEW_PR_COMMENTS_PANEL_ID = 'review-pr-comments';

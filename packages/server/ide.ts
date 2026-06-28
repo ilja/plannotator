@@ -1,5 +1,5 @@
 /**
- * IDE integration — opens plan diffs in external IDEs
+ * IDE integration — opens file diffs in external IDEs
  */
 
 /**

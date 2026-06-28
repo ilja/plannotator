@@ -1,7 +1,7 @@
 /**
  * Session manager — tracks active and historical AI sessions.
  *
- * Each Plannotator server instance (plan review, code review, annotate)
+ * Each Plannotator server instance (code review or annotate)
  * gets its own SessionManager. It tracks:
  *
  * - Active sessions (currently streaming or idle but resumable)

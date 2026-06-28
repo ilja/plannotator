@@ -12,46 +12,11 @@ export function resolveTemplate(
   });
 }
 
-// ─── Tool name map ───────────────────────────────────────────────────────────
-
-export const PLAN_TOOL_NAMES: Record<PromptRuntime, string> = {
-  "claude-code": "ExitPlanMode",
-  amp: "ExitPlanMode",
-  droid: "ExitPlanMode",
-  "kiro-cli": "ExitPlanMode",
-  opencode: "submit_plan",
-  "copilot-cli": "exit_plan_mode",
-  pi: "plannotator_submit_plan",
-  codex: "ExitPlanMode",
-  "gemini-cli": "exit_plan_mode",
-};
-
-export function getPlanToolName(runtime?: PromptRuntime | null): string {
-  return (runtime && PLAN_TOOL_NAMES[runtime]) || "ExitPlanMode";
-}
-
-export function buildPlanFileRule(toolName: string, planFilePath?: string): string {
-  if (!planFilePath) return "";
-  return `- Your plan is saved at: ${planFilePath}\n  You can edit this file to make targeted changes, then pass its path to ${toolName}.\n`;
-}
-
 // ─── Default constants ───────────────────────────────────────────────────────
 
 export const DEFAULT_REVIEW_APPROVED_PROMPT = "# Code Review\n\nCode review completed — no changes requested.";
 
 export const DEFAULT_REVIEW_DENIED_SUFFIX = "\n\nThis feedback came from review. Please triage it and verify it against the code and then come back to me with your thoughts on the findings. Do not change any code until we've discussed the findings.";
-
-export const DEFAULT_PLAN_DENIED_PROMPT =
-  "YOUR PLAN WAS NOT APPROVED.\n\nYou MUST revise the plan to address ALL of the feedback below before calling {{toolName}} again.\n\nRules:\n{{planFileRule}}- Do not resubmit the same plan unchanged.\n- Do NOT change the plan title (first # heading) unless the user explicitly asks you to.\n\n{{feedback}}";
-
-export const DEFAULT_PLAN_APPROVED_PROMPT =
-  "Plan approved. You now have full tool access (read, bash, edit, write). Execute the plan in {{planFilePath}}. {{doneMsg}}";
-
-export const DEFAULT_PLAN_APPROVED_WITH_NOTES_PROMPT =
-  "Plan approved with notes! You now have full tool access (read, bash, edit, write). Execute the plan in {{planFilePath}}. {{doneMsg}}\n\n## Implementation Notes\n\nThe user approved your plan but added the following notes to consider during implementation:\n\n{{feedback}}\n\nProceed with implementation, incorporating these notes where applicable.";
-
-export const DEFAULT_PLAN_AUTO_APPROVED_PROMPT =
-  "Plan auto-approved (non-interactive mode). Execute the plan now.";
 
 export const DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT =
   "# Markdown Annotations\n\n{{fileHeader}}: {{filePath}}\n\n{{feedback}}\n\nPlease address the annotation feedback above.";
@@ -63,7 +28,7 @@ export const DEFAULT_ANNOTATE_APPROVED_PROMPT = "The user approved.";
 
 // ─── Core resolver ───────────────────────────────────────────────────────────
 
-type PromptSection = "review" | "plan" | "annotate";
+type PromptSection = "review" | "annotate";
 type PromptKey = "approved" | "approvedWithNotes" | "autoApproved" | "denied"
   | "fileFeedback" | "messageFeedback";
 
@@ -126,76 +91,6 @@ export function getReviewDeniedSuffix(
     runtime,
     config,
     fallback: DEFAULT_REVIEW_DENIED_SUFFIX,
-  });
-}
-
-// ─── Plan wrappers ───────────────────────────────────────────────────────────
-
-export function getPlanDeniedPrompt(
-  runtime?: PromptRuntime | null,
-  config?: PlannotatorConfig,
-  vars?: FeedbackVars,
-): string {
-  const template = getConfiguredPrompt({
-    section: "plan",
-    key: "denied",
-    runtime,
-    config,
-    fallback: DEFAULT_PLAN_DENIED_PROMPT,
-  });
-  return resolveTemplate(template, vars ?? {});
-}
-
-const PLAN_APPROVED_RUNTIME_DEFAULTS: Partial<Record<PromptRuntime, string>> = {
-  opencode: "Plan approved!{{doneMsg}}",
-};
-
-export function getPlanApprovedPrompt(
-  runtime?: PromptRuntime | null,
-  config?: PlannotatorConfig,
-  vars?: FeedbackVars,
-): string {
-  const template = getConfiguredPrompt({
-    section: "plan",
-    key: "approved",
-    runtime,
-    config,
-    fallback: DEFAULT_PLAN_APPROVED_PROMPT,
-    runtimeFallbacks: PLAN_APPROVED_RUNTIME_DEFAULTS,
-  });
-  return resolveTemplate(template, vars ?? {});
-}
-
-const PLAN_APPROVED_WITH_NOTES_RUNTIME_DEFAULTS: Partial<Record<PromptRuntime, string>> = {
-  opencode: "Plan approved with notes!\n{{doneMsg}}\n\n## Implementation Notes\n\nThe user approved your plan but added the following notes to consider during implementation:\n\n{{feedback}}{{proceedSuffix}}",
-};
-
-export function getPlanApprovedWithNotesPrompt(
-  runtime?: PromptRuntime | null,
-  config?: PlannotatorConfig,
-  vars?: FeedbackVars,
-): string {
-  const template = getConfiguredPrompt({
-    section: "plan",
-    key: "approvedWithNotes",
-    runtime,
-    config,
-    fallback: DEFAULT_PLAN_APPROVED_WITH_NOTES_PROMPT,
-    runtimeFallbacks: PLAN_APPROVED_WITH_NOTES_RUNTIME_DEFAULTS,
-  });
-  return resolveTemplate(template, { proceedSuffix: "", ...vars });
-}
-
-export function getPlanAutoApprovedPrompt(
-  runtime?: PromptRuntime | null,
-  config?: PlannotatorConfig,
-): string {
-  return getConfiguredPrompt({
-    section: "plan",
-    key: "autoApproved",
-    runtime,
-    config,
-    fallback: DEFAULT_PLAN_AUTO_APPROVED_PROMPT,
   });
 }
 

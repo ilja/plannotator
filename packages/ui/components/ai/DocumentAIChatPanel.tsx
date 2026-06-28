@@ -123,10 +123,8 @@ export const DocumentAIChatPanel: React.FC<DocumentAIChatPanelProps> = ({
         providers={aiProviders}
         selectedProviderId={aiConfig?.providerId ?? null}
         selectedModel={aiConfig?.model ?? null}
-        selectedReasoningEffort={aiConfig?.reasoningEffort ?? null}
         onProviderChange={(providerId) => onAIConfigChange?.({ providerId })}
         onModelChange={(model) => onAIConfigChange?.({ model })}
-        onReasoningEffortChange={(reasoningEffort) => onAIConfigChange?.({ reasoningEffort })}
       />
 
       {onAskGeneral && (

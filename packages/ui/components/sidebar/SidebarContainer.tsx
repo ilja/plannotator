@@ -1,19 +1,16 @@
 /**
  * SidebarContainer — Shared sidebar shell
  *
- * Houses the Table of Contents, Version Browser, File Browser, and Archive Browser views.
+ * Houses the Table of Contents, File Browser, and Messages Browser views.
  * Tab bar at top switches between them.
  */
 
 import React from "react";
 import type { SidebarTab } from "../../hooks/useSidebar";
 import type { Block, Annotation } from "../../types";
-import type { VersionInfo, VersionEntry } from "../../hooks/usePlanDiff";
 import type { UseFileBrowserReturn } from "../../hooks/useFileBrowser";
 import { TableOfContents } from "../TableOfContents";
-import { VersionBrowser } from "./VersionBrowser";
 import { FileBrowser, type FileEditStatus } from "./FileBrowser";
-import { ArchiveBrowser, type ArchivedPlan } from "./ArchiveBrowser";
 import { MessagesBrowser, type PickerMessage } from "./MessagesBrowser";
 import { MessagesIcon } from "../icons/MessagesIcon";
 import { OverlayScrollArea } from "../OverlayScrollArea";
@@ -45,27 +42,8 @@ interface SidebarContainerProps {
   onFilesSelectFile?: (absolutePath: string, dirPath: string) => void;
   onFilesFetchAll?: () => void;
   onFilesRetryVaultDir?: (vaultPath: string) => void;
-  // Version Browser props
-  showVersionsTab?: boolean;
-  versionInfo: VersionInfo | null;
-  versions: VersionEntry[];
-  selectedBaseVersion: number | null;
-  onSelectBaseVersion: (version: number) => void;
-  isPlanDiffActive: boolean;
-  hasPreviousVersion: boolean;
-  onActivatePlanDiff: () => void;
-  isLoadingVersions: boolean;
-  isSelectingVersion: boolean;
-  fetchingVersion: number | null;
-  onFetchVersions: () => void;
   // Annotation indicators
   hasFileAnnotations?: boolean;
-  // Archive Browser props
-  showArchiveTab?: boolean;
-  archivePlans: ArchivedPlan[];
-  selectedArchiveFile: string | null;
-  onArchiveSelect: (filename: string) => void;
-  isLoadingArchive: boolean;
   showMessagesTab?: boolean;
   messages?: PickerMessage[];
   selectedMessageId?: string | null;
@@ -97,24 +75,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
   onFilesSelectFile,
   onFilesFetchAll,
   onFilesRetryVaultDir,
-  showVersionsTab,
-  versionInfo,
-  versions,
-  selectedBaseVersion,
-  onSelectBaseVersion,
-  isPlanDiffActive,
-  hasPreviousVersion,
-  onActivatePlanDiff,
-  isLoadingVersions,
-  isSelectingVersion,
-  fetchingVersion,
-  onFetchVersions,
   hasFileAnnotations,
-  showArchiveTab,
-  archivePlans,
-  selectedArchiveFile,
-  onArchiveSelect,
-  isLoadingArchive,
   showMessagesTab,
   messages,
   selectedMessageId,
@@ -157,28 +118,6 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
           }
           label="Contents"
         />
-        {showVersionsTab && (
-          <TabButton
-            active={activeTab === "versions"}
-            onClick={() => onTabChange("versions")}
-            icon={
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            }
-            label="Versions"
-          />
-        )}
         {showMessagesTab && (
           <TabButton
             active={activeTab === "messages"}
@@ -211,28 +150,6 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
             badge={hasFileAnnotations}
           />
         )}
-        {showArchiveTab && (
-          <TabButton
-            active={activeTab === "archive"}
-            onClick={() => onTabChange("archive")}
-            icon={
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                />
-              </svg>
-            }
-            label="Archive"
-          />
-        )}
         {/* No header close button — the sidebar collapses via the resize-handle
             hover button (see ResizeHandle onCollapse). */}
       </div>
@@ -251,21 +168,6 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
             backLabel={backLabel}
           />
         )}
-        {activeTab === "versions" && (
-          <VersionBrowser
-            versionInfo={versionInfo}
-            versions={versions}
-            selectedBaseVersion={selectedBaseVersion}
-            onSelectBaseVersion={onSelectBaseVersion}
-            isPlanDiffActive={isPlanDiffActive}
-            hasPreviousVersion={hasPreviousVersion}
-            onActivatePlanDiff={onActivatePlanDiff}
-            isLoading={isLoadingVersions}
-            isSelectingVersion={isSelectingVersion}
-            fetchingVersion={fetchingVersion}
-            onFetchVersions={onFetchVersions}
-          />
-        )}
         {activeTab === "files" && showFilesTab && fileBrowser && (
           <FileBrowser
             dirs={fileBrowser.dirs}
@@ -280,14 +182,6 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
             annotationCounts={fileAnnotationCounts}
             highlightedFiles={highlightedFiles}
             editStatuses={fileEditStatuses}
-          />
-        )}
-        {activeTab === "archive" && showArchiveTab && (
-          <ArchiveBrowser
-            plans={archivePlans}
-            selectedFile={selectedArchiveFile}
-            onSelect={onArchiveSelect}
-            isLoading={isLoadingArchive}
           />
         )}
         {activeTab === "messages" && showMessagesTab && messages && onSelectMessage && (

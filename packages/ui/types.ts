@@ -39,7 +39,7 @@ export interface Annotation {
   images?: ImageAttachment[]; // Attached images with human-readable names
   isQuickLabel?: boolean; // true if created via quick label chip
   quickLabelTip?: string; // optional instruction tip from the label definition
-  diffContext?: 'added' | 'removed' | 'modified'; // set when annotation created in plan diff view
+  diffContext?: 'added' | 'removed' | 'modified'; // set when annotation is created from a diff context
   // web-highlighter metadata for cross-element selections
   startMeta?: {
     parentTagName: string;
@@ -224,11 +224,3 @@ export type { EditorAnnotation } from '@plannotator/shared/types';
 export type {
   ExternalAnnotationEvent,
 } from '@plannotator/shared/external-annotation';
-
-export type {
-  AgentJobInfo,
-  AgentJobEvent,
-  AgentJobStatus,
-  AgentCapability,
-  AgentCapabilities,
-} from '@plannotator/shared/agent-jobs';

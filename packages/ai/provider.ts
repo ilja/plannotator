@@ -1,10 +1,9 @@
 /**
  * Provider registry — manages AI provider instances.
  *
- * Supports multiple instances of the same provider type (e.g., two Claude
- * Agent SDK providers with different configs) keyed by instance ID.
+ * Supports multiple instances of the same provider type keyed by instance ID.
  *
- * Each server (plan review, code review, annotate) should create its own
+ * Each server (code review, annotate) should create its own
  * ProviderRegistry or share one — no module-level global state.
  */
 

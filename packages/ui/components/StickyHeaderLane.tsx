@@ -29,7 +29,6 @@ import { AnnotationToolstrip } from './AnnotationToolstrip';
 import { DocBadges } from './DocBadges';
 import { useScrollViewport } from '../hooks/useScrollViewport';
 import type { EditorMode, InputMethod } from '../types';
-import type { PlanDiffStats } from '../utils/planDiffEngine';
 
 // Snap a measured pixel width to a 16px grid. ResizeObserver fires every
 // frame during a drag; without quantization the sticky bar would
@@ -65,11 +64,6 @@ interface StickyHeaderLaneProps {
 
   // Badge state
   repoInfo?: { display: string; branch?: string } | null;
-  planDiffStats?: PlanDiffStats | null;
-  isPlanDiffActive?: boolean;
-  hasPreviousVersion?: boolean;
-  onPlanDiffToggle?: () => void;
-  archiveInfo?: { status: 'approved' | 'denied' | 'unknown'; timestamp: string; title: string } | null;
 
   // Layout
   maxWidth?: number | null;
@@ -90,11 +84,6 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
   onModeChange,
   taterMode,
   repoInfo,
-  planDiffStats,
-  isPlanDiffActive,
-  hasPreviousVersion,
-  onPlanDiffToggle,
-  archiveInfo,
   maxWidth,
   remountToken,
 }) => {
@@ -247,11 +236,6 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
           <DocBadges
             layout="row"
             repoInfo={repoInfo}
-            planDiffStats={planDiffStats}
-            isPlanDiffActive={isPlanDiffActive}
-            hasPreviousVersion={hasPreviousVersion}
-            onPlanDiffToggle={onPlanDiffToggle}
-            archiveInfo={archiveInfo}
           />
         </div>
       </div>

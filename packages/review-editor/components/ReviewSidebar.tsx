@@ -9,15 +9,13 @@ import { detectLanguage } from '../utils/detectLanguage';
 import { renderInlineMarkdown } from '../utils/renderInlineMarkdown';
 import { FileNameChip } from './FileNameChip';
 import { AITab } from './AITab';
-import { AgentsTab } from '@plannotator/ui/components/AgentsTab';
 import type { PRMetadata } from '@plannotator/shared/pr-types';
 import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea';
 import type { AIChatEntry } from '../hooks/useAIChat';
-import type { AgentJobInfo, AgentCapabilities } from '@plannotator/ui/types';
 import type { DiffFile } from '../types';
 import type { AIProviderOption } from '@plannotator/ui/utils/aiProvider';
 
-export type ReviewSidebarTab = 'annotations' | 'ai' | 'agents';
+export type ReviewSidebarTab = 'annotations' | 'ai';
 
 
 interface ReviewSidebarProps {
@@ -51,14 +49,6 @@ interface ReviewSidebarProps {
   aiConfig?: { providerId: string | null; model: string | null; reasoningEffort?: string | null };
   onAIConfigChange?: (config: { providerId?: string | null; model?: string | null; reasoningEffort?: string | null }) => void;
   hasAISession?: boolean;
-  // Agent props
-  agentJobs?: AgentJobInfo[];
-  agentCapabilities?: AgentCapabilities | null;
-  onAgentLaunch?: (params: { provider?: string; command?: string[]; label?: string; engine?: string; model?: string; reasoningEffort?: string; effort?: string; fastMode?: boolean; reviewProfileId?: string }) => void;
-  onAgentKillJob?: (id: string) => void;
-  onAgentKillAll?: () => void;
-  externalAnnotations?: Array<{ source?: string }>;
-  onOpenJobDetail?: (jobId: string) => void;
   onOpenPRPanel?: (type: 'summary' | 'comments' | 'checks') => void;
 }
 
@@ -137,13 +127,6 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
   aiConfig,
   onAIConfigChange,
   hasAISession,
-  agentJobs,
-  agentCapabilities,
-  onAgentLaunch,
-  onAgentKillJob,
-  onAgentKillAll,
-  externalAnnotations,
-  onOpenJobDetail,
   onOpenPRPanel,
 }) => {
   const totalCount = annotations.length + (editorAnnotations?.length ?? 0);
@@ -272,16 +255,11 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
         <div className="px-3 flex items-center border-b border-border/50" style={{ height: 'var(--panel-header-h)' }}>
           <div className="flex items-center gap-2 w-full min-w-0">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
-              {activeTab === 'annotations' ? 'Annotations' : activeTab === 'ai' ? 'AI' : 'Review Agents'}
+              {activeTab === 'annotations' ? 'Annotations' : 'AI'}
             </h2>
             {activeTab === 'annotations' && totalCount > 0 && (
               <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                 {totalCount}
-              </span>
-            )}
-            {activeTab === 'agents' && (agentJobs?.length ?? 0) > 0 && (
-              <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                {agentJobs!.length}
               </span>
             )}
             {activeTab === 'ai' && aiMessages.length > 0 && (
@@ -403,18 +381,7 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
             />
           )}
 
-          {/* Agents tab */}
-          {activeTab === 'agents' && (
-            <AgentsTab
-              jobs={agentJobs ?? []}
-              capabilities={agentCapabilities ?? null}
-              onLaunch={onAgentLaunch ?? (() => {})}
-              onKillJob={onAgentKillJob ?? (() => {})}
-              onKillAll={onAgentKillAll ?? (() => {})}
-              externalAnnotations={externalAnnotations ?? []}
-              onOpenJobDetail={onOpenJobDetail}
-            />
-          )}
+
 
         </OverlayScrollArea>
 

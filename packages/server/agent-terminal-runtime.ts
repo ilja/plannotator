@@ -11,8 +11,8 @@
  *     so Node resolves webtui/node-pty straight from the repo's node_modules.
  *   - **managed (compiled release binary):** the sidecar is a Bun *virtual*
  *     path (not real disk), so we materialize it to the data dir and rely on a
- *     webtui runtime `npm install`-ed there ahead of time by
- *     `plannotator install-runtime agent-terminal` (run by scripts/install.sh).
+ *     webtui runtime `npm install`-ed there ahead of time by running
+ *     `plannotator install-runtime agent-terminal`.
  *
  * See ADR adr/implementation/annotate-agent-terminal.md for the full design.
  */

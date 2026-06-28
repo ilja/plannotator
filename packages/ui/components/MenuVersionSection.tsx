@@ -2,15 +2,10 @@ import React, { useState } from 'react';
 import { TextShimmer } from './TextShimmer';
 import type { UpdateInfo } from '../hooks/useUpdateCheck';
 import type { Origin } from '@plannotator/shared/agents';
-import { isWindows } from '../utils/platform';
-
 const PI_INSTALL_COMMAND = 'pi install npm:@plannotator/pi-extension';
 
-function getInstallCommand(origin?: Origin | null, isWSL = false): string {
-  if (origin === 'pi') return PI_INSTALL_COMMAND;
-  return isWindows && !isWSL
-    ? 'powershell -c "irm https://plannotator.ai/install.ps1 | iex"'
-    : 'curl -fsSL https://plannotator.ai/install.sh | bash';
+function getInstallCommand(_origin?: Origin | null, _isWSL = false): string {
+  return PI_INSTALL_COMMAND;
 }
 
 interface MenuVersionSectionProps {

@@ -2,7 +2,7 @@
  * Route Parity Test
  *
  * Extracts all API routes from Bun and Pi server files and asserts
- * they are identical per server (plan, review, annotate) plus shared
+ * they are identical per retained server (review, annotate) plus shared
  * delegated handlers (editor annotations, AI endpoints).
  */
 
@@ -45,14 +45,12 @@ function unique(routes: string[]): string[] {
 // --- File paths ---
 
 const bun = {
-  plan: join(ROOT, "packages/server/index.ts"),
   review: join(ROOT, "packages/server/review.ts"),
   annotate: join(ROOT, "packages/server/annotate.ts"),
   editorAnnotations: join(ROOT, "packages/server/editor-annotations.ts"),
 };
 
 const pi = {
-  plan: join(ROOT, "apps/pi-extension/server/serverPlan.ts"),
   review: join(ROOT, "apps/pi-extension/server/serverReview.ts"),
   annotate: join(ROOT, "apps/pi-extension/server/serverAnnotate.ts"),
   editorAnnotations: join(ROOT, "apps/pi-extension/server/annotations.ts"),
@@ -63,12 +61,6 @@ const aiEndpointsFile = join(ROOT, "packages/ai/endpoints.ts");
 // --- Tests ---
 
 describe("route parity: Bun ↔ Pi", () => {
-  test("plan server routes match", () => {
-    const bunRoutes = unique(extractInlineRoutes(bun.plan));
-    const piRoutes = unique(extractInlineRoutes(pi.plan));
-    expect(piRoutes).toEqual(bunRoutes);
-  });
-
   test("review server routes match", () => {
     const bunRoutes = unique(extractInlineRoutes(bun.review));
     const piRoutes = unique(extractInlineRoutes(pi.review));
@@ -100,7 +92,6 @@ describe("route parity: Bun ↔ Pi", () => {
 
   test("all routes across all servers match", () => {
     const bunAll = unique([
-      ...extractInlineRoutes(bun.plan),
       ...extractInlineRoutes(bun.review),
       ...extractInlineRoutes(bun.annotate),
       ...extractInlineRoutes(bun.editorAnnotations),
@@ -108,7 +99,6 @@ describe("route parity: Bun ↔ Pi", () => {
     ]);
 
     const piAll = unique([
-      ...extractInlineRoutes(pi.plan),
       ...extractInlineRoutes(pi.review),
       ...extractInlineRoutes(pi.annotate),
       ...extractInlineRoutes(pi.editorAnnotations),

@@ -1,34 +1,21 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { DiffType, VcsSelection } from "./server.js";
 import { getRecentAssistantMessages } from "./assistant-message.js";
 import {
 	getLastAssistantMessageText,
 	getStartupErrorMessage,
-	openArchiveBrowserAction,
 	openCodeReview,
 	openLastMessageAnnotation,
 	openMarkdownAnnotation,
 	startCodeReviewBrowserSession,
 	startLastMessageAnnotationSession,
 	startMarkdownAnnotationSession,
-	startPlanReviewBrowserSession,
 } from "./plannotator-browser.js";
 
 export const PLANNOTATOR_REQUEST_CHANNEL = "plannotator:request" as const;
-export const PLANNOTATOR_REVIEW_RESULT_CHANNEL = "plannotator:review-result" as const;
 export const PLANNOTATOR_TIMEOUT_MS = 5_000;
 
-export type PlannotatorAction =
-	| "plan-mode"
-	| "plan-review"
-	| "review-status"
-	| "code-review"
-	| "annotate"
-	| "annotate-last"
-	| "archive";
+export type PlannotatorAction = "code-review" | "annotate" | "annotate-last";
 
 export interface PlannotatorHandledResponse<T> {
 	status: "handled";
@@ -57,43 +44,6 @@ export interface PlannotatorRequestBase<A extends PlannotatorAction, P, R> {
 	respond: (response: PlannotatorResponse<R>) => void;
 }
 
-export interface PlannotatorPlanModePayload {
-	mode?: "enter" | "exit" | "toggle" | "status";
-}
-
-export interface PlannotatorPlanModeResult {
-	phase: "idle" | "planning" | "executing";
-}
-
-export interface PlannotatorPlanReviewPayload {
-	planFilePath?: string;
-	planContent: string;
-	origin?: string;
-}
-
-export interface PlannotatorPlanReviewStartResult {
-	status: "pending";
-	reviewId: string;
-}
-
-export interface PlannotatorReviewResultEvent {
-	reviewId: string;
-	approved: boolean;
-	feedback?: string;
-	savedPath?: string;
-	agentSwitch?: string;
-	permissionMode?: string;
-}
-
-export interface PlannotatorReviewStatusPayload {
-	reviewId: string;
-}
-
-export type PlannotatorReviewStatusResult =
-	| { status: "pending" }
-	| ({ status: "completed" } & PlannotatorReviewResultEvent)
-	| { status: "missing" };
-
 export interface PlannotatorCodeReviewPayload {
 	diffType?: DiffType;
 	defaultBranch?: string;
@@ -107,7 +57,6 @@ export interface PlannotatorCodeReviewResult {
 	approved: boolean;
 	feedback?: string;
 	annotations?: unknown[];
-	agentSwitch?: string;
 }
 
 export interface PlannotatorAnnotatePayload {
@@ -127,73 +76,20 @@ export interface PlannotatorAnnotationResult {
 	approved?: boolean;
 }
 
-export interface PlannotatorArchivePayload {
-	customPlanPath?: string;
-}
-
-export interface PlannotatorArchiveResult {
-	opened: boolean;
-}
-
 export type PlannotatorRequestMap = {
-	"plan-mode": PlannotatorRequestBase<"plan-mode", PlannotatorPlanModePayload, PlannotatorPlanModeResult>;
-	"plan-review": PlannotatorRequestBase<"plan-review", PlannotatorPlanReviewPayload, PlannotatorPlanReviewStartResult>;
-	"review-status": PlannotatorRequestBase<"review-status", PlannotatorReviewStatusPayload, PlannotatorReviewStatusResult>;
 	"code-review": PlannotatorRequestBase<"code-review", PlannotatorCodeReviewPayload, PlannotatorCodeReviewResult>;
 	annotate: PlannotatorRequestBase<"annotate", PlannotatorAnnotatePayload, PlannotatorAnnotationResult>;
 	"annotate-last": PlannotatorRequestBase<"annotate-last", PlannotatorAnnotatePayload, PlannotatorAnnotationResult>;
-	archive: PlannotatorRequestBase<"archive", PlannotatorArchivePayload, PlannotatorArchiveResult>;
 };
 export type PlannotatorRequest = PlannotatorRequestMap[PlannotatorAction];
 export type PlannotatorResponseMap = {
-	"plan-mode": PlannotatorResponse<PlannotatorPlanModeResult>;
-	"plan-review": PlannotatorResponse<PlannotatorPlanReviewStartResult>;
-	"review-status": PlannotatorResponse<PlannotatorReviewStatusResult>;
 	"code-review": PlannotatorResponse<PlannotatorCodeReviewResult>;
 	annotate: PlannotatorResponse<PlannotatorAnnotationResult>;
 	"annotate-last": PlannotatorResponse<PlannotatorAnnotationResult>;
-	archive: PlannotatorResponse<PlannotatorArchiveResult>;
 };
+
 function isPlannotatorAction(value: unknown): value is PlannotatorAction {
-	return (
-		value === "plan-mode" ||
-		value === "plan-review" ||
-		value === "review-status" ||
-		value === "code-review" ||
-		value === "annotate" ||
-		value === "annotate-last" ||
-		value === "archive"
-	);
-}
-
-const REVIEW_STATUS_PATH = join(homedir(), ".pi", "plannotator-review-status.json");
-
-type StoredReviewStatus = Record<string, PlannotatorReviewStatusResult>;
-
-function readStoredReviewStatuses(): StoredReviewStatus {
-	try {
-		if (!existsSync(REVIEW_STATUS_PATH)) return {};
-		const raw = readFileSync(REVIEW_STATUS_PATH, "utf-8");
-		const parsed = JSON.parse(raw) as StoredReviewStatus;
-		return parsed && typeof parsed === "object" ? parsed : {};
-	} catch {
-		return {};
-	}
-}
-
-function writeStoredReviewStatuses(statuses: StoredReviewStatus): void {
-	mkdirSync(dirname(REVIEW_STATUS_PATH), { recursive: true });
-	writeFileSync(REVIEW_STATUS_PATH, JSON.stringify(statuses, null, 2));
-}
-
-function setStoredReviewStatus(reviewId: string, status: PlannotatorReviewStatusResult): void {
-	const statuses = readStoredReviewStatuses();
-	statuses[reviewId] = status;
-	writeStoredReviewStatuses(statuses);
-}
-
-function getStoredReviewStatus(reviewId: string): PlannotatorReviewStatusResult {
-	return readStoredReviewStatuses()[reviewId] ?? { status: "missing" };
+	return value === "code-review" || value === "annotate" || value === "annotate-last";
 }
 
 function createActiveSessionContext() {
@@ -212,17 +108,7 @@ function createActiveSessionContext() {
 	};
 }
 
-export interface PlannotatorEventListenerOptions {
-	handlePlanMode?: (
-		mode: NonNullable<PlannotatorPlanModePayload["mode"]>,
-		ctx: ExtensionContext,
-	) => Promise<PlannotatorPlanModeResult> | PlannotatorPlanModeResult;
-}
-
-export function registerPlannotatorEventListeners(
-	pi: ExtensionAPI,
-	options: PlannotatorEventListenerOptions = {},
-): void {
+export function registerPlannotatorEventListeners(pi: ExtensionAPI): void {
 	const activeSessionContext = createActiveSessionContext();
 
 	// Plannotator event requests are handled against the latest active session.
@@ -239,65 +125,12 @@ export function registerPlannotatorEventListeners(
 		}
 
 		try {
-			if (request.action === "review-status") {
-				const reviewId = request.payload?.reviewId;
-				if (typeof reviewId !== "string" || !reviewId.trim()) {
-					request.respond({ status: "error", error: "Missing reviewId for review-status request." });
-					return;
-				}
-				request.respond({ status: "handled", result: getStoredReviewStatus(reviewId) });
-				return;
-			}
-
 			if (!ctx) {
 				request.respond({ status: "unavailable", error: "Plannotator context is not ready yet." });
 				return;
 			}
 
 			switch (request.action) {
-				case "plan-mode": {
-					if (!options.handlePlanMode) {
-						request.respond({ status: "unavailable", error: "Plan mode control is not available in this session." });
-						return;
-					}
-					const mode = request.payload?.mode ?? "toggle";
-					if (mode !== "enter" && mode !== "exit" && mode !== "toggle" && mode !== "status") {
-						request.respond({ status: "error", error: "Invalid plan-mode payload.mode." });
-						return;
-					}
-					const result = await options.handlePlanMode(mode, ctx);
-					request.respond({ status: "handled", result });
-					return;
-				}
-				case "plan-review": {
-					const planContent = request.payload?.planContent;
-					if (typeof planContent !== "string" || !planContent.trim()) {
-						request.respond({ status: "error", error: "Missing planContent for plan-review request." });
-						return;
-					}
-					const session = await startPlanReviewBrowserSession(ctx, planContent);
-					setStoredReviewStatus(session.reviewId, { status: "pending" });
-					session.onDecision((result) => {
-						const reviewResult = {
-							reviewId: session.reviewId,
-							approved: result.approved,
-							feedback: result.feedback,
-							savedPath: result.savedPath,
-							agentSwitch: result.agentSwitch,
-							permissionMode: result.permissionMode,
-						} satisfies PlannotatorReviewResultEvent;
-						setStoredReviewStatus(session.reviewId, { status: "completed", ...reviewResult });
-						pi.events.emit(PLANNOTATOR_REVIEW_RESULT_CHANNEL, reviewResult);
-					});
-					request.respond({
-						status: "handled",
-						result: {
-							status: "pending",
-							reviewId: session.reviewId,
-						},
-					});
-					return;
-				}
 				case "code-review": {
 					const result = await openCodeReview(ctx, {
 						cwd: request.payload?.cwd,
@@ -344,11 +177,6 @@ export function registerPlannotatorEventListeners(
 					request.respond({ status: "handled", result });
 					return;
 				}
-				case "archive": {
-					const result = await openArchiveBrowserAction(ctx, request.payload?.customPlanPath);
-					request.respond({ status: "handled", result });
-					return;
-				}
 			}
 		} catch (err) {
 			const message = getStartupErrorMessage(err);
@@ -363,16 +191,13 @@ export function registerPlannotatorEventListeners(
 
 export {
 	getLastAssistantMessageText,
-	hasPlanBrowserHtml,
+	hasAnnotationBrowserHtml,
 	hasReviewBrowserHtml,
 	startCodeReviewBrowserSession,
 	startLastMessageAnnotationSession,
 	startMarkdownAnnotationSession,
 	getStartupErrorMessage,
-	openArchiveBrowserAction,
 	openCodeReview,
 	openLastMessageAnnotation,
 	openMarkdownAnnotation,
-	openPlanReviewBrowser,
-	startPlanReviewBrowserSession,
 } from "./plannotator-browser.js";

@@ -2,12 +2,9 @@
   "name": "plannotator",
   "version": "0.21.2",
   "private": true,
-  "description": "Interactive Plan Review for Claude Code - annotate plans visually, share with team, automatically send feedback",
+  "description": "Pi review and annotation surfaces for Plannotator",
   "author": "backnotprop",
   "license": "MIT OR Apache-2.0",
-  "bin": {
-    "plannotator": "bin/plannotator.js"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/backnotprop/plannotator.git"
@@ -16,29 +13,21 @@
   "bugs": {
     "url": "https://github.com/backnotprop/plannotator/issues"
   },
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev:hook": "bun run --cwd apps/hook dev",
-    "dev:portal": "bun run --cwd apps/portal dev",
-    "dev:marketing": "bun run --cwd apps/marketing dev",
+    "dev:annotation": "bun run --cwd apps/hook dev",
     "dev:review": "bun run --cwd apps/review dev",
-    "build:hook": "bun run --cwd apps/hook build",
-    "build:portal": "bun run --cwd apps/portal build",
-    "build:marketing": "bun run --cwd apps/marketing build",
-    "build:opencode": "bun run --cwd apps/opencode-plugin build",
+    "build:annotation": "bun run --cwd apps/hook build",
     "build:review": "bun run --cwd apps/review build",
-    "build:pi": "bun run build:review && bun run build:hook && bun run --cwd apps/pi-extension build",
-    "build": "bun run build:hook && bun run build:opencode",
-    "dev:vscode": "bun run --cwd apps/vscode-extension watch",
-    "build:vscode": "bun run --cwd apps/vscode-extension build",
-    "package:vscode": "bun run --cwd apps/vscode-extension package",
+    "build:pi": "bun run build:review && bun run build:annotation && bun run --cwd apps/pi-extension build",
+    "build": "bun run build:pi",
     "test": "bun test",
     "typecheck": "bash apps/pi-extension/vendor.sh && tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p packages/ai/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p apps/pi-extension/tsconfig.json"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.92",
-    "@openai/codex-sdk": "^0.118.0",
-    "@opencode-ai/sdk": "^1.3.0",
     "@pierre/diffs": "1.2.8",
     "diff": "^8.0.4",
     "dockview-react": "^5.2.0",

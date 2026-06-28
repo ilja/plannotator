@@ -16,7 +16,6 @@ import {
 	runVcsDiff,
 	stageFile,
 	startAnnotateServer,
-	startPlanReviewServer,
 	startReviewServer,
 	type DiffType,
 	type VcsSelection,
@@ -41,13 +40,6 @@ import {
 export { getLastAssistantMessageText } from "./assistant-message.js";
 
 export type AnnotateMode = "annotate" | "annotate-folder" | "annotate-last";
-export interface PlanReviewDecision {
-	approved: boolean;
-	feedback?: string;
-	savedPath?: string;
-	agentSwitch?: string;
-	permissionMode?: string;
-}
 
 export interface BrowserDecisionSession<T> {
 	url: string;
@@ -55,17 +47,12 @@ export interface BrowserDecisionSession<T> {
 	stop: () => void;
 }
 
-export interface PlanReviewBrowserSession extends BrowserDecisionSession<PlanReviewDecision> {
-	reviewId: string;
-	onDecision: (listener: (result: PlanReviewDecision) => void | Promise<void>) => () => void;
-}
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let planHtmlContent = "";
+let annotationHtmlContent = "";
 let reviewHtmlContent = "";
 
 try {
-	planHtmlContent = readFileSync(resolve(__dirname, "plannotator.html"), "utf-8");
+	annotationHtmlContent = readFileSync(resolve(__dirname, "plannotator.html"), "utf-8");
 } catch {
 	// built assets unavailable
 }
@@ -80,8 +67,8 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 }
 
-export function hasPlanBrowserHtml(): boolean {
-	return Boolean(planHtmlContent);
+export function hasAnnotationBrowserHtml(): boolean {
+	return Boolean(annotationHtmlContent);
 }
 
 export function hasReviewBrowserHtml(): boolean {
@@ -114,28 +101,6 @@ async function buildLocalWorkspaceReview(
 		stageFile,
 		unstageFile,
 	}, root, options);
-}
-
-async function openBrowserAndWait<T>(
-	server: { url: string; stop: () => void },
-	ctx: ExtensionContext,
-	waitForResult: () => Promise<T>,
-): Promise<T> {
-	await openBrowserForServer(server.url, ctx);
-	return waitForDecisionWithCleanup(server, waitForResult);
-}
-
-async function waitForDecisionWithCleanup<T>(
-	server: { url: string; stop: () => void },
-	waitForResult: () => Promise<T>,
-): Promise<T> {
-	try {
-		const result = await waitForResult();
-		await delay(1500);
-		return result;
-	} finally {
-		server.stop();
-	}
 }
 
 function startBrowserDecisionSession<T>(
@@ -180,43 +145,6 @@ function startBrowserDecisionSession<T>(
 	};
 }
 
-export async function startPlanReviewBrowserSession(
-	ctx: ExtensionContext,
-	planContent: string,
-): Promise<PlanReviewBrowserSession> {
-	if (!ctx.hasUI || !planHtmlContent) {
-		throw new Error("Plannotator browser review is unavailable in this session.");
-	}
-
-	const server = await startPlanReviewServer({
-		plan: planContent,
-		htmlContent: planHtmlContent,
-		origin: "pi",
-		sharingEnabled: resolveSharingEnabled(loadConfig()),
-		shareBaseUrl: process.env.PLANNOTATOR_SHARE_URL || undefined,
-		pasteApiUrl: process.env.PLANNOTATOR_PASTE_URL || undefined,
-	});
-
-	const session = startBrowserDecisionSession(server, ctx, server.waitForDecision);
-	server.onDecision(() => {
-		setTimeout(() => session.stop(), 1500);
-	});
-
-	return {
-		...session,
-		reviewId: server.reviewId,
-		onDecision: server.onDecision,
-	};
-}
-
-export async function openPlanReviewBrowser(
-	ctx: ExtensionContext,
-	planContent: string,
-): Promise<PlanReviewDecision> {
-	const session = await startPlanReviewBrowserSession(ctx, planContent);
-	return session.waitForDecision();
-}
-
 export function shouldUseLocalPrCheckout(options: { useLocal?: boolean }): boolean {
 	return options.useLocal !== false;
 }
@@ -224,7 +152,7 @@ export function shouldUseLocalPrCheckout(options: { useLocal?: boolean }): boole
 export async function openCodeReview(
 	ctx: ExtensionContext,
 	options: { cwd?: string; defaultBranch?: string; diffType?: DiffType; prUrl?: string; vcsType?: VcsSelection; useLocal?: boolean } = {},
-): Promise<{ approved: boolean; feedback?: string; annotations?: unknown[]; agentSwitch?: string; exit?: boolean }> {
+): Promise<{ approved: boolean; feedback?: string; annotations?: unknown[]; exit?: boolean }> {
 	const session = await startCodeReviewBrowserSession(ctx, options);
 	return session.waitForDecision();
 }
@@ -237,7 +165,6 @@ export async function startCodeReviewBrowserSession(
 		approved: boolean;
 		feedback?: string;
 		annotations?: unknown[];
-		agentSwitch?: string;
 		exit?: boolean;
 	}>
 > {
@@ -526,7 +453,7 @@ export async function startMarkdownAnnotationSession(
 	convertHtml?: boolean,
 	recentMessages?: { messageId: string; text: string; timestamp?: string }[],
 ): Promise<BrowserDecisionSession<{ feedback: string; exit?: boolean; approved?: boolean; selectedMessageId?: string; feedbackScope?: "message" | "messages" }>> {
-	if (!ctx.hasUI || !planHtmlContent) {
+	if (!ctx.hasUI || !annotationHtmlContent) {
 		throw new Error("Plannotator annotation browser is unavailable in this session.");
 	}
 
@@ -555,7 +482,7 @@ export async function startMarkdownAnnotationSession(
 		rawHtml,
 		renderHtml,
 		convertHtml,
-		htmlContent: planHtmlContent,
+		htmlContent: annotationHtmlContent,
 		sharingEnabled: resolveSharingEnabled(loadConfig()),
 		shareBaseUrl: process.env.PLANNOTATOR_SHARE_URL || undefined,
 		pasteApiUrl: process.env.PLANNOTATOR_PASTE_URL || undefined,
@@ -595,31 +522,4 @@ export async function startLastMessageAnnotationSession(
 		undefined,
 		recentMessages,
 	);
-}
-
-export async function openArchiveBrowserAction(
-	ctx: ExtensionContext,
-	customPlanPath?: string,
-): Promise<{ opened: boolean }> {
-	if (!ctx.hasUI || !planHtmlContent) {
-		throw new Error("Plannotator archive browser is unavailable in this session.");
-	}
-
-	const server = await startPlanReviewServer({
-		plan: "",
-		htmlContent: planHtmlContent,
-		origin: "pi",
-		mode: "archive",
-		customPlanPath,
-		sharingEnabled: resolveSharingEnabled(loadConfig()),
-		shareBaseUrl: process.env.PLANNOTATOR_SHARE_URL || undefined,
-		pasteApiUrl: process.env.PLANNOTATOR_PASTE_URL || undefined,
-	});
-
-	return openBrowserAndWait(server, ctx, async () => {
-		if (server.waitForDone) {
-			await server.waitForDone();
-		}
-		return { opened: true };
-	});
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   applyAIProviderSelection,
   findOriginAIProvider,
+  isPiProvider,
   resolveAIProviderSelection,
   type AIProviderOption,
   type AIProviderSettings,
@@ -9,22 +10,20 @@ import {
 
 const providers: AIProviderOption[] = [
   {
-    id: 'claude-local',
-    name: 'claude-agent-sdk',
+    id: 'pi-local',
+    name: 'pi-sdk',
     models: [
-      { id: 'claude-default', label: 'Claude Default', default: true },
-      { id: 'claude-alt', label: 'Claude Alt' },
+      { id: 'pi-default', label: 'Pi Default', default: true },
+      { id: 'pi-alt', label: 'Pi Alt' },
     ],
   },
   {
-    id: 'codex-local',
-    name: 'codex-sdk',
+    id: 'fallback-local',
+    name: 'fallback-provider',
     models: [
-      { id: 'codex-default', label: 'Codex Default', default: true },
-      { id: 'codex-alt', label: 'Codex Alt' },
+      { id: 'fallback-default', label: 'Fallback Default', default: true },
     ],
   },
-  { id: 'opencode-sdk', name: 'opencode-sdk' },
 ];
 
 const settings = (overrides: Partial<AIProviderSettings> = {}): AIProviderSettings => ({
@@ -35,66 +34,82 @@ const settings = (overrides: Partial<AIProviderSettings> = {}): AIProviderSettin
 });
 
 describe('AI provider origin defaults', () => {
-  it('matches a detected origin by provider type even when registry IDs are custom', () => {
-    expect(findOriginAIProvider(providers, 'claude-code')?.id).toBe('claude-local');
-    expect(findOriginAIProvider(providers, 'codex')?.id).toBe('codex-local');
-    expect(findOriginAIProvider(providers, 'opencode')?.id).toBe('opencode-sdk');
+  it('recognizes only Pi SDK providers as retained Ask AI providers', () => {
+    expect(isPiProvider(providers[0])).toBe(true);
+    expect(isPiProvider(providers[1])).toBe(false);
+    expect(findOriginAIProvider(providers, 'pi')?.id).toBe('pi-local');
+    expect(findOriginAIProvider(providers, 'claude-code')).toBeNull();
+    expect(findOriginAIProvider(providers, 'codex')).toBeNull();
+    expect(findOriginAIProvider(providers, 'opencode')).toBeNull();
   });
 
-  it('uses the origin-matched provider before the global saved provider', () => {
+  it('uses the Pi provider before the global saved provider for Pi sessions', () => {
     const selection = resolveAIProviderSelection({
       providers,
-      origin: 'codex',
-      settings: settings({ providerId: 'claude-local' }),
+      origin: 'pi',
+      settings: settings({ providerId: 'fallback-local' }),
     });
 
-    expect(selection.providerId).toBe('codex-local');
-    expect(selection.model).toBe('codex-default');
+    expect(selection.providerId).toBe('pi-local');
+    expect(selection.model).toBe('pi-default');
   });
 
-  it('uses per-origin saved provider choices before the automatic origin match', () => {
+  it('ignores stale per-origin non-Pi provider choices', () => {
     const selection = resolveAIProviderSelection({
       providers,
-      origin: 'codex',
+      origin: 'pi',
       settings: settings({
-        providerByOrigin: { codex: 'claude-local' },
-        preferredModels: { 'claude-local': 'claude-alt' },
+        providerByOrigin: { pi: 'fallback-local' },
+        preferredModels: { 'fallback-local': 'fallback-default' },
       }),
     });
 
-    expect(selection.providerId).toBe('claude-local');
-    expect(selection.model).toBe('claude-alt');
+    expect(selection.providerId).toBe('pi-local');
+    expect(selection.model).toBe('pi-default');
   });
 
-  it('falls back to server default when an origin has no matching provider', () => {
+  it('ignores stale non-Pi server defaults', () => {
     const selection = resolveAIProviderSelection({
       providers,
       origin: 'gemini-cli',
       settings: settings(),
-      serverDefaultProvider: 'codex-local',
+      serverDefaultProvider: 'fallback-local',
     });
 
-    expect(selection.providerId).toBe('codex-local');
+    expect(selection.providerId).toBe('pi-local');
+    expect(selection.model).toBe('pi-default');
   });
 
-  it('stores explicit choices for mapped origins without changing the global fallback', () => {
-    const next = applyAIProviderSelection(
-      settings({ providerId: 'claude-local' }),
-      { providerId: 'codex-local', model: 'codex-alt', origin: 'codex' },
-    );
+  it('returns no selection when only non-Pi providers are available', () => {
+    const selection = resolveAIProviderSelection({
+      providers: [providers[1]],
+      origin: 'pi',
+      settings: settings({ providerId: 'fallback-local' }),
+      serverDefaultProvider: 'fallback-local',
+    });
 
-    expect(next.providerId).toBe('claude-local');
-    expect(next.providerByOrigin.codex).toBe('codex-local');
-    expect(next.preferredModels['codex-local']).toBe('codex-alt');
+    expect(selection).toEqual({ providerId: null, model: null });
   });
 
-  it('stores explicit choices as the global fallback for origins without a dedicated provider', () => {
+  it('stores explicit Pi choices without changing the global fallback', () => {
     const next = applyAIProviderSelection(
-      settings({ providerId: 'claude-local' }),
-      { providerId: 'codex-local', model: 'codex-alt', origin: 'gemini-cli' },
+      settings({ providerId: 'fallback-local' }),
+      { providerId: 'pi-local', model: 'pi-alt', origin: 'pi' },
     );
 
-    expect(next.providerId).toBe('codex-local');
-    expect(next.providerByOrigin['gemini-cli']).toBeUndefined();
+    expect(next.providerId).toBe('fallback-local');
+    expect(next.providerByOrigin.pi).toBe('pi-local');
+    expect(next.preferredModels['pi-local']).toBe('pi-alt');
+  });
+
+  it('does not store non-Pi provider choices', () => {
+    const next = applyAIProviderSelection(
+      settings({ providerId: 'pi-local' }),
+      { providerId: 'fallback-local', model: 'fallback-default', origin: 'codex' },
+    );
+
+    expect(next.providerId).toBe('pi-local');
+    expect(next.providerByOrigin.codex).toBeUndefined();
+    expect(next.preferredModels['fallback-local']).toBeUndefined();
   });
 });

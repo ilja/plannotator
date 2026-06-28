@@ -100,7 +100,7 @@ export function usePinpoint({
 
     const handleClick = (e: MouseEvent) => {
       // Read highlighter at click time, not effect setup time.
-      // On remount (e.g. after exiting plan diff), the highlighter init effect
+      // On remount (e.g. after changing review surfaces), the highlighter init effect
       // may not have run yet when this effect sets up, but it will be ready by
       // the time the user clicks.
       const highlighter = highlighterRef.current;

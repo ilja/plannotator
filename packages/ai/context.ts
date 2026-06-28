@@ -16,15 +16,13 @@ import type { AIContext } from "./types.ts";
  * Build a system prompt from the given context.
  *
  * The prompt tells the AI:
- * - What role it plays (plan reviewer, code reviewer, etc.)
- * - The content it should reference (plan markdown, diff patch, file)
+ * - What role it plays (code reviewer, document annotator, etc.)
+ * - The content it should reference (diff patch or document)
  * - Any annotations the user has already made
  * - That it's operating inside Plannotator (not a general coding session)
  */
 export function buildSystemPrompt(ctx: AIContext): string {
   switch (ctx.mode) {
-    case "plan-review":
-      return buildPlanReviewPrompt(ctx);
     case "code-review":
       return buildCodeReviewPrompt(ctx);
     case "annotate":
@@ -47,24 +45,6 @@ export function buildForkPreamble(ctx: AIContext): string {
   ];
 
   switch (ctx.mode) {
-    case "plan-review": {
-      lines.push("## Current Plan Under Review");
-      if (ctx.plan.version) {
-        const total = ctx.plan.totalVersions ? ` of ${ctx.plan.totalVersions}` : "";
-        lines.push(`Plan version: ${ctx.plan.version}${total}`);
-      }
-      if (ctx.plan.project) {
-        lines.push(`Project: ${ctx.plan.project}`);
-      }
-      lines.push("");
-      lines.push(truncate(ctx.plan.plan, MAX_PLAN_CHARS));
-      if (ctx.plan.annotations) {
-        lines.push("");
-        lines.push("## User Annotations So Far");
-        lines.push(ctx.plan.annotations);
-      }
-      break;
-    }
     case "code-review": {
       if (ctx.review.filePath) {
         lines.push(`## Reviewing: ${ctx.review.filePath}`);
@@ -104,7 +84,7 @@ export function buildForkPreamble(ctx: AIContext): string {
         lines.push("Note: this content was converted before annotation, so source line numbers may not match the original document.");
       }
       lines.push("");
-      lines.push(truncate(ctx.annotate.content, MAX_PLAN_CHARS));
+      lines.push(truncate(ctx.annotate.content, MAX_DOCUMENT_CHARS));
       if (ctx.annotate.annotations) {
         lines.push("");
         lines.push("## User Annotations So Far");
@@ -119,8 +99,7 @@ export function buildForkPreamble(ctx: AIContext): string {
 
 /**
  * Build the effective prompt for a query, prepending a preamble on the first
- * message. Used by providers that inject context via the prompt itself (Codex,
- * Pi) rather than a separate system-prompt channel (Claude).
+ * message. Used by providers that inject context via the prompt itself.
  */
 export function buildEffectivePrompt(
   userPrompt: string,
@@ -137,48 +116,12 @@ export function buildEffectivePrompt(
 // Internals
 // ---------------------------------------------------------------------------
 
-const MAX_PLAN_CHARS = 60_000;
+const MAX_DOCUMENT_CHARS = 60_000;
 const MAX_DIFF_CHARS = 40_000;
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return `${text.slice(0, max)}\n\n... [truncated for context window]`;
-}
-
-function buildPlanReviewPrompt(
-  ctx: Extract<AIContext, { mode: "plan-review" }>
-): string {
-  const sections: string[] = [
-    "The user is reviewing an implementation plan in Plannotator.",
-    "",
-    "## Plan Under Review",
-  ];
-
-  if (ctx.plan.version) {
-    const total = ctx.plan.totalVersions ? ` of ${ctx.plan.totalVersions}` : "";
-    sections.push(`Plan version: ${ctx.plan.version}${total}`);
-  }
-
-  if (ctx.plan.project) {
-    sections.push(`Project: ${ctx.plan.project}`);
-  }
-
-  sections.push("");
-  sections.push(truncate(ctx.plan.plan, MAX_PLAN_CHARS));
-
-  if (ctx.plan.previousPlan) {
-    sections.push("");
-    sections.push("## Previous Plan Version (for reference)");
-    sections.push(truncate(ctx.plan.previousPlan, MAX_PLAN_CHARS / 2));
-  }
-
-  if (ctx.plan.annotations) {
-    sections.push("");
-    sections.push("## User Annotations");
-    sections.push(ctx.plan.annotations);
-  }
-
-  return sections.join("\n");
 }
 
 function buildCodeReviewPrompt(
@@ -238,7 +181,7 @@ function buildAnnotatePrompt(
   }
 
   sections.push("");
-  sections.push(truncate(ctx.annotate.content, MAX_PLAN_CHARS));
+  sections.push(truncate(ctx.annotate.content, MAX_DOCUMENT_CHARS));
 
   if (ctx.annotate.annotations) {
     sections.push("");

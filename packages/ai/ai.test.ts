@@ -192,7 +192,7 @@ describe("SessionManager", () => {
     const s1 = mockSession("s1");
     const s2 = mockSession("s2");
 
-    const e1 = sm.track(s1, "plan-review", "First");
+    const e1 = sm.track(s1, "code-review", "First");
     const e2 = sm.track(s2, "code-review", "Second");
     e1.lastActiveAt = 1000;
     e2.lastActiveAt = 2000;
@@ -205,14 +205,14 @@ describe("SessionManager", () => {
 
   test("get returns entry by ID", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
     expect(sm.get("s1")?.session.id).toBe("s1");
     expect(sm.get("nonexistent")).toBeUndefined();
   });
 
   test("touch updates lastActiveAt", async () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
     const before = sm.get("s1")!.lastActiveAt;
 
     await new Promise((r) => setTimeout(r, 10));
@@ -223,16 +223,16 @@ describe("SessionManager", () => {
 
   test("remove removes entry", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
     sm.remove("s1");
     expect(sm.size).toBe(0);
   });
 
   test("forksOf filters by parent", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
-    sm.track(mockSession("fork1", "parent-123"), "plan-review");
-    sm.track(mockSession("fork2", "parent-123"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
+    sm.track(mockSession("fork1", "parent-123"), "code-review");
+    sm.track(mockSession("fork2", "parent-123"), "code-review");
     sm.track(mockSession("fork3", "other-parent"), "code-review");
 
     const forks = sm.forksOf("parent-123");
@@ -242,9 +242,9 @@ describe("SessionManager", () => {
 
   test("evicts oldest idle session when maxSessions reached", () => {
     const sm = new SessionManager({ maxSessions: 2 });
-    sm.track(mockSession("s1"), "plan-review");
-    sm.track(mockSession("s2"), "plan-review");
-    sm.track(mockSession("s3"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
+    sm.track(mockSession("s2"), "code-review");
+    sm.track(mockSession("s3"), "code-review");
 
     expect(sm.size).toBe(2);
     expect(sm.get("s1")).toBeUndefined();
@@ -255,14 +255,14 @@ describe("SessionManager", () => {
   test("disposeAll aborts active sessions and clears", () => {
     const sm = new SessionManager();
     const s1 = mockSession("s1");
-    sm.track(s1, "plan-review");
+    sm.track(s1, "code-review");
     sm.disposeAll();
     expect(sm.size).toBe(0);
   });
 
   test("remapId moves entry to new key and keeps alias", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("placeholder-1"), "plan-review");
+    sm.track(mockSession("placeholder-1"), "code-review");
 
     sm.remapId("placeholder-1", "real-sdk-id");
 
@@ -275,7 +275,7 @@ describe("SessionManager", () => {
   test("track wires onIdResolved callback with alias", () => {
     const sm = new SessionManager();
     const session = mockSession("temp-id");
-    sm.track(session, "plan-review");
+    sm.track(session, "code-review");
 
     expect(session.onIdResolved).toBeDefined();
     session.onIdResolved!("temp-id", "real-id");
@@ -288,7 +288,7 @@ describe("SessionManager", () => {
 
   test("remove cleans up aliases", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("temp"), "plan-review");
+    sm.track(mockSession("temp"), "code-review");
     sm.remapId("temp", "real");
 
     sm.remove("real");
@@ -299,7 +299,7 @@ describe("SessionManager", () => {
 
   test("remove via alias also works", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("temp"), "plan-review");
+    sm.track(mockSession("temp"), "code-review");
     sm.remapId("temp", "real");
 
     sm.remove("temp"); // remove via alias
@@ -313,26 +313,6 @@ describe("SessionManager", () => {
 // ---------------------------------------------------------------------------
 
 describe("Context builders", () => {
-  test("buildSystemPrompt for plan-review", () => {
-    const ctx: AIContext = {
-      mode: "plan-review",
-      plan: {
-        plan: "# My Plan\n\nStep 1: do things",
-        previousPlan: "# Old Plan",
-        version: 3,
-        totalVersions: 4,
-        project: "plannotator",
-      },
-    };
-    const prompt = buildSystemPrompt(ctx);
-    expect(prompt).toContain("Plannotator");
-    expect(prompt).toContain("# My Plan");
-    expect(prompt).toContain("Step 1: do things");
-    expect(prompt).toContain("Plan version: 3 of 4");
-    expect(prompt).toContain("Project: plannotator");
-    expect(prompt).toContain("# Old Plan");
-  });
-
   test("buildSystemPrompt for code-review", () => {
     const ctx: AIContext = {
       mode: "code-review",
@@ -364,16 +344,17 @@ describe("Context builders", () => {
 
   test("buildForkPreamble includes context and instructions", () => {
     const ctx: AIContext = {
-      mode: "plan-review",
-      plan: {
-        plan: "# Plan\nDetails here",
+      mode: "annotate",
+      annotate: {
+        content: "# Doc\nDetails here",
+        filePath: "/project/doc.md",
         annotations: "- Remove section 3",
       },
       parent: { sessionId: "parent-123", cwd: "/project" },
     };
     const preamble = buildForkPreamble(ctx);
     expect(preamble).toContain("reviewing your work in Plannotator");
-    expect(preamble).toContain("# Plan");
+    expect(preamble).toContain("# Doc");
     expect(preamble).toContain("Remove section 3");
   });
 
@@ -394,15 +375,15 @@ describe("Context builders", () => {
     expect(preamble).toContain("Lines 10-15");
   });
 
-  test("truncates very long plans", () => {
-    const longPlan = "x".repeat(100_000);
+  test("truncates very long documents", () => {
+    const longDocument = "x".repeat(100_000);
     const ctx: AIContext = {
-      mode: "plan-review",
-      plan: { plan: longPlan },
+      mode: "annotate",
+      annotate: { content: longDocument, filePath: "/tmp/doc.md" },
     };
     const prompt = buildSystemPrompt(ctx);
     expect(prompt).toContain("[truncated for context window]");
-    expect(prompt.length).toBeLessThan(longPlan.length);
+    expect(prompt.length).toBeLessThan(longDocument.length);
   });
 });
 
@@ -428,38 +409,38 @@ describe("ProviderRegistry", () => {
 
   test("register with custom instance ID", () => {
     const reg = new ProviderRegistry();
-    const p = mockProvider("claude-agent-sdk");
-    const id = reg.register(p, "claude-fast");
+    const p = mockProvider("pi-sdk");
+    const id = reg.register(p, "pi-fast");
 
-    expect(id).toBe("claude-fast");
-    expect(reg.get("claude-fast")).toBe(p);
-    expect(reg.get("claude-agent-sdk")).toBeUndefined();
+    expect(id).toBe("pi-fast");
+    expect(reg.get("pi-fast")).toBe(p);
+    expect(reg.get("pi-sdk")).toBeUndefined();
   });
 
   test("multiple instances of same provider type", () => {
     const reg = new ProviderRegistry();
-    const p1 = mockProvider("claude-agent-sdk");
-    const p2 = mockProvider("claude-agent-sdk");
+    const p1 = mockProvider("pi-sdk");
+    const p2 = mockProvider("pi-sdk");
 
-    reg.register(p1, "claude-review");
-    reg.register(p2, "claude-plan");
+    reg.register(p1, "pi-review");
+    reg.register(p2, "pi-annotate");
 
     expect(reg.size).toBe(2);
-    expect(reg.get("claude-review")).toBe(p1);
-    expect(reg.get("claude-plan")).toBe(p2);
+    expect(reg.get("pi-review")).toBe(p1);
+    expect(reg.get("pi-annotate")).toBe(p2);
 
-    const byType = reg.getByType("claude-agent-sdk");
+    const byType = reg.getByType("pi-sdk");
     expect(byType.length).toBe(2);
   });
 
   test("mixed provider types", () => {
     const reg = new ProviderRegistry();
-    reg.register(mockProvider("claude-agent-sdk"), "claude-1");
-    reg.register(mockProvider("opencode-sdk"), "oc-1");
+    reg.register(mockProvider("pi-sdk"), "pi-1");
+    reg.register(mockProvider("mock-sdk"), "mock-1");
 
     expect(reg.size).toBe(2);
-    expect(reg.getByType("claude-agent-sdk").length).toBe(1);
-    expect(reg.getByType("opencode-sdk").length).toBe(1);
+    expect(reg.getByType("pi-sdk").length).toBe(1);
+    expect(reg.getByType("mock-sdk").length).toBe(1);
   });
 
   test("disposeAll clears everything", () => {
@@ -555,8 +536,8 @@ describe("AI endpoints", () => {
 
   test("capabilities lists multiple providers", async () => {
     const { reg, endpoints } = setup();
-    reg.register(mockProvider("claude-agent-sdk"), "claude-1");
-    reg.register(mockProvider("opencode-sdk"), "oc-1");
+    reg.register(mockProvider("pi-sdk"), "pi-1");
+    reg.register(mockProvider("mock-sdk"), "mock-1");
 
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities")
@@ -564,20 +545,20 @@ describe("AI endpoints", () => {
     const data = await res.json();
     expect(data.providers.length).toBe(2);
     const ids = data.providers.map((p: { id: string }) => p.id);
-    expect(ids).toContain("claude-1");
-    expect(ids).toContain("oc-1");
+    expect(ids).toContain("pi-1");
+    expect(ids).toContain("mock-1");
   });
 
   test("capabilities returns instance ID not type name for defaultProvider", async () => {
     const { reg, endpoints } = setup();
-    reg.register(mockProvider("claude-agent-sdk"), "claude-fast");
+    reg.register(mockProvider("pi-sdk"), "pi-fast");
 
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities")
     );
     const data = await res.json();
-    // Should return the instance ID "claude-fast", not the type name "claude-agent-sdk"
-    expect(data.defaultProvider).toBe("claude-fast");
+    // Should return the instance ID "pi-fast", not the type name "pi-sdk"
+    expect(data.defaultProvider).toBe("pi-fast");
   });
 
   test("session creation and query flow", async () => {
@@ -590,7 +571,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -605,29 +586,29 @@ describe("AI endpoints", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: createData.sessionId,
-          prompt: "What is this plan about?",
+          prompt: "What is this diff about?",
         }),
       })
     );
     expect(queryRes.headers.get("Content-Type")).toBe("text/event-stream");
 
     const text = await queryRes.text();
-    expect(text).toContain("Echo: What is this plan about?");
+    expect(text).toContain("Echo: What is this diff about?");
     expect(text).toContain("[DONE]");
   });
 
   test("session creation with specific provider ID", async () => {
     const { reg, endpoints } = setup();
-    reg.register(mockProvider("claude-agent-sdk"), "claude-fast");
-    reg.register(mockProvider("opencode-sdk"), "oc-default");
+    reg.register(mockProvider("pi-sdk"), "pi-fast");
+    reg.register(mockProvider("mock-sdk"), "mock-default");
 
     const createRes = await endpoints["/api/ai/session"](
       new Request("http://localhost/api/ai/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
-          providerId: "claude-fast",
+          context: { mode: "code-review", review: { patch: "+x" } },
+          providerId: "pi-fast",
         }),
       })
     );
@@ -650,7 +631,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
           maxTurns: 9999,
           maxBudgetUsd: 9999,
         }),
@@ -671,7 +652,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
           providerId: "nonexistent",
         }),
       })
@@ -690,7 +671,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -722,7 +703,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -753,7 +734,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -779,7 +760,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# A" } },
+          context: { mode: "code-review", review: { patch: "+a" } },
         }),
       })
     );
@@ -798,397 +779,6 @@ describe("AI endpoints", () => {
     );
     const sessions = (await listRes.json()) as Array<{ mode: string }>;
     expect(sessions.length).toBe(2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Claude Agent SDK — Bedrock/Vertex model resolution
-// ---------------------------------------------------------------------------
-
-import { resolveSDKModel } from "./providers/claude-agent-sdk.ts";
-
-describe("resolveSDKModel", () => {
-  const SONNET_ARN =
-    "arn:aws:bedrock:us-east-1:123456789012:inference-profile/global.anthropic.claude-sonnet-4-6";
-  const OPUS_ARN =
-    "arn:aws:bedrock:us-east-1:123456789012:inference-profile/global.anthropic.claude-opus-4-8[1m]";
-  const HAIKU_ARN =
-    "arn:aws:bedrock:us-east-1:123456789012:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0";
-
-  const bedrockEnv = {
-    CLAUDE_CODE_USE_BEDROCK: "1",
-    ANTHROPIC_MODEL: OPUS_ARN,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: SONNET_ARN,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: OPUS_ARN,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: HAIKU_ARN,
-  };
-
-  test("off Bedrock/Vertex: returns the requested alias unchanged", () => {
-    expect(resolveSDKModel("claude-sonnet-4-6", {})).toBe("claude-sonnet-4-6");
-  });
-
-  test("maps a bare sonnet alias to the configured Sonnet ARN on Bedrock", () => {
-    expect(resolveSDKModel("claude-sonnet-4-6", bedrockEnv)).toBe(SONNET_ARN);
-  });
-
-  test("maps bare opus / haiku aliases to their ARNs", () => {
-    expect(resolveSDKModel("claude-opus-4-8", bedrockEnv)).toBe(OPUS_ARN);
-    expect(resolveSDKModel("claude-haiku-4-5", bedrockEnv)).toBe(HAIKU_ARN);
-  });
-
-  test("maps the [1m] context variant by family", () => {
-    expect(resolveSDKModel("claude-sonnet-4-6[1m]", bedrockEnv)).toBe(SONNET_ARN);
-  });
-
-  test("passes through an identifier that is already an ARN", () => {
-    expect(resolveSDKModel(SONNET_ARN, bedrockEnv)).toBe(SONNET_ARN);
-  });
-
-  test("passes through a bare inference-profile id", () => {
-    const profile = "us.anthropic.claude-sonnet-4-5-20250929-v1:0";
-    expect(resolveSDKModel(profile, bedrockEnv)).toBe(profile);
-  });
-
-  test("falls back to ANTHROPIC_MODEL when no family default is set", () => {
-    expect(
-      resolveSDKModel("claude-sonnet-4-6", {
-        CLAUDE_CODE_USE_BEDROCK: "1",
-        ANTHROPIC_MODEL: OPUS_ARN,
-      }),
-    ).toBe(OPUS_ARN);
-  });
-
-  test("returns undefined so the SDK inherits env when nothing else resolves", () => {
-    expect(
-      resolveSDKModel("claude-sonnet-4-6", { CLAUDE_CODE_USE_BEDROCK: "1" }),
-    ).toBeUndefined();
-  });
-
-  test("also applies on Vertex", () => {
-    expect(
-      resolveSDKModel("claude-opus-4-8", {
-        CLAUDE_CODE_USE_VERTEX: "true",
-        ANTHROPIC_DEFAULT_OPUS_MODEL: OPUS_ARN,
-      }),
-    ).toBe(OPUS_ARN);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Codex SDK event mapping
-// ---------------------------------------------------------------------------
-
-import {
-  mapCodexEvent,
-  mapCodexItem,
-  shouldSkipGitRepoCheck,
-} from "./providers/codex-sdk.ts";
-
-describe("shouldSkipGitRepoCheck", () => {
-  test("keeps the Codex git repo check inside a worktree", async () => {
-    const probe = async (command: string, args: string[], options: { encoding: "utf8" }) => {
-      expect(command).toBe("git");
-      expect(args).toEqual(["-C", "/repo", "rev-parse", "--is-inside-work-tree"]);
-      expect(options).toEqual({ encoding: "utf8" });
-      return { stdout: "true\n" };
-    };
-
-    expect(await shouldSkipGitRepoCheck("/repo", probe)).toBe(false);
-  });
-
-  test("skips the Codex git repo check for standalone document sessions", async () => {
-    const probe = async () => {
-      throw new Error("not a git repo");
-    };
-
-    expect(await shouldSkipGitRepoCheck("/tmp/plain-session", probe)).toBe(true);
-  });
-
-  test("skips the Codex git repo check when the probe cannot run", async () => {
-    const probe = async () => {
-      throw new Error("git unavailable");
-    };
-
-    expect(await shouldSkipGitRepoCheck("/tmp/plain-session", probe)).toBe(true);
-  });
-});
-
-describe("mapCodexEvent", () => {
-  function offsets() {
-    return new Map<string, number>();
-  }
-
-  test("thread.started returns empty", () => {
-    const result = mapCodexEvent(
-      { type: "thread.started", thread_id: "t-123" },
-      offsets(),
-    );
-    expect(result).toEqual([]);
-  });
-
-  test("turn.started and turn.completed return empty", () => {
-    expect(mapCodexEvent({ type: "turn.started" }, offsets())).toEqual([]);
-    expect(mapCodexEvent({ type: "turn.completed", usage: {} }, offsets())).toEqual([]);
-  });
-
-  test("turn.failed returns error", () => {
-    const result = mapCodexEvent(
-      { type: "turn.failed", error: { message: "Out of tokens" } },
-      offsets(),
-    );
-    expect(result).toEqual([{
-      type: "error",
-      error: "Out of tokens",
-      code: "turn_failed",
-    }]);
-  });
-
-  test("error event returns error", () => {
-    const result = mapCodexEvent(
-      { type: "error", message: "Connection lost" },
-      offsets(),
-    );
-    expect(result).toEqual([{
-      type: "error",
-      error: "Connection lost",
-      code: "codex_error",
-    }]);
-  });
-
-  test("unknown event type passes through", () => {
-    const result = mapCodexEvent(
-      { type: "some.future.event", data: 42 },
-      offsets(),
-    );
-    expect(result.length).toBe(1);
-    expect(result[0].type).toBe("unknown");
-  });
-});
-
-describe("mapCodexItem — agent_message", () => {
-  function offsets() {
-    return new Map<string, number>();
-  }
-
-  test("item.started initializes offset tracker, returns empty", () => {
-    const o = offsets();
-    const result = mapCodexItem(
-      { type: "item.started", item: { id: "msg-1", type: "agent_message", text: "" } },
-      o,
-    );
-    expect(result).toEqual([]);
-    expect(o.get("msg-1")).toBe(0);
-  });
-
-  test("item.updated emits text_delta from cumulative text", () => {
-    const o = offsets();
-    o.set("msg-1", 0);
-
-    const r1 = mapCodexItem(
-      { type: "item.updated", item: { id: "msg-1", type: "agent_message", text: "Hello" } },
-      o,
-    );
-    expect(r1).toEqual([{ type: "text_delta", delta: "Hello" }]);
-    expect(o.get("msg-1")).toBe(5);
-
-    const r2 = mapCodexItem(
-      { type: "item.updated", item: { id: "msg-1", type: "agent_message", text: "Hello world" } },
-      o,
-    );
-    expect(r2).toEqual([{ type: "text_delta", delta: " world" }]);
-    expect(o.get("msg-1")).toBe(11);
-  });
-
-  test("item.updated with no new text returns empty", () => {
-    const o = offsets();
-    o.set("msg-1", 5);
-
-    const result = mapCodexItem(
-      { type: "item.updated", item: { id: "msg-1", type: "agent_message", text: "Hello" } },
-      o,
-    );
-    expect(result).toEqual([]);
-  });
-
-  test("item.completed emits full text and cleans up offset", () => {
-    const o = offsets();
-    o.set("msg-1", 5);
-
-    const result = mapCodexItem(
-      { type: "item.completed", item: { id: "msg-1", type: "agent_message", text: "Hello world" } },
-      o,
-    );
-    expect(result).toEqual([{ type: "text", text: "Hello world" }]);
-    expect(o.has("msg-1")).toBe(false);
-  });
-});
-
-describe("mapCodexItem — command_execution", () => {
-  function offsets() {
-    return new Map<string, number>();
-  }
-
-  test("item.started emits tool_use", () => {
-    const result = mapCodexItem(
-      { type: "item.started", item: { id: "cmd-1", type: "command_execution", command: "ls -la", status: "in_progress" } },
-      offsets(),
-    );
-    expect(result).toEqual([{
-      type: "tool_use",
-      toolName: "Bash",
-      toolInput: { command: "ls -la" },
-      toolUseId: "cmd-1",
-    }]);
-  });
-
-  test("item.completed emits tool_result with exit code", () => {
-    const result = mapCodexItem(
-      { type: "item.completed", item: { id: "cmd-1", type: "command_execution", command: "ls", aggregated_output: "file.txt\n", exit_code: 0, status: "completed" } },
-      offsets(),
-    );
-    expect(result.length).toBe(1);
-    expect(result[0].type).toBe("tool_result");
-    if (result[0].type === "tool_result") {
-      expect(result[0].result).toContain("file.txt");
-      expect(result[0].result).toContain("[exit code: 0]");
-    }
-  });
-});
-
-describe("mapCodexItem — file_change", () => {
-  function offsets() {
-    return new Map<string, number>();
-  }
-
-  test("emits tool_use with changes", () => {
-    const result = mapCodexItem(
-      { type: "item.completed", item: { id: "fc-1", type: "file_change", changes: [{ path: "src/foo.ts", kind: "update" }], status: "completed" } },
-      offsets(),
-    );
-    expect(result.length).toBe(1);
-    expect(result[0].type).toBe("tool_use");
-    if (result[0].type === "tool_use") {
-      expect(result[0].toolName).toBe("FileChange");
-    }
-  });
-});
-
-describe("mapCodexItem — mcp_tool_call", () => {
-  function offsets() {
-    return new Map<string, number>();
-  }
-
-  test("item.started emits tool_use with server/tool name", () => {
-    const result = mapCodexItem(
-      { type: "item.started", item: { id: "mcp-1", type: "mcp_tool_call", server: "github", tool: "search", arguments: { q: "test" }, status: "in_progress" } },
-      offsets(),
-    );
-    expect(result).toEqual([{
-      type: "tool_use",
-      toolName: "github/search",
-      toolInput: { q: "test" },
-      toolUseId: "mcp-1",
-    }]);
-  });
-
-  test("item.completed with result emits tool_result", () => {
-    const result = mapCodexItem(
-      { type: "item.completed", item: { id: "mcp-1", type: "mcp_tool_call", server: "github", tool: "search", arguments: {}, result: "found 3 items", status: "completed" } },
-      offsets(),
-    );
-    expect(result.some(m => m.type === "tool_result")).toBe(true);
-  });
-
-  test("item.completed with error emits error", () => {
-    const result = mapCodexItem(
-      { type: "item.completed", item: { id: "mcp-1", type: "mcp_tool_call", server: "github", tool: "search", arguments: {}, error: { message: "rate limited" }, status: "completed" } },
-      offsets(),
-    );
-    expect(result.some(m => m.type === "error")).toBe(true);
-  });
-});
-
-describe("mapCodexItem — error and passthrough types", () => {
-  function offsets() {
-    return new Map<string, number>();
-  }
-
-  test("error item maps to error message", () => {
-    const result = mapCodexItem(
-      { type: "item.completed", item: { id: "e-1", type: "error", message: "Something broke" } },
-      offsets(),
-    );
-    expect(result).toEqual([{ type: "error", error: "Something broke" }]);
-  });
-
-  test("reasoning, web_search, todo_list pass through as unknown", () => {
-    for (const itemType of ["reasoning", "web_search", "todo_list"]) {
-      const result = mapCodexItem(
-        { type: "item.completed", item: { id: "x-1", type: itemType, text: "thinking..." } },
-        offsets(),
-      );
-      expect(result[0].type).toBe("unknown");
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Multi-provider capabilities
-// ---------------------------------------------------------------------------
-
-describe("Multi-provider endpoints", () => {
-  test("capabilities lists both providers with correct capabilities", async () => {
-    const reg = new ProviderRegistry();
-    const sm = new SessionManager();
-    const endpoints = createAIEndpoints({ registry: reg, sessionManager: sm });
-
-    // Claude-like: full capabilities
-    const claude = mockProvider("claude-agent-sdk");
-    reg.register(claude, "claude");
-
-    // Codex-like: no fork
-    const codex: AIProvider = {
-      ...mockProvider("codex-sdk"),
-      capabilities: { fork: false, resume: true, streaming: true, tools: true },
-    };
-    reg.register(codex, "codex");
-
-    const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
-    );
-    const data = await res.json();
-
-    expect(data.available).toBe(true);
-    expect(data.providers.length).toBe(2);
-    const ids = data.providers.map((p: { id: string }) => p.id);
-    expect(ids).toContain("claude");
-    expect(ids).toContain("codex");
-    // Default is first registered
-    expect(data.defaultProvider).toBe("claude");
-  });
-
-  test("session creation with specific provider ID routes correctly", async () => {
-    const reg = new ProviderRegistry();
-    const sm = new SessionManager();
-    const endpoints = createAIEndpoints({ registry: reg, sessionManager: sm });
-
-    reg.register(mockProvider("claude-agent-sdk"), "claude");
-    reg.register(mockProvider("codex-sdk"), "codex");
-
-    // Create session with codex provider
-    const res = await endpoints["/api/ai/session"](
-      new Request("http://localhost/api/ai/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          context: { mode: "code-review", review: { patch: "+x" } },
-          providerId: "codex",
-        }),
-      })
-    );
-    expect(res.status).toBe(200);
-    const data = (await res.json()) as { sessionId: string };
-    expect(data.sessionId).toBeDefined();
   });
 });
 
@@ -1339,175 +929,5 @@ describe("mapPiEvent", () => {
       toolUseId: "tc_2",
       result: JSON.stringify({ files: ["a.ts", "b.ts"] }),
     }]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// OpenCode event mapping
-// ---------------------------------------------------------------------------
-
-import { mapOpenCodeEvent } from "./providers/opencode-sdk.ts";
-
-describe("mapOpenCodeEvent", () => {
-  const SESSION_ID = "oc_session_1";
-
-  test("message.part.delta with text field maps to text_delta", () => {
-    const result = mapOpenCodeEvent("message.part.delta", {
-      sessionID: SESSION_ID,
-      messageID: "msg_1",
-      partID: "part_1",
-      field: "text",
-      delta: "Hello ",
-    }, SESSION_ID);
-    expect(result).toEqual([{ type: "text_delta", delta: "Hello " }]);
-  });
-
-  test("message.part.delta with non-text field returns empty", () => {
-    const result = mapOpenCodeEvent("message.part.delta", {
-      field: "reasoning",
-      delta: "thinking...",
-    }, SESSION_ID);
-    expect(result).toEqual([]);
-  });
-
-  test("message.part.updated with running tool maps to tool_use", () => {
-    const result = mapOpenCodeEvent("message.part.updated", {
-      part: {
-        id: "part_1",
-        type: "tool",
-        tool: "read",
-        callID: "call_1",
-        state: {
-          status: "running",
-          input: { path: "/foo.ts" },
-          time: { start: 1000 },
-        },
-      },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "tool_use",
-      toolName: "read",
-      toolInput: { path: "/foo.ts" },
-      toolUseId: "call_1",
-    }]);
-  });
-
-  test("message.part.updated with completed tool maps to tool_result", () => {
-    const result = mapOpenCodeEvent("message.part.updated", {
-      part: {
-        id: "part_1",
-        type: "tool",
-        tool: "read",
-        callID: "call_1",
-        state: {
-          status: "completed",
-          output: "file contents here",
-          time: { start: 1000, end: 1100 },
-        },
-      },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "tool_result",
-      toolUseId: "call_1",
-      result: "file contents here",
-    }]);
-  });
-
-  test("message.part.updated with error tool maps to tool_result with [Error] prefix", () => {
-    const result = mapOpenCodeEvent("message.part.updated", {
-      part: {
-        id: "part_1",
-        type: "tool",
-        tool: "read",
-        callID: "call_1",
-        state: {
-          status: "error",
-          error: "file not found",
-          time: { start: 1000, end: 1100 },
-        },
-      },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "tool_result",
-      toolUseId: "call_1",
-      result: "[Error] file not found",
-    }]);
-  });
-
-  test("permission.updated maps to permission_request", () => {
-    const result = mapOpenCodeEvent("permission.updated", {
-      id: "perm_1",
-      type: "write_file",
-      title: "Write to /src/foo.ts",
-      callID: "call_2",
-      sessionID: SESSION_ID,
-      metadata: { path: "/src/foo.ts" },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "permission_request",
-      requestId: "perm_1",
-      toolName: "write_file",
-      toolInput: { path: "/src/foo.ts" },
-      title: "Write to /src/foo.ts",
-      toolUseId: "call_2",
-    }]);
-  });
-
-  test("session.status idle maps to result", () => {
-    const result = mapOpenCodeEvent("session.status", {
-      sessionID: SESSION_ID,
-      status: { type: "idle" },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "result",
-      sessionId: SESSION_ID,
-      success: true,
-    }]);
-  });
-
-  test("session.status busy returns empty", () => {
-    const result = mapOpenCodeEvent("session.status", {
-      sessionID: SESSION_ID,
-      status: { type: "busy" },
-    }, SESSION_ID);
-    expect(result).toEqual([]);
-  });
-
-  test("message.updated with error maps to error", () => {
-    const result = mapOpenCodeEvent("message.updated", {
-      info: {
-        id: "msg_1",
-        sessionID: SESSION_ID,
-        role: "assistant",
-        error: {
-          name: "ProviderAuthError",
-          data: { message: "Invalid API key", providerID: "anthropic" },
-        },
-      },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "error",
-      error: "Invalid API key",
-      code: "opencode_message_error",
-    }]);
-  });
-
-  test("session.error maps to error", () => {
-    const result = mapOpenCodeEvent("session.error", {
-      sessionID: SESSION_ID,
-      error: { message: "Something went wrong" },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "error",
-      error: "Something went wrong",
-      code: "opencode_session_error",
-    }]);
-  });
-
-  test("ignored events return empty", () => {
-    expect(mapOpenCodeEvent("session.created", { sessionID: SESSION_ID }, SESSION_ID)).toEqual([]);
-    expect(mapOpenCodeEvent("session.updated", { sessionID: SESSION_ID }, SESSION_ID)).toEqual([]);
-    expect(mapOpenCodeEvent("server.connected", {}, SESSION_ID)).toEqual([]);
-    expect(mapOpenCodeEvent("file.edited", { file: "foo.ts" }, SESSION_ID)).toEqual([]);
   });
 });

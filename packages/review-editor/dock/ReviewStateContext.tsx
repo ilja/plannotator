@@ -1,6 +1,5 @@
 import React, { createContext, useContext } from 'react';
 import type { CodeAnnotation, CodeAnnotationType, SelectedLineRange, TokenAnnotationMeta, ConventionalLabel, ConventionalDecoration } from '@plannotator/ui/types';
-import type { AgentJobInfo } from '@plannotator/ui/types';
 import type { DiffFile, AnnotationScrollTarget } from '../types';
 import type { AIChatEntry } from '../hooks/useAIChat';
 import type { ReviewSearchMatch } from '../utils/reviewSearch';
@@ -36,13 +35,12 @@ export interface ReviewState {
    *  part of the DiffViewer remount key so mode switches invalidate cached
    *  file content — branch and merge-base compute different "old" sides. */
   activeDiffBase?: string;
-  /** Diff context baked into exported feedback so downstream panels (agent job
-   * detail, etc.) produce the same markdown the main feedback path sends. */
+  /** Diff context baked into exported feedback. */
   feedbackDiffContext?: FeedbackDiffContext;
   /** PR/MR review scope label, e.g. "Layer diff" or "Full stack diff". */
   prReviewScope?: string;
   prDiffScope?: PRDiffScope;
-  /** Agent working directory — base for resolving repo-relative diff paths to
+  /** Local checkout directory — base for resolving repo-relative diff paths to
    *  absolute (e.g. for the Open-in-app control). */
   agentCwd?: string | null;
 
@@ -102,9 +100,6 @@ export interface ReviewState {
   /** File-aware variant of aiHistoryForSelection (same single-file caveat). */
   getAIHistoryForFile: (filePath: string) => AIChatEntry[];
 
-  // Agent jobs
-  agentJobs: AgentJobInfo[];
-
   // PR
   prMetadata: PRMetadata | null;
   prContext: PRContext | null;
@@ -122,9 +117,6 @@ export interface ReviewState {
   onSemanticDiffUnavailable: () => void;
   onSemanticDiffLoadError: () => boolean;
   onSemanticDiffLoadSuccess: () => void;
-
-  // Tour
-  openTourPanel: (jobId: string) => void;
 
   // Code navigation
   onCodeNavRequest?: (request: import('@plannotator/shared/code-nav').CodeNavRequest) => void;

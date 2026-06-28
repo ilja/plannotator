@@ -117,21 +117,15 @@ Write the draft to `RELEASE_NOTES_v<VERSION>.md` in the repo root and tell the u
 
 ## Phase 2: Version Bump
 
-Bump the version string in these **7 files** (and only these — other package.json files use stub versions):
+Bump the version string in these **3 files** (and only these — other package.json files use stub versions):
 
 | File | Field |
 |------|-------|
 | `package.json` (root) | `"version"` |
-| `apps/opencode-plugin/package.json` | `"version"` |
 | `apps/pi-extension/package.json` | `"version"` |
-| `apps/hook/.claude-plugin/plugin.json` | `"version"` |
-| `apps/copilot/plugin.json` | `"version"` |
-| `openpackage.yml` (root) | `version:` |
 | `packages/server/package.json` | `"version"` |
 
-Read each file, confirm the current version matches expectations, then update all 7 atomically.
-
-Do not bump the VS Code extension (`apps/vscode-extension/package.json`) — it has independent versioning.
+Read each file, confirm the current version matches expectations, then update all 3 atomically.
 
 ---
 
@@ -140,13 +134,12 @@ Do not bump the VS Code extension (`apps/vscode-extension/package.json`) — it 
 Run builds in dependency order:
 
 ```bash
-bun run build:review    # 1. Code review editor (standalone Vite build)
-bun run build:hook      # 2. Plan review + hook server (copies review's built HTML into hook dist)
-bun run build:opencode  # 3. OpenCode plugin (copies built HTML from hook + review)
-bun run build:pi        # 4. Pi extension (chains review → hook → pi internally, safe to run after 1-2)
+bun run build:review      # 1. Code review editor (standalone Vite build)
+bun run build:annotation  # 2. Annotation bundle builder
+bun run build:pi          # 3. Pi extension (chains review → annotation → pi internally, safe to run directly)
 ```
 
-`build:pi` chains review and hook internally, so after steps 1-2 it only runs the pi-specific build.
+`build:pi` chains review and annotation internally, so it is the required release build.
 
 Verify all builds succeed before proceeding.
 
@@ -154,7 +147,7 @@ Verify all builds succeed before proceeding.
 
 After builds pass, audit the Pi extension to ensure all server-side imports resolve in the published package. This catches missing files before they reach npm.
 
-1. **Check imports vs `files` array.** Trace all local imports (starting with `./` or `../`) from `index.ts`, `server.ts`, `tool-scope.ts`, and every file in `server/`. Verify each target is covered by a pattern in the `files` array of `apps/pi-extension/package.json`.
+1. **Check imports vs `files` array.** Trace all local imports (starting with `./` or `../`) from `index.ts`, `server.ts`, and every file in `server/`. Verify each target is covered by a pattern in the `files` array of `apps/pi-extension/package.json`.
 
 2. **Check `vendor.sh` covers all shared/ai imports.** Every `../generated/*.js` import in the server files must have a corresponding entry in `vendor.sh`'s copy loops. If a new shared module or AI module was added to `packages/shared/` or `packages/ai/` and is imported by Pi's server code, it must be added to `vendor.sh`.
 
@@ -191,7 +184,7 @@ If anything is missing, fix it before proceeding to Phase 4. Common fixes:
    - Compiles paste service binaries (same 6 platforms)
    - Generates SLSA build provenance attestations for all 12 binaries via `actions/attest-build-provenance` (signed through Sigstore, recorded in Rekor)
    - Creates the GitHub Release with all binaries attached
-   - Publishes `@plannotator/opencode` and `@plannotator/pi-extension` to npm with provenance
+   - Publishes `@plannotator/pi-extension` to npm with provenance
 
    **Note on immutable releases:** The repo has GitHub Immutable Releases enabled, so once the `v*` tag is pushed and the release is created, the tag→commit and tag→asset bindings are permanent. You cannot delete and re-create a tag to "fix" a bad release — you must ship a new version. Release notes remain editable (see step 5), but everything else is locked.
 
@@ -204,7 +197,7 @@ If anything is missing, fix it before proceeding to Phase 4. Common fixes:
    Verify:
    - All jobs pass (test, build, release, npm-publish)
    - The GitHub Release was created with all binary artifacts
-   - npm packages published successfully (check with `npm view @plannotator/opencode version` and `npm view @plannotator/pi-extension version`)
+   - npm package published successfully (check with `npm view @plannotator/pi-extension version`)
 
    If anything fails, investigate the logs and report to the user before retrying.
 
@@ -219,11 +212,10 @@ If anything is missing, fix it before proceeding to Phase 4. Common fixes:
 ## Checklist
 
 Before tagging, verify:
-- [ ] All 7 version files bumped consistently
+- [ ] All 3 version files bumped consistently
 - [ ] Release notes drafted and reviewed
 - [ ] `bun run build:review` succeeded
-- [ ] `bun run build:hook` succeeded
-- [ ] `bun run build:opencode` succeeded
+- [ ] `bun run build:annotation` succeeded
 - [ ] `bun run build:pi` succeeded (or pi-specific build step)
 - [ ] Version bump committed
 - [ ] Pi parity gate passed (imports, vendor.sh, dry-run pack)

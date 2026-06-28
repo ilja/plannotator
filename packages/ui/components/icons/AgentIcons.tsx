@@ -30,8 +30,7 @@ export function CursorIcon({ className }: { className?: string }) {
   );
 }
 
-// OpenCode brand mark — extracted from apps/marketing/public/assets/icon-opencode-dark.svg
-// (same vector ProviderIcons.tsx uses; currentColor so it adapts to theme).
+// OpenCode brand mark — same vector ProviderIcons.tsx uses; currentColor so it adapts to theme.
 export function OpenCodeIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
