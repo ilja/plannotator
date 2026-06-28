@@ -11,7 +11,7 @@ import { isCodeFilePath } from '../../packages/shared/code-file';
 import { preloadFile } from '@pierre/diffs/ssr';
 
 // ─── Default plans (Real-time Collaboration) ─────────────────────────────
-// What every dev sees when running `bun run dev:hook` without any flag.
+// What every dev sees when running `bun run dev:annotation` without any flag.
 // Matches the pre-branch demo content; kept identical so the project's
 // default demo story doesn't change.
 const PLAN_V1_DEFAULT = `# Implementation Plan: Real-time Collaboration

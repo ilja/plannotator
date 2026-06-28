@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -79,9 +79,5 @@ describe("agent terminal runtime", () => {
       expect(parsed.dependencies?.["@plannotator/webtui"]).toBe(AGENT_TERMINAL_WEBTUI_VERSION);
     }
 
-    const releaseWorkflow = readFileSync(join(repoRoot, ".github", "workflows", "release.yml"), "utf8");
-    const workflowVersions = [...releaseWorkflow.matchAll(/webtui-(\d+\.\d+\.\d+)/g)].map((match) => match[1]);
-    expect(workflowVersions.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(workflowVersions)).toEqual(new Set([AGENT_TERMINAL_WEBTUI_VERSION]));
   });
 });

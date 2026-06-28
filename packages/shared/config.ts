@@ -107,14 +107,6 @@ export interface PlannotatorConfig {
   /** null = explicitly cleared (use defaults), undefined = not set */
   conventionalLabels?: CCLabelConfig[] | null;
   /**
-   * Enable `gh attestation verify` during CLI installation/upgrade.
-   * Read by scripts/install.sh|ps1|cmd on every run (not by any runtime code).
-   * When true, the installer runs build-provenance verification after the
-   * SHA256 checksum check; requires `gh` CLI installed and authenticated
-   * (`gh auth login`). OS-level opt-in only — no UI surface. Default: false.
-   */
-  verifyAttestation?: boolean;
-  /**
    * Enable Jina Reader for URL-to-markdown conversion during annotation.
    * When true (default), `plannotator annotate <url>` routes through
    * r.jina.ai for better JS-rendered page support and reader-mode extraction.

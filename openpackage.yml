@@ -1,8 +1,8 @@
 name: plannotator
 version: 0.21.2
-description: Annotate Claude Code and other agent plans and review code visually. Share with your team, and send feedback to your agent with one click
+description: Pi review and annotation surfaces with browser feedback and paste sharing
 author: backnotprop
 license: MIT/Apache2.0
 
 includes:
-  - apps/hook/**/*
+  - apps/pi-extension/**/*

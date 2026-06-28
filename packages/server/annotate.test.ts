@@ -8,7 +8,7 @@
  * in shared-handlers.test.ts; this proves it is actually wired into the server
  * and answers with JSON rather than the HTML page.
  *
- * NOTE: this can only run because apps/opencode-plugin/commands.test.ts injects
+ * NOTE: this relies on the test environment injecting
  * its annotate-server stub via CommandDeps instead of a global `mock.module`.
  * A module mock there would leak the stub into this file (Bun module mocks are
  * process-global and cannot be unset).
