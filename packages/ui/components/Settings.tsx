@@ -186,6 +186,11 @@ const ANNOTATION_PROSE_FONT_OPTIONS = [
   { value: 'Verdana', label: 'Verdana' },
 ] as const;
 
+function parsePxSize(value: string, fallback: number): number {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const GitTab: React.FC = () => {
   const defaultDiffType = useConfigValue('defaultDiffType');
   return (
@@ -234,6 +239,9 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
     if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
   }, [annotationCodeFontFamily]);
 
+  const proseSizeValue = parsePxSize(annotationProseFontSize, 15);
+  const codeSizeValue = parsePxSize(annotationCodeFontSize, 13);
+
   return (
     <>
       <div className="space-y-2">
@@ -271,7 +279,7 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
             min={12}
             max={24}
             step={1}
-            value={annotationProseFontSize ? parseInt(annotationProseFontSize, 10) : 15}
+            value={proseSizeValue}
             onChange={(e) => configStore.set('annotationProseFontSize', `${e.target.value}px`)}
             className="flex-1 h-1.5 accent-primary cursor-pointer"
           />
@@ -331,7 +339,7 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
             min={10}
             max={24}
             step={1}
-            value={annotationCodeFontSize ? parseInt(annotationCodeFontSize, 10) : 13}
+            value={codeSizeValue}
             onChange={(e) => configStore.set('annotationCodeFontSize', `${e.target.value}px`)}
             className="flex-1 h-1.5 accent-primary cursor-pointer"
           />
