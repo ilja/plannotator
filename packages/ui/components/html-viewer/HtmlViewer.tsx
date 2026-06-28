@@ -60,6 +60,35 @@ function readThemeTokens(): Record<string, string> {
   return tokens;
 }
 
+function readTypographyTokens(typographyStyle?: React.CSSProperties): Record<string, string> {
+  const tokens: Record<string, string> = {};
+  for (const [key, value] of Object.entries(typographyStyle ?? {})) {
+    if (key.startsWith("--") && typeof value === "string" && value.trim()) {
+      tokens[key] = value;
+    }
+  }
+  return tokens;
+}
+
+const HTML_TYPOGRAPHY_CSS = `
+:where(body) {
+  font-family: var(--annotation-prose-font-family, var(--font-sans));
+  font-size: var(--annotation-prose-font-size, inherit);
+}
+:where(p, li, blockquote, td, th) {
+  font-family: inherit;
+}
+:where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--annotation-prose-font-family, var(--font-sans));
+}
+:where(pre, code, kbd, samp) {
+  font-family: var(--annotation-code-font-family, var(--font-mono));
+}
+:where(pre, pre code) {
+  font-size: var(--annotation-code-font-size, 0.8125rem);
+}
+`;
+
 function isLightTheme(): boolean {
   return document.documentElement.classList.contains("light");
 }
@@ -103,6 +132,7 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
       maxWidth,
       fullViewport,
       hideControls,
+      typographyStyle,
       onAskAI,
     },
     ref,
@@ -117,7 +147,7 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     } | null>(null);
 
     const srcdoc = useMemo(() => {
-      const tokens = readThemeTokens();
+      const tokens = { ...readThemeTokens(), ...readTypographyTokens(typographyStyle) };
       let themeCSS = ":root {\n";
       for (const [key, val] of Object.entries(tokens)) {
         themeCSS += `  ${key}: ${val};\n`;
@@ -125,13 +155,13 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
       themeCSS += "}\n";
       if (isLightTheme()) themeCSS += ":root { color-scheme: light; }\n:root.light, :root { }\n";
 
-      const injection = `<style>${themeCSS}${ANNOTATION_HIGHLIGHT_CSS}</style><script>${BRIDGE_SCRIPT}</script>`;
+      const injection = `<style>${themeCSS}${HTML_TYPOGRAPHY_CSS}${ANNOTATION_HIGHLIGHT_CSS}</style><script>${BRIDGE_SCRIPT}</script>`;
       const headClose = rawHtml.indexOf("</head>");
       if (headClose !== -1) {
         return rawHtml.slice(0, headClose) + injection + rawHtml.slice(headClose);
       }
       return injection + rawHtml;
-    }, [rawHtml]);
+    }, [rawHtml, typographyStyle]);
 
     const handleResize = useCallback((height: number) => {
       setIframeHeight(height);
@@ -177,7 +207,7 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     useEffect(() => {
       if (!iframeReady) return;
       function sendTheme() {
-        const tokens = readThemeTokens();
+        const tokens = { ...readThemeTokens(), ...readTypographyTokens(typographyStyle) };
         iframeRef.current?.contentWindow?.postMessage(
           { type: `${PREFIX}theme`, tokens, isLight: isLightTheme() },
           "*",
@@ -190,7 +220,7 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
         attributeFilter: ["class", "style"],
       });
       return () => observer.disconnect();
-    }, [iframeReady]);
+    }, [iframeReady, typographyStyle]);
 
     useImperativeHandle(ref, () => ({
       removeHighlight: hook.removeHighlight,
