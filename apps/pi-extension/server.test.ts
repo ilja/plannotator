@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import {
   canStageFiles,
   getGitContext,
@@ -17,6 +17,7 @@ import {
   startReviewServer,
   unstageFile,
 } from "./server";
+import { createPiAIRuntime } from "./server/ai-runtime.js";
 import { WorkspaceReviewSession } from "./generated/review-workspace.js";
 
 const tempDirs: string[] = [];
@@ -26,6 +27,8 @@ const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
 const originalPort = process.env.PLANNOTATOR_PORT;
 const originalSemPath = process.env.PLANNOTATOR_SEM_PATH;
 const originalDataDir = process.env.PLANNOTATOR_DATA_DIR;
+const pathEnvKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+const originalPath = process.env[pathEnvKey];
 
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -185,10 +188,70 @@ afterEach(() => {
   } else {
     process.env.PLANNOTATOR_DATA_DIR = originalDataDir;
   }
+  if (originalPath === undefined) {
+    delete process.env[pathEnvKey];
+  } else {
+    process.env[pathEnvKey] = originalPath;
+  }
 
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe("pi AI runtime", () => {
+  test("reports only the Pi SDK provider when pi is available", async () => {
+    const tempDir = makeTempDir("plannotator-pi-ai-runtime-");
+    const fakeBin = join(tempDir, "bin");
+    mkdirSync(fakeBin, { recursive: true });
+
+    const piPath = join(fakeBin, "pi");
+    writeFileSync(
+      piPath,
+      `#!/usr/bin/env node
+const readline = require("node:readline");
+const rl = readline.createInterface({ input: process.stdin });
+rl.on("line", (line) => {
+  if (!line.trim()) return;
+  const message = JSON.parse(line);
+  if (message.type === "get_available_models") {
+    process.stdout.write(JSON.stringify({
+      type: "response",
+      id: message.id,
+      success: true,
+      data: { models: [{ provider: "fake", id: "pi-model", name: "Pi Model" }] },
+    }) + "\\n");
+    return;
+  }
+  process.stdout.write(JSON.stringify({ type: "response", id: message.id, success: true, data: {} }) + "\\n");
+});
+setInterval(() => {}, 1000);
+`,
+      "utf-8",
+    );
+    chmodSync(piPath, 0o755);
+    process.env[pathEnvKey] = `${fakeBin}${delimiter}${originalPath ?? ""}`;
+
+    const runtime = await createPiAIRuntime({ cwd: tempDir, getCwd: () => tempDir });
+    expect(runtime).not.toBeNull();
+
+    try {
+      const response = await runtime!.endpoints["/api/ai/capabilities"](
+        new Request("http://localhost/api/ai/capabilities"),
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json() as {
+        available: boolean;
+        providers: Array<{ id: string; name: string; models?: Array<{ id: string }> }>;
+      };
+      expect(body.available).toBe(true);
+      expect(body.providers).toHaveLength(1);
+      expect(body.providers[0]).toMatchObject({ id: "pi-sdk", name: "pi-sdk" });
+      expect(body.providers[0].models?.map((model) => model.id)).toEqual(["fake/pi-model"]);
+    } finally {
+      runtime?.dispose();
+    }
+  });
 });
 
 describe("pi annotate server", () => {

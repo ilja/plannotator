@@ -37,33 +37,6 @@ export async function createPiAIRuntime(options: CreatePiAIRuntimeOptions = {}):
 		const modelDiscovery: Promise<void>[] = [];
 
 		try {
-			await import("../generated/ai/providers/claude-agent-sdk.js");
-			const claudePath = whichCmd("claude");
-			const provider = await ai.createProvider({
-				type: "claude-agent-sdk",
-				cwd,
-				...(claudePath && { claudeExecutablePath: claudePath }),
-			});
-			registry.register(provider);
-		} catch {
-			// Claude SDK not available.
-		}
-
-		try {
-			await import("../generated/ai/providers/codex-sdk.js");
-			await import("@openai/codex-sdk");
-			const codexPath = whichCmd("codex");
-			const provider = await ai.createProvider({
-				type: "codex-sdk",
-				cwd,
-				...(codexPath && { codexExecutablePath: codexPath }),
-			});
-			registry.register(provider);
-		} catch {
-			// Codex SDK not available.
-		}
-
-		try {
 			await import("../generated/ai/providers/pi-sdk-node.js");
 			const piPath = whichCmd("pi");
 			if (piPath) {
@@ -83,27 +56,6 @@ export async function createPiAIRuntime(options: CreatePiAIRuntimeOptions = {}):
 			}
 		} catch {
 			// Pi not available.
-		}
-
-		try {
-			await import("../generated/ai/providers/opencode-sdk.js");
-			const opencodePath = whichCmd("opencode");
-			if (opencodePath) {
-				const provider = await ai.createProvider({
-					type: "opencode-sdk",
-					cwd,
-				});
-				if (provider && "fetchModels" in provider) {
-					modelDiscovery.push(
-						(provider as { fetchModels: () => Promise<void> })
-							.fetchModels()
-							.catch(() => {}),
-					);
-				}
-				registry.register(provider);
-			}
-		} catch {
-			// OpenCode not available.
 		}
 
 		return {
