@@ -8,6 +8,16 @@ import { Callout } from "./blocks/Callout";
 import { AlertBlock } from "./blocks/AlertBlock";
 import { TableBlock } from "./blocks/TableBlock";
 
+const proseStyle: React.CSSProperties = {
+  fontFamily: 'var(--annotation-prose-font-family, var(--font-sans))',
+  fontSize: 'var(--annotation-prose-font-size, 15px)',
+};
+
+const headingStyle = (scale: number): React.CSSProperties => ({
+  fontFamily: 'var(--annotation-prose-font-family, var(--font-sans))',
+  fontSize: `calc(var(--annotation-prose-font-size, 15px) * ${scale})`,
+});
+
 export const BlockRenderer: React.FC<{
   block: Block;
   onOpenLinkedDoc?: (path: string) => void;
@@ -33,6 +43,7 @@ export const BlockRenderer: React.FC<{
         <Tag
           id={headingAnchorId}
           className={styles}
+          style={headingStyle(block.level === 1 ? 1.6 : block.level === 2 ? 1.35 : 1.1)}
           data-block-id={block.id}
           data-block-type="heading"
         >
@@ -63,6 +74,7 @@ export const BlockRenderer: React.FC<{
       return (
         <blockquote
           className="border-l-2 border-primary/50 pl-4 my-4 text-muted-foreground italic"
+          style={proseStyle}
           data-block-id={block.id}
         >
           {paragraphs.map((para, i) => (
@@ -81,7 +93,7 @@ export const BlockRenderer: React.FC<{
         ? checkboxOverrides.get(block.id)!
         : block.checked;
       const isInteractive = isCheckbox && !!onToggleCheckbox;
-      const textClass = `text-sm leading-relaxed ${isCheckbox && isChecked ? 'text-muted-foreground line-through' : 'text-foreground/90'}`;
+      const textClass = `leading-relaxed ${isCheckbox && isChecked ? 'text-muted-foreground line-through' : 'text-foreground/90'}`;
       const inlineProps = { imageBaseDir, onImageClick, onOpenLinkedDoc, onOpenCodeFile, githubRepo, onNavigateAnchor };
       return (
         <div
@@ -97,6 +109,7 @@ export const BlockRenderer: React.FC<{
             interactive={isInteractive}
             onToggle={isInteractive ? () => onToggleCheckbox!(block.id, !isChecked) : undefined}
             textClassName={textClass}
+            textStyle={proseStyle}
             content={block.content}
             renderInline={(text) => <InlineMarkdown {...inlineProps} text={text} />}
           />
@@ -149,7 +162,8 @@ export const BlockRenderer: React.FC<{
     default:
       return (
         <p
-          className="mb-4 leading-relaxed text-foreground/90 text-[15px]"
+          className="mb-4 leading-relaxed text-foreground/90"
+          style={proseStyle}
           data-block-id={block.id}
         >
           <InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={block.content} onOpenLinkedDoc={onOpenLinkedDoc} onOpenCodeFile={onOpenCodeFile} githubRepo={githubRepo} onNavigateAnchor={onNavigateAnchor} />

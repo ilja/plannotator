@@ -177,6 +177,15 @@ function ToggleSwitch({ checked, onChange, label, description }: {
   );
 }
 
+const ANNOTATION_PROSE_FONT_OPTIONS = [
+  { value: '', label: 'Theme Default' },
+  { value: 'Inter', label: 'Inter' },
+  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible' },
+  { value: 'Arial', label: 'Arial' },
+  { value: 'Georgia', label: 'Georgia' },
+  { value: 'Verdana', label: 'Verdana' },
+] as const;
+
 const GitTab: React.FC = () => {
   const defaultDiffType = useConfigValue('defaultDiffType');
   return (
@@ -216,6 +225,8 @@ const GitTab: React.FC = () => {
 };
 
 const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const annotationProseFontFamily = useConfigValue('annotationProseFontFamily');
+  const annotationProseFontSize = useConfigValue('annotationProseFontSize');
   const annotationCodeFontFamily = useConfigValue('annotationCodeFontFamily');
   const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
 
@@ -225,6 +236,58 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
+      <div className="space-y-2">
+        <div>
+          <div className="text-sm font-medium">Annotation Prose Font</div>
+          <div className="text-xs text-muted-foreground">Font family for annotation document text</div>
+        </div>
+        <select
+          value={annotationProseFontFamily}
+          onChange={(e) => configStore.set('annotationProseFontFamily', e.target.value)}
+          className="w-full px-3 py-1.5 text-sm rounded-md bg-muted/50 border border-border text-foreground"
+          style={annotationProseFontFamily ? { fontFamily: `'${annotationProseFontFamily}', var(--font-sans)` } : undefined}
+        >
+          {ANNOTATION_PROSE_FONT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="border-t border-border" />
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Annotation Prose Font Size</div>
+            <div className="text-xs text-muted-foreground">Base size for annotation document text</div>
+          </div>
+          <div className="text-xs tabular-nums text-muted-foreground min-w-[4ch] text-right">
+            {annotationProseFontSize || 'Auto'}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={12}
+            max={24}
+            step={1}
+            value={annotationProseFontSize ? parseInt(annotationProseFontSize, 10) : 15}
+            onChange={(e) => configStore.set('annotationProseFontSize', `${e.target.value}px`)}
+            className="flex-1 h-1.5 accent-primary cursor-pointer"
+          />
+          {annotationProseFontSize && (
+            <button
+              onClick={() => configStore.set('annotationProseFontSize', '')}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-border" />
+
       <div className="space-y-2">
         <div>
           <div className="text-sm font-medium">Annotation Code Font</div>

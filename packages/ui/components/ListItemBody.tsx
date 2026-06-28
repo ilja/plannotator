@@ -20,6 +20,7 @@ interface ListItemBodyProps {
   interactive?: boolean;
   onToggle?: () => void;
   textClassName: string;
+  textStyle?: React.CSSProperties;
   content: string;
   renderInline: (text: string) => React.ReactNode;
 }
@@ -32,6 +33,7 @@ export const ListItemBody: React.FC<ListItemBodyProps> = ({
   interactive,
   onToggle,
   textClassName,
+  textStyle,
   content,
   renderInline,
 }) => {
@@ -47,9 +49,9 @@ export const ListItemBody: React.FC<ListItemBodyProps> = ({
         onToggle={onToggle}
       />
       {paragraphs.length === 1 ? (
-        <span className={textClassName}>{renderInline(content)}</span>
+        <span className={textClassName} style={textStyle}>{renderInline(content)}</span>
       ) : (
-        <div className={textClassName}>
+        <div className={textClassName} style={textStyle}>
           {paragraphs.map((para, i) => (
             <p key={i} className={i > 0 ? 'mt-3' : ''}>
               {renderInline(para)}

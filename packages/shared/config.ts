@@ -30,6 +30,8 @@ export interface DiffOptions {
 }
 
 export interface AnnotationOptions {
+  proseFontFamily?: string;
+  proseFontSize?: string;
   codeFontFamily?: string;
   codeFontSize?: string;
 }

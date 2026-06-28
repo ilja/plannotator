@@ -290,14 +290,22 @@ const App: React.FC = () => {
   const gridEnabled = useConfigValue('gridEnabled');
   const annotationCodeFontFamily = useConfigValue('annotationCodeFontFamily');
   const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
+  const annotationProseFontFamily = useConfigValue('annotationProseFontFamily');
+  const annotationProseFontSize = useConfigValue('annotationProseFontSize');
   const annotationTypographyStyle = useMemo<React.CSSProperties>(() => ({
+    ...(annotationProseFontFamily && {
+      ['--annotation-prose-font-family' as string]: `'${annotationProseFontFamily}', var(--font-sans)`,
+    }),
+    ...(annotationProseFontSize && {
+      ['--annotation-prose-font-size' as string]: annotationProseFontSize,
+    }),
     ...(annotationCodeFontFamily && {
       ['--annotation-code-font-family' as string]: `'${annotationCodeFontFamily}', var(--font-mono)`,
     }),
     ...(annotationCodeFontSize && {
       ['--annotation-code-font-size' as string]: annotationCodeFontSize,
     }),
-  }), [annotationCodeFontFamily, annotationCodeFontSize]);
+  }), [annotationCodeFontFamily, annotationCodeFontSize, annotationProseFontFamily, annotationProseFontSize]);
   useEffect(() => {
     if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
   }, [annotationCodeFontFamily]);
