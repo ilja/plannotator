@@ -21,6 +21,7 @@ import { loadDiffFont } from '@plannotator/ui/utils/diffFonts';
 import { getAgentSwitchSettings, getEffectiveAgentName } from '@plannotator/ui/utils/agentSwitch';
 import {
   getAIProviderSettings,
+  isPiProvider,
   resolveAIModelForProvider,
   resolveAIProviderSelection,
   saveAIProviderSelection,
@@ -513,10 +514,14 @@ const ReviewApp: React.FC = () => {
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.available) {
-          setAiAvailable(true);
-          const providers = data.providers ?? [];
+          const providers = (data.providers ?? []).filter(isPiProvider);
+          setAiAvailable(providers.length > 0);
+          const defaultProvider = typeof data.defaultProvider === 'string' &&
+            providers.some(provider => provider.id === data.defaultProvider)
+            ? data.defaultProvider
+            : null;
           setAiProviders(providers);
-          setAiDefaultProvider(data.defaultProvider ?? null);
+          setAiDefaultProvider(defaultProvider);
         }
       })
       .catch(() => {});

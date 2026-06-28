@@ -2,6 +2,7 @@ import type React from 'react';
 import { getProviderMeta } from './ProviderIcons';
 import {
   getAIProviderSettings,
+  isPiProvider,
   resolveAIModelForProvider,
   resolveAIProviderSelection,
   saveAIProviderSelection,
@@ -28,16 +29,17 @@ export const AISettingsTab: React.FC<AISettingsTabProps> = ({
   origin,
   onProviderChange,
 }) => {
+  const piProviders = providers.filter(isPiProvider);
   const settings = getAIProviderSettings();
-  const originDefault = resolveAIProviderSelection({ providers, origin, settings }).providerId;
-  const effectiveSelection = selectedProviderId ?? originDefault ?? providers[0]?.id ?? null;
+  const originDefault = resolveAIProviderSelection({ providers: piProviders, origin, settings }).providerId;
+  const effectiveSelection = selectedProviderId ?? originDefault ?? piProviders[0]?.id ?? null;
   const [preferredModels, setPreferredModels] = useState<Record<string, string>>(() =>
     getAIProviderSettings().preferredModels
   );
 
   const handleSelectProvider = (providerId: string) => {
     onProviderChange(providerId);
-    const provider = providers.find(p => p.id === providerId) ?? null;
+    const provider = piProviders.find(p => p.id === providerId) ?? null;
     const model = resolveAIModelForProvider(provider, getAIProviderSettings().preferredModels);
     saveAIProviderSelection({ providerId, model, origin });
   };
@@ -47,7 +49,7 @@ export const AISettingsTab: React.FC<AISettingsTabProps> = ({
     setPreferredModels(prev => ({ ...prev, [providerId]: modelId }));
   };
 
-  if (providers.length === 0) {
+  if (piProviders.length === 0) {
     return (
       <>
         <div>
@@ -57,7 +59,7 @@ export const AISettingsTab: React.FC<AISettingsTabProps> = ({
           <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
-          <span>No AI providers detected. Install the <strong>claude</strong> or <strong>codex</strong> CLI and make sure you're authenticated. <a href="https://plannotator.ai/docs/guides/ai-features/" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-700 dark:hover:text-amber-300">Setup guide</a></span>
+          <span>No Pi AI provider detected. Install the <strong>pi</strong> CLI and make sure you're authenticated. <a href="https://plannotator.ai/docs/guides/ai-features/" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-700 dark:hover:text-amber-300">Setup guide</a></span>
         </div>
       </>
     );
@@ -73,7 +75,7 @@ export const AISettingsTab: React.FC<AISettingsTabProps> = ({
       </div>
 
       <div className="space-y-2">
-        {providers.map((p) => {
+        {piProviders.map((p) => {
           const meta = getProviderMeta(p.name);
           const Icon = meta.icon;
           const isSelected = effectiveSelection === p.id;

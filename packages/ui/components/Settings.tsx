@@ -56,7 +56,7 @@ import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { type QuickLabel, getQuickLabels, saveQuickLabels, resetQuickLabels, DEFAULT_QUICK_LABELS, getLabelColors, LABEL_COLOR_MAP } from '../utils/quickLabels';
 import { ThemeTab } from './ThemeTab';
 import { isMac, modKey, altKey } from '../utils/platform';
-import { getAIProviderSettings, resolveAIProviderSelection } from '../utils/aiProvider';
+import { getAIProviderSettings, isPiProvider, resolveAIProviderSelection } from '../utils/aiProvider';
 import { AISettingsTab } from './AISettingsTab';
 import { HooksTab } from './settings/HooksTab';
 import { OverlayScrollArea } from './OverlayScrollArea';
@@ -647,6 +647,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
 
   // Fetch available agents for OpenCode
   const { agents: availableAgents, validateAgent, getAgentWarning } = useAgents(origin ?? null);
+  const piAIProviders = useMemo(() => aiProviders.filter(isPiProvider), [aiProviders]);
 
   const mainTabs = useMemo(() => {
     const t: { id: SettingsTab; label: string }[] = [{ id: 'general', label: 'General' }];
@@ -660,7 +661,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
       t.push({ id: 'git', label: 'Git' });
       t.push({ id: 'display', label: 'Display' });
       t.push({ id: 'comments', label: 'Comments' });
-      if (aiProviders.length > 0) {
+      if (piAIProviders.length > 0) {
         t.push({ id: 'ai', label: 'AI' });
       }
     }
@@ -669,7 +670,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
       t.push({ id: 'hooks', label: 'Hooks' });
     }
     return t;
-  }, [mode, aiProviders.length]);
+  }, [mode, piAIProviders.length]);
 
   const integrationTabs: { id: SettingsTab; label: string }[] = [
     { id: 'files', label: 'Files' },
@@ -702,7 +703,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
       setDefaultNotesApp(getDefaultNotesApp());
       setQuickLabelsState(getQuickLabels());
       const aiSettings = getAIProviderSettings();
-      setAiProvider(resolveAIProviderSelection({ providers: aiProviders, origin, settings: aiSettings }).providerId);
+      setAiProvider(resolveAIProviderSelection({ providers: piAIProviders, origin, settings: aiSettings }).providerId);
       setFileBrowserSettings(getFileBrowserSettings());
 
       // Validate agent setting when dialog opens
@@ -710,7 +711,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
         setAgentWarning(getAgentWarning());
       }
     }
-  }, [showDialog, availableAgents, origin, getAgentWarning, aiProviders.length]);
+  }, [showDialog, availableAgents, origin, getAgentWarning, piAIProviders]);
 
   useEffect(() => {
     if (!showDialog) return;
@@ -1609,7 +1610,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
                 {/* === AI TAB === */}
                 {activeTab === 'ai' && (
                   <AISettingsTab
-                    providers={aiProviders}
+                    providers={piAIProviders}
                     selectedProviderId={aiProvider}
                     origin={origin}
                     onProviderChange={setAiProvider}

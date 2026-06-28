@@ -33,6 +33,7 @@ import { getOctarineSettings, isOctarineConfigured } from '@plannotator/ui/utils
 import { getDefaultNotesApp } from '@plannotator/ui/utils/defaultNotesApp';
 import {
   getAIProviderSettings,
+  isPiProvider,
   resolveAIModelForProvider,
   resolveAIProviderSelection,
   saveAIProviderSelection,
@@ -2167,8 +2168,12 @@ const App: React.FC = () => {
       .then(data => {
         if (cancelled) return;
         if (data?.available) {
-          const providers = data.providers ?? [];
-          setAiAvailable(true);
+          const providers = (data.providers ?? []).filter(isPiProvider);
+          const defaultProvider = typeof data.defaultProvider === 'string' &&
+            providers.some(provider => provider.id === data.defaultProvider)
+            ? data.defaultProvider
+            : null;
+          setAiAvailable(providers.length > 0);
           setAiProviders(providers);
           setAIConfig(prev => {
             const saved = getAIProviderSettings();
@@ -2176,7 +2181,7 @@ const App: React.FC = () => {
               providers,
               origin,
               settings: saved,
-              serverDefaultProvider: data.defaultProvider ?? null,
+              serverDefaultProvider: defaultProvider,
             });
 
             if (prev.providerId === selection.providerId && prev.model === selection.model) return prev;

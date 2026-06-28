@@ -247,6 +247,9 @@ setInterval(() => {}, 1000);
       expect(body.available).toBe(true);
       expect(body.providers).toHaveLength(1);
       expect(body.providers[0]).toMatchObject({ id: "pi-sdk", name: "pi-sdk" });
+      expect(body.providers.map((provider) => provider.name)).not.toContain("claude-agent-sdk");
+      expect(body.providers.map((provider) => provider.name)).not.toContain("codex-sdk");
+      expect(body.providers.map((provider) => provider.name)).not.toContain("opencode-sdk");
       expect(body.providers[0].models?.map((model) => model.id)).toEqual(["fake/pi-model"]);
     } finally {
       runtime?.dispose();

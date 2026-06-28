@@ -46,8 +46,16 @@ export const AI_REASONING_EFFORTS = [
   { id: 'xhigh', label: 'Max' },
 ] as const;
 
+export function isPiProvider(provider: AIProviderOption | null | undefined): boolean {
+  return provider?.id === 'pi-sdk' || provider?.name === 'pi-sdk';
+}
+
+function isPiProviderId(providerId: string | null | undefined): boolean {
+  return providerId === 'pi-sdk' || providerId?.startsWith('pi-') === true;
+}
+
 export function originHasDedicatedAIProvider(origin: Origin | null | undefined): boolean {
-  return getAgentAIProviderTypes(origin).length > 0;
+  return getAgentAIProviderTypes(origin).includes('pi-sdk');
 }
 
 /**
@@ -124,9 +132,9 @@ export function findOriginAIProvider(
   providers: AIProviderOption[],
   origin: Origin | null | undefined,
 ): AIProviderOption | null {
-  const providerTypes = getAgentAIProviderTypes(origin);
+  const providerTypes = getAgentAIProviderTypes(origin).filter(providerType => providerType === 'pi-sdk');
   for (const providerType of providerTypes) {
-    const provider = providers.find(p => p.id === providerType || p.name === providerType);
+    const provider = providers.find(p => isPiProvider(p) && (p.id === providerType || p.name === providerType));
     if (provider) return provider;
   }
   return null;
@@ -153,8 +161,9 @@ export function resolveAIProviderSelection(options: {
   settings?: AIProviderSettings;
   serverDefaultProvider?: string | null;
 }): AIProviderSelection {
-  const { providers, origin, serverDefaultProvider } = options;
+  const { origin, serverDefaultProvider } = options;
   const settings = options.settings ?? getAIProviderSettings();
+  const providers = options.providers.filter(isPiProvider);
   if (providers.length === 0) return { providerId: null, model: null };
 
   const byId = (id: string | null | undefined) =>
@@ -193,8 +202,9 @@ export function applyAIProviderSelection(
   },
 ): AIProviderSettings {
   const preferredModels = { ...settings.preferredModels };
-  if (options.providerId && options.model) {
-    preferredModels[options.providerId] = options.model;
+  const retainedProviderId = isPiProviderId(options.providerId) ? options.providerId : null;
+  if (retainedProviderId && options.model) {
+    preferredModels[retainedProviderId] = options.model;
   }
 
   const providerByOrigin = { ...settings.providerByOrigin };
@@ -202,13 +212,13 @@ export function applyAIProviderSelection(
   const hasOriginDefault = originHasDedicatedAIProvider(options.origin);
 
   if (options.origin && hasOriginDefault) {
-    if (options.providerId) {
-      providerByOrigin[options.origin] = options.providerId;
+    if (retainedProviderId) {
+      providerByOrigin[options.origin] = retainedProviderId;
     } else {
       delete providerByOrigin[options.origin];
     }
-  } else {
-    providerId = options.providerId;
+  } else if (retainedProviderId || options.providerId === null) {
+    providerId = retainedProviderId;
   }
 
   return {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   applyAIProviderSelection,
   findOriginAIProvider,
+  isPiProvider,
   resolveAIProviderSelection,
   type AIProviderOption,
   type AIProviderSettings,
@@ -33,7 +34,9 @@ const settings = (overrides: Partial<AIProviderSettings> = {}): AIProviderSettin
 });
 
 describe('AI provider origin defaults', () => {
-  it('matches only the Pi origin to a dedicated provider', () => {
+  it('recognizes only Pi SDK providers as retained Ask AI providers', () => {
+    expect(isPiProvider(providers[0])).toBe(true);
+    expect(isPiProvider(providers[1])).toBe(false);
     expect(findOriginAIProvider(providers, 'pi')?.id).toBe('pi-local');
     expect(findOriginAIProvider(providers, 'claude-code')).toBeNull();
     expect(findOriginAIProvider(providers, 'codex')).toBeNull();
@@ -51,7 +54,7 @@ describe('AI provider origin defaults', () => {
     expect(selection.model).toBe('pi-default');
   });
 
-  it('uses per-origin saved Pi provider choices before the automatic Pi match', () => {
+  it('ignores stale per-origin non-Pi provider choices', () => {
     const selection = resolveAIProviderSelection({
       providers,
       origin: 'pi',
@@ -61,11 +64,11 @@ describe('AI provider origin defaults', () => {
       }),
     });
 
-    expect(selection.providerId).toBe('fallback-local');
-    expect(selection.model).toBe('fallback-default');
+    expect(selection.providerId).toBe('pi-local');
+    expect(selection.model).toBe('pi-default');
   });
 
-  it('falls back to server default when an origin has no dedicated provider', () => {
+  it('ignores stale non-Pi server defaults', () => {
     const selection = resolveAIProviderSelection({
       providers,
       origin: 'gemini-cli',
@@ -73,10 +76,22 @@ describe('AI provider origin defaults', () => {
       serverDefaultProvider: 'fallback-local',
     });
 
-    expect(selection.providerId).toBe('fallback-local');
+    expect(selection.providerId).toBe('pi-local');
+    expect(selection.model).toBe('pi-default');
   });
 
-  it('stores explicit choices for Pi without changing the global fallback', () => {
+  it('returns no selection when only non-Pi providers are available', () => {
+    const selection = resolveAIProviderSelection({
+      providers: [providers[1]],
+      origin: 'pi',
+      settings: settings({ providerId: 'fallback-local' }),
+      serverDefaultProvider: 'fallback-local',
+    });
+
+    expect(selection).toEqual({ providerId: null, model: null });
+  });
+
+  it('stores explicit Pi choices without changing the global fallback', () => {
     const next = applyAIProviderSelection(
       settings({ providerId: 'fallback-local' }),
       { providerId: 'pi-local', model: 'pi-alt', origin: 'pi' },
@@ -87,13 +102,14 @@ describe('AI provider origin defaults', () => {
     expect(next.preferredModels['pi-local']).toBe('pi-alt');
   });
 
-  it('stores explicit choices as the global fallback for non-Pi origins', () => {
+  it('does not store non-Pi provider choices', () => {
     const next = applyAIProviderSelection(
-      settings({ providerId: 'fallback-local' }),
-      { providerId: 'pi-local', model: 'pi-alt', origin: 'codex' },
+      settings({ providerId: 'pi-local' }),
+      { providerId: 'fallback-local', model: 'fallback-default', origin: 'codex' },
     );
 
     expect(next.providerId).toBe('pi-local');
     expect(next.providerByOrigin.codex).toBeUndefined();
+    expect(next.preferredModels['fallback-local']).toBeUndefined();
   });
 });

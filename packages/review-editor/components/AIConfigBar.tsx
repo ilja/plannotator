@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { getProviderMeta } from '@plannotator/ui/components/ProviderIcons';
-import { AI_REASONING_EFFORTS, type AIProviderOption } from '@plannotator/ui/utils/aiProvider';
+import type { AIProviderOption } from '@plannotator/ui/utils/aiProvider';
 
 interface AIConfigBarProps {
   providers: AIProviderOption[];
@@ -18,14 +18,12 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
   providers,
   selectedProviderId,
   selectedModel,
-  selectedReasoningEffort,
   onProviderChange,
   onModelChange,
-  onReasoningEffortChange,
   hasSession,
 }) => {
   const [showSessionNote, setShowSessionNote] = useState(false);
-  const [openMenu, setOpenMenu] = useState<'provider' | 'model' | 'effort' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'provider' | 'model' | null>(null);
   const [modelSearch, setModelSearch] = useState('');
   const barRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -81,12 +79,6 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
     onModelChange(id);
     setOpenMenu(null);
     setModelSearch('');
-  };
-
-  const handleEffortSelect = (id: string) => {
-    if (hasSession) setShowSessionNote(true);
-    onReasoningEffortChange(id);
-    setOpenMenu(null);
   };
 
   const chevron = (
@@ -203,47 +195,6 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
           <span>{currentModelLabel}</span>
         </>
       ) : null}
-
-      {/* Reasoning effort — Codex only */}
-      {currentProvider.name === 'codex-sdk' && (
-        <>
-          <span className="text-border/60">·</span>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpenMenu(openMenu === 'effort' ? null : 'effort')}
-              className="flex items-center gap-1 px-1 py-0.5 -mx-1 rounded hover:bg-muted/50 transition-colors"
-              title="Reasoning effort"
-            >
-              <span>{AI_REASONING_EFFORTS.find(e => e.id === (selectedReasoningEffort ?? 'high'))?.label ?? 'High'}</span>
-              {chevron}
-            </button>
-
-            {openMenu === 'effort' && (
-              <div className="ai-config-menu">
-                {AI_REASONING_EFFORTS.map(e => {
-                  const isActive = e.id === (selectedReasoningEffort ?? 'high');
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => handleEffortSelect(e.id)}
-                      className={`ai-config-menu-item ${isActive ? 'ai-config-menu-item-active' : ''}`}
-                    >
-                      <span>{e.label}</span>
-                      {isActive && (
-                        <svg className="w-3 h-3 ml-auto text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
-      )}
 
       {/* Spacer */}
       <div className="flex-1" />
