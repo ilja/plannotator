@@ -213,6 +213,33 @@ export const SETTINGS = {
     },
     toServer: (v: string) => ({ diffOptions: { fontSize: v } }),
   },
+
+  // --- Annotation display options (namespaced under annotationOptions) ---
+
+  annotationCodeFontFamily: {
+    defaultValue: '' as string, // empty = theme mono/default
+    fromCookie: () => storage.getItem('plannotator-annotation-code-font-family') || undefined,
+    toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-family', v),
+    serverKey: 'annotationOptions',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.codeFontFamily;
+      return typeof v === 'string' ? v : undefined;
+    },
+    toServer: (v: string) => ({ annotationOptions: { codeFontFamily: v } }),
+  },
+
+  annotationCodeFontSize: {
+    defaultValue: '' as string, // empty = current 13px default
+    fromCookie: () => storage.getItem('plannotator-annotation-code-font-size') || undefined,
+    toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-size', v),
+    serverKey: 'annotationOptions',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.codeFontSize;
+      return typeof v === 'string' ? v : undefined;
+    },
+    toServer: (v: string) => ({ annotationOptions: { codeFontSize: v } }),
+  },
+
   diffTabSize: {
     defaultValue: 2 as number,
     fromCookie: () => {

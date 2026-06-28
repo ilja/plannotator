@@ -17,9 +17,22 @@ const FONT_URLS: Record<string, string> = {
   'Hack': 'https://cdn.jsdelivr.net/npm/hack-font@3/build/web/hack.css',
 };
 
+export const CODE_FONT_OPTIONS = [
+  { value: '', label: 'Theme Default' },
+  { value: 'Fira Code', label: 'Fira Code' },
+  { value: 'Hack', label: 'Hack' },
+  { value: 'IBM Plex Mono', label: 'IBM Plex Mono' },
+  { value: 'Inconsolata', label: 'Inconsolata' },
+  { value: 'JetBrains Mono', label: 'JetBrains Mono' },
+  { value: 'Red Hat Mono', label: 'Red Hat Mono' },
+  { value: 'Roboto Mono', label: 'Roboto Mono' },
+  { value: 'Source Code Pro', label: 'Source Code Pro' },
+  { value: 'Atkinson Hyperlegible Mono', label: 'Atkinson Hyperlegible' },
+] as const;
+
 const loaded = new Set<string>();
 
-export function loadDiffFont(fontFamily: string): void {
+export function loadCodeFont(fontFamily: string, datasetKey = 'codeFont'): void {
   if (!fontFamily || loaded.has(fontFamily)) return;
   const url = FONT_URLS[fontFamily];
   if (!url) return;
@@ -27,7 +40,11 @@ export function loadDiffFont(fontFamily: string): void {
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = url;
-  link.dataset.diffFont = fontFamily;
+  link.dataset[datasetKey] = fontFamily;
   document.head.appendChild(link);
   loaded.add(fontFamily);
+}
+
+export function loadDiffFont(fontFamily: string): void {
+  loadCodeFont(fontFamily, 'diffFont');
 }

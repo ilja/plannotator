@@ -25,6 +25,7 @@ import { useAgents } from '@plannotator/ui/hooks/useAgents';
 import { useActiveSection } from '@plannotator/ui/hooks/useActiveSection';
 import { storage } from '@plannotator/ui/utils/storage';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
+import { loadCodeFont } from '@plannotator/ui/utils/diffFonts';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
 import { useUpdateCheck } from '@plannotator/ui/hooks/useUpdateCheck';
 import { PlanAIAnnouncementDialog } from '@plannotator/ui/components/PlanAIAnnouncementDialog';
@@ -287,6 +288,19 @@ const App: React.FC = () => {
     return stored === 'true';
   });
   const gridEnabled = useConfigValue('gridEnabled');
+  const annotationCodeFontFamily = useConfigValue('annotationCodeFontFamily');
+  const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
+  const annotationTypographyStyle = useMemo<React.CSSProperties>(() => ({
+    ...(annotationCodeFontFamily && {
+      ['--annotation-code-font-family' as string]: `'${annotationCodeFontFamily}', var(--font-mono)`,
+    }),
+    ...(annotationCodeFontSize && {
+      ['--annotation-code-font-size' as string]: annotationCodeFontSize,
+    }),
+  }), [annotationCodeFontFamily, annotationCodeFontSize]);
+  useEffect(() => {
+    if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
+  }, [annotationCodeFontFamily]);
   const [uiPrefs, setUiPrefs] = useState(() => getUIPreferences());
 
   // Plan-area width (inside the OverlayScrollArea, after sidebar/panel
@@ -4262,6 +4276,7 @@ const App: React.FC = () => {
                     maxWidth={isHtmlSurface ? null : annotateReaderMaxWidth}
                     fullViewport={isHtmlSurface}
                     hideControls={htmlToolsHidden}
+                    typographyStyle={annotationTypographyStyle}
                     onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
                   />
                 ) : isEditingMarkdown ? (
@@ -4336,6 +4351,7 @@ const App: React.FC = () => {
                     onToggleCheckbox={checkbox.toggle}
                     checkboxOverrides={checkbox.overrides}
                     actionsLabelMode={actionsLabelMode}
+                    typographyStyle={annotationTypographyStyle}
                     onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
                   />
                 )}

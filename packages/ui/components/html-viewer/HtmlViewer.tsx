@@ -83,6 +83,7 @@ export interface HtmlViewerProps {
   /** Hide the floating doc-level controls (attachments + global comment) in
    *  full-viewport mode, so the user can read the page unobstructed. */
   hideControls?: boolean;
+  typographyStyle?: React.CSSProperties;
   onAskAI?: CommentAskAIHandler;
 }
 

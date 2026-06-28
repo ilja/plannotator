@@ -67,8 +67,17 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, i
           </svg>
         )}
       </button>
-      <pre className="rounded-lg text-[13px] overflow-x-auto bg-muted/50 border border-border/30">
-        <code ref={codeRef} className={codeClassName}>{block.content}</code>
+      <pre
+        className="rounded-lg overflow-x-auto bg-muted/50 border border-border/30"
+        style={{ fontSize: 'var(--annotation-code-font-size, 13px)' }}
+      >
+        <code
+          ref={codeRef}
+          className={codeClassName}
+          style={{ fontFamily: 'var(--annotation-code-font-family, var(--font-mono))' }}
+        >
+          {block.content}
+        </code>
       </pre>
     </div>
   );

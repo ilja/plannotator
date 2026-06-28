@@ -108,6 +108,7 @@ interface ViewerProps {
   // Checkbox toggle props
   onToggleCheckbox?: (blockId: string, checked: boolean) => void;
   checkboxOverrides?: Map<string, boolean>;
+  typographyStyle?: React.CSSProperties;
   onAskAI?: CommentAskAIHandler;
 }
 
@@ -186,6 +187,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   messagePickerInfo,
   onToggleCheckbox,
   checkboxOverrides,
+  typographyStyle,
   onAskAI,
 }, ref) => {
   const [copied, setCopied] = useState(false);
@@ -538,8 +540,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
       <article
         ref={containerRef}
         data-print-region="article"
+        data-annotation-typography
         className={`w-full bg-card rounded-xl py-5 md:py-8 lg:py-10 xl:py-12 relative ${gridEnabled ? 'px-5 md:px-8 lg:px-10 xl:px-12 shadow-xl border border-border/50' : ''} ${inputMethod === 'pinpoint' ? 'cursor-crosshair' : ''}`}
-        style={{ WebkitTouchCallout: 'none' } as React.CSSProperties}
+        style={{ WebkitTouchCallout: 'none', ...typographyStyle } as React.CSSProperties}
       >
         {/* Repo info + plan diff badge + demo badge + linked doc badge + archive badge - top left */}
         {(repoInfo || hasPreviousVersion || showDemoBadge || linkedDocInfo || archiveInfo || sourceInfo || openInAppPath) && (
