@@ -21,6 +21,26 @@ import { join } from "path";
 import { startAnnotateServer } from "./annotate";
 
 const MINIMAL_HTML = "<html><body>Plannotator</body></html>";
+const PROJECT_ROOT = join(import.meta.dir, "../..");
+
+async function runScript(script: string, env: Record<string, string> = {}): Promise<string> {
+  const proc = Bun.spawn(["bun", "-e", script], {
+    env: { ...process.env, ...env },
+    cwd: PROJECT_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const stdout = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+
+  if (exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`Subprocess failed (exit ${exitCode}): ${stderr}`);
+  }
+
+  return stdout.trim();
+}
 
 describe("annotate server: /api/save-notes wiring", () => {
   // Bind a random local port regardless of env left behind by sibling suites.
@@ -83,6 +103,42 @@ describe("annotate server: /api/save-notes wiring", () => {
     } finally {
       server.stop();
     }
+  });
+
+  test("/api/config accepts annotationOptions", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "plannotator-config-route-"));
+    const result = await runScript(`
+      import { join } from "node:path";
+      import { tmpdir } from "node:os";
+      import { startAnnotateServer } from "./packages/server/annotate";
+
+      const server = await startAnnotateServer({
+        markdown: "# Test",
+        filePath: join(tmpdir(), "test.md"),
+        htmlContent: ${JSON.stringify(MINIMAL_HTML)},
+      });
+
+      try {
+        const response = await fetch(\`\${server.url}/api/config\`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            annotationOptions: { proseFontSize: "18px", codeFontSize: "15px" },
+          }),
+        });
+
+        console.log(JSON.stringify({ status: response.status, body: await response.json() }));
+      } finally {
+        server.stop();
+      }
+      process.exit(0);
+    `, {
+      PLANNOTATOR_DATA_DIR: dataDir,
+      PLANNOTATOR_REMOTE: "0",
+      PLANNOTATOR_PORT: "",
+    });
+
+    expect(JSON.parse(result)).toEqual({ status: 200, body: { ok: true } });
   });
 });
 

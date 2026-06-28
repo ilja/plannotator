@@ -8,6 +8,11 @@ import { useCodePathValidation, type CodePathValidationContextValue } from "./Co
 import type { ValidationEntry } from "../hooks/useValidatedCodePaths";
 import { CodeFilePicker } from "./CodeFilePicker";
 
+const inlineCodeTypographyStyle: React.CSSProperties = {
+  fontFamily: 'var(--annotation-code-font-family, var(--font-mono))',
+  fontSize: 'var(--annotation-code-font-size, 0.875em)',
+};
+
 /**
  * Decide how a candidate code-file path should render based on validation state:
  *   - 'link'           → clickable, opens directly via onOpenCodeFile(resolvedOrInput)
@@ -180,7 +185,7 @@ const CodeFileLink: React.FC<{
 
   if (gate.render === 'plain') {
     return (
-      <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono">
+      <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono" style={inlineCodeTypographyStyle}>
         {display}
       </code>
     );
@@ -210,6 +215,7 @@ const CodeFileLink: React.FC<{
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className="code-file-link px-1.5 py-0.5 rounded bg-muted text-sm font-mono cursor-pointer hover:text-primary inline-flex items-center gap-1 transition-colors"
+        style={inlineCodeTypographyStyle}
         title={isAmbiguous ? `${display} — multiple matches` : `View: ${display}`}
       >
         {display}
@@ -625,6 +631,7 @@ export const InlineMarkdown: React.FC<{
           <code
             key={key++}
             className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono"
+            style={inlineCodeTypographyStyle}
           >
             {codeContent}
           </code>,
@@ -651,7 +658,7 @@ export const InlineMarkdown: React.FC<{
             style={{ backgroundColor: hex }}
             title={hex}
           />
-          <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono">
+          <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono" style={inlineCodeTypographyStyle}>
             {hex}
           </code>
         </span>,

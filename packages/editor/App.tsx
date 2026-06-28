@@ -24,6 +24,7 @@ import { getCallbackConfig, CallbackAction, executeCallback } from '@plannotator
 import { useActiveSection } from '@plannotator/ui/hooks/useActiveSection';
 import { storage } from '@plannotator/ui/utils/storage';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
+import { loadCodeFont } from '@plannotator/ui/utils/diffFonts';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
 import { useUpdateCheck } from '@plannotator/ui/hooks/useUpdateCheck';
 import { LookAndFeelAnnouncementDialog } from '@plannotator/ui/components/LookAndFeelAnnouncementDialog';
@@ -251,6 +252,27 @@ const App: React.FC = () => {
     return stored === 'true';
   });
   const gridEnabled = useConfigValue('gridEnabled');
+  const annotationCodeFontFamily = useConfigValue('annotationCodeFontFamily');
+  const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
+  const annotationProseFontFamily = useConfigValue('annotationProseFontFamily');
+  const annotationProseFontSize = useConfigValue('annotationProseFontSize');
+  const annotationTypographyStyle = useMemo<React.CSSProperties>(() => ({
+    ...(annotationProseFontFamily && {
+      ['--annotation-prose-font-family' as string]: `'${annotationProseFontFamily}', var(--font-sans)`,
+    }),
+    ...(annotationProseFontSize && {
+      ['--annotation-prose-font-size' as string]: annotationProseFontSize,
+    }),
+    ...(annotationCodeFontFamily && {
+      ['--annotation-code-font-family' as string]: `'${annotationCodeFontFamily}', var(--font-mono)`,
+    }),
+    ...(annotationCodeFontSize && {
+      ['--annotation-code-font-size' as string]: annotationCodeFontSize,
+    }),
+  }), [annotationCodeFontFamily, annotationCodeFontSize, annotationProseFontFamily, annotationProseFontSize]);
+  useEffect(() => {
+    if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
+  }, [annotationCodeFontFamily]);
   const [uiPrefs, setUiPrefs] = useState(() => getUIPreferences());
 
   // Plan-area width (inside the OverlayScrollArea, after sidebar/panel
@@ -3771,6 +3793,7 @@ const App: React.FC = () => {
                     maxWidth={isHtmlSurface ? null : annotateReaderMaxWidth}
                     fullViewport={isHtmlSurface}
                     hideControls={htmlToolsHidden}
+                    typographyStyle={annotationTypographyStyle}
                     onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
                   />
                 ) : isEditingMarkdown ? (
@@ -3840,6 +3863,7 @@ const App: React.FC = () => {
                     onToggleCheckbox={checkbox.toggle}
                     checkboxOverrides={checkbox.overrides}
                     actionsLabelMode={actionsLabelMode}
+                    typographyStyle={annotationTypographyStyle}
                     onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
                   />
                 )}

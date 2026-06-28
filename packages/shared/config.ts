@@ -29,6 +29,13 @@ export interface DiffOptions {
   lineBgIntensity?: DiffLineBgIntensity;
 }
 
+export interface AnnotationOptions {
+  proseFontFamily?: string;
+  proseFontSize?: string;
+  codeFontFamily?: string;
+  codeFontSize?: string;
+}
+
 /** Single conventional comment label entry stored in config.json */
 export interface CCLabelConfig {
   label: string;
@@ -102,6 +109,7 @@ export function mergePromptConfig(
 export interface PlannotatorConfig {
   displayName?: string;
   diffOptions?: DiffOptions;
+  annotationOptions?: AnnotationOptions;
   prompts?: PromptConfig;
   conventionalComments?: boolean;
   /** null = explicitly cleared (use defaults), undefined = not set */
@@ -165,11 +173,15 @@ export function saveConfig(partial: Partial<PlannotatorConfig>): void {
     const mergedDiffOptions = (current.diffOptions || partial.diffOptions)
       ? { ...current.diffOptions, ...partial.diffOptions }
       : undefined;
+    const mergedAnnotationOptions = (current.annotationOptions || partial.annotationOptions)
+      ? { ...current.annotationOptions, ...partial.annotationOptions }
+      : undefined;
     const mergedPrompts = mergePromptConfig(current.prompts, partial.prompts);
     const merged = {
       ...current,
       ...partial,
       diffOptions: mergedDiffOptions,
+      annotationOptions: mergedAnnotationOptions,
       prompts: mergedPrompts,
     };
     mkdirSync(CONFIG_DIR, { recursive: true });
@@ -199,6 +211,7 @@ export function detectGitUser(): string | null {
 export function getServerConfig(gitUser: string | null): {
   displayName?: string;
   diffOptions?: DiffOptions;
+  annotationOptions?: AnnotationOptions;
   gitUser?: string;
   conventionalComments?: boolean;
   conventionalLabels?: CCLabelConfig[] | null;
@@ -207,6 +220,7 @@ export function getServerConfig(gitUser: string | null): {
   return {
     displayName: cfg.displayName,
     diffOptions: cfg.diffOptions,
+    annotationOptions: cfg.annotationOptions,
     gitUser: gitUser ?? undefined,
     ...(cfg.conventionalComments !== undefined && { conventionalComments: cfg.conventionalComments }),
     ...(cfg.conventionalLabels !== undefined && { conventionalLabels: cfg.conventionalLabels }),

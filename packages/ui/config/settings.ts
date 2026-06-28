@@ -213,6 +213,57 @@ export const SETTINGS = {
     },
     toServer: (v: string) => ({ diffOptions: { fontSize: v } }),
   },
+
+  // --- Annotation display options (namespaced under annotationOptions) ---
+
+  annotationCodeFontFamily: {
+    defaultValue: '' as string, // empty = theme mono/default
+    fromCookie: () => storage.getItem('plannotator-annotation-code-font-family') || undefined,
+    toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-family', v),
+    serverKey: 'annotationOptions',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.codeFontFamily;
+      return typeof v === 'string' ? v : undefined;
+    },
+    toServer: (v: string) => ({ annotationOptions: { codeFontFamily: v } }),
+  },
+
+  annotationCodeFontSize: {
+    defaultValue: '' as string, // empty = current 13px default
+    fromCookie: () => storage.getItem('plannotator-annotation-code-font-size') || undefined,
+    toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-size', v),
+    serverKey: 'annotationOptions',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.codeFontSize;
+      return typeof v === 'string' ? v : undefined;
+    },
+    toServer: (v: string) => ({ annotationOptions: { codeFontSize: v } }),
+  },
+
+  annotationProseFontFamily: {
+    defaultValue: '' as string, // empty = theme sans/default
+    fromCookie: () => storage.getItem('plannotator-annotation-prose-font-family') || undefined,
+    toCookie: (v: string) => storage.setItem('plannotator-annotation-prose-font-family', v),
+    serverKey: 'annotationOptions',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.proseFontFamily;
+      return typeof v === 'string' ? v : undefined;
+    },
+    toServer: (v: string) => ({ annotationOptions: { proseFontFamily: v } }),
+  },
+
+  annotationProseFontSize: {
+    defaultValue: '' as string, // empty = current 15px default
+    fromCookie: () => storage.getItem('plannotator-annotation-prose-font-size') || undefined,
+    toCookie: (v: string) => storage.setItem('plannotator-annotation-prose-font-size', v),
+    serverKey: 'annotationOptions',
+    fromServer: (sc: Record<string, unknown>) => {
+      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.proseFontSize;
+      return typeof v === 'string' ? v : undefined;
+    },
+    toServer: (v: string) => ({ annotationOptions: { proseFontSize: v } }),
+  },
+
   diffTabSize: {
     defaultValue: 2 as number,
     fromCookie: () => {

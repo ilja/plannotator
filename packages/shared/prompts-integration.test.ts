@@ -164,6 +164,30 @@ describe("prompts integration (config from disk)", () => {
     expect(result).toBe("LGTM");
   });
 
+  // ── Config merge semantics ──────────────────────────────────────────
+
+  test("saveConfig merges annotationOptions without dropping other config", async () => {
+    writeConfig({
+      diffOptions: { fontSize: "13px" },
+      annotationOptions: { codeFontFamily: "Fira Code" },
+      prompts: { annotate: { approved: "OK" } },
+    });
+
+    const result = await runScript(`
+      import { saveConfig, loadConfig } from "./packages/shared/config";
+      saveConfig({ annotationOptions: { codeFontSize: "16px" } });
+      console.log(JSON.stringify(loadConfig()));
+    `);
+
+    expect(JSON.parse(result)).toMatchObject({
+      diffOptions: { fontSize: "13px" },
+      annotationOptions: { codeFontFamily: "Fira Code", codeFontSize: "16px" },
+      prompts: { annotate: { approved: "OK" } },
+    });
+  });
+
+  // ── Cross-section isolation ──────────────────────────────────────────
+
   test("config sections do not bleed into each other", async () => {
     writeConfig({
       prompts: {

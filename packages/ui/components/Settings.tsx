@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Origin } from '@plannotator/shared/agents';
 import type { DiffLineBgIntensity } from '@plannotator/shared/config';
 import { configStore, useConfigValue } from '../config';
-import { loadDiffFont } from '../utils/diffFonts';
+import { CODE_FONT_OPTIONS, loadCodeFont, loadDiffFont } from '../utils/diffFonts';
 import { TaterSpritePullup } from './TaterSpritePullup';
 import { getIdentity, regenerateIdentity, setCustomIdentity } from '../utils/identity';
 import { GitUser } from '../icons/GitUser';
@@ -72,19 +72,6 @@ interface SettingsProps {
 }
 
 // --- Review-mode Display tab (diff display options) ---
-
-const DIFF_FONT_OPTIONS = [
-  { value: '', label: 'Theme Default' },
-  { value: 'Fira Code', label: 'Fira Code' },
-  { value: 'Hack', label: 'Hack' },
-  { value: 'IBM Plex Mono', label: 'IBM Plex Mono' },
-  { value: 'Inconsolata', label: 'Inconsolata' },
-  { value: 'JetBrains Mono', label: 'JetBrains Mono' },
-  { value: 'Red Hat Mono', label: 'Red Hat Mono' },
-  { value: 'Roboto Mono', label: 'Roboto Mono' },
-  { value: 'Source Code Pro', label: 'Source Code Pro' },
-  { value: 'Atkinson Hyperlegible Mono', label: 'Atkinson Hyperlegible' },
-];
 
 export const DIFF_STYLE_OPTIONS = [
   { value: 'split' as const, label: 'Split' },
@@ -172,6 +159,20 @@ function ToggleSwitch({ checked, onChange, label, description }: {
   );
 }
 
+const ANNOTATION_PROSE_FONT_OPTIONS = [
+  { value: '', label: 'Theme Default' },
+  { value: 'Inter', label: 'Inter' },
+  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible' },
+  { value: 'Arial', label: 'Arial' },
+  { value: 'Georgia', label: 'Georgia' },
+  { value: 'Verdana', label: 'Verdana' },
+] as const;
+
+function parsePxSize(value: string, fallback: number): number {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const GitTab: React.FC = () => {
   const defaultDiffType = useConfigValue('defaultDiffType');
   return (
@@ -210,6 +211,138 @@ const GitTab: React.FC = () => {
   );
 };
 
+const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const annotationProseFontFamily = useConfigValue('annotationProseFontFamily');
+  const annotationProseFontSize = useConfigValue('annotationProseFontSize');
+  const annotationCodeFontFamily = useConfigValue('annotationCodeFontFamily');
+  const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
+
+  useEffect(() => {
+    if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
+  }, [annotationCodeFontFamily]);
+
+  const proseSizeValue = parsePxSize(annotationProseFontSize, 15);
+  const codeSizeValue = parsePxSize(annotationCodeFontSize, 13);
+
+  return (
+    <>
+      <div className="space-y-2">
+        <div>
+          <div className="text-sm font-medium">Annotation Prose Font</div>
+          <div className="text-xs text-muted-foreground">Font family for annotation document text</div>
+        </div>
+        <select
+          value={annotationProseFontFamily}
+          onChange={(e) => configStore.set('annotationProseFontFamily', e.target.value)}
+          className="w-full px-3 py-1.5 text-sm rounded-md bg-muted/50 border border-border text-foreground"
+          style={annotationProseFontFamily ? { fontFamily: `'${annotationProseFontFamily}', var(--font-sans)` } : undefined}
+        >
+          {ANNOTATION_PROSE_FONT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="border-t border-border" />
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Annotation Prose Font Size</div>
+            <div className="text-xs text-muted-foreground">Base size for annotation document text</div>
+          </div>
+          <div className="text-xs tabular-nums text-muted-foreground min-w-[4ch] text-right">
+            {annotationProseFontSize || 'Auto'}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={12}
+            max={24}
+            step={1}
+            value={proseSizeValue}
+            onChange={(e) => configStore.set('annotationProseFontSize', `${e.target.value}px`)}
+            className="flex-1 h-1.5 accent-primary cursor-pointer"
+          />
+          {annotationProseFontSize && (
+            <button
+              onClick={() => configStore.set('annotationProseFontSize', '')}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-border" />
+
+      <div className="space-y-2">
+        <div>
+          <div className="text-sm font-medium">Annotation Code Font</div>
+          <div className="text-xs text-muted-foreground">Font family for fenced and inline code in annotation documents</div>
+        </div>
+        <select
+          value={annotationCodeFontFamily}
+          onChange={(e) => configStore.set('annotationCodeFontFamily', e.target.value)}
+          className="w-full px-3 py-1.5 text-sm rounded-md bg-muted/50 border border-border text-foreground"
+          style={annotationCodeFontFamily ? { fontFamily: `'${annotationCodeFontFamily}', monospace` } : undefined}
+        >
+          {CODE_FONT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        {annotationCodeFontFamily && (
+          <div
+            className="text-xs text-muted-foreground px-1 py-1 rounded bg-muted/30 font-mono"
+            style={{ fontFamily: `'${annotationCodeFontFamily}', monospace` }}
+          >
+            Preview: const x = fn(42);
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-border" />
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Annotation Code Font Size</div>
+            <div className="text-xs text-muted-foreground">Font size for annotation code blocks</div>
+          </div>
+          <div className="text-xs tabular-nums text-muted-foreground min-w-[4ch] text-right">
+            {annotationCodeFontSize || 'Auto'}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={10}
+            max={24}
+            step={1}
+            value={codeSizeValue}
+            onChange={(e) => configStore.set('annotationCodeFontSize', `${e.target.value}px`)}
+            className="flex-1 h-1.5 accent-primary cursor-pointer"
+          />
+          {annotationCodeFontSize && (
+            <button
+              onClick={() => configStore.set('annotationCodeFontSize', '')}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-border" />
+
+      {children}
+    </>
+  );
+};
+
 const ReviewDisplayTab: React.FC = () => {
   const diffStyle = useConfigValue('diffStyle');
   const diffOverflow = useConfigValue('diffOverflow');
@@ -242,7 +375,7 @@ const ReviewDisplayTab: React.FC = () => {
           className="w-full px-3 py-1.5 text-sm rounded-md bg-muted/50 border border-border text-foreground"
           style={diffFontFamily ? { fontFamily: `'${diffFontFamily}', monospace` } : undefined}
         >
-          {DIFF_FONT_OPTIONS.map((opt) => (
+          {CODE_FONT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
@@ -983,7 +1116,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
                 )}
 
                 {activeTab === 'display' && mode !== 'review' && (
-                  <>
+                  <AnnotationDisplayTab>
                     {/* Auto-open Sidebar */}
                     <div className="flex items-center justify-between">
                       <div>
@@ -1174,7 +1307,7 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
                         />
                       </button>
                     </div>
-                  </>
+                  </AnnotationDisplayTab>
                 )}
 
                 {/* === SAVING TAB === */}
