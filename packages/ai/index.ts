@@ -2,17 +2,17 @@
  * @plannotator/ai — AI provider layer for Plannotator.
  *
  * This package provides the backbone for AI-powered features (inline chat,
- * plan Q&A, code review assistance) across all Plannotator surfaces.
+ * code review assistance, and document annotation assistance) across retained
+ * Plannotator surfaces.
  *
  * Architecture:
  *
  *   ┌─────────────────┐     ┌──────────────┐
- *   │  Plan Review UI  │────▶│              │
+ *   │ Code Review UI  │────▶│              │
  *   ├─────────────────┤     │  AI Endpoints │──▶ SSE stream
- *   │  Code Review UI  │────▶│  (HTTP)      │
- *   ├─────────────────┤     │              │
- *   │  Annotate UI     │────▶└──────┬───────┘
- *   └─────────────────┘            │
+ *   │  Annotate UI    │────▶│  (HTTP)      │
+ *   └─────────────────┘     └──────┬───────┘
+ *                                  │
  *                                  ▼
  *                         ┌────────────────┐
  *                         │ Session Manager │
@@ -22,22 +22,21 @@
  *                         │  AIProvider     │ (abstract)
  *                         └────────┬───────┘
  *                                  │
- *                    ┌─────────────┼──────────────┐
- *                    ▼             ▼               ▼
- *           ┌──────────────┐ ┌──────────┐  ┌───────────┐
- *           │ Claude Agent │ │ OpenCode │  │  Future   │
- *           │ SDK Provider │ │ Provider │  │ Providers │
- *           └──────────────┘ └──────────┘  └───────────┘
+ *                                  ▼
+ *                          ┌─────────────┐
+ *                          │ Pi SDK      │
+ *                          │ Provider    │
+ *                          └─────────────┘
  *
  * Quick start:
  *
  * ```ts
- * import "@plannotator/ai/providers/claude-agent-sdk";
+ * import "@plannotator/ai/providers/pi-sdk";
  * import { ProviderRegistry, createProvider, createAIEndpoints, SessionManager } from "@plannotator/ai";
  *
  * // 1. Create a registry and provider
  * const registry = new ProviderRegistry();
- * const provider = await createProvider({ type: "claude-agent-sdk", cwd: process.cwd() });
+ * const provider = await createProvider({ type: "pi-sdk", cwd: process.cwd(), piExecutablePath: "pi" });
  * registry.register(provider);
  *
  * // 2. Create endpoints and session manager
@@ -71,10 +70,7 @@ export type {
   AnnotateContext,
   ParentSession,
   CreateSessionOptions,
-  ClaudeAgentSDKConfig,
-  CodexSDKConfig,
   PiSDKConfig,
-  OpenCodeConfig,
 } from "./types.ts";
 
 // Provider registry

@@ -119,8 +119,7 @@ export function buildForkPreamble(ctx: AIContext): string {
 
 /**
  * Build the effective prompt for a query, prepending a preamble on the first
- * message. Used by providers that inject context via the prompt itself (Codex,
- * Pi) rather than a separate system-prompt channel (Claude).
+ * message. Used by providers that inject context via the prompt itself.
  */
 export function buildEffectivePrompt(
   userPrompt: string,

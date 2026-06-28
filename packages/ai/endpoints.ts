@@ -32,8 +32,6 @@ export interface CreateSessionRequest {
   maxTurns?: number;
   /** Max budget in USD. */
   maxBudgetUsd?: number;
-  /** Reasoning effort (Codex only). */
-  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
 export interface QueryRequest {
@@ -121,7 +119,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       const body = (await req.json()) as CreateSessionRequest;
-      const { context, providerId, model, maxTurns, maxBudgetUsd, reasoningEffort } = body;
+      const { context, providerId, model, maxTurns, maxBudgetUsd } = body;
 
       if (!context?.mode) {
         return Response.json(
@@ -151,12 +149,11 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
           model,
           ...(boundedMaxTurns !== undefined && { maxTurns: boundedMaxTurns }),
           ...(boundedMaxBudgetUsd !== undefined && { maxBudgetUsd: boundedMaxBudgetUsd }),
-          reasoningEffort,
         };
 
         // Fork if parent session is provided AND provider supports it.
-        // Providers that can't fork (e.g. Codex) fall back to a fresh
-        // session with the full system prompt — no fake history.
+        // Providers that can't fork fall back to a fresh session with the
+        // full system prompt — no fake history.
         const shouldFork = context.parent && provider.capabilities.fork;
         const session = shouldFork
           ? await provider.forkSession(options)

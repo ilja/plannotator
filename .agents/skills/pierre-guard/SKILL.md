@@ -120,7 +120,7 @@ When reviewing changes that touch the Pierre integration, check:
 - [ ] Run `bun run dev:review` and verify the diff renders in both split and unified modes
 - [ ] Check the browser console for Pierre warnings (e.g., `parseLineType: Invalid firstChar`)
 - [ ] Test with add-only and delete-only files (Pierre doesn't render split grid for these)
-- [ ] If changing UI code, remember build order: `bun run --cwd apps/review build && bun run build:hook`
+- [ ] If changing UI code, remember build order: `bun run build:review && bun run build:annotation`
 
 ## When Upgrading @pierre/diffs
 
