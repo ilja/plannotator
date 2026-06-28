@@ -1,5 +1,5 @@
 /**
- * DocBadges — repo / branch / plan-diff / demo / archive / linked-doc badge cluster.
+ * DocBadges — repo / branch / demo / linked-doc badge cluster.
  *
  * Extracted from Viewer.tsx so the same markup can render in two places:
  *   - layout="column": original location at the top-left of the plan card (absolute)
@@ -11,8 +11,6 @@
  */
 
 import React from 'react';
-import { PlanDiffBadge } from './plan-diff/PlanDiffBadge';
-import type { PlanDiffStats } from '../utils/planDiffEngine';
 import { hostnameOrFallback } from '@plannotator/shared/project';
 import { OpenInAppButton } from './OpenInAppButton';
 
@@ -27,12 +25,7 @@ export interface LinkedDocBadgeInfo {
 export interface DocBadgesProps {
   layout: 'column' | 'row';
   repoInfo?: { display: string; branch?: string } | null;
-  planDiffStats?: PlanDiffStats | null;
-  isPlanDiffActive?: boolean;
-  hasPreviousVersion?: boolean;
-  onPlanDiffToggle?: () => void;
   showDemoBadge?: boolean;
-  archiveInfo?: { status: 'approved' | 'denied' | 'unknown'; timestamp: string; title: string } | null;
   linkedDocInfo?: LinkedDocBadgeInfo | null;
   /** Source attribution for HTML/URL annotations (e.g. "https://..." or "index.html") */
   sourceInfo?: string;
@@ -46,12 +39,7 @@ export interface DocBadgesProps {
 export const DocBadges: React.FC<DocBadgesProps> = ({
   layout,
   repoInfo,
-  planDiffStats,
-  isPlanDiffActive,
-  hasPreviousVersion,
-  onPlanDiffToggle,
   showDemoBadge,
-  archiveInfo,
   linkedDocInfo,
   sourceInfo,
   openInAppPath,
@@ -63,12 +51,10 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
     <OpenInAppButton filePath={openInAppPath} base={null} />
   ) : null;
 
-  // In row layout, only PlanDiffBadge (when it has stats to show) and
-  // archiveInfo actually render — everything else is hidden. Check what
-  // will truly produce visible output to avoid an empty wrapper div.
+  // In row layout, there is currently no document badge content to render.
   const anything = isRow
-    ? (!linkedDocInfo && ((hasPreviousVersion && planDiffStats) || archiveInfo))
-    : repoInfo || hasPreviousVersion || showDemoBadge || linkedDocInfo || archiveInfo || sourceInfo || canOpenInApp;
+    ? false
+    : repoInfo || showDemoBadge || linkedDocInfo || sourceInfo || canOpenInApp;
   if (!anything) return null;
 
   // Row layout: single horizontal line. Column layout: stacked rows.
@@ -121,56 +107,11 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
         </div>
       )}
 
-      {onPlanDiffToggle && !linkedDocInfo && (
-        <PlanDiffBadge
-          stats={planDiffStats ?? null}
-          isActive={isPlanDiffActive ?? false}
-          onToggle={onPlanDiffToggle}
-          hasPreviousVersion={hasPreviousVersion ?? false}
-        />
-      )}
-
       {/* Demo badge: only in column (top-of-doc) layout */}
       {!isRow && showDemoBadge && !linkedDocInfo && (
         <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-500/15 text-amber-600 dark:text-amber-400">
           Demo
         </span>
-      )}
-
-      {archiveInfo && !linkedDocInfo && (
-        <div className="flex items-center gap-1.5">
-          <span
-            className={`px-1.5 py-0.5 rounded ${
-              archiveInfo.status === 'approved'
-                ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                : archiveInfo.status === 'denied'
-                  ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-                  : 'bg-muted/50 text-muted-foreground'
-            }`}
-          >
-            {archiveInfo.status === 'approved'
-              ? 'Approved'
-              : archiveInfo.status === 'denied'
-                ? 'Denied'
-                : 'Unknown'}
-          </span>
-          {archiveInfo.timestamp && (
-            <span
-              className="px-1.5 py-0.5 bg-muted/50 rounded"
-              title={archiveInfo.timestamp}
-            >
-              {new Date(archiveInfo.timestamp).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}{' '}
-              {new Date(archiveInfo.timestamp).toLocaleTimeString(undefined, {
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-            </span>
-          )}
-        </div>
       )}
 
       {/* Linked-doc breadcrumb: only in column layout (sticky lane is hidden in linked-doc mode) */}

@@ -76,11 +76,6 @@ interface ViewerProps {
    *  resolve against the doc's own directory rather than only cwd. */
   codePathBaseDir?: string;
   linkedDocInfo?: LinkedDocBadgeInfo | null;
-  // Plan diff props
-  planDiffStats?: { additions: number; deletions: number; modifications: number } | null;
-  isPlanDiffActive?: boolean;
-  onPlanDiffToggle?: () => void;
-  hasPreviousVersion?: boolean;
   /** Show amber "Demo" badge (portal mode, no shared content loaded) */
   showDemoBadge?: boolean;
   /** Max width in px for the plan card; null removes the cap entirely. */
@@ -93,7 +88,6 @@ interface ViewerProps {
    * callers that don't measure plan-area width.
    */
   actionsLabelMode?: ActionsLabelMode;
-  archiveInfo?: { status: 'approved' | 'denied' | 'unknown'; timestamp: string; title: string } | null;
   /** Source attribution for HTML/URL annotations (e.g. URL or filename) */
   sourceInfo?: string;
   /** Absolute path of the annotated source file for the Open-in-app control. */
@@ -167,10 +161,6 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   repoInfo,
   stickyActions = true,
   gridEnabled = false,
-  planDiffStats,
-  isPlanDiffActive,
-  onPlanDiffToggle,
-  hasPreviousVersion,
   showDemoBadge,
   maxWidth,
   onOpenLinkedDoc,
@@ -180,7 +170,6 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   codePathBaseDir,
   copyLabel,
   actionsLabelMode = 'full',
-  archiveInfo,
   sourceInfo,
   openInAppPath,
   messagePickerInfo,
@@ -293,7 +282,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
     containerRef,
     highlighterRef,
     inputMethod,
-    enabled: !toolbarState && !hookCommentPopover && !viewerCommentPopover && !hookQuickLabelPicker && !codeBlockQuickLabelPicker && !(isPlanDiffActive ?? false),
+    enabled: !toolbarState && !hookCommentPopover && !viewerCommentPopover && !hookQuickLabelPicker && !codeBlockQuickLabelPicker,
     onCodeBlockClick: handlePinpointCodeBlockClick,
   });
 
@@ -541,18 +530,13 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
         className={`w-full bg-card rounded-xl py-5 md:py-8 lg:py-10 xl:py-12 relative ${gridEnabled ? 'px-5 md:px-8 lg:px-10 xl:px-12 shadow-xl border border-border/50' : ''} ${inputMethod === 'pinpoint' ? 'cursor-crosshair' : ''}`}
         style={{ WebkitTouchCallout: 'none' } as React.CSSProperties}
       >
-        {/* Repo info + plan diff badge + demo badge + linked doc badge + archive badge - top left */}
-        {(repoInfo || hasPreviousVersion || showDemoBadge || linkedDocInfo || archiveInfo || sourceInfo || openInAppPath) && (
+        {/* Repo info + demo badge + linked doc badge - top left */}
+        {(repoInfo || showDemoBadge || linkedDocInfo || sourceInfo || openInAppPath) && (
           <div data-print-hide className={`absolute top-3 md:top-4 ${gridEnabled ? 'left-3 md:left-5' : 'left-0'}`}>
             <DocBadges
               layout="column"
               repoInfo={repoInfo}
-              planDiffStats={planDiffStats}
-              isPlanDiffActive={isPlanDiffActive}
-              hasPreviousVersion={hasPreviousVersion}
-              onPlanDiffToggle={onPlanDiffToggle}
               showDemoBadge={showDemoBadge}
-              archiveInfo={archiveInfo}
               linkedDocInfo={linkedDocInfo}
               sourceInfo={sourceInfo}
               openInAppPath={openInAppPath}

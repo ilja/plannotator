@@ -13,8 +13,6 @@ import { ReviewAgentsIcon } from "../ReviewAgentsIcon";
 interface SidebarTabsProps {
   activeTab: SidebarTab;
   onToggleTab: (tab: SidebarTab) => void;
-  hasDiff: boolean;
-  showVersionsTab?: boolean;
   showFilesTab?: boolean;
   showMessagesTab?: boolean;
   showAgentTerminalTab?: boolean;
@@ -29,8 +27,6 @@ interface SidebarTabsProps {
 export const SidebarTabs: React.FC<SidebarTabsProps> = ({
   activeTab,
   onToggleTab,
-  hasDiff,
-  showVersionsTab,
   showFilesTab,
   showMessagesTab,
   showAgentTerminalTab,
@@ -84,33 +80,6 @@ export const SidebarTabs: React.FC<SidebarTabsProps> = ({
           />
         </svg>
       </button>
-
-      {/* Versions tab — only shown when multiple versions exist */}
-      {showVersionsTab && (
-        <button
-          onClick={() => onToggleTab("versions")}
-          className="sidebar-tab-flag group relative flex items-center justify-center w-7 h-9 rounded-r-md border border-l-0 border-border/50 bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-card transition-colors"
-          title="Plan Versions"
-        >
-          <svg
-            className="w-3.5 h-3.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          {/* Availability indicator dot */}
-          {hasDiff && (
-            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-primary" />
-          )}
-        </button>
-      )}
 
       {showMessagesTab && (
         <button
