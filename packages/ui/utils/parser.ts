@@ -1,5 +1,5 @@
 import { Block, type Annotation, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
-import { planDenyFeedback } from '@plannotator/shared/feedback-templates';
+import { annotationFeedback } from '@plannotator/shared/feedback-templates';
 
 /**
  * Parsed YAML frontmatter as key-value pairs.
@@ -456,9 +456,9 @@ export const computeListIndices = (blocks: Block[]): (number | null)[] => {
   });
 };
 
-/** Wrap feedback output with the deny preamble for pasting into agent sessions */
+/** Wrap feedback output with annotation instructions for pasting into agent sessions */
 export const wrapFeedbackForAgent = (feedback: string): string =>
-  planDenyFeedback(feedback);
+  annotationFeedback(feedback);
 
 export interface ExportAnnotationsOptions {
   sourceConverted?: boolean;

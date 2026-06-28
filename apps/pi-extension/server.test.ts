@@ -278,16 +278,10 @@ describe("pi annotate server", () => {
       const payload = await response.json() as {
         mode?: string;
         recentMessages?: Array<{ messageId: string; text: string }>;
-        previousPlan?: unknown;
-        versionInfo?: unknown;
-        archivePlans?: unknown;
       };
 
       expect(payload.mode).toBe("annotate-last");
       expect(payload.recentMessages).toEqual([{ messageId: "entry-1", text: "assistant text" }]);
-      expect(payload.previousPlan).toBeUndefined();
-      expect(payload.versionInfo).toBeUndefined();
-      expect(payload.archivePlans).toBeUndefined();
     } finally {
       server.stop();
     }
@@ -702,8 +696,6 @@ describe("pi review server", () => {
       );
       expect(annotationDelete.status).toBe(200);
 
-      const agentsResponse = await fetch(`${server.url}/api/agents`);
-      expect(await agentsResponse.json()).toEqual({ agents: [] });
 
       const formData = new FormData();
       formData.append("file", new File(["png-bytes"], "diagram.png", { type: "image/png" }));
@@ -761,7 +753,6 @@ describe("pi review server", () => {
         approved: false,
         feedback: "Please update the diff",
         annotations: [{ id: "note-1" }],
-        agentSwitch: undefined,
       });
     } finally {
       server.stop();
@@ -798,7 +789,6 @@ describe("pi review server", () => {
         approved: false,
         feedback: "",
         annotations: [],
-        agentSwitch: undefined,
       });
     } finally {
       server.stop();

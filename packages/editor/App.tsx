@@ -52,12 +52,6 @@ import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea'
 import { ScrollViewportContext } from '@plannotator/ui/hooks/useScrollViewport';
 import { useOverlayViewport } from '@plannotator/ui/hooks/useOverlayViewport';
 import { useIsMobile } from '@plannotator/ui/hooks/useIsMobile';
-import {
-  getPermissionModeSettings,
-  needsPermissionModeSetup,
-  type PermissionMode,
-} from '@plannotator/ui/utils/permissionMode';
-import { PermissionModeSetup } from '@plannotator/ui/components/PermissionModeSetup';
 import { ImageAnnotator } from '@plannotator/ui/components/ImageAnnotator';
 import { deriveImageName } from '@plannotator/ui/components/AttachmentsButton';
 import { useSidebar, type SidebarTab } from '@plannotator/ui/hooks/useSidebar';
@@ -76,12 +70,6 @@ import { SidebarTabs } from '@plannotator/ui/components/sidebar/SidebarTabs';
 import { SidebarContainer } from '@plannotator/ui/components/sidebar/SidebarContainer';
 import type { PickerMessage } from '@plannotator/ui/components/sidebar/MessagesBrowser';
 import { CodeFilePopout, type CodeFileAnnotationInput } from '@plannotator/ui/components/CodeFilePopout';
-import {
-  GoalSetupSurface,
-  type GoalSetupActionState,
-  type GoalSetupSurfaceHandle,
-} from '@plannotator/ui/components/goal-setup/GoalSetupSurface';
-import type { GoalSetupBundle } from '@plannotator/shared/goal-setup';
 import type { AIContext } from '@plannotator/ai';
 import type { CommentAskAIContext } from '@plannotator/ui/components/CommentPopover';
 import {
@@ -333,14 +321,6 @@ const App: React.FC = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const messageStateCacheRef = useRef<Map<string, MessageAnnotationState>>(new Map());
   const [cachedMessageAnnotationCounts, setCachedMessageAnnotationCounts] = useState<Map<string, number>>(new Map());
-  const [goalSetupBundle, setGoalSetupBundle] = useState<GoalSetupBundle | null>(null);
-  const goalSetupSurfaceRef = useRef<GoalSetupSurfaceHandle>(null);
-  const [goalSetupAction, setGoalSetupAction] = useState<GoalSetupActionState>({
-    canSubmit: false,
-    isSubmitting: false,
-    submitted: false,
-    submitLabel: 'Submit',
-  });
   const [sourceInfo, setSourceInfo] = useState<string | undefined>();
   const [sourceConverted, setSourceConverted] = useState(false);
   const [renderAs, setRenderAs] = useState<'markdown' | 'html'>('markdown');
@@ -362,8 +342,6 @@ const App: React.FC = () => {
   const [isExiting, setIsExiting] = useState(false);
   const [submitted, setSubmitted] = useState<'approved' | 'denied' | 'exited' | null>(null);
   const [pendingPasteImage, setPendingPasteImage] = useState<{ file: File; blobUrl: string; initialName: string } | null>(null);
-  const [showPermissionModeSetup, setShowPermissionModeSetup] = useState(false);
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions');
   const [sharingEnabled, setSharingEnabled] = useState(true);
   const [shareBaseUrl, setShareBaseUrl] = useState<string | undefined>(undefined);
   const [pasteApiUrl, setPasteApiUrl] = useState<string | undefined>(undefined);
@@ -382,8 +360,6 @@ const App: React.FC = () => {
   const wideModeSnapshotRef = useRef<WideModeLayoutSnapshot | null>(null);
   const initialSidebarPreferenceAppliedRef = useRef(false);
   const lastAppliedTocEnabledRef = useRef(uiPrefs.tocEnabled);
-  const goalSetupMode = goalSetupBundle !== null;
-
   useEffect(() => {
     document.title = repoInfo ? `${repoInfo.display} · Plannotator` : "Plannotator";
   }, [repoInfo]);
@@ -1055,15 +1031,15 @@ const App: React.FC = () => {
   const activeSection = useActiveSection(containerRef, headingCount, scrollViewport);
 
   const { editorAnnotations, deleteEditorAnnotation } = useEditorAnnotations();
-  const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations<Annotation>({ enabled: isApiMode && !goalSetupMode });
+  const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations<Annotation>({ enabled: isApiMode });
 
   // Drive DOM highlights for SSE-delivered external annotations. Disabled
   // while a linked doc overlay is open (Viewer DOM is hidden) and while the
-  // plan diff view is active (diff view has its own annotation surface).
+  // a dedicated diff surface is active (diff view has its own annotation surface).
   const { reset: resetExternalHighlights } = useExternalAnnotationHighlights({
     viewerRef,
     externalAnnotations,
-    enabled: isApiMode && !goalSetupMode && !linkedDocHook.isActive && true && !isEditingMarkdown,
+    enabled: isApiMode && !linkedDocHook.isActive && true && !isEditingMarkdown,
     planKey: markdown,
   });
 
@@ -1242,7 +1218,7 @@ const App: React.FC = () => {
     if (wideModeType !== null) return;
 
     initialSidebarPreferenceAppliedRef.current = true;
-    if (false || goalSetupMode || annotateSource === 'folder') return;
+    if (annotateSource === 'folder') return;
     if (renderAs === 'html') {
       sidebar.close();
       return;
@@ -1252,8 +1228,6 @@ const App: React.FC = () => {
     }
   }, [
     annotateSource,
-    false,
-    goalSetupMode,
     hasTocEntries,
     isLoading,
     isLoadingShared,
@@ -1322,7 +1296,7 @@ const App: React.FC = () => {
     getEditedMarkdown: getDraftEditedMarkdown,
     getEditedDocuments: editableDocuments.getDraftDocuments,
     getSavedFileChanges: editableDocuments.getDraftSavedFileChanges,
-    isApiMode: isApiMode && !goalSetupMode,
+    isApiMode,
     isSharedSession,
     // isSubmitting counts: a save firing while approve/deny is in flight can
     // land after the server's draft delete and ghost a "Draft Recovered"
@@ -1349,15 +1323,14 @@ const App: React.FC = () => {
   }, [pendingSharedAnnotations, clearPendingSharedAnnotations, resetExternalHighlights]);
 
   // Markdown edit mode: single consolidated gate. The editor only ever opens on
-  // the main plan/file markdown — never on HTML surfaces, archive/goal-setup
-  // views, linked docs, messages, folder pickers, diff view, or shared sessions.
+  // the main plan/file markdown — never on HTML surfaces, linked docs, messages,
+  // folder pickers, diff view, or shared sessions.
   const canEditMarkdown =
     renderAs !== 'html' &&
     // editStats non-null keeps the toggle available after committing an
     // emptied document, so the user can re-enter and undo. Source-backed files
     // are editable even when they start empty.
     (activeEditableDocument?.sourceSave?.enabled || displayedMarkdown !== '' || editStats !== null) &&
-    !goalSetupMode &&
     (!linkedDocHook.isActive || (annotateSource === 'folder' && activeEditableDocument?.sourceSave?.enabled)) &&
     !isSharedSession &&
     annotateSource !== 'message' &&
@@ -1455,7 +1428,7 @@ const App: React.FC = () => {
   }, [activeEditableDocument, displayedMarkdown, editableDocuments, isEditingMarkdown, annotations, markdown, applyEditedDocument, repaintHighlights, scheduleDraftSave]);
 
   // Discards direct edits for one document. Source-backed folder edits are
-  // file-scoped; normal plan-review edits still have a single document.
+  // file-scoped; the root annotation document has a single document.
   const handleDiscardEdits = useCallback((sourceKey?: string) => {
     const targetKey = sourceKey ?? activeEditableDocument?.key;
     const targetIsActive = !!targetKey && editableDocuments.getActiveKey() === targetKey;
@@ -1776,7 +1749,7 @@ const App: React.FC = () => {
 
   // Editing exit control: a source-backed session with unsaved edits gets a
   // two-step "Cancel" (discard + exit). Plan mode and clean source sessions keep
-  // the plain "Done" (commit edits + exit), so plan-mode keep behavior is unchanged.
+  // the plain "Done" (commit edits + exit), so annotation close behavior is unchanged.
   const cancelMode = isEditingMarkdown && !!activeSourceSave && (
     activeSourceBufferDirty ||
     activeSaveStatus === 'conflict' ||
@@ -2053,20 +2026,16 @@ const App: React.FC = () => {
         if (!res.ok) throw new Error('Not in API mode');
         return res.json();
       })
-      .then((data: { plan: string; origin?: Origin; mode?: 'annotate' | 'annotate-last' | 'annotate-folder' | 'goal-setup'; goalSetup?: GoalSetupBundle; filePath?: string; sourceInfo?: string; sourceConverted?: boolean; sourceSave?: SourceSaveCapability; gate?: boolean; renderAs?: 'html' | 'markdown'; rawHtml?: string; shareHtml?: string; convertHtml?: boolean; sharingEnabled?: boolean; shareBaseUrl?: string; pasteApiUrl?: string; repoInfo?: { display: string; branch?: string; host?: string }; projectRoot?: string; isWSL?: boolean; serverConfig?: { displayName?: string; gitUser?: string }; recentMessages?: PickerMessage[]; agentTerminal?: AgentTerminalCapability }) => {
+      .then((data: { plan: string; origin?: Origin; mode?: 'annotate' | 'annotate-last' | 'annotate-folder'; filePath?: string; sourceInfo?: string; sourceConverted?: boolean; sourceSave?: SourceSaveCapability; gate?: boolean; renderAs?: 'html' | 'markdown'; rawHtml?: string; shareHtml?: string; convertHtml?: boolean; sharingEnabled?: boolean; shareBaseUrl?: string; pasteApiUrl?: string; repoInfo?: { display: string; branch?: string; host?: string }; projectRoot?: string; isWSL?: boolean; serverConfig?: { displayName?: string; gitUser?: string }; recentMessages?: PickerMessage[]; agentTerminal?: AgentTerminalCapability }) => {
         // Initialize config store with server-provided values (config file > cookie > default)
         configStore.init(data.serverConfig);
         // Session-level force-markdown preference (--markdown); threaded into folder/linked
         // /api/doc requests so on-demand HTML files convert too.
         setConvertHtml(data.convertHtml ?? false);
-        setAISessionEnabled(data.mode !== 'goal-setup');
+        setAISessionEnabled(true);
         // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
         setGitUser(data.serverConfig?.gitUser);
-        if (data.mode === 'goal-setup' && data.goalSetup) {
-          setGoalSetupBundle(data.goalSetup);
-          setMarkdown('');
-          setSharingEnabled(false);
-        } else if (data.renderAs === 'html' && data.rawHtml) {
+        if (data.renderAs === 'html' && data.rawHtml) {
           setRenderAs('html');
           setRawHtml(data.rawHtml);
           setShareHtml(data.shareHtml ?? '');
@@ -2133,12 +2102,6 @@ const App: React.FC = () => {
         setAgentTerminalCapability(data.agentTerminal ?? null);
         if (data.origin) {
           setOrigin(data.origin);
-          // For Claude Code, check if user needs to configure permission mode
-          if (data.origin === 'claude-code' && data.mode !== 'goal-setup' && needsPermissionModeSetup()) {
-            setShowPermissionModeSetup(true);
-          }
-          // Load saved permission mode preference
-          setPermissionMode(getPermissionModeSettings().mode);
         }
         if (data.isWSL) {
           setIsWSL(true);
@@ -2510,24 +2473,6 @@ const App: React.FC = () => {
     }
   }, [withDraftGeneration]);
 
-  const handleGoalSetupSubmit = useCallback(() => {
-    goalSetupSurfaceRef.current?.submit();
-  }, []);
-
-  const handleGoalSetupExit = useCallback(async () => {
-    setIsExiting(true);
-    try {
-      const res = await fetch('/api/exit', { method: 'POST' });
-      if (res.ok) {
-        setSubmitted('exited');
-      } else {
-        throw new Error('Failed to exit');
-      }
-    } catch {
-      setIsExiting(false);
-    }
-  }, []);
-
   const confirmUnsavedSourceFileEdits = useCallback((
     action: SourceFileEditWarningAction,
     continueAction: () => void | Promise<void>,
@@ -2574,10 +2519,10 @@ const App: React.FC = () => {
       // Don't intercept if any modal is open
       if (showExport || showImport || showFeedbackPrompt ||
           showSourceFileEditWarning ||
-          showExitWarning || showPermissionModeSetup || pendingPasteImage) return;
+          showExitWarning || pendingPasteImage) return;
 
       // Don't intercept if already submitted, submitting, or exiting
-      if (submitted || isSubmitting || isExiting || goalSetupAction.isSubmitting) return;
+      if (submitted || isSubmitting || isExiting) return;
 
       // Don't intercept in demo/share mode (no API)
       if (!isApiMode) return;
@@ -2590,15 +2535,7 @@ const App: React.FC = () => {
       // references and should not submit the root plan.
       if (linkedDocHook.isActive && annotateSource !== 'folder') return;
 
-      if (goalSetupMode) {
-        if (document.querySelector('[data-comment-popover="true"]')) return;
-        if (isTextField && !target?.closest('.goal-shell')) return;
-        e.preventDefault();
-        if (goalSetupAction.canSubmit) goalSetupSurfaceRef.current?.submit();
-        return;
-      }
-
-      // Don't intercept if typing in an input/textarea outside goal setup.
+      // Don't intercept if typing in an input/textarea.
       if (isTextField) return;
 
       e.preventDefault();
@@ -2621,9 +2558,9 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     showExport, showImport, showFeedbackPrompt, showSourceFileEditWarning, showExitWarning,
-    showPermissionModeSetup, pendingPasteImage,
-    submitted, isSubmitting, isExiting, goalSetupAction.isSubmitting, isApiMode, isEditingMarkdown, linkedDocHook.isActive, annotations.length, codeAnnotations.length, externalAnnotations.length, annotateMode,
-    gate, hasFeedbackToSend, goalSetupMode, goalSetupAction.canSubmit, isAgentTerminalReady,
+    pendingPasteImage,
+    submitted, isSubmitting, isExiting, isApiMode, isEditingMarkdown, linkedDocHook.isActive, annotations.length, codeAnnotations.length, externalAnnotations.length, annotateMode,
+    gate, hasFeedbackToSend, isAgentTerminalReady,
     annotateSource,
     maybeConfirmUnsavedSourceFileEdits,
   ]);
@@ -2773,7 +2710,7 @@ const App: React.FC = () => {
     annotateSource === 'message';
 
   const aiContext = useMemo<AIContext | null>(() => {
-    if (!aiSessionEnabled || goalSetupMode || !hasAIDocumentContext) return null;
+    if (!aiSessionEnabled || !hasAIDocumentContext) return null;
 
     return {
       mode: 'annotate',
@@ -2794,7 +2731,6 @@ const App: React.FC = () => {
     aiSourceConverted,
     aiSourceInfo,
     displayedMarkdown,
-    goalSetupMode,
     hasAIDocumentContext,
     rawHtml,
   ]);
@@ -3261,7 +3197,7 @@ const App: React.FC = () => {
 
       if (showExport || showFeedbackPrompt ||
           showSourceFileEditWarning ||
-          showExitWarning || showPermissionModeSetup || pendingPasteImage) return;
+          showExitWarning || pendingPasteImage) return;
 
       if (submitted || !isApiMode) return;
 
@@ -3296,7 +3232,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleSaveShortcut);
   }, [
     showExport, showFeedbackPrompt, showSourceFileEditWarning, showExitWarning,
-    showPermissionModeSetup, pendingPasteImage,
+    pendingPasteImage,
     submitted, isApiMode, isEditingMarkdown, handleSaveEditedSourceFile, displayedMarkdown, annotationsOutput,
   ]);
 
@@ -3310,7 +3246,7 @@ const App: React.FC = () => {
 
       if (showExport || showFeedbackPrompt ||
           showSourceFileEditWarning ||
-          showExitWarning || showPermissionModeSetup || pendingPasteImage) return;
+          showExitWarning || pendingPasteImage) return;
 
       if (submitted) return;
 
@@ -3322,7 +3258,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handlePrintShortcut);
   }, [
     showExport, showFeedbackPrompt, showSourceFileEditWarning, showExitWarning,
-    showPermissionModeSetup, pendingPasteImage, submitted,
+    pendingPasteImage, submitted,
   ]);
 
   const agentName = useMemo(() => getAgentName(origin), [origin]);
@@ -3393,21 +3329,18 @@ const App: React.FC = () => {
   const showAgentTerminalControls =
     annotateMode &&
     annotateSource !== 'message' &&
-    agentTerminalCapability !== null &&
-    !goalSetupMode;
+    agentTerminalCapability !== null;
   const shouldRenderAgentTerminal =
     showAgentTerminalControls &&
     agentTerminalCapability !== null &&
     wideModeType === null &&
     (isAgentTerminalOpen || isAgentTerminalRunning);
   // Only greet in a normal authoring context — not on a read-only shared session
-  // (a viewer would also be able to flip the owner's gridEnabled), nor over the
-  // goal-setup / permission-mode flows. Deferred (not marked seen) until then.
+  // (a viewer would also be able to flip the owner's gridEnabled). Deferred
+  // (not marked seen) until then.
   const shouldShowLookAndFeelAnnouncement =
     showLookAndFeelAnnouncement &&
-    !isSharedSession &&
-    !goalSetupMode &&
-    !showPermissionModeSetup;
+    !isSharedSession;
 
 
 
@@ -3430,10 +3363,6 @@ const App: React.FC = () => {
           onToggleHtmlTools={() => setHtmlToolsHidden((v) => !v)}
           isApiMode={isApiMode}
           annotateMode={annotateMode}
-          goalSetupMode={goalSetupMode}
-          goalSetupCanSubmit={goalSetupAction.canSubmit}
-          goalSetupIsSubmitting={goalSetupAction.isSubmitting}
-          goalSetupSubmitLabel={goalSetupAction.submitLabel}
           gate={gate}
           isSharedSession={isSharedSession}
           origin={origin}
@@ -3454,8 +3383,6 @@ const App: React.FC = () => {
           onCallbackFeedback={handleCallbackFeedback}
           onCallbackApprove={handleCallbackApprove}
           onAnnotateExit={handleHeaderAnnotateExit}
-          onGoalSetupExit={handleGoalSetupExit}
-          onGoalSetupSubmit={handleGoalSetupSubmit}
           onAnnotateFeedback={handleHeaderAnnotateFeedback}
           onAnnotateApprove={handleHeaderAnnotateApprove}
           onAnnotationPanelToggle={handleAnnotationPanelToggle}
@@ -3575,7 +3502,7 @@ const App: React.FC = () => {
             </div>
           )}
           {/* Left Sidebar: collapsed tab flags (when sidebar is closed) */}
-          {wideModeType === null && !sidebar.isOpen && !goalSetupMode && !isAgentTerminalOpen && (
+          {wideModeType === null && !sidebar.isOpen && !isAgentTerminalOpen && (
             <SidebarTabs
               activeTab={sidebar.activeTab}
               onToggleTab={toggleSidebarTab}
@@ -3592,7 +3519,7 @@ const App: React.FC = () => {
           )}
 
           {/* Left Sidebar: open state (TOC, files, or messages) */}
-          {sidebar.isOpen && !goalSetupMode && (
+          {sidebar.isOpen && (
             <div className="contents group/sidebar">
               <SidebarContainer
                 activeTab={sidebar.activeTab}
@@ -3644,7 +3571,7 @@ const App: React.FC = () => {
           {/* Document Area */}
           <OverlayScrollArea
             element="main"
-            className={`flex-1 min-w-0 ${isHtmlSurface ? 'bg-background' : `${gridEnabled ? "bg-grid " : "bg-card "}${!goalSetupMode && !sidebar.isOpen && !isAgentTerminalOpen && wideModeType === null ? 'lg:pl-[30px]' : ''}`}`}
+            className={`flex-1 min-w-0 ${isHtmlSurface ? 'bg-background' : `${gridEnabled ? "bg-grid " : "bg-card "}${!sidebar.isOpen && !isAgentTerminalOpen && wideModeType === null ? 'lg:pl-[30px]' : ''}`}`}
             data-print-region="document"
             onViewportReady={handleViewportReady}
           >
@@ -3662,11 +3589,11 @@ const App: React.FC = () => {
               {/* Sticky header lane — ghost bar that pins the toolstrip +
                   badges at top: 12px once the user scrolls. Invisible at top
                   of doc; original toolstrip/badges remain the source of
-                  truth there. Hidden in plan diff or archive mode, or when
-                  sticky actions are disabled. remountToken re-anchors the
+                  truth there. Hidden when sticky actions are disabled.
+                  remountToken re-anchors the
                   ResizeObserver when Viewer swaps content (linked docs or
                   message switches). */}
-              {!goalSetupMode && !isHtmlSurface && !isEditingMarkdown && uiPrefs.stickyActionsEnabled && (
+              {!isHtmlSurface && !isEditingMarkdown && uiPrefs.stickyActionsEnabled && (
                 <StickyHeaderLane
                   inputMethod={inputMethod}
                   onInputMethodChange={handleInputMethodChange}
@@ -3680,10 +3607,10 @@ const App: React.FC = () => {
               )}
 
               {/* Annotation Toolstrip — the mode switcher (selection/redline input +
-                  comment/markup mode). Hidden during plan diff, and on HTML surfaces
+                  comment/markup mode). Hidden on HTML surfaces
                   when the header's "Hide tools" toggle is on (leaving the rendered HTML
                   free of overlay controls). On HTML it floats top-left over the doc. */}
-              {!goalSetupMode && !isEditingMarkdown && !(isHtmlSurface && htmlToolsHidden) && (
+              {!isEditingMarkdown && !(isHtmlSurface && htmlToolsHidden) && (
                 <div
                   data-print-hide
                   className={isHtmlSurface
@@ -3702,21 +3629,8 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Document View */}
-              {goalSetupBundle && (
-                <div className="w-full flex justify-center">
-                  <GoalSetupSurface
-                    ref={goalSetupSurfaceRef}
-                    bundle={goalSetupBundle}
-                    maxWidth={planMaxWidth}
-                    onActionStateChange={setGoalSetupAction}
-                    onSubmitted={() => setSubmitted('approved')}
-                  />
-                </div>
-              )}
-
               {/* Folder annotation empty state — shown before user picks a file */}
-              {annotateSource === 'folder' && !markdown && !linkedDocHook.isActive && !goalSetupMode && (
+              {annotateSource === 'folder' && !markdown && !linkedDocHook.isActive && (
                 <div className="w-full flex justify-center">
                   <div className="w-full max-w-3xl p-12 text-center text-muted-foreground">
                     <p className="text-lg font-medium mb-2">Select a file to annotate</p>
@@ -3725,7 +3639,7 @@ const App: React.FC = () => {
                 </div>
               )}
               {/* Normal Plan View — always mounted, hidden during diff mode */}
-              <div className={`w-full relative ${isHtmlSurface ? 'flex-1 flex flex-col' : `flex justify-center${isEditingMarkdown ? ' flex-1 min-h-0' : ''}`}`} style={{ display: goalSetupMode || (annotateSource === 'folder' && !markdown && !linkedDocHook.isActive) ? 'none' : undefined }}>
+              <div className={`w-full relative ${isHtmlSurface ? 'flex-1 flex flex-col' : `flex justify-center${isEditingMarkdown ? ' flex-1 min-h-0' : ''}`}`} style={{ display: (annotateSource === 'folder' && !markdown && !linkedDocHook.isActive) ? 'none' : undefined }}>
                 {(canUseWideMode || canEditMarkdown) && !isHtmlSurface && (
                   <div
                     data-print-hide
@@ -3939,11 +3853,11 @@ const App: React.FC = () => {
               ancestor (`contents` = no layout box). */}
           <div className="contents group/sidebar">
           {/* Resize Handle */}
-          {isPanelOpen && wideModeType === null && !goalSetupMode && (rightSidebarTab === 'annotations' || canUseAskAI) && <ResizeHandle {...panelResize.handleProps} className="hidden md:block z-[55]" side="right" onCollapse={() => setIsPanelOpen(false)} />}
+          {isPanelOpen && wideModeType === null && (rightSidebarTab === 'annotations' || canUseAskAI) && <ResizeHandle {...panelResize.handleProps} className="hidden md:block z-[55]" side="right" onCollapse={() => setIsPanelOpen(false)} />}
 
           {/* Annotation Panel */}
           <AnnotationPanel
-            isOpen={isPanelOpen && rightSidebarTab === 'annotations' && wideModeType === null && !goalSetupMode}
+            isOpen={isPanelOpen && rightSidebarTab === 'annotations' && wideModeType === null}
             blocks={blocks}
             annotations={allAnnotations}
             selectedId={selectedAnnotationId ?? selectedCodeAnnotationId}
@@ -3971,7 +3885,7 @@ const App: React.FC = () => {
             })) ?? null}
             onOtherFileAnnotationsClick={handleFlashAnnotatedFiles}
           />
-          {isPanelOpen && rightSidebarTab === 'ai' && wideModeType === null && !goalSetupMode && canUseAskAI && (
+          {isPanelOpen && rightSidebarTab === 'ai' && wideModeType === null && canUseAskAI && (
             <aside
               data-annotation-panel="true"
               className={`border-l border-border/50 bg-card flex flex-col flex-shrink-0 ${
@@ -4167,7 +4081,6 @@ const App: React.FC = () => {
           title={
             false ? 'Archive Closed'
             : submitted === 'exited' ? 'Session Closed'
-            : goalSetupMode ? 'Answers Submitted'
             : submitted === 'approved'
               ? 'Approved'
               : 'Feedback Sent'
@@ -4175,9 +4088,7 @@ const App: React.FC = () => {
           subtitle={
             submitted === 'exited'
               ? 'Annotation session closed without feedback.'
-              : goalSetupMode
-                ? `${agentName} will use your answers to continue.`
-                : submitted === 'approved'
+              : submitted === 'approved'
                   ? `${agentName} will proceed.`
                   : `${agentName} will address your feedback on the ${annotateSource === 'message' ? 'message' : annotateSource === 'folder' ? 'files' : 'file'}.`
           }
@@ -4202,13 +4113,6 @@ const App: React.FC = () => {
         />
 
         {/* Permission Mode Setup (Claude Code first-time) */}
-        <PermissionModeSetup
-          isOpen={showPermissionModeSetup}
-          onComplete={(mode) => {
-            setPermissionMode(mode);
-            setShowPermissionModeSetup(false);
-          }}
-        />
       </div>
       </TooltipProvider>
     </ThemeProvider>

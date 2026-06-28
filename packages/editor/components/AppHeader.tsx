@@ -17,10 +17,6 @@ interface AppHeaderProps {
   // Mode flags (stable after mount)
   isApiMode: boolean;
   annotateMode: boolean;
-  goalSetupMode: boolean;
-  goalSetupCanSubmit: boolean;
-  goalSetupIsSubmitting: boolean;
-  goalSetupSubmitLabel: string;
   gate: boolean;
   isSharedSession: boolean;
   origin: Origin | null;
@@ -49,8 +45,6 @@ interface AppHeaderProps {
   onCallbackFeedback: () => void;
   onCallbackApprove: () => void;
   onAnnotateExit: () => void;
-  onGoalSetupExit: () => void;
-  onGoalSetupSubmit: () => void;
   onAnnotateFeedback: () => void;
   onAnnotateApprove: () => void;
   onAnnotationPanelToggle: () => void;
@@ -86,10 +80,6 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   onToggleHtmlTools,
   isApiMode,
   annotateMode,
-  goalSetupMode,
-  goalSetupCanSubmit,
-  goalSetupIsSubmitting,
-  goalSetupSubmitLabel,
   gate,
   isSharedSession,
   origin,
@@ -110,8 +100,6 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   onCallbackFeedback,
   onCallbackApprove,
   onAnnotateExit,
-  onGoalSetupExit,
-  onGoalSetupSubmit,
   onAnnotateFeedback,
   onAnnotateApprove,
   onAnnotationPanelToggle,
@@ -174,28 +162,7 @@ export const AppHeader = React.memo<AppHeaderProps>(({
           </>
         )}
 
-        {isApiMode && !linkedDocIsActive && goalSetupMode && (
-          <>
-            <ExitButton
-              onClick={onGoalSetupExit}
-              disabled={isExiting || goalSetupIsSubmitting}
-              isLoading={isExiting}
-              title="Close goal setup without submitting"
-            />
-            <ApproveButton
-              onClick={onGoalSetupSubmit}
-              disabled={!goalSetupCanSubmit || goalSetupIsSubmitting || isExiting}
-              isLoading={goalSetupIsSubmitting}
-              label={goalSetupSubmitLabel}
-              loadingLabel="Submitting..."
-              mobileLabel="Submit"
-              title={goalSetupSubmitLabel}
-            />
-            <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
-          </>
-        )}
-
-        {isApiMode && (!linkedDocIsActive || annotateMode) && !goalSetupMode && (
+        {isApiMode && (!linkedDocIsActive || annotateMode) && (
           <>
             {annotateMode && (
               <>
@@ -228,22 +195,20 @@ export const AppHeader = React.memo<AppHeaderProps>(({
         )}
 
         {/* Annotations panel toggle */}
-        {!goalSetupMode && (
-          <button
-            onClick={onAnnotationPanelToggle}
-            className={`p-1.5 rounded-md text-xs font-medium transition-all ${
-              isPanelOpen
-                ? 'bg-primary/15 text-primary'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-            }`}
-            title={isPanelOpen ? 'Hide annotations' : 'Show annotations'}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-            </svg>
-          </button>
-        )}
-        {!goalSetupMode && aiAvailable && (
+        <button
+          onClick={onAnnotationPanelToggle}
+          className={`p-1.5 rounded-md text-xs font-medium transition-all ${
+            isPanelOpen
+              ? 'bg-primary/15 text-primary'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+          }`}
+          title={isPanelOpen ? 'Hide annotations' : 'Show annotations'}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+          </svg>
+        </button>
+        {aiAvailable && (
           <button
             onClick={onAIChatToggle}
             className={`relative p-1.5 rounded-md text-xs font-medium transition-all ${
@@ -293,9 +258,9 @@ export const AppHeader = React.memo<AppHeaderProps>(({
           sharingEnabled={canShareCurrentSession}
           isApiMode={isApiMode}
           agentInstructionsEnabled={agentInstructionsEnabled}
-          obsidianConfigured={!goalSetupMode && obsidianConfigured}
-          bearConfigured={!goalSetupMode && bearConfigured}
-          octarineConfigured={!goalSetupMode && octarineConfigured}
+          obsidianConfigured={obsidianConfigured}
+          bearConfigured={bearConfigured}
+          octarineConfigured={octarineConfigured}
         />
       </div>
     </header>

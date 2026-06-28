@@ -45,8 +45,6 @@ import {
 import type { WorktreePool } from "../generated/worktree-pool.js";
 
 import { createEditorAnnotationHandler } from "./annotations.js";
-import { createAgentJobHandler } from "./agent-jobs.js";
-import { type AgentJobInfo, REVIEW_OUTPUT_FAILED, markJobReviewFailed } from "../generated/agent-jobs.js";
 import { createExternalAnnotationHandler } from "./external-annotations.js";
 import {
 	handleDraftRequest,
@@ -76,30 +74,6 @@ import {
 } from "./pr.js";
 import { getRepoInfo } from "./project.js";
 import {
-	composeCodexReviewPrompt,
-	buildCodexCommand,
-	generateOutputPath,
-	parseCodexOutput,
-	transformReviewFindings,
-} from "../generated/codex-review.js";
-import { buildAgentReviewUserMessage, buildAgentReviewUserMessageForTarget, type WorkspaceReviewPromptContext } from "../generated/agent-review-message.js";
-import {
-	composeClaudeReviewPrompt,
-	buildClaudeCommand,
-	parseClaudeStreamOutput,
-	transformClaudeFindings,
-} from "../generated/claude-review.js";
-import { createTourSession, TOUR_EMPTY_OUTPUT_ERROR } from "../generated/tour-review.js";
-import {
-	MARKER_ENGINES,
-	composeMarkerReviewPrompt,
-	buildMarkerCommand,
-	parseMarkerStreamOutput,
-	transformMarkerFindings,
-	makeMarkerNonce,
-	extractMarkerNonce,
-} from "../generated/marker-review.js";
-import {
 	WorkspaceReviewSession,
 	type WorkspaceDiffType,
 } from "../generated/review-workspace.js";
@@ -120,11 +94,6 @@ import {
 	SemanticDiffResponseCache,
 } from "../generated/semantic-diff.js";
 import type { SemanticDiffAvailability, SemanticDiffResponse } from "../generated/semantic-diff-types.js";
-import { discoverCuratedSkills, resolveRequestedReviewProfile, listAllSkills, enableReviewSkill } from "../generated/review-skill-loader.js";
-import {
-	BUILTIN_DEFAULT_PROFILE,
-	type ReviewProfilesResponse,
-} from "../generated/review-profiles.js";
 import {
 	canStageFiles,
 	detectRemoteDefaultCompareTarget,
@@ -169,9 +138,6 @@ const piCodeNavRuntime: CodeNavRuntime = {
 	},
 };
 
-// Review ingestion completion semantics (REVIEW_OUTPUT_FAILED,
-// markJobReviewFailed) now live in the shared agent-jobs module.
-
 /** Detect if running inside WSL (Windows Subsystem for Linux) */
 function detectWSL(): boolean {
 	if (process.platform !== "linux") return false;
@@ -194,7 +160,6 @@ export interface ReviewServerResult {
 		approved: boolean;
 		feedback: string;
 		annotations: unknown[];
-		agentSwitch?: string;
 		exit?: boolean;
 	}>;
 	stop: () => void;
@@ -238,6 +203,12 @@ export async function startReviewServer(options: {
 	onReady?: (url: string, isRemote: boolean, port: number) => void;
 }): Promise<ReviewServerResult> {
 	const gitUser = detectGitUser();
+	const sharingEnabled =
+		options.sharingEnabled ?? resolveSharingEnabled(loadConfig());
+	const shareBaseUrl =
+		(options.shareBaseUrl ?? process.env.PLANNOTATOR_SHARE_URL) || undefined;
+	const pasteApiUrl =
+		(options.pasteApiUrl ?? process.env.PLANNOTATOR_PASTE_URL) || undefined;
 	let draftKey = contentHash(options.rawPatch);
 	let prMeta = options.prMetadata;
 	const isPRMode = !!prMeta;
@@ -305,6 +276,22 @@ export async function startReviewServer(options: {
 			// Non-fatal: viewed state is best-effort
 		}
 	}
+
+	let resolveDecision!: (result: {
+		approved: boolean;
+		feedback: string;
+		annotations: unknown[];
+		exit?: boolean;
+	}) => void;
+	const decisionPromise = new Promise<{
+		approved: boolean;
+		feedback: string;
+		annotations: unknown[];
+		exit?: boolean;
+	}>((resolve) => {
+		resolveDecision = resolve;
+	});
+
 	let repoInfo = prMeta
 		? {
 				display: getDisplayRepo(prMeta),
@@ -391,9 +378,11 @@ export async function startReviewServer(options: {
 
 	// Fire-and-forget: query the remote for its actual default branch.
 	if (options.gitContext && !options.initialBase && !isPRMode) {
-		detectRemoteDefaultCompareTarget(options.gitContext.cwd, sessionVcsType).then((remote) => {
-			if (remote && !baseEverSwitched) currentBase = remote;
-		});
+		detectRemoteDefaultCompareTarget(options.gitContext.cwd, sessionVcsType)
+			.then((remote) => {
+				if (remote && !baseEverSwitched) currentBase = remote;
+			})
+			.catch(() => {});
 	}
 
 	// Agent jobs — background process manager (late-binds serverUrl via getter)
@@ -430,11 +419,6 @@ export async function startReviewServer(options: {
 		if (options.worktreePool && prMeta) return resolvePRLocalCwd() ?? [];
 		return options.agentCwd ?? resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd) ?? process.cwd();
 	}
-	function getWorkspacePromptContext(): WorkspaceReviewPromptContext | undefined {
-		if (!workspace) return undefined;
-		return workspace.getPromptContext();
-	}
-	const tour = createTourSession();
 	const semanticDiffScratchCwd = getSemanticDiffScratchCwd();
 	function resolveSemanticDiffCwd(): string {
 		if (workspace) return workspace.root;
@@ -503,331 +487,10 @@ export async function startReviewServer(options: {
 		return result;
 	}
 
-	const agentJobs = createAgentJobHandler({
-		mode: "review",
-		getServerUrl: () => serverUrl,
-		getCwd: resolveAgentCwd,
-
-		async buildCommand(provider, config) {
-			// Fail fast in PR-pool mode when this PR's checkout doesn't exist
-			// (e.g. a pr-switch whose worktree creation failed): falling back
-			// would run the agent against the wrong revision or directory.
-			if (options.worktreePool && prMeta && !options.worktreePool.resolve(prMeta.url)) {
-				throw new Error(
-					"Local PR checkout unavailable — the agent can't run against the PR files. Retry shortly (the checkout may still be recovering).",
-				);
-			}
-			const cwd = resolveAgentCwd();
-			const workspacePrompt = getWorkspacePromptContext();
-			const hasAgentLocalAccess = !!workspacePrompt || !!options.worktreePool || !!options.agentCwd || !!options.gitContext;
-			const userMessageOptions = {
-				defaultBranch: currentBase,
-				hasLocalAccess: hasAgentLocalAccess,
-				prDiffScope: currentPRDiffScope,
-				...(workspacePrompt && { workspace: workspacePrompt }),
-			};
-
-			// Snapshot the diff context at launch (see review.ts buildCommand
-			// for the rationale — keeps downstream "Copy All" honest across
-			// subsequent context switches).
-			const worktreeParts = String(currentDiffType).startsWith("worktree:")
-				? parseWorktreeDiffType(currentDiffType as DiffType)
-				: null;
-			const launchPrUrl = prMeta?.url;
-			const launchDiffScope = isPRMode ? currentPRDiffScope : undefined;
-
-			const requestedProfileId =
-				typeof config?.reviewProfileId === "string" ? config.reviewProfileId : undefined;
-			// Resolve the requested review, or throw a clear error. An unresolvable
-			// non-default id (renamed/removed skill, stale cookie, malformed request)
-			// never silently downgrades to the default — explicit selection is
-			// authoritative at this boundary.
-			const reviewProfile = resolveRequestedReviewProfile(requestedProfileId);
-
-			const diffContext: AgentJobInfo["diffContext"] | undefined = workspacePrompt
-				? { mode: String(currentDiffType), worktreePath: null }
-				: prMeta
-				? undefined
-				: {
-						mode: (worktreeParts?.subType ?? currentDiffType) as string,
-						base: currentBase,
-						worktreePath: worktreeParts?.path ?? null,
-					};
-
-			if (provider === "tour") {
-				const built = await tour.buildCommand({
-					cwd,
-					patch: currentPatch,
-					diffType: currentDiffType as DiffType,
-					options: userMessageOptions,
-					prMetadata: prMeta,
-					config,
-				});
-				return built ? { ...built, prUrl: launchPrUrl, diffScope: launchDiffScope, diffContext, reviewProfileId: reviewProfile.id, reviewProfileLabel: reviewProfile.label } : built;
-			}
-
-			// A custom review skill carries its own instructions and becomes the whole
-			// prompt; strip the default framing prose from the user message so only the
-			// git/PR context remains. The default review keeps today's message verbatim.
-			const isCustomReview = reviewProfile.source === "user";
-			const userMessage = workspacePrompt
-				? buildAgentReviewUserMessageForTarget({
-						kind: "workspace",
-						patch: currentPatch,
-						workspace: workspacePrompt,
-					}, isCustomReview)
-				: buildAgentReviewUserMessage(currentPatch, currentDiffType as DiffType, userMessageOptions, prMeta, isCustomReview);
-			const jobLabel = workspacePrompt ? "Workspace Review" : "Code Review";
-
-			if (provider === "codex") {
-				const model = typeof config?.model === "string" && config.model ? config.model : undefined;
-				const reasoningEffort = typeof config?.reasoningEffort === "string" && config.reasoningEffort ? config.reasoningEffort : undefined;
-				const fastMode = config?.fastMode === true;
-				const outputPath = generateOutputPath();
-				const prompt = composeCodexReviewPrompt(userMessage, reviewProfile);
-				const command = await buildCodexCommand({ cwd, outputPath, prompt, model, reasoningEffort, fastMode });
-				return { command, outputPath, prompt, cwd, label: jobLabel, model, reasoningEffort, fastMode: fastMode || undefined, prUrl: launchPrUrl, diffScope: launchDiffScope, diffContext, reviewProfileId: reviewProfile.id, reviewProfileLabel: reviewProfile.label };
-			}
-
-			if (provider === "claude") {
-				const model = typeof config?.model === "string" && config.model ? config.model : undefined;
-				const effort = typeof config?.effort === "string" && config.effort ? config.effort : undefined;
-				const prompt = composeClaudeReviewPrompt(userMessage, reviewProfile);
-				const { command, stdinPrompt } = buildClaudeCommand(prompt, model, effort);
-				return { command, stdinPrompt, prompt, cwd, label: jobLabel, captureStdout: true, model, effort, prUrl: launchPrUrl, diffScope: launchDiffScope, diffContext, reviewProfileId: reviewProfile.id, reviewProfileLabel: reviewProfile.label };
-			}
-
-			// Marker engines (Cursor, OpenCode) — one branch, same shape as Claude.
-			// Neither CLI has a schema flag, so composeMarkerReviewPrompt ALWAYS
-			// appends the marker-block output contract (even for a custom profile —
-			// it's the only thing that makes their prose output parseable). The
-			// engine's buildArgv passes the prompt as the trailing positional arg and
-			// threads the spawn cwd (--workspace for Cursor, --dir for OpenCode).
-			// captureStdout is required: the marker block comes back on stdout NDJSON.
-			const markerEngine = MARKER_ENGINES[provider as "cursor" | "opencode"];
-			if (markerEngine) {
-				const model = typeof config?.model === "string" && config.model ? config.model : undefined;
-				// Per-job nonce embedded in the marker contract; recovered from job.prompt
-				// at parse time so echoed/quoted bare tags can't be mistaken for the payload.
-				const nonce = makeMarkerNonce();
-				const prompt = composeMarkerReviewPrompt(reviewProfile, userMessage, nonce);
-				const { command } = buildMarkerCommand(markerEngine, prompt, model, cwd);
-				return { command, prompt, cwd, label: jobLabel, captureStdout: true, model, prUrl: launchPrUrl, diffScope: launchDiffScope, diffContext, reviewProfileId: reviewProfile.id, reviewProfileLabel: reviewProfile.label };
-			}
-
-			return null;
-		},
-
-		async onJobComplete(job, meta) {
-			const cwd = meta.cwd ?? resolveAgentCwd();
-			const jobPrUrl = job.prUrl;
-			const jobDiffScope = job.diffScope;
-			const jobPrMeta = jobPrUrl ? prSwitchCache.get(jobPrUrl)?.metadata : undefined;
-			const jobPrContext = jobPrMeta ? {
-				prUrl: jobPrUrl,
-				prNumber: jobPrMeta.platform === "github" ? jobPrMeta.number : jobPrMeta.iid,
-				prTitle: jobPrMeta.title,
-				prRepo: getDisplayRepo(jobPrMeta),
-			} : jobPrUrl ? { prUrl: jobPrUrl } : {};
-
-			// Only tag annotations with a *custom* profile — the default review needs no tag.
-			const profileLabel =
-				job.reviewProfileId && job.reviewProfileId !== BUILTIN_DEFAULT_PROFILE.id
-					? job.reviewProfileLabel
-					: undefined;
-
-			// Map findings onto annotations and ingest. Shared by both engine branches;
-			// no-ops on an empty set so a clean (zero-finding) review stays "done".
-			const ingest = <T extends object>(transformed: readonly T[], logTag: string) => {
-				if (transformed.length === 0) return undefined;
-				const annotations = transformed.map((a) => ({
-					...a,
-					...jobPrContext,
-					...(jobDiffScope && { diffScope: jobDiffScope }),
-					...(profileLabel && { reviewProfileLabel: profileLabel }),
-				}));
-				const result = externalAnnotations.addAnnotations({ annotations });
-				if ("error" in result) console.error(`[${logTag}] addAnnotations error:`, result.error);
-				return result;
-			};
-
-			if (job.provider === "codex") {
-				const output = meta.outputPath ? await parseCodexOutput(meta.outputPath) : null;
-				if (!output) {
-					// Process exited 0 but output is missing/unparseable — not a green run.
-					markJobReviewFailed(job, REVIEW_OUTPUT_FAILED);
-					return;
-				}
-
-				const hasBlockingFindings = output.findings.some(f => f.priority !== null && f.priority <= 1);
-				job.summary = {
-					correctness: hasBlockingFindings ? "Issues Found" : output.overall_correctness,
-					explanation: output.overall_explanation,
-					confidence: output.overall_confidence_score,
-				};
-
-				ingest(
-					transformReviewFindings(
-						output.findings,
-						job.source,
-						cwd,
-						"Codex",
-						workspace ? (filePath) => workspace.normalizeAnnotationPath(filePath) : undefined,
-					),
-					"codex-review",
-				);
-				return;
-			}
-
-			if (job.provider === "claude") {
-				const stdout = meta.stdout ?? "";
-				const output = parseClaudeStreamOutput(stdout);
-				if (!output) {
-					console.error(`[claude-review] Failed to parse output (${stdout.length} bytes, last 200: ${stdout.slice(-200)})`);
-					markJobReviewFailed(job, REVIEW_OUTPUT_FAILED);
-					return;
-				}
-
-				// Recompute the verdict from the findings we actually render. Nothing is
-				// dropped now (un-pinnable findings become file/general comments), so the
-				// count reflects reality and the card can never claim more than it shows.
-				const transformed = transformClaudeFindings(
-					output.findings,
-					job.source,
-					cwd,
-					workspace ? (filePath) => workspace.normalizeAnnotationPath(filePath) : undefined,
-				);
-				const counts = { important: 0, nit: 0, pre_existing: 0 };
-				for (const a of transformed) counts[a.severity]++;
-				const total = counts.important + counts.nit + counts.pre_existing;
-				job.summary = {
-					correctness: counts.important === 0 ? "Correct" : "Issues Found",
-					explanation: `${counts.important} important, ${counts.nit} nit, ${counts.pre_existing} pre-existing`,
-					confidence: total === 0 ? 1.0 : Math.max(0, 1.0 - (counts.important * 0.2)),
-				};
-
-				ingest(transformed, "claude-review");
-				return;
-			}
-
-			// --- Marker path (Cursor, OpenCode) ---
-			// FAIL-CLOSED: marker output is prompt-enforced (no schema flag), so any
-			// missing/malformed/schema/transform/insertion failure must MUTATE the job
-			// to failed — NEVER throw (agent-jobs.ts swallows throws, silently leaving
-			// an exit-0 job marked done). Mirrors the Tour fail-closed pattern below.
-			// Findings carry nullable file/line, classified into line/whole-file/
-			// general by transformMarkerFindings — nothing is dropped (same as Claude).
-			const markerEngine = MARKER_ENGINES[job.provider as "cursor" | "opencode"];
-			if (markerEngine) {
-				// Recover the per-job nonce embedded in the prompt; without it no block
-				// can be trusted, so parse fails closed below.
-				const nonce = extractMarkerNonce(job.prompt ?? "");
-				const output = nonce && meta.stdout ? parseMarkerStreamOutput(meta.stdout, markerEngine, nonce) : null;
-				if (!output) {
-					job.status = "failed";
-					job.error = `${markerEngine.author} review output missing or unparseable (no valid marker JSON).`;
-					return;
-				}
-
-				// Derive the verdict from finding severities (like Claude) rather than
-				// trusting the model's free-form `correctness` string. Marker engines
-				// have no schema flag, so a model value like "not correct" would be
-				// stored verbatim and the detail panel (any string containing "correct"
-				// except "incorrect" → green) would invert the displayed result.
-				const hasImportant = output.findings.some((f) => f.severity === "important");
-				job.summary = {
-					correctness: hasImportant ? "Issues Found" : "Correct",
-					explanation: output.summary.explanation,
-					confidence: output.summary.confidence,
-				};
-
-				// Reuse the shared ingest() decoration; add a fail-closed check on result.
-				const result = ingest(
-					transformMarkerFindings(
-						output.findings,
-						job.source,
-						markerEngine.author,
-						cwd,
-						workspace ? (filePath) => workspace.normalizeAnnotationPath(filePath) : undefined,
-					),
-					`${markerEngine.id}-review`,
-				);
-				if (result && "error" in result) {
-					job.status = "failed";
-					job.error = `${markerEngine.author} annotation insertion failed: ${result.error}`;
-					return;
-				}
-				return;
-			}
-
-			if (job.provider === "tour") {
-				const { summary } = await tour.onJobComplete({ job, meta });
-				if (summary) {
-					job.summary = summary;
-				} else {
-					// The process exited 0 but the model returned empty or malformed output
-					// and nothing was stored. Flip status so the client doesn't auto-open
-					// a successful-looking card that 404s on /api/tour/:id.
-					job.status = "failed";
-					job.error = TOUR_EMPTY_OUTPUT_ERROR;
-				}
-				return;
-			}
-		},
-	});
-	const sharingEnabled =
-		options.sharingEnabled ?? resolveSharingEnabled(loadConfig());
-	const shareBaseUrl =
-		(options.shareBaseUrl ?? process.env.PLANNOTATOR_SHARE_URL) || undefined;
-	const pasteApiUrl =
-		(options.pasteApiUrl ?? process.env.PLANNOTATOR_PASTE_URL) || undefined;
-	let resolveDecision!: (result: {
-		approved: boolean;
-		feedback: string;
-		annotations: unknown[];
-		agentSwitch?: string;
-		exit?: boolean;
-	}) => void;
-	const decisionPromise = new Promise<{
-		approved: boolean;
-		feedback: string;
-		annotations: unknown[];
-		agentSwitch?: string;
-		exit?: boolean;
-	}>((r) => {
-		resolveDecision = r;
-	});
-
 	const aiRuntime = await createPiAIRuntime({ getCwd: resolveAgentCwd });
 
 	const server = createServer(async (req, res) => {
 		const url = requestUrl(req);
-
-		// API: Get tour result
-		if (url.pathname.match(/^\/api\/tour\/[^/]+$/) && req.method === "GET") {
-			const jobId = url.pathname.slice("/api/tour/".length);
-			const result = tour.getTour(jobId);
-			if (!result) {
-				json(res, { error: "Tour not found" }, 404);
-				return;
-			}
-			json(res, result);
-			return;
-		}
-
-		// API: Save tour checklist state
-		const checklistMatch = url.pathname.match(/^\/api\/tour\/([^/]+)\/checklist$/);
-		if (checklistMatch && req.method === "PUT") {
-			const jobId = checklistMatch[1];
-			try {
-				const body = await parseBody(req) as { checked: boolean[] };
-				if (Array.isArray(body.checked)) tour.saveChecklist(jobId, body.checked);
-				json(res, { ok: true });
-			} catch {
-				json(res, { error: "Invalid JSON" }, 400);
-			}
-			return;
-		}
 
 		if (url.pathname === "/api/diff" && req.method === "GET") {
 			json(res, {
@@ -871,6 +534,33 @@ export async function startReviewServer(options: {
 				semanticDiff: await getSemanticDiffAdvert(),
 				serverConfig: getServerConfig(gitUser),
 			});
+		} else if (url.pathname === "/api/open-in/apps" && req.method === "GET") {
+			json(res, { apps: getAvailableOpenInApps() });
+		} else if (url.pathname === "/api/open-in" && req.method === "POST") {
+			try {
+				const body = (await parseBody(req)) as { filePath?: unknown; appId?: unknown; base?: unknown };
+				if (typeof body.filePath !== "string" || !body.filePath) {
+					json(res, { error: "Missing filePath" }, 400);
+					return;
+				}
+				const target = resolveOpenInTarget(
+					body.filePath,
+					typeof body.base === "string" ? body.base : null,
+					resolveOpenInRoot,
+				);
+				if (!target) {
+					json(res, { error: "Path escapes review root" }, 400);
+					return;
+				}
+				const result = await openFileInApp(target, typeof body.appId === "string" ? body.appId : undefined);
+				if (result.ok) {
+					json(res, { ok: true });
+				} else {
+					json(res, { error: result.error }, 500);
+				}
+			} catch (err) {
+				json(res, { error: err instanceof Error ? err.message : "Failed to open file" }, 500);
+			}
 		} else if (url.pathname === "/api/diff/fresh" && req.method === "GET") {
 			// Cheap staleness probe — has the underlying VCS state changed since
 			// the current diff snapshot was computed? Best-effort: anything that
@@ -1449,6 +1139,44 @@ export async function startReviewServer(options: {
 			} catch {
 				json(res, { error: "File not found" }, 404);
 			}
+		} else if (url.pathname === "/api/git-add" && req.method === "POST") {
+			try {
+				const body = (await parseBody(req)) as { filePath?: unknown; undo?: boolean };
+				if (typeof body.filePath !== "string" || !body.filePath) {
+					json(res, { error: "Missing filePath" }, 400);
+					return;
+				}
+				try { validateFilePath(body.filePath); } catch {
+					json(res, { error: "Invalid path" }, 400);
+					return;
+				}
+
+				if (workspace) {
+					try {
+						await workspace.stageFile(body.filePath, body.undo);
+						json(res, { ok: true });
+					} catch (error) {
+						json(res, { error: error instanceof Error ? error.message : "Failed to stage file" }, 400);
+					}
+					return;
+				}
+
+				const stageCwd = resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd);
+				if (isPRMode || !(await canStageFiles(currentDiffType as DiffType, stageCwd))) {
+					json(res, { error: "Staging not available" }, 400);
+					return;
+				}
+
+				if (body.undo) {
+					await unstageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+				} else {
+					await stageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+				}
+
+				json(res, { ok: true });
+			} catch (err) {
+				json(res, { error: err instanceof Error ? err.message : "Failed to stage file" }, 500);
+			}
 		} else if (url.pathname === "/api/config" && req.method === "POST") {
 			try {
 				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean };
@@ -1465,170 +1193,24 @@ export async function startReviewServer(options: {
 			handleImageRequest(res, url);
 		} else if (url.pathname === "/api/upload" && req.method === "POST") {
 			await handleUploadRequest(req, res);
-		} else if (url.pathname === "/api/agents" && req.method === "GET") {
-			json(res, { agents: [] });
-		} else if (
-			url.pathname === "/api/agents/review-profiles" &&
-			req.method === "GET"
-		) {
-			// Custom reviews discovery. Reloaded per request, no file watching.
-			// Catalog only — directory listing, no SKILL.md bodies read here.
-			// Bodies are read at launch, for the one selected skill.
-			const body: ReviewProfilesResponse = {
-				profiles: [
-					{
-						id: BUILTIN_DEFAULT_PROFILE.id,
-						label: BUILTIN_DEFAULT_PROFILE.label,
-						source: BUILTIN_DEFAULT_PROFILE.source,
-						default: BUILTIN_DEFAULT_PROFILE.default,
-					},
-					...discoverCuratedSkills().map((s) => ({
-						id: `skill:${s.name}`,
-						label: s.name,
-						source: "user" as const,
-						sourcePath: s.sourcePath,
-					})),
-				],
-			};
-			json(res, body);
-		} else if (url.pathname === "/api/agents/skills" && req.method === "GET") {
-			// All discovered skills for the "add a review" picker, each flagged
-			// with whether it is already enabled.
-			json(res, { skills: listAllSkills() });
-		} else if (url.pathname === "/api/agents/review-skills" && req.method === "POST") {
-			// Enable a skill as a review (curation write to review-skills.json).
-			let name: unknown;
-			try {
-				const body = await parseBody(req);
-				name = body.name;
-			} catch {
-				json(res, { error: "Invalid JSON" }, 400);
-				return;
-			}
-			if (typeof name !== "string" || name.length === 0) {
-				json(res, { error: "`name` is required." }, 400);
-				return;
-			}
-			try {
-				json(res, enableReviewSkill(name));
-			} catch (err) {
-				json(res, { error: err instanceof Error ? err.message : "Could not enable review." }, 400);
-			}
-		} else if (url.pathname === "/api/git-add" && req.method === "POST") {
-			try {
-				const body = await parseBody(req);
-				const filePath = body.filePath as string | undefined;
-				if (typeof filePath !== "string" || !filePath) {
-					json(res, { error: "Missing filePath" }, 400);
-					return;
-				}
-				try {
-					validateFilePath(filePath);
-				} catch {
-					json(res, { error: "Invalid path" }, 400);
-					return;
-				}
-				const undo = body.undo === true;
-
-				if (workspace) {
-					try {
-						await workspace.stageFile(filePath, undo);
-						json(res, { ok: true });
-					} catch (error) {
-						json(
-							res,
-							{ error: error instanceof Error ? error.message : "Failed to stage file" },
-							400,
-						);
-					}
-					return;
-				}
-
-				const stageCwd = resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd);
-				if (isPRMode || !(await canStageFiles(currentDiffType as DiffType, stageCwd))) {
-					json(res, { error: "Staging not available" }, 400);
-					return;
-				}
-
-				if (undo) {
-					await unstageFile(currentDiffType as DiffType, filePath, stageCwd);
-				} else {
-					await stageFile(currentDiffType as DiffType, filePath, stageCwd);
-				}
-				json(res, { ok: true });
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : "Failed to stage file";
-				json(res, { error: message }, 500);
-			}
-		} else if (url.pathname === "/api/open-in/apps" && req.method === "GET") {
-			// Remote/headless sessions can't open apps on the user's machine —
-			// report unavailable so the UI hides the control entirely.
-			if (isRemote) {
-				json(res, { available: false, apps: [] });
-				return;
-			}
-			json(res, { available: true, apps: getAvailableOpenInApps() });
-		} else if (url.pathname === "/api/open-in" && req.method === "POST") {
-			if (isRemote) {
-				json(res, { ok: false, error: "Open in app is unavailable in remote sessions" }, 400);
-				return;
-			}
-			try {
-				const body = await parseBody(req);
-				const filePath = body.filePath;
-				if (typeof filePath !== "string" || !filePath) {
-					json(res, { ok: false, error: "Missing filePath" }, 400);
-					return;
-				}
-				const appId = typeof body.appId === "string" ? body.appId : undefined;
-				// Resolve repo-relative `git diff` paths against the VCS root
-				// server-side (resolveAgentCwd folds in workspace.root, the PR
-				// local checkout, resolveVcsCwd(gitContext.cwd), and process.cwd())
-				// — not the client `base`, which is wrong when review runs from a
-				// subdirectory — then containment-check.
-				const abs = resolveOpenInTarget(filePath, null, resolveOpenInRoot);
-				if (abs == null) {
-					json(res, { ok: false, error: "Path is outside the allowed directory" }, 403);
-					return;
-				}
-				const result = await openFileInApp(abs, appId);
-				json(res, result, 200);
-			} catch (err) {
-				json(
-					res,
-					{ ok: false, error: err instanceof Error ? err.message : "Failed to open file" },
-					500,
-				);
-			}
 		} else if (url.pathname === "/api/draft") {
 			await handleDraftRequest(req, res, draftKey);
+		} else if (url.pathname.startsWith("/api/ai/")) {
+			if (req.method === "POST" && url.pathname === "/api/ai/session" && options.worktreePool && prMeta) {
+				const checkout = resolvePRLocalCwd();
+				if (!checkout) {
+					json(res, { error: "Local PR checkout unavailable — Ask AI can't read the PR files right now. Retry shortly." }, 503);
+					return;
+				}
+			}
+			await handlePiAIRequest(req, res, url, aiRuntime);
+			return;
 		} else if (url.pathname === "/favicon.svg") {
 			handleFavicon(res);
 		} else if (await editorAnnotations.handle(req, res, url)) {
 			return;
 		} else if (await externalAnnotations.handle(req, res, url)) {
 			return;
-		} else if (await agentJobs.handle(req, res, url)) {
-			return;
-		} else if (url.pathname.startsWith("/api/ai/")) {
-			// AI sessions pin their cwd at creation — make sure the PR checkout
-			// exists first so sessions never root in a transient fallback
-			// (mirrors the Bun server; no-op while the pool entry is ready).
-			if (req.method === "POST" && url.pathname === "/api/ai/session" && options.worktreePool && prMeta) {
-				// If the checkout can't be produced, refuse instead of starting a
-				// session rooted in the wrong directory.
-				try {
-					await options.worktreePool.ensure(reviewRuntime, prMeta);
-				} catch {
-					json(res, { error: "Local PR checkout unavailable — Ask AI can't read the PR files right now. Retry shortly." }, 503);
-					return;
-				}
-			}
-			if (await handlePiAIRequest(req, res, url, aiRuntime)) return;
-			// Unmatched /api/ai/* paths fall through to the app shell, same as
-			// the original dispatch chain.
-			html(res, options.htmlContent);
 		} else if (url.pathname === "/api/exit" && req.method === "POST") {
 			deleteDraft(draftKey, readDraftGenerationFromUrl(req));
 			resolveDecision({ approved: false, feedback: '', annotations: [], exit: true });
@@ -1641,7 +1223,6 @@ export async function startReviewServer(options: {
 					approved: (body.approved as boolean) ?? false,
 					feedback: (body.feedback as string) || "",
 					annotations: (body.annotations as unknown[]) || [],
-					agentSwitch: body.agentSwitch as string | undefined,
 				});
 				json(res, { ok: true });
 			} catch (err) {
@@ -1655,9 +1236,6 @@ export async function startReviewServer(options: {
 
 	const { port, portSource } = await listenOnPort(server);
 	serverUrl = `http://localhost:${port}`;
-	const exitHandler = () => agentJobs.killAll();
-	process.once("exit", exitHandler);
-
 	if (options.onReady) {
 		options.onReady(serverUrl, isRemote, port);
 	}
@@ -1669,8 +1247,6 @@ export async function startReviewServer(options: {
 		isRemote,
 		waitForDecision: () => decisionPromise,
 		stop: () => {
-			process.removeListener("exit", exitHandler);
-			agentJobs.killAll();
 			aiRuntime?.dispose();
 			server.close();
 			// Invoke cleanup callback (e.g., remove temp worktree)

@@ -192,7 +192,7 @@ describe("SessionManager", () => {
     const s1 = mockSession("s1");
     const s2 = mockSession("s2");
 
-    const e1 = sm.track(s1, "plan-review", "First");
+    const e1 = sm.track(s1, "code-review", "First");
     const e2 = sm.track(s2, "code-review", "Second");
     e1.lastActiveAt = 1000;
     e2.lastActiveAt = 2000;
@@ -205,14 +205,14 @@ describe("SessionManager", () => {
 
   test("get returns entry by ID", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
     expect(sm.get("s1")?.session.id).toBe("s1");
     expect(sm.get("nonexistent")).toBeUndefined();
   });
 
   test("touch updates lastActiveAt", async () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
     const before = sm.get("s1")!.lastActiveAt;
 
     await new Promise((r) => setTimeout(r, 10));
@@ -223,16 +223,16 @@ describe("SessionManager", () => {
 
   test("remove removes entry", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
     sm.remove("s1");
     expect(sm.size).toBe(0);
   });
 
   test("forksOf filters by parent", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("s1"), "plan-review");
-    sm.track(mockSession("fork1", "parent-123"), "plan-review");
-    sm.track(mockSession("fork2", "parent-123"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
+    sm.track(mockSession("fork1", "parent-123"), "code-review");
+    sm.track(mockSession("fork2", "parent-123"), "code-review");
     sm.track(mockSession("fork3", "other-parent"), "code-review");
 
     const forks = sm.forksOf("parent-123");
@@ -242,9 +242,9 @@ describe("SessionManager", () => {
 
   test("evicts oldest idle session when maxSessions reached", () => {
     const sm = new SessionManager({ maxSessions: 2 });
-    sm.track(mockSession("s1"), "plan-review");
-    sm.track(mockSession("s2"), "plan-review");
-    sm.track(mockSession("s3"), "plan-review");
+    sm.track(mockSession("s1"), "code-review");
+    sm.track(mockSession("s2"), "code-review");
+    sm.track(mockSession("s3"), "code-review");
 
     expect(sm.size).toBe(2);
     expect(sm.get("s1")).toBeUndefined();
@@ -255,14 +255,14 @@ describe("SessionManager", () => {
   test("disposeAll aborts active sessions and clears", () => {
     const sm = new SessionManager();
     const s1 = mockSession("s1");
-    sm.track(s1, "plan-review");
+    sm.track(s1, "code-review");
     sm.disposeAll();
     expect(sm.size).toBe(0);
   });
 
   test("remapId moves entry to new key and keeps alias", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("placeholder-1"), "plan-review");
+    sm.track(mockSession("placeholder-1"), "code-review");
 
     sm.remapId("placeholder-1", "real-sdk-id");
 
@@ -275,7 +275,7 @@ describe("SessionManager", () => {
   test("track wires onIdResolved callback with alias", () => {
     const sm = new SessionManager();
     const session = mockSession("temp-id");
-    sm.track(session, "plan-review");
+    sm.track(session, "code-review");
 
     expect(session.onIdResolved).toBeDefined();
     session.onIdResolved!("temp-id", "real-id");
@@ -288,7 +288,7 @@ describe("SessionManager", () => {
 
   test("remove cleans up aliases", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("temp"), "plan-review");
+    sm.track(mockSession("temp"), "code-review");
     sm.remapId("temp", "real");
 
     sm.remove("real");
@@ -299,7 +299,7 @@ describe("SessionManager", () => {
 
   test("remove via alias also works", () => {
     const sm = new SessionManager();
-    sm.track(mockSession("temp"), "plan-review");
+    sm.track(mockSession("temp"), "code-review");
     sm.remapId("temp", "real");
 
     sm.remove("temp"); // remove via alias
@@ -313,26 +313,6 @@ describe("SessionManager", () => {
 // ---------------------------------------------------------------------------
 
 describe("Context builders", () => {
-  test("buildSystemPrompt for plan-review", () => {
-    const ctx: AIContext = {
-      mode: "plan-review",
-      plan: {
-        plan: "# My Plan\n\nStep 1: do things",
-        previousPlan: "# Old Plan",
-        version: 3,
-        totalVersions: 4,
-        project: "plannotator",
-      },
-    };
-    const prompt = buildSystemPrompt(ctx);
-    expect(prompt).toContain("Plannotator");
-    expect(prompt).toContain("# My Plan");
-    expect(prompt).toContain("Step 1: do things");
-    expect(prompt).toContain("Plan version: 3 of 4");
-    expect(prompt).toContain("Project: plannotator");
-    expect(prompt).toContain("# Old Plan");
-  });
-
   test("buildSystemPrompt for code-review", () => {
     const ctx: AIContext = {
       mode: "code-review",
@@ -364,16 +344,17 @@ describe("Context builders", () => {
 
   test("buildForkPreamble includes context and instructions", () => {
     const ctx: AIContext = {
-      mode: "plan-review",
-      plan: {
-        plan: "# Plan\nDetails here",
+      mode: "annotate",
+      annotate: {
+        content: "# Doc\nDetails here",
+        filePath: "/project/doc.md",
         annotations: "- Remove section 3",
       },
       parent: { sessionId: "parent-123", cwd: "/project" },
     };
     const preamble = buildForkPreamble(ctx);
     expect(preamble).toContain("reviewing your work in Plannotator");
-    expect(preamble).toContain("# Plan");
+    expect(preamble).toContain("# Doc");
     expect(preamble).toContain("Remove section 3");
   });
 
@@ -394,15 +375,15 @@ describe("Context builders", () => {
     expect(preamble).toContain("Lines 10-15");
   });
 
-  test("truncates very long plans", () => {
-    const longPlan = "x".repeat(100_000);
+  test("truncates very long documents", () => {
+    const longDocument = "x".repeat(100_000);
     const ctx: AIContext = {
-      mode: "plan-review",
-      plan: { plan: longPlan },
+      mode: "annotate",
+      annotate: { content: longDocument, filePath: "/tmp/doc.md" },
     };
     const prompt = buildSystemPrompt(ctx);
     expect(prompt).toContain("[truncated for context window]");
-    expect(prompt.length).toBeLessThan(longPlan.length);
+    expect(prompt.length).toBeLessThan(longDocument.length);
   });
 });
 
@@ -590,7 +571,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -605,14 +586,14 @@ describe("AI endpoints", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: createData.sessionId,
-          prompt: "What is this plan about?",
+          prompt: "What is this diff about?",
         }),
       })
     );
     expect(queryRes.headers.get("Content-Type")).toBe("text/event-stream");
 
     const text = await queryRes.text();
-    expect(text).toContain("Echo: What is this plan about?");
+    expect(text).toContain("Echo: What is this diff about?");
     expect(text).toContain("[DONE]");
   });
 
@@ -626,7 +607,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
           providerId: "pi-fast",
         }),
       })
@@ -650,7 +631,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
           maxTurns: 9999,
           maxBudgetUsd: 9999,
         }),
@@ -671,7 +652,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
           providerId: "nonexistent",
         }),
       })
@@ -690,7 +671,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -722,7 +703,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -753,7 +734,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# Test" } },
+          context: { mode: "code-review", review: { patch: "+x" } },
         }),
       })
     );
@@ -779,7 +760,7 @@ describe("AI endpoints", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: { mode: "plan-review", plan: { plan: "# A" } },
+          context: { mode: "code-review", review: { patch: "+a" } },
         }),
       })
     );

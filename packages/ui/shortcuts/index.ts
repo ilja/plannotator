@@ -1,14 +1,13 @@
 export * from './core';
 export * from './runtime';
 
-// plan-review scopes
-export { annotationToolbarShortcuts, useAnnotationToolbarShortcuts } from './plan-review/annotationToolbar.shortcuts';
-export { annotationPanelShortcuts, useAnnotationPanelShortcuts } from './plan-review/annotationPanel.shortcuts';
-export { commentPopoverShortcuts } from './plan-review/commentPopover.shortcuts';
-export { imageAnnotatorShortcuts, useImageAnnotatorShortcuts } from './plan-review/imageAnnotator.shortcuts';
-export { inputMethodShortcuts } from './plan-review/inputMethod.shortcuts';
-export { viewerShortcuts, useViewerShortcuts } from './plan-review/viewer.shortcuts';
-export { goalSetupShortcuts, useGoalSetupShortcuts } from './plan-review/goalSetup.shortcuts';
+// annotation editor scopes
+export { annotationToolbarShortcuts, useAnnotationToolbarShortcuts } from './annotation-editor/annotationToolbar.shortcuts';
+export { annotationPanelShortcuts, useAnnotationPanelShortcuts } from './annotation-editor/annotationPanel.shortcuts';
+export { commentPopoverShortcuts } from './annotation-editor/commentPopover.shortcuts';
+export { imageAnnotatorShortcuts, useImageAnnotatorShortcuts } from './annotation-editor/imageAnnotator.shortcuts';
+export { inputMethodShortcuts } from './annotation-editor/inputMethod.shortcuts';
+export { viewerShortcuts, useViewerShortcuts } from './annotation-editor/viewer.shortcuts';
 
 // code-review scopes
 export { reviewAnnotationToolbarShortcuts, useReviewAnnotationToolbarShortcuts } from './code-review/annotationToolbar.shortcuts';
@@ -17,4 +16,3 @@ export { reviewPrCommentsShortcuts, useReviewPrCommentsShortcuts } from './code-
 export { reviewAllFilesDiffShortcuts, useReviewAllFilesDiffShortcuts } from './code-review/allFilesDiff.shortcuts';
 export { reviewAiShortcuts, useReviewAiShortcuts } from './code-review/ai.shortcuts';
 export { reviewSuggestionModalShortcuts, useReviewSuggestionModalShortcuts } from './code-review/suggestionModal.shortcuts';
-export { reviewTourDialogShortcuts, useReviewTourDialogShortcuts } from './code-review/tourDialog.shortcuts';

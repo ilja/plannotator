@@ -57,7 +57,6 @@ export interface PlannotatorCodeReviewResult {
 	approved: boolean;
 	feedback?: string;
 	annotations?: unknown[];
-	agentSwitch?: string;
 }
 
 export interface PlannotatorAnnotatePayload {

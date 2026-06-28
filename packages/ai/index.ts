@@ -65,7 +65,6 @@ export type {
   AIUnknownMessage,
   AIContext,
   AIContextMode,
-  PlanContext,
   CodeReviewContext,
   AnnotateContext,
   ParentSession,

@@ -10,10 +10,10 @@
 // ---------------------------------------------------------------------------
 
 /** The surface the user is interacting with when they invoke AI. */
-export type AIContextMode = "plan-review" | "code-review" | "annotate";
+export type AIContextMode = "code-review" | "annotate";
 
 /**
- * Describes the parent agent session that originally produced the plan or diff.
+ * Describes the parent agent session that originally produced the diff or document.
  * Used to fork conversations with full history.
  */
 export interface ParentSession {
@@ -21,25 +21,6 @@ export interface ParentSession {
   sessionId: string;
   /** Working directory the parent session was running in. */
   cwd: string;
-}
-
-/**
- * Snapshot of plan-review-specific context.
- * Passed when AIContextMode is "plan-review".
- */
-export interface PlanContext {
-  /** The full plan markdown as submitted by the agent. */
-  plan: string;
-  /** Previous plan version (if this is a resubmission). */
-  previousPlan?: string;
-  /** The version number in the plan's history. */
-  version?: number;
-  /** Total number of versions in the plan's history. */
-  totalVersions?: number;
-  /** Project/repository label used for plan history. */
-  project?: string;
-  /** Annotations the user has made so far (serialised for the prompt). */
-  annotations?: string;
 }
 
 /**
@@ -82,7 +63,6 @@ export interface AnnotateContext {
  * Union of mode-specific contexts, discriminated by `mode`.
  */
 export type AIContext =
-  | { mode: "plan-review"; plan: PlanContext; parent?: ParentSession }
   | { mode: "code-review"; review: CodeReviewContext; parent?: ParentSession }
   | { mode: "annotate"; annotate: AnnotateContext; parent?: ParentSession };
 
@@ -216,7 +196,7 @@ export interface AIProviderCapabilities {
 }
 
 export interface CreateSessionOptions {
-  /** The context (plan, diff, file) to seed the session with. */
+  /** The context (diff or document) to seed the session with. */
   context: AIContext;
   /**
    * Working directory override for the agent session.
