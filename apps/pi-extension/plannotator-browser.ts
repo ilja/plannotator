@@ -61,11 +61,11 @@ export interface PlanReviewBrowserSession extends BrowserDecisionSession<PlanRev
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let planHtmlContent = "";
+let annotationHtmlContent = "";
 let reviewHtmlContent = "";
 
 try {
-	planHtmlContent = readFileSync(resolve(__dirname, "plannotator.html"), "utf-8");
+	annotationHtmlContent = readFileSync(resolve(__dirname, "plannotator.html"), "utf-8");
 } catch {
 	// built assets unavailable
 }
@@ -80,9 +80,11 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 }
 
-export function hasPlanBrowserHtml(): boolean {
-	return Boolean(planHtmlContent);
+export function hasAnnotationBrowserHtml(): boolean {
+	return Boolean(annotationHtmlContent);
 }
+
+export const hasPlanBrowserHtml = hasAnnotationBrowserHtml;
 
 export function hasReviewBrowserHtml(): boolean {
 	return Boolean(reviewHtmlContent);
@@ -184,13 +186,13 @@ export async function startPlanReviewBrowserSession(
 	ctx: ExtensionContext,
 	planContent: string,
 ): Promise<PlanReviewBrowserSession> {
-	if (!ctx.hasUI || !planHtmlContent) {
+	if (!ctx.hasUI || !annotationHtmlContent) {
 		throw new Error("Plannotator browser review is unavailable in this session.");
 	}
 
 	const server = await startPlanReviewServer({
 		plan: planContent,
-		htmlContent: planHtmlContent,
+		htmlContent: annotationHtmlContent,
 		origin: "pi",
 		sharingEnabled: resolveSharingEnabled(loadConfig()),
 		shareBaseUrl: process.env.PLANNOTATOR_SHARE_URL || undefined,
@@ -526,7 +528,7 @@ export async function startMarkdownAnnotationSession(
 	convertHtml?: boolean,
 	recentMessages?: { messageId: string; text: string; timestamp?: string }[],
 ): Promise<BrowserDecisionSession<{ feedback: string; exit?: boolean; approved?: boolean; selectedMessageId?: string; feedbackScope?: "message" | "messages" }>> {
-	if (!ctx.hasUI || !planHtmlContent) {
+	if (!ctx.hasUI || !annotationHtmlContent) {
 		throw new Error("Plannotator annotation browser is unavailable in this session.");
 	}
 
@@ -555,7 +557,7 @@ export async function startMarkdownAnnotationSession(
 		rawHtml,
 		renderHtml,
 		convertHtml,
-		htmlContent: planHtmlContent,
+		htmlContent: annotationHtmlContent,
 		sharingEnabled: resolveSharingEnabled(loadConfig()),
 		shareBaseUrl: process.env.PLANNOTATOR_SHARE_URL || undefined,
 		pasteApiUrl: process.env.PLANNOTATOR_PASTE_URL || undefined,
@@ -601,13 +603,13 @@ export async function openArchiveBrowserAction(
 	ctx: ExtensionContext,
 	customPlanPath?: string,
 ): Promise<{ opened: boolean }> {
-	if (!ctx.hasUI || !planHtmlContent) {
+	if (!ctx.hasUI || !annotationHtmlContent) {
 		throw new Error("Plannotator archive browser is unavailable in this session.");
 	}
 
 	const server = await startPlanReviewServer({
 		plan: "",
-		htmlContent: planHtmlContent,
+		htmlContent: annotationHtmlContent,
 		origin: "pi",
 		mode: "archive",
 		customPlanPath,

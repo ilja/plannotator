@@ -28,7 +28,7 @@ import { parseAnnotateArgs } from "./generated/annotate-args.js";
 import { parseReviewArgs } from "./generated/review-args.js";
 import { resolveAtReference } from "./generated/at-reference.js";
 import {
-	hasPlanBrowserHtml,
+	hasAnnotationBrowserHtml,
 	hasReviewBrowserHtml,
 	getStartupErrorMessage,
 	startCodeReviewBrowserSession,
@@ -257,7 +257,7 @@ export default function plannotator(pi: ExtensionAPI): void {
 				ctx.ui.notify("Usage: /plannotator-annotate <file.md | file.txt | file.html | https://... | folder/> [--markdown] [--no-jina] [--gate] [--json]", "error");
 				return;
 			}
-			if (!hasPlanBrowserHtml()) {
+			if (!hasAnnotationBrowserHtml()) {
 				ctx.ui.notify(
 					"Annotation UI not available. Run 'bun run build' in the pi-extension directory.",
 					"error",
@@ -411,7 +411,7 @@ export default function plannotator(pi: ExtensionAPI): void {
 			// Support --gate on /plannotator-last for the Stop-hook review gate.
 			const { gate } = parseAnnotateArgs(args ?? "");
 
-			if (!hasPlanBrowserHtml()) {
+			if (!hasAnnotationBrowserHtml()) {
 				ctx.ui.notify(
 					"Annotation UI not available. Run 'bun run build' in the pi-extension directory.",
 					"error",

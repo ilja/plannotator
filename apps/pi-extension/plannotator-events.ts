@@ -192,6 +192,7 @@ export function registerPlannotatorEventListeners(pi: ExtensionAPI): void {
 
 export {
 	getLastAssistantMessageText,
+	hasAnnotationBrowserHtml,
 	hasPlanBrowserHtml,
 	hasReviewBrowserHtml,
 	startCodeReviewBrowserSession,

@@ -13,6 +13,7 @@ import {
   runGitDiff,
   runVcsDiff,
   stageFile,
+  startAnnotateServer,
   startReviewServer,
   unstageFile,
 } from "./server";
@@ -188,6 +189,221 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe("pi annotate server", () => {
+  test("serves annotation-only payload with recent message metadata", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-data-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "assistant text",
+      filePath: "last-message",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate-last",
+      recentMessages: [{ messageId: "entry-1", text: "assistant text" }],
+    });
+
+    try {
+      const response = await fetch(`${server.url}/api/plan`);
+      expect(response.status).toBe(200);
+      const payload = await response.json() as {
+        mode?: string;
+        recentMessages?: Array<{ messageId: string; text: string }>;
+        previousPlan?: unknown;
+        versionInfo?: unknown;
+        archivePlans?: unknown;
+      };
+
+      expect(payload.mode).toBe("annotate-last");
+      expect(payload.recentMessages).toEqual([{ messageId: "entry-1", text: "assistant text" }]);
+      expect(payload.previousPlan).toBeUndefined();
+      expect(payload.versionInfo).toBeUndefined();
+      expect(payload.archivePlans).toBeUndefined();
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("resolves feedback with selected message metadata and clears drafts", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-feedback-data-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "assistant text",
+      filePath: "last-message",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate-last",
+      recentMessages: [{ messageId: "entry-1", text: "assistant text" }],
+    });
+
+    try {
+      const draftSave = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: [{ id: "draft-1" }], draftGeneration: 3 }),
+      });
+      expect(draftSave.status).toBe(200);
+
+      const feedbackResponse = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          feedback: "Fix this",
+          annotations: [],
+          selectedMessageId: "entry-1",
+          feedbackScope: "message",
+          draftGeneration: 3,
+        }),
+      });
+      expect(feedbackResponse.status).toBe(200);
+
+      await expect(server.waitForDecision()).resolves.toMatchObject({
+        feedback: "Fix this",
+        selectedMessageId: "entry-1",
+        feedbackScope: "message",
+      });
+
+      const draftLoad = await fetch(`${server.url}/api/draft`);
+      expect(draftLoad.status).toBe(404);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("resolves gate approval and clears drafts", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-approve-data-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "# Annotate",
+      filePath: "doc.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate",
+      gate: true,
+    });
+
+    try {
+      await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: [{ id: "draft-approve" }], draftGeneration: 1 }),
+      });
+
+      const approveResponse = await fetch(`${server.url}/api/approve?draftGeneration=1`, { method: "POST" });
+      expect(approveResponse.status).toBe(200);
+
+      await expect(server.waitForDecision()).resolves.toEqual({
+        feedback: "",
+        annotations: [],
+        approved: true,
+      });
+
+      const draftLoad = await fetch(`${server.url}/api/draft`);
+      expect(draftLoad.status).toBe(404);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("resolves exit and clears drafts", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-exit-data-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "# Annotate",
+      filePath: "doc.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate",
+    });
+
+    try {
+      await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: [{ id: "draft-exit" }], draftGeneration: 2 }),
+      });
+
+      const exitResponse = await fetch(`${server.url}/api/exit?draftGeneration=2`, { method: "POST" });
+      expect(exitResponse.status).toBe(200);
+
+      await expect(server.waitForDecision()).resolves.toEqual({
+        feedback: "",
+        annotations: [],
+        exit: true,
+      });
+
+      const draftLoad = await fetch(`${server.url}/api/draft`);
+      expect(draftLoad.status).toBe(404);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("serves folder annotation metadata", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-folder-data-");
+    const folderPath = makeTempDir("plannotator-pi-annotate-folder-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "",
+      filePath: folderPath,
+      folderPath,
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate-folder",
+    });
+
+    try {
+      const payload = await fetch(`${server.url}/api/plan`).then((response) => response.json()) as {
+        mode?: string;
+        projectRoot?: string;
+        sourceSave?: { enabled?: boolean; reason?: string };
+      };
+
+      expect(payload.mode).toBe("annotate-folder");
+      expect(payload.projectRoot).toBe(folderPath);
+      expect(payload.sourceSave).toMatchObject({
+        enabled: false,
+        reason: "folder-mode",
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("reports AI capability fallback without failing the annotate server", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-ai-data-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "# Annotate",
+      filePath: "doc.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate",
+    });
+
+    try {
+      const response = await fetch(`${server.url}/api/ai/capabilities`);
+      expect(response.status).toBe(200);
+      const payload = await response.json() as { available?: boolean; providers?: unknown[] };
+      expect(typeof payload.available).toBe("boolean");
+      expect(Array.isArray(payload.providers)).toBe(true);
+    } finally {
+      server.stop();
+    }
+  });
 });
 
 describe("pi review server", () => {
