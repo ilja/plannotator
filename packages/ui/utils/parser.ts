@@ -103,7 +103,7 @@ type ParsedChoiceQuestion = {
 };
 
 const OPTION_RE = /^\s*-\s+Option\s+([^:]+):\s+(.+)\s*$/;
-const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+Option\s+([^\.\s]+)\.?\s*$/i;
+const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+Option\s+(.+?)\s*$/i;
 
 const parseChoiceQuestionAt = (
   lines: string[],
@@ -130,8 +130,16 @@ const parseChoiceQuestionAt = (
   const recommendationMatch = recommendationLine?.match(RECOMMENDATION_RE);
   if (!recommendationMatch) return null;
 
-  const recommendedLabel = recommendationMatch[1].trim();
-  if (!options.some(option => option.label === recommendedLabel)) return null;
+  const recommendationText = recommendationMatch[1].trim();
+  const recommendedLabel = [...options]
+    .sort((a, b) => b.label.length - a.label.length)
+    .find(option =>
+      recommendationText === option.label ||
+      recommendationText.startsWith(`${option.label}.`) ||
+      recommendationText.startsWith(`${option.label},`),
+    )?.label;
+
+  if (!recommendedLabel) return null;
 
   const sourceLines = lines.slice(paragraphStartIndex, i + 2);
   return {

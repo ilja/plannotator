@@ -261,6 +261,36 @@ Reccomendation: Option left.`);
     }));
   });
 
+  test("accepts recommendation rationale after a comma", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Reccomendation: Option A, because it is best.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: "A",
+    }));
+  });
+
+  test("does not partially match unknown recommendation labels", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Recommendation: Option AB, because it is best.`);
+
+    expect(blocks.map(block => block.type)).toEqual([
+      "paragraph",
+      "list-item",
+      "list-item",
+      "paragraph",
+    ]);
+  });
+
   test("falls back when recommendation label does not match an option", () => {
     const blocks = parseMarkdownToBlocks(`Pick one
 

@@ -7,6 +7,7 @@ import { HtmlBlock } from "./blocks/HtmlBlock";
 import { Callout } from "./blocks/Callout";
 import { AlertBlock } from "./blocks/AlertBlock";
 import { TableBlock } from "./blocks/TableBlock";
+import { ChoiceQuestionBlock } from "./blocks/ChoiceQuestionBlock";
 
 const proseStyle: React.CSSProperties = {
   fontFamily: 'var(--annotation-prose-font-family, var(--font-sans))',
@@ -158,6 +159,19 @@ export const BlockRenderer: React.FC<{
         />
       );
     }
+
+    case 'choice-question':
+      return (
+        <ChoiceQuestionBlock
+          block={block}
+          imageBaseDir={imageBaseDir}
+          onImageClick={onImageClick}
+          onOpenLinkedDoc={onOpenLinkedDoc}
+          onOpenCodeFile={onOpenCodeFile}
+          githubRepo={githubRepo}
+          onNavigateAnchor={onNavigateAnchor}
+        />
+      );
 
     default:
       return (
