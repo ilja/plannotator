@@ -134,6 +134,10 @@ pre code.hljs .hljs-code {
   border-bottom: 2px solid var(--accent);
 }
 
+[data-choice-question="true"] .annotation-highlight.comment {
+  box-shadow: 0 0 0 2px oklch(from var(--primary) l c h / 0.25);
+}
+
 /* Light mode: softer highlights */
 .light .annotation-highlight.deletion {
   background: oklch(0.65 0.22 25 / 0.2);

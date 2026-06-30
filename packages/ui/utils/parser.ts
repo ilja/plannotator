@@ -731,8 +731,15 @@ export const exportLinkedDocAnnotations = (
           break;
 
         case 'COMMENT':
-          output += `Feedback on: "${ann.originalText}"\n`;
-          output += `> ${ann.text}\n`;
+          if (ann.isQuickLabel) {
+            output += `[${ann.text}] Feedback on: "${ann.originalText}"\n`;
+            if (ann.quickLabelTip) {
+              output += `> ${ann.quickLabelTip}\n`;
+            }
+          } else {
+            output += `Feedback on: "${ann.originalText}"\n`;
+            output += `> ${ann.text}\n`;
+          }
           break;
 
         case 'GLOBAL_COMMENT':

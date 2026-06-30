@@ -12,6 +12,7 @@ import { AnnotationType } from '../types';
 import type { QuickLabel } from '../utils/quickLabels';
 import { getIdentity } from '../utils/identity';
 import { transformPlainText } from '../utils/inlineTransforms';
+import { isChoiceAnnotation } from '../utils/choiceAnnotations';
 
 // --- Exported state types ---
 
@@ -234,6 +235,53 @@ export function useAnnotationHighlighter({
     return null;
   }, []);
 
+  const findChoiceTarget = useCallback((ann: Annotation): HTMLElement | null => {
+    const root = containerRef.current;
+    if (!root || !ann.blockId) return null;
+
+    const blockEl = root.querySelector<HTMLElement>(
+      `[data-block-id="${CSS.escape(ann.blockId)}"][data-choice-question="true"]`
+    );
+    if (!blockEl) return null;
+
+    if (ann.choiceOptionLabel) {
+      const optionEl = blockEl.querySelector<HTMLElement>(
+        `[data-choice-option-label="${CSS.escape(ann.choiceOptionLabel)}"]`
+      );
+      if (optionEl) return optionEl;
+    }
+
+    return blockEl;
+  }, []);
+
+  const applyChoiceHighlight = useCallback((ann: Annotation): boolean => {
+    const target = findChoiceTarget(ann);
+    if (!target) return false;
+
+    target.classList.add('annotation-highlight', 'comment');
+    target.setAttribute('data-choice-annotation-id', ann.id);
+
+    if (target.dataset.choiceHighlightBound !== 'true') {
+      target.dataset.choiceHighlightBound = 'true';
+      target.addEventListener('click', (event) => {
+        const annotationId = (event.currentTarget as HTMLElement).dataset.choiceAnnotationId;
+        if (annotationId) onSelectAnnotationRef.current?.(annotationId);
+      });
+    }
+
+    return true;
+  }, [findChoiceTarget]);
+
+  const removeChoiceHighlight = useCallback((id: string) => {
+    const nodes = containerRef.current?.querySelectorAll<HTMLElement>(
+      `[data-choice-annotation-id="${CSS.escape(id)}"]`
+    );
+    nodes?.forEach(node => {
+      node.classList.remove('annotation-highlight', 'comment', 'focused');
+      node.removeAttribute('data-choice-annotation-id');
+    });
+  }, []);
+
   const createAnnotationFromSource = (
     highlighter: Highlighter,
     source: any,
@@ -296,6 +344,11 @@ export function useAnnotationHighlighter({
 
     anns.forEach(ann => {
       if (ann.type === AnnotationType.GLOBAL_COMMENT) return;
+
+      if (isChoiceAnnotation(ann)) {
+        applyChoiceHighlight(ann);
+        return;
+      }
 
       // Skip if already highlighted
       try {
@@ -400,9 +453,10 @@ export function useAnnotationHighlighter({
         console.warn(`Failed to apply highlight for annotation ${ann.id}:`, e);
       }
     });
-  }, [findTextInDOM]);
+  }, [applyChoiceHighlight, findTextInDOM]);
 
   const removeHighlight = useCallback((id: string) => {
+    removeChoiceHighlight(id);
     highlighterRef.current?.remove(id);
 
     const manualHighlights = containerRef.current?.querySelectorAll(`[data-bind-id="${id}"]`);
@@ -413,9 +467,15 @@ export function useAnnotationHighlighter({
       }
       el.remove();
     });
-  }, []);
+  }, [removeChoiceHighlight]);
 
   const clearAllHighlights = useCallback(() => {
+    const choiceHighlights = containerRef.current?.querySelectorAll('[data-choice-annotation-id]');
+    choiceHighlights?.forEach(el => {
+      el.classList.remove('annotation-highlight', 'comment', 'focused');
+      el.removeAttribute('data-choice-annotation-id');
+    });
+
     const manualHighlights = containerRef.current?.querySelectorAll('[data-bind-id]');
     manualHighlights?.forEach(el => {
       const parent = el.parentNode;
@@ -580,6 +640,13 @@ export function useAnnotationHighlighter({
         `[data-bind-id="${selectedAnnotationId}"]`
       );
       if (manualMarks.length > 0) targetElements = Array.from(manualMarks);
+    }
+
+    if (targetElements.length === 0) {
+      const choiceMarks = containerRef.current.querySelectorAll(
+        `[data-choice-annotation-id="${CSS.escape(selectedAnnotationId)}"]`
+      );
+      if (choiceMarks.length > 0) targetElements = Array.from(choiceMarks);
     }
 
     if (targetElements.length === 0) return;

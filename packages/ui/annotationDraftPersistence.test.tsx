@@ -68,6 +68,20 @@ const ANNOTATION: Annotation = {
   author: 'tater',
 };
 
+const CHOICE_ANNOTATION: Annotation = {
+  id: 'ann-choice-1718000000000-1',
+  blockId: 'block-0',
+  startOffset: 0,
+  endOffset: 4,
+  type: AnnotationType.COMMENT,
+  text: '👍 Selected Option',
+  originalText: 'Beta',
+  isQuickLabel: true,
+  choiceOptionLabel: 'B',
+  createdA: 1718000000000,
+  author: 'tater',
+};
+
 const SOURCE_SAVE = {
   enabled: true,
   kind: 'local-text-file',
@@ -252,6 +266,29 @@ describe('direct-edit draft persistence', () => {
     expect(restored!.annotations).toEqual([ANNOTATION]);
     expect(restored!.editedMarkdown).toBe(EDITED); // byte-identical
     expect(s2.result.current!.draftBanner).toBeNull();
+    await s2.unmount();
+  });
+
+  test.skipIf(!hasDom)('choice annotation metadata survives draft save and restore', async () => {
+    const s1 = await mountSession(options({ annotations: [CHOICE_ANNOTATION] }));
+    act(() => s1.result.current!.scheduleDraftSave());
+    await tick(DEBOUNCE_WAIT_MS);
+    await s1.unmount();
+
+    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    expect(onDisk).not.toBeNull();
+    expect(onDisk!.annotations).toEqual([CHOICE_ANNOTATION]);
+
+    const s2 = await mountSession(options());
+    let restored: ReturnType<HookResult['restoreDraft']>;
+    act(() => {
+      restored = s2.result.current!.restoreDraft();
+    });
+    expect(restored!.annotations).toContainEqual(expect.objectContaining({
+      id: CHOICE_ANNOTATION.id,
+      isQuickLabel: true,
+      choiceOptionLabel: 'B',
+    }));
     await s2.unmount();
   });
 

@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { parseMarkdownToBlocks, computeListIndices, extractFrontmatter, exportAnnotations } from "./parser";
-import type { Block } from "../types";
+import { parseMarkdownToBlocks, computeListIndices, extractFrontmatter, exportAnnotations, exportLinkedDocAnnotations } from "./parser";
+import { AnnotationType, type Block } from "../types";
 
 /** Tiny factory for list-item blocks used by computeListIndices tests. */
 const li = (level: number, ordered: boolean, orderedStart?: number): Block => ({
@@ -1111,6 +1111,37 @@ Recommendation: Option B.`);
       isQuickLabel: true,
     }]);
 
+    expect(output).toContain("(lines 1–6)");
+    expect(output).toContain('[👍 Selected Option] Feedback on: "Beta"');
+  });
+
+  test("linked document choice annotations use quick-label formatting", () => {
+    const choiceBlocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Recommendation: Option B.`);
+    const docs = new Map([
+      ["docs/a.md", {
+        annotations: [{
+          id: "ann-choice-1",
+          blockId: choiceBlocks[0].id,
+          startOffset: 0,
+          endOffset: 4,
+          type: AnnotationType.COMMENT,
+          text: "👍 Selected Option",
+          originalText: "Beta",
+          isQuickLabel: true,
+          choiceOptionLabel: "B",
+          createdA: 1718000000000,
+        }],
+        globalAttachments: [],
+        blocks: choiceBlocks,
+      }],
+    ]);
+
+    const output = exportLinkedDocAnnotations(docs);
     expect(output).toContain("(lines 1–6)");
     expect(output).toContain('[👍 Selected Option] Feedback on: "Beta"');
   });

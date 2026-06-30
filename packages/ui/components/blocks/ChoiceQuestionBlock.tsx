@@ -49,7 +49,7 @@ export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
 
   return (
     <section
-      className="my-5 rounded-xl border border-border/60 bg-card/80 p-4 shadow-sm"
+      className="my-5 rounded-xl border border-border/60 bg-card/80 p-4 shadow-sm transition-shadow"
       style={proseStyle}
       data-block-id={block.id}
       data-choice-question="true"
@@ -69,7 +69,7 @@ export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
               tabIndex={0}
               className={`w-full cursor-pointer rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 selected
-                  ? 'border-primary/70 bg-primary/10 shadow-sm'
+                  ? 'border-primary/70 bg-primary/10 shadow-sm ring-1 ring-primary/20'
                   : 'border-border/60 bg-background/70 hover:border-primary/40 hover:bg-muted/40'
               }`}
               data-choice-option-label={option.label}
