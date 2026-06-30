@@ -34,7 +34,6 @@ class ToolbarErrorBoundary extends React.Component<
 }
 
 import { CommentPopover, type CommentAskAIContext, type CommentAskAIHandler } from './CommentPopover';
-import { TaterSpriteSitting } from './TaterSpriteSitting';
 import { AttachmentsButton } from './AttachmentsButton';
 import { MessagesIcon } from './icons/MessagesIcon';
 import { GraphvizBlock } from './GraphvizBlock';
@@ -60,7 +59,6 @@ interface ViewerProps {
   selectedAnnotationId: string | null;
   mode: EditorMode;
   inputMethod?: InputMethod;
-  taterMode: boolean;
   globalAttachments?: ImageAttachment[];
   onAddGlobalAttachment?: (image: ImageAttachment) => void;
   onRemoveGlobalAttachment?: (path: string) => void;
@@ -155,7 +153,6 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   selectedAnnotationId,
   mode,
   inputMethod = 'drag',
-  taterMode,
   globalAttachments = [],
   onAddGlobalAttachment,
   onRemoveGlobalAttachment,
@@ -525,7 +522,6 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   return (
     <CodePathValidationContext.Provider value={codePathValidation}>
     <div className="relative z-50 w-full" style={maxWidth === null ? undefined : { maxWidth: maxWidth ?? 832 }}>
-      {taterMode && <TaterSpriteSitting />}
       <article
         ref={containerRef}
         data-print-region="article"

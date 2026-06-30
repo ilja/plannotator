@@ -60,8 +60,6 @@ interface StickyHeaderLaneProps {
   onInputMethodChange: (method: InputMethod) => void;
   mode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
-  taterMode?: boolean;
-
   // Badge state
   repoInfo?: { display: string; branch?: string } | null;
 
@@ -82,7 +80,6 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
   onInputMethodChange,
   mode,
   onModeChange,
-  taterMode,
   repoInfo,
   maxWidth,
   remountToken,
@@ -228,7 +225,6 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
               onInputMethodChange={onInputMethodChange}
               mode={mode}
               onModeChange={onModeChange}
-              taterMode={taterMode}
               compact
               iconOnly={isNarrow || isToolstripIconOnly}
             />

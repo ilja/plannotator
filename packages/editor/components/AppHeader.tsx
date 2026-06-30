@@ -36,7 +36,6 @@ interface AppHeaderProps {
   callbackConfig: CallbackConfig | null;
 
   // Settings props
-  taterMode: boolean;
   mobileSettingsOpen: boolean;
   gitUser: string | undefined;
 
@@ -48,7 +47,6 @@ interface AppHeaderProps {
   onAnnotateApprove: () => void;
   onAnnotationPanelToggle: () => void;
   onAIChatToggle: () => void;
-  onTaterModeChange: (enabled: boolean) => void;
   onIdentityChange: (oldId: string, newId: string) => void;
   onUIPreferencesChange: (prefs: UIPreferences) => void;
   onOpenSettings: () => void;
@@ -91,7 +89,6 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   callbackShareUrlReady,
   canShareCurrentSession,
   callbackConfig,
-  taterMode,
   mobileSettingsOpen,
   gitUser,
   onCallbackFeedback,
@@ -101,7 +98,6 @@ export const AppHeader = React.memo<AppHeaderProps>(({
   onAnnotateApprove,
   onAnnotationPanelToggle,
   onAIChatToggle,
-  onTaterModeChange,
   onIdentityChange,
   onUIPreferencesChange,
   onOpenSettings,
@@ -224,8 +220,6 @@ export const AppHeader = React.memo<AppHeaderProps>(({
         {/* Settings dialog (controlled, button hidden — opened from PlanHeaderMenu) */}
         <div className="hidden">
           <Settings
-            taterMode={taterMode}
-            onTaterModeChange={onTaterModeChange}
             onIdentityChange={onIdentityChange}
             origin={origin}
             onUIPreferencesChange={onUIPreferencesChange}

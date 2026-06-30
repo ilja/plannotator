@@ -1,13 +1,11 @@
 import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import type { EditorMode, InputMethod } from '../types';
-import { TaterSpritePullup } from './TaterSpritePullup';
 
 interface AnnotationToolstripProps {
   inputMethod: InputMethod;
   onInputMethodChange: (method: InputMethod) => void;
   mode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
-  taterMode?: boolean;
   /**
    * Compact mode: used inside the sticky header lane. Buttons only expand for
    * the active mode (no hover expansion), gap is tightened, and the help link
@@ -32,7 +30,6 @@ export const AnnotationToolstrip: React.FC<AnnotationToolstripProps> = ({
   onInputMethodChange,
   mode,
   onModeChange,
-  taterMode,
   compact = false,
   showHelpLink = true,
   iconOnly = false,
@@ -171,7 +168,6 @@ export const AnnotationToolstrip: React.FC<AnnotationToolstripProps> = ({
             className="bg-card border border-border rounded-xl w-full max-w-2xl shadow-2xl relative"
             onClick={e => e.stopPropagation()}
           >
-            {taterMode && <TaterSpritePullup />}
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
                 <button

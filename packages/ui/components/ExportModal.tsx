@@ -28,7 +28,6 @@ interface ExportModalProps {
   onGenerateShortUrl?: () => void | Promise<unknown>;
   annotationsOutput: string;
   annotationCount: number;
-  taterSprite?: React.ReactNode;
   sharingEnabled?: boolean;
   markdown?: string;
   isApiMode?: boolean;
@@ -51,7 +50,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onGenerateShortUrl,
   annotationsOutput,
   annotationCount,
-  taterSprite,
   sharingEnabled = true,
   markdown,
   isApiMode = false,
@@ -186,7 +184,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         className="bg-card border border-border rounded-xl w-full max-w-2xl flex flex-col max-h-[80vh] shadow-2xl relative"
         onClick={e => e.stopPropagation()}
       >
-        {taterSprite}
 
         {/* Header */}
         <div className="p-4 border-b border-border">

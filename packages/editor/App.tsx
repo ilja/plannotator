@@ -17,8 +17,6 @@ import { ThemeProvider } from '@plannotator/ui/components/ThemeProvider';
 import { Tooltip, TooltipProvider } from '@plannotator/ui/components/Tooltip';
 import { AnnotationToolstrip } from '@plannotator/ui/components/AnnotationToolstrip';
 import { StickyHeaderLane } from '@plannotator/ui/components/StickyHeaderLane';
-import { TaterSpriteRunning } from '@plannotator/ui/components/TaterSpriteRunning';
-import { TaterSpritePullup } from '@plannotator/ui/components/TaterSpritePullup';
 import { useSharing } from '@plannotator/ui/hooks/useSharing';
 import { getCallbackConfig, CallbackAction, executeCallback } from '@plannotator/ui/utils/callback';
 import { useActiveSection } from '@plannotator/ui/hooks/useActiveSection';
@@ -246,10 +244,6 @@ const App: React.FC = () => {
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>(getEditorMode);
   const [inputMethod, setInputMethod] = useState<InputMethod>(getInputMethod);
-  const [taterMode, setTaterMode] = useState(() => {
-    const stored = storage.getItem('plannotator-tater-mode');
-    return stored === 'true';
-  });
   const gridEnabled = useConfigValue('gridEnabled');
   const annotationCodeFontFamily = useConfigValue('annotationCodeFontFamily');
   const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
@@ -2001,11 +1995,6 @@ const App: React.FC = () => {
     };
   }, [sourceWatchDirsKey]);
 
-  const handleTaterModeChange = useCallback((enabled: boolean) => {
-    setTaterMode(enabled);
-    storage.setItem('plannotator-tater-mode', String(enabled));
-  }, []);
-
   const handleEditorModeChange = (mode: EditorMode) => {
     setEditorMode(mode);
     saveEditorMode(mode);
@@ -3378,7 +3367,6 @@ const App: React.FC = () => {
           callbackShareUrlReady={callbackConfig ? Boolean(shareUrl || shortShareUrl || (renderAs === 'html' && (shareHtml || rawHtml))) : true}
           canShareCurrentSession={canShareCurrentSession}
           callbackConfig={callbackConfig}
-          taterMode={taterMode}
           mobileSettingsOpen={mobileSettingsOpen}
           gitUser={gitUser}
           onCallbackFeedback={handleCallbackFeedback}
@@ -3388,7 +3376,6 @@ const App: React.FC = () => {
           onAnnotateApprove={handleHeaderAnnotateApprove}
           onAnnotationPanelToggle={handleAnnotationPanelToggle}
           onAIChatToggle={handleAIChatToggle}
-          onTaterModeChange={handleTaterModeChange}
           onIdentityChange={handleIdentityChange}
           onUIPreferencesChange={setUiPrefs}
           onOpenSettings={handleOpenSettings}
@@ -3470,8 +3457,6 @@ const App: React.FC = () => {
         {/* Main Content */}
         <ScrollViewportContext.Provider value={scrollViewport}>
         <div data-print-region="content" className={`flex-1 flex overflow-hidden relative z-0 ${isResizing ? 'select-none' : ''}`}>
-          {/* Tater sprites — inside content wrapper so z-0 stacking context applies */}
-          {taterMode && <TaterSpriteRunning />}
           {shouldRenderAgentTerminal && agentTerminalCapability && (
             <div
               className={
@@ -3598,7 +3583,6 @@ const App: React.FC = () => {
                   onInputMethodChange={handleInputMethodChange}
                   mode={editorMode}
                   onModeChange={handleEditorModeChange}
-                  taterMode={taterMode}
                   repoInfo={repoInfo}
                       maxWidth={annotateReaderMaxWidth}
                   remountToken={viewerContentKey}
@@ -3622,7 +3606,6 @@ const App: React.FC = () => {
                     onInputMethodChange={handleInputMethodChange}
                     mode={editorMode}
                     onModeChange={handleEditorModeChange}
-                    taterMode={taterMode}
                     showHelpLink={!isHtmlSurface}
                   />
                 </div>
@@ -3645,7 +3628,7 @@ const App: React.FC = () => {
                     className="absolute -top-5 left-0 right-0 mx-auto w-full flex justify-end pointer-events-none"
                     style={annotateReaderMaxWidth === null ? undefined : { maxWidth: annotateReaderMaxWidth ?? 832 }}
                   >
-                    <div className={`pointer-events-auto flex items-center gap-1.5 text-[11px] tracking-wide ${taterMode ? 'mr-[60px]' : 'mr-[4px]'}`}>
+                    <div className="pointer-events-auto flex items-center gap-1.5 text-[11px] tracking-wide mr-[4px]">
                       {canUseWideMode && (['wide', 'focus'] as const).map((type, i) => (
                         <React.Fragment key={type}>
                           {i > 0 && <span aria-hidden className="text-muted-foreground/30 select-none">|</span>}
@@ -3795,7 +3778,6 @@ const App: React.FC = () => {
                     selectedAnnotationId={selectedAnnotationId}
                     mode={editorMode}
                     inputMethod={inputMethod}
-                    taterMode={taterMode}
                     gridEnabled={gridEnabled}
                     globalAttachments={globalAttachments}
                     onAddGlobalAttachment={handleAddGlobalAttachment}
@@ -3972,7 +3954,6 @@ const App: React.FC = () => {
               : ''
           }
           annotationCount={allAnnotations.length + codeAnnotations.length}
-          taterSprite={taterMode ? <TaterSpritePullup /> : undefined}
           sharingEnabled={canShareCurrentSession}
           markdown={markdown}
           isApiMode={isApiMode}
