@@ -222,6 +222,81 @@ describe("parseMarkdownToBlocks — real-world plan regression", () => {
   });
 });
 
+describe("parseMarkdownToBlocks — choice-question blocks", () => {
+  test("parses strict option question with recommendation", () => {
+    const blocks = parseMarkdownToBlocks(`Which approach should we take?
+
+- Option A: Keep the current flow
+- Option B: Add the widget
+
+Recommendation: Option B.`);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        id: "block-0",
+        type: "choice-question",
+        content: "Which approach should we take?",
+        startLine: 1,
+        sourceLineCount: 6,
+        choiceOptions: [
+          { label: "A", text: "Keep the current flow" },
+          { label: "B", text: "Add the widget" },
+        ],
+        recommendedChoiceLabel: "B",
+      }),
+    ]);
+  });
+
+  test("accepts Reccomendation spelling", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option left: Left path
+- Option right: Right path
+
+Reccomendation: Option left.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: "left",
+    }));
+  });
+
+  test("falls back when recommendation label does not match an option", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Recommendation: Option C.`);
+
+    expect(blocks.map(block => block.type)).toEqual([
+      "paragraph",
+      "list-item",
+      "list-item",
+      "paragraph",
+    ]);
+  });
+
+  test("preserves adjacent normal markdown", () => {
+    const blocks = parseMarkdownToBlocks(`# Before
+
+Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Recommendation: Option B.
+
+Afterwards`);
+
+    expect(blocks.map(block => block.type)).toEqual([
+      "heading",
+      "choice-question",
+      "paragraph",
+    ]);
+  });
+});
+
 describe("parseMarkdownToBlocks — list continuation lines", () => {
   test("indented continuation line merges into preceding list item", () => {
     const md = "- First item with text\n  that continues here\n- Second item";
@@ -988,5 +1063,25 @@ describe("exportAnnotations — line labels", () => {
   test("no sourceConverted means no caveat", () => {
     const output = exportAnnotations(blocks, [{ blockId: blocks[0].id, type: "COMMENT", text: "ok", originalText: "Heading", startOffset: 0 }]);
     expect(output).not.toContain("converted markdown");
+  });
+
+  test("choice-question export label spans full source block", () => {
+    const choiceBlocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Recommendation: Option B.`);
+    const output = exportAnnotations(choiceBlocks, [{
+      blockId: choiceBlocks[0].id,
+      type: "COMMENT",
+      text: "👍 Selected Option",
+      originalText: "Beta",
+      startOffset: 0,
+      isQuickLabel: true,
+    }]);
+
+    expect(output).toContain("(lines 1–6)");
+    expect(output).toContain('[👍 Selected Option] Feedback on: "Beta"');
   });
 });

@@ -39,6 +39,7 @@ export interface Annotation {
   images?: ImageAttachment[]; // Attached images with human-readable names
   isQuickLabel?: boolean; // true if created via quick label chip
   quickLabelTip?: string; // optional instruction tip from the label definition
+  choiceOptionLabel?: string; // selected option label for choice-question widgets
   diffContext?: 'added' | 'removed' | 'modified'; // set when annotation is created from a diff context
   // web-highlighter metadata for cross-element selections
   startMeta?: {
@@ -55,9 +56,14 @@ export interface Annotation {
 
 export type AlertKind = 'note' | 'tip' | 'warning' | 'caution' | 'important';
 
+export interface ChoiceQuestionOption {
+  label: string;
+  text: string;
+}
+
 export interface Block {
   id: string;
-  type: 'paragraph' | 'heading' | 'blockquote' | 'list-item' | 'code' | 'hr' | 'table' | 'html' | 'directive';
+  type: 'paragraph' | 'heading' | 'blockquote' | 'list-item' | 'code' | 'hr' | 'table' | 'html' | 'directive' | 'choice-question';
   content: string; // Plain text, or raw (unsanitized) HTML for type === 'html'
   level?: number; // For headings (1-6) or list indentation
   language?: string; // For code blocks (e.g., 'rust', 'typescript')
@@ -66,6 +72,10 @@ export interface Block {
   orderedStart?: number; // For ordered list items: integer parsed from the marker (e.g. 5 for "5.")
   alertKind?: AlertKind; // For blockquotes starting with [!NOTE] / [!TIP] / etc.
   directiveKind?: string; // For directive containers (e.g. ':::note' → 'note')
+  choiceOptions?: ChoiceQuestionOption[]; // For choice-question blocks
+  recommendedChoiceLabel?: string; // Recommended option label for choice-question blocks
+  sourceText?: string; // Original source span for choice-question blocks
+  sourceLineCount?: number; // Original source span line count for choice-question blocks
   order: number; // Sorting order
   startLine: number; // 1-based line number in source
 }

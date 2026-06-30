@@ -1,4 +1,4 @@
-import { Block, type Annotation, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
+import { Block, type Annotation, type ChoiceQuestionOption, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
 import { annotationFeedback } from '@plannotator/shared/feedback-templates';
 
 /**
@@ -92,6 +92,57 @@ export const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 const HTML_BLOCK_OPEN_RE = /^<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s|>|\/|$)/;
+
+type ParsedChoiceQuestion = {
+  question: string;
+  options: ChoiceQuestionOption[];
+  recommendedLabel: string;
+  sourceText: string;
+  sourceLineCount: number;
+  endIndex: number;
+};
+
+const OPTION_RE = /^\s*-\s+Option\s+([^:]+):\s+(.+)\s*$/;
+const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+Option\s+([^\.\s]+)\.?\s*$/i;
+
+const parseChoiceQuestionAt = (
+  lines: string[],
+  paragraphLines: string[],
+  paragraphStartIndex: number,
+  nextIndex: number,
+): ParsedChoiceQuestion | null => {
+  if (paragraphLines.length === 0) return null;
+  if (lines[nextIndex]?.trim() !== '') return null;
+
+  const options: ChoiceQuestionOption[] = [];
+  let i = nextIndex + 1;
+  while (i < lines.length) {
+    const match = lines[i].match(OPTION_RE);
+    if (!match) break;
+    options.push({ label: match[1].trim(), text: match[2].trim() });
+    i += 1;
+  }
+
+  if (options.length < 2) return null;
+  if (lines[i]?.trim() !== '') return null;
+
+  const recommendationLine = lines[i + 1];
+  const recommendationMatch = recommendationLine?.match(RECOMMENDATION_RE);
+  if (!recommendationMatch) return null;
+
+  const recommendedLabel = recommendationMatch[1].trim();
+  if (!options.some(option => option.label === recommendedLabel)) return null;
+
+  const sourceLines = lines.slice(paragraphStartIndex, i + 2);
+  return {
+    question: paragraphLines.join('\n'),
+    options,
+    recommendedLabel,
+    sourceText: sourceLines.join('\n'),
+    sourceLineCount: sourceLines.length,
+    endIndex: i + 1,
+  };
+};
 
 /**
  * A simplified markdown parser that splits content into linear blocks.
@@ -382,6 +433,32 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
 
     // Empty lines separate paragraphs
     if (trimmed === '') {
+      const choice = parseChoiceQuestionAt(
+        lines,
+        buffer,
+        bufferStartLine - contentStartLine,
+        i,
+      );
+
+      if (choice) {
+        blocks.push({
+          id: `block-${currentId++}`,
+          type: 'choice-question',
+          content: choice.question,
+          choiceOptions: choice.options,
+          recommendedChoiceLabel: choice.recommendedLabel,
+          sourceText: choice.sourceText,
+          sourceLineCount: choice.sourceLineCount,
+          order: currentId,
+          startLine: bufferStartLine,
+        });
+        buffer = [];
+        currentType = 'paragraph';
+        lastLineWasBlank = false;
+        i = choice.endIndex;
+        continue;
+      }
+
       flush();
       currentType = 'paragraph';
       lastLineWasBlank = true;
@@ -466,6 +543,10 @@ export interface ExportAnnotationsOptions {
 
 /** Compute the end line of a block from its content and type. */
 const blockEndLine = (block: Block): number => {
+  if (block.type === 'choice-question') {
+    const lineCount = block.sourceLineCount ?? block.sourceText?.split('\n').length ?? 1;
+    return block.startLine + lineCount - 1;
+  }
   if (!block.content) return block.startLine;
   const contentLines = block.content.split('\n').length;
   if (block.type === 'code') return block.startLine + contentLines + 1;
