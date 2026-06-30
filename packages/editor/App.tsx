@@ -3774,6 +3774,7 @@ const App: React.FC = () => {
                     frontmatter={frontmatter}
                     annotations={viewerAnnotations}
                     onAddAnnotation={handleAddAnnotation}
+                    onRemoveAnnotation={removeAnnotation}
                     onSelectAnnotation={handleSelectAnnotation}
                     selectedAnnotationId={selectedAnnotationId}
                     mode={editorMode}

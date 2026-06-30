@@ -1,5 +1,6 @@
 import React from "react";
-import { Block } from "../types";
+import type { Annotation, Block, ChoiceQuestionOption } from "../types";
+import { isChoiceAnnotationForBlock } from "../utils/choiceAnnotations";
 import { InlineMarkdown } from "./InlineMarkdown";
 import { ListItemBody } from "./ListItemBody";
 import { CodeBlock } from "./blocks/CodeBlock";
@@ -31,7 +32,11 @@ export const BlockRenderer: React.FC<{
   githubRepo?: string;
   headingAnchorId?: string;
   onNavigateAnchor?: (hash: string) => void;
-}> = ({ block, onOpenLinkedDoc, onOpenCodeFile, imageBaseDir, onImageClick, onToggleCheckbox, checkboxOverrides, orderedIndex, githubRepo, headingAnchorId, onNavigateAnchor }) => {
+  annotations?: Annotation[];
+  onSelectChoice?: (block: Block, option: ChoiceQuestionOption) => void;
+}> = ({ block, onOpenLinkedDoc, onOpenCodeFile, imageBaseDir, onImageClick, onToggleCheckbox, checkboxOverrides, orderedIndex, githubRepo, headingAnchorId, onNavigateAnchor, annotations, onSelectChoice }) => {
+  const selectedChoiceAnnotation = annotations?.find(ann => isChoiceAnnotationForBlock(ann, block.id));
+
   switch (block.type) {
     case 'heading': {
       const Tag = `h${block.level || 1}` as React.ElementType;
@@ -164,6 +169,9 @@ export const BlockRenderer: React.FC<{
       return (
         <ChoiceQuestionBlock
           block={block}
+          selectedOptionLabel={selectedChoiceAnnotation?.choiceOptionLabel}
+          selectedAnnotationId={selectedChoiceAnnotation?.id}
+          onSelectChoice={onSelectChoice}
           imageBaseDir={imageBaseDir}
           onImageClick={onImageClick}
           onOpenLinkedDoc={onOpenLinkedDoc}

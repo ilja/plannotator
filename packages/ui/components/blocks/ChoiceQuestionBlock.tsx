@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Block } from '../../types';
+import type { Block, ChoiceQuestionOption } from '../../types';
 import { InlineMarkdown } from '../InlineMarkdown';
 
 const proseStyle: React.CSSProperties = {
@@ -9,6 +9,9 @@ const proseStyle: React.CSSProperties = {
 
 type ChoiceQuestionBlockProps = {
   block: Block;
+  selectedOptionLabel?: string;
+  selectedAnnotationId?: string;
+  onSelectChoice?: (block: Block, option: ChoiceQuestionOption) => void;
   onOpenLinkedDoc?: (path: string) => void;
   onOpenCodeFile?: (path: string) => void;
   imageBaseDir?: string;
@@ -19,6 +22,9 @@ type ChoiceQuestionBlockProps = {
 
 export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
   block,
+  selectedOptionLabel,
+  selectedAnnotationId,
+  onSelectChoice,
   onOpenLinkedDoc,
   onOpenCodeFile,
   imageBaseDir,
@@ -53,13 +59,28 @@ export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
       </div>
       <div className="grid gap-2">
         {options.map(option => {
+          const selected = option.label === selectedOptionLabel;
           const recommended = option.label === block.recommendedChoiceLabel;
 
           return (
             <div
               key={option.label}
-              className="rounded-lg border border-border/60 bg-background/70 px-3 py-2 text-left transition-colors"
+              role="button"
+              tabIndex={0}
+              className={`w-full cursor-pointer rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                selected
+                  ? 'border-primary/70 bg-primary/10 shadow-sm'
+                  : 'border-border/60 bg-background/70 hover:border-primary/40 hover:bg-muted/40'
+              }`}
               data-choice-option-label={option.label}
+              data-choice-selected={selected ? 'true' : undefined}
+              data-choice-annotation-id={selected ? selectedAnnotationId : undefined}
+              onClick={() => onSelectChoice?.(block, option)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                onSelectChoice?.(block, option);
+              }}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useMemo, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import hljs from 'highlight.js';
-import { Block, Annotation, AnnotationType, EditorMode, type InputMethod, type ImageAttachment, type ActionsLabelMode } from '../types';
+import { Block, Annotation, AnnotationType, EditorMode, type ChoiceQuestionOption, type InputMethod, type ImageAttachment, type ActionsLabelMode } from '../types';
 import { Frontmatter, computeListIndices } from '../utils/parser';
 import { buildHeadingSlugMap } from '../utils/slugify';
 import { BlockRenderer } from './BlockRenderer';
@@ -48,6 +48,7 @@ import { usePinpoint } from '../hooks/usePinpoint';
 import { useAnnotationHighlighter } from '../hooks/useAnnotationHighlighter';
 import { useScrollViewport } from '../hooks/useScrollViewport';
 import { decodeAnchorHash } from '../utils/anchors';
+import { isChoiceAnnotationForBlock, nextChoiceAnnotationId } from '../utils/choiceAnnotations';
 
 interface ViewerProps {
   blocks: Block[];
@@ -55,6 +56,7 @@ interface ViewerProps {
   frontmatter?: Frontmatter | null;
   annotations: Annotation[];
   onAddAnnotation: (ann: Annotation) => void;
+  onRemoveAnnotation?: (id: string) => void;
   onSelectAnnotation: (id: string | null) => void;
   selectedAnnotationId: string | null;
   mode: EditorMode;
@@ -149,6 +151,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   frontmatter,
   annotations,
   onAddAnnotation,
+  onRemoveAnnotation,
   onSelectAnnotation,
   selectedAnnotationId,
   mode,
@@ -180,6 +183,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
   const [locationHash, setLocationHash] = useState(() => window.location.hash);
   const globalCommentButtonRef = useRef<HTMLButtonElement>(null);
+  const lastChoiceAnnotationByBlockRef = useRef(new Map<string, { id: string; label: string }>());
 
   const handleCopyPlan = async () => {
     try {
@@ -252,6 +256,45 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   useEffect(() => { onAddAnnotationRef.current = onAddAnnotation; }, [onAddAnnotation]);
   const modeRef = useRef<EditorMode>(mode);
   useEffect(() => { modeRef.current = mode; }, [mode]);
+
+  const handleSelectChoice = useCallback((block: Block, option: ChoiceQuestionOption) => {
+    const previousChoiceAnnotations = annotations.filter(ann => isChoiceAnnotationForBlock(ann, block.id));
+    const lastLocalChoice = lastChoiceAnnotationByBlockRef.current.get(block.id);
+    const clickedAlreadySelected =
+      previousChoiceAnnotations.some(ann => ann.choiceOptionLabel === option.label) ||
+      lastLocalChoice?.label === option.label;
+    const idsToRemove = new Set(previousChoiceAnnotations.map(ann => ann.id));
+    if (lastLocalChoice) idsToRemove.add(lastLocalChoice.id);
+
+    idsToRemove.forEach(id => onRemoveAnnotation?.(id));
+
+    if (clickedAlreadySelected) {
+      lastChoiceAnnotationByBlockRef.current.delete(block.id);
+      window.getSelection()?.removeAllRanges();
+      return;
+    }
+
+    const annotation: Annotation = {
+      id: nextChoiceAnnotationId(),
+      blockId: block.id,
+      startOffset: 0,
+      endOffset: option.text.length,
+      type: AnnotationType.COMMENT,
+      text: '👍 Selected Option',
+      originalText: option.text,
+      isQuickLabel: true,
+      choiceOptionLabel: option.label,
+      createdA: Date.now(),
+      author: getIdentity(),
+    };
+
+    lastChoiceAnnotationByBlockRef.current.set(block.id, {
+      id: annotation.id,
+      label: option.label,
+    });
+    onAddAnnotation(annotation);
+    window.getSelection()?.removeAllRanges();
+  }, [annotations, onAddAnnotation, onRemoveAnnotation]);
 
   // Pinpoint mode: hover + click to select elements
   const handlePinpointCodeBlockClick = useCallback((blockId: string, element: HTMLElement) => {
@@ -641,6 +684,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
                       githubRepo={repoInfo?.display}
                       headingAnchorId={headingSlugMap.get(block.id)}
                       onNavigateAnchor={scrollToAnchor}
+                      annotations={annotations}
+                      onSelectChoice={handleSelectChoice}
                     />
                   ))}
                 </div>
@@ -711,7 +756,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
               isHovered={inputMethod !== 'pinpoint' && hoveredCodeBlock?.block.id === group.block.id}
             />
           ) : (
-            <BlockRenderer imageBaseDir={imageBaseDir} onImageClick={(src, alt) => setLightbox({ src, alt })} key={group.block.id} block={group.block} onOpenLinkedDoc={onOpenLinkedDoc} onOpenCodeFile={onOpenCodeFile} onNavigateAnchor={scrollToAnchor} onToggleCheckbox={onToggleCheckbox} checkboxOverrides={checkboxOverrides} githubRepo={repoInfo?.display} headingAnchorId={headingSlugMap.get(group.block.id)} />
+            <BlockRenderer imageBaseDir={imageBaseDir} onImageClick={(src, alt) => setLightbox({ src, alt })} key={group.block.id} block={group.block} onOpenLinkedDoc={onOpenLinkedDoc} onOpenCodeFile={onOpenCodeFile} onNavigateAnchor={scrollToAnchor} onToggleCheckbox={onToggleCheckbox} checkboxOverrides={checkboxOverrides} githubRepo={repoInfo?.display} headingAnchorId={headingSlugMap.get(group.block.id)} annotations={annotations} onSelectChoice={handleSelectChoice} />
           )
         )}
 
