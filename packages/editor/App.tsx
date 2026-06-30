@@ -26,7 +26,6 @@ import { storage } from '@plannotator/ui/utils/storage';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
 import { loadCodeFont } from '@plannotator/ui/utils/diffFonts';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
-import { useUpdateCheck } from '@plannotator/ui/hooks/useUpdateCheck';
 import { LookAndFeelAnnouncementDialog } from '@plannotator/ui/components/LookAndFeelAnnouncementDialog';
 import { getObsidianSettings, getEffectiveVaultPath, isObsidianConfigured, CUSTOM_PATH_SENTINEL } from '@plannotator/ui/utils/obsidian';
 import { getBearSettings } from '@plannotator/ui/utils/bear';
@@ -290,23 +289,6 @@ const App: React.FC = () => {
   const [isApiMode, setIsApiMode] = useState(false);
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [gitUser, setGitUser] = useState<string | undefined>();
-  const [isWSL, setIsWSL] = useState(false);
-  const updateInfo = useUpdateCheck();
-  const updateToastShown = useRef(false);
-  useEffect(() => {
-    if (window.location.hash) return;
-    if (updateInfo?.updateAvailable && !updateInfo.dismissed && !updateToastShown.current) {
-      updateToastShown.current = true;
-      const t = setTimeout(() => {
-        toast('A new version of Plannotator is available', {
-          description: 'Open the Options menu to update.',
-          duration: 4000,
-          classNames: { toast: '!w-auto', description: '!text-foreground/70' },
-        });
-      }, 1500);
-      return () => clearTimeout(t);
-    }
-  }, [updateInfo?.updateAvailable, updateInfo?.dismissed]);
   // Markdown edit mode (prototype): CM6 live-preview editor over the raw plan
   // text. originalMarkdownRef is the as-submitted baseline for the edit diff —
   // set once at plan load, never by linked-doc navigation or edit commits.
@@ -2048,7 +2030,7 @@ const App: React.FC = () => {
         if (!res.ok) throw new Error('Not in API mode');
         return res.json();
       })
-      .then((data: { plan: string; origin?: Origin; mode?: 'annotate' | 'annotate-last' | 'annotate-folder'; filePath?: string; sourceInfo?: string; sourceConverted?: boolean; sourceSave?: SourceSaveCapability; gate?: boolean; renderAs?: 'html' | 'markdown'; rawHtml?: string; shareHtml?: string; convertHtml?: boolean; sharingEnabled?: boolean; shareBaseUrl?: string; pasteApiUrl?: string; repoInfo?: { display: string; branch?: string; host?: string }; projectRoot?: string; isWSL?: boolean; serverConfig?: { displayName?: string; gitUser?: string }; recentMessages?: PickerMessage[]; agentTerminal?: AgentTerminalCapability }) => {
+      .then((data: { plan: string; origin?: Origin; mode?: 'annotate' | 'annotate-last' | 'annotate-folder'; filePath?: string; sourceInfo?: string; sourceConverted?: boolean; sourceSave?: SourceSaveCapability; gate?: boolean; renderAs?: 'html' | 'markdown'; rawHtml?: string; shareHtml?: string; convertHtml?: boolean; sharingEnabled?: boolean; shareBaseUrl?: string; pasteApiUrl?: string; repoInfo?: { display: string; branch?: string; host?: string }; projectRoot?: string; serverConfig?: { displayName?: string; gitUser?: string }; recentMessages?: PickerMessage[]; agentTerminal?: AgentTerminalCapability }) => {
         // Initialize config store with server-provided values (config file > cookie > default)
         configStore.init(data.serverConfig);
         // Session-level force-markdown preference (--markdown); threaded into folder/linked
@@ -2124,9 +2106,6 @@ const App: React.FC = () => {
         setAgentTerminalCapability(data.agentTerminal ?? null);
         if (data.origin) {
           setOrigin(data.origin);
-        }
-        if (data.isWSL) {
-          setIsWSL(true);
         }
       })
       .catch(() => {
@@ -3423,8 +3402,6 @@ const App: React.FC = () => {
           onSaveToBear={handleSaveToBear}
           onSaveToOctarine={handleSaveToOctarine}
           appVersion={typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'}
-          updateInfo={updateInfo}
-          isWSL={isWSL}
           agentInstructionsEnabled={false}
           obsidianConfigured={isObsidianConfigured()}
           bearConfigured={getBearSettings().enabled}

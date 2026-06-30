@@ -7,7 +7,6 @@ import { Settings } from '@plannotator/ui/components/Settings';
 import { FeedbackButton, ApproveButton, ExitButton } from '@plannotator/ui/components/ToolbarButtons';
 import { AgentReviewActions } from './components/AgentReviewActions';
 import { DiffOptionsPopover } from './components/DiffOptionsPopover';
-import { useUpdateCheck } from '@plannotator/ui/hooks/useUpdateCheck';
 import { storage } from '@plannotator/ui/utils/storage';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
 import { GitHubIcon } from '@plannotator/ui/components/GitHubIcon';
@@ -176,7 +175,6 @@ const ReviewApp: React.FC = () => {
   const [hideViewedFiles, setHideViewedFiles] = useState(false);
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [gitUser, setGitUser] = useState<string | undefined>();
-  const [isWSL, setIsWSL] = useState(false);
   const [reviewMode, setReviewMode] = useState<string | null>(null);
   const [diffType, setDiffType] = useState<string>('uncommitted');
   const [gitContext, setGitContext] = useState<GitContext | null>(null);
@@ -251,22 +249,6 @@ const ReviewApp: React.FC = () => {
   const mrNumberLabel = prMetadata ? getMRNumberLabel(prMetadata) : '';
   const displayRepo = prMetadata ? getDisplayRepo(prMetadata) : '';
   const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
-  const updateInfo = useUpdateCheck();
-  const updateToastShown = useRef(false);
-  useEffect(() => {
-    if (updateInfo?.updateAvailable && !updateInfo.dismissed && !updateToastShown.current) {
-      updateToastShown.current = true;
-      const t = setTimeout(() => {
-        toast('A new version of Plannotator is available', {
-          description: 'Open the Options menu to update.',
-          duration: 4000,
-          position: 'top-right',
-          classNames: { toast: '!w-auto', description: '!text-foreground/70' },
-        });
-      }, 1500);
-      return () => clearTimeout(t);
-    }
-  }, [updateInfo?.updateAvailable, updateInfo?.dismissed]);
 
   const identity = useConfigValue('displayName');
 
@@ -875,7 +857,6 @@ const ReviewApp: React.FC = () => {
         platformUser?: string;
         viewedFiles?: string[];
         error?: string;
-        isWSL?: boolean;
         semanticDiff?: SemanticDiffAdvert;
         serverConfig?: { displayName?: string; gitUser?: string };
       }) => {
@@ -928,7 +909,6 @@ const ReviewApp: React.FC = () => {
           setViewedFiles(new Set(data.viewedFiles));
         }
         if (data.error) setDiffError(data.error);
-        if (data.isWSL) setIsWSL(true);
         setSemanticDiffAvailable(data.semanticDiff?.available === true);
         // Mark diff type setup as pending on first run (local mode only)
         if (data.diffType && data.mode !== 'workspace' && !data.prMetadata && data.gitContext && data.gitContext.vcsType !== 'p4' && data.gitContext.vcsType !== 'jj' && needsDiffTypeSetup()) {
@@ -2346,9 +2326,6 @@ const ReviewApp: React.FC = () => {
               isFileTreeOpen={isFileTreeOpen}
               isSidebarOpen={reviewSidebar.isOpen}
               appVersion={appVersion}
-              updateInfo={updateInfo}
-              origin={origin}
-              isWSL={isWSL}
             />
           </div>
         </header>

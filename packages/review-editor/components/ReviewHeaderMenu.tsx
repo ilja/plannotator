@@ -7,10 +7,7 @@ import {
 } from '@plannotator/ui/components/ActionMenu';
 import { useTheme } from '@plannotator/ui/components/ThemeProvider';
 import { MenuVersionSection } from '@plannotator/ui/components/MenuVersionSection';
-import { TextShimmer } from '@plannotator/ui/components/TextShimmer';
 import { modKey } from '@plannotator/ui/utils/platform';
-import type { UpdateInfo } from '@plannotator/ui/hooks/useUpdateCheck';
-import type { Origin } from '@plannotator/shared/agents';
 
 interface ReviewHeaderMenuProps {
   onOpenSettings: () => void;
@@ -20,9 +17,6 @@ interface ReviewHeaderMenuProps {
   isFileTreeOpen: boolean;
   isSidebarOpen: boolean;
   appVersion: string;
-  updateInfo?: UpdateInfo | null;
-  origin?: Origin | null;
-  isWSL?: boolean;
 }
 
 export const ReviewHeaderMenu: React.FC<ReviewHeaderMenuProps> = ({
@@ -33,23 +27,17 @@ export const ReviewHeaderMenu: React.FC<ReviewHeaderMenuProps> = ({
   isFileTreeOpen,
   isSidebarOpen,
   appVersion,
-  updateInfo,
-  origin,
-  isWSL = false,
 }) => {
   const { theme, resolvedMode, setTheme } = useTheme();
   const activeTheme = useMemo<'light' | 'dark'>(() => {
     return theme === 'system' ? resolvedMode : theme;
   }, [resolvedMode, theme]);
 
-  const showUpdateDot = !!updateInfo?.updateAvailable && !updateInfo.dismissed;
-
   return (
     <ActionMenu
       renderTrigger={({ isOpen, toggleMenu }) => (
         <button
           onClick={() => {
-            if (!isOpen && showUpdateDot) updateInfo?.dismiss();
             toggleMenu();
           }}
           className={`relative flex items-center gap-1.5 p-1.5 md:px-2.5 md:py-1 rounded-md text-xs font-medium transition-colors ${
@@ -62,16 +50,7 @@ export const ReviewHeaderMenu: React.FC<ReviewHeaderMenuProps> = ({
           aria-expanded={isOpen}
         >
           {isOpen ? <CloseIcon /> : <MenuIcon />}
-          {showUpdateDot ? (
-            <TextShimmer className="hidden md:inline text-xs font-medium" duration={2.5} spread={1.5}>
-              Options
-            </TextShimmer>
-          ) : (
-            <span className="hidden md:inline">Options</span>
-          )}
-          {showUpdateDot && (
-            <span className="absolute top-0.5 right-0.5 md:-top-0.5 md:-right-0.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
-          )}
+          <span className="hidden md:inline">Options</span>
         </button>
       )}
     >
@@ -144,9 +123,6 @@ export const ReviewHeaderMenu: React.FC<ReviewHeaderMenuProps> = ({
 
           <MenuVersionSection
             appVersion={appVersion}
-            updateInfo={updateInfo}
-            origin={origin}
-            isWSL={isWSL}
             closeMenu={closeMenu}
           />
         </>

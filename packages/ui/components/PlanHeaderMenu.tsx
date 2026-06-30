@@ -9,15 +9,9 @@ import { useTheme } from './ThemeProvider';
 import { SunIcon, MoonIcon, SystemIcon } from './icons/themeIcons';
 import { ReviewAgentsIcon } from './ReviewAgentsIcon';
 import { MenuVersionSection } from './MenuVersionSection';
-import { TextShimmer } from './TextShimmer';
-import type { UpdateInfo } from '../hooks/useUpdateCheck';
-import type { Origin } from '@plannotator/shared/agents';
 
 interface PlanHeaderMenuProps {
   appVersion: string;
-  updateInfo?: UpdateInfo | null;
-  origin?: Origin | null;
-  isWSL?: boolean;
   onOpenSettings: () => void;
   onOpenExport: () => void;
   onCopyAgentInstructions: () => void;
@@ -38,9 +32,6 @@ interface PlanHeaderMenuProps {
 
 export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
   appVersion,
-  updateInfo,
-  origin,
-  isWSL = false,
   onOpenSettings,
   onOpenExport,
   onCopyAgentInstructions,
@@ -60,8 +51,6 @@ export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
 }) => {
   const { theme, setTheme } = useTheme();
 
-  const showUpdateDot = !!updateInfo?.updateAvailable && !updateInfo.dismissed;
-
   const anyNotesAppConfigured =
     isApiMode && (obsidianConfigured || bearConfigured || octarineConfigured);
 
@@ -70,7 +59,6 @@ export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
       renderTrigger={({ isOpen, toggleMenu }) => (
         <button
           onClick={() => {
-            if (!isOpen && showUpdateDot) updateInfo?.dismiss();
             toggleMenu();
           }}
           className={`relative flex items-center gap-1.5 p-1.5 md:px-2.5 md:py-1 rounded-md text-xs font-medium transition-colors ${
@@ -83,16 +71,7 @@ export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
           aria-expanded={isOpen}
         >
           {isOpen ? <CloseIcon /> : <MenuIcon />}
-          {showUpdateDot ? (
-            <TextShimmer className="hidden md:inline text-xs font-medium" duration={2.5} spread={1.5}>
-              Options
-            </TextShimmer>
-          ) : (
-            <span className="hidden md:inline">Options</span>
-          )}
-          {showUpdateDot && (
-            <span className="absolute top-0.5 right-0.5 md:-top-0.5 md:-right-0.5 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
-          )}
+          <span className="hidden md:inline">Options</span>
         </button>
       )}
     >
@@ -231,9 +210,6 @@ export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
 
           <MenuVersionSection
             appVersion={appVersion}
-            updateInfo={updateInfo}
-            origin={origin}
-            isWSL={isWSL}
             closeMenu={closeMenu}
           />
         </>
