@@ -275,6 +275,65 @@ Reccomendation: Option A, because it is best.`);
     }));
   });
 
+  test("accepts recommendation rationale after whitespace", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Reccomendation: Option A for the first version.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: "A",
+    }));
+  });
+
+  test("accepts recommendation text with the option mentioned later", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+- Option C: Gamma
+
+Reccomendation: We should choose Option A because it is best.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: "A",
+    }));
+  });
+
+  test("renders choice question without a badge when recommendation mentions multiple options", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+- Option C: Gamma
+
+Reccomendation: Use an ordered strategy: Option A first, Option B next, then Option C.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: undefined,
+    }));
+  });
+
+  test("renders choice question without a badge when recommendation uses plural options", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta
+- Option C: Gamma
+
+Reccomendation: Options A and B for the first implementation. Option C can exist later.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: undefined,
+    }));
+  });
+
   test("does not partially match unknown recommendation labels", () => {
     const blocks = parseMarkdownToBlocks(`Pick one
 
@@ -283,15 +342,13 @@ Reccomendation: Option A, because it is best.`);
 
 Recommendation: Option AB, because it is best.`);
 
-    expect(blocks.map(block => block.type)).toEqual([
-      "paragraph",
-      "list-item",
-      "list-item",
-      "paragraph",
-    ]);
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: undefined,
+    }));
   });
 
-  test("falls back when recommendation label does not match an option", () => {
+  test("renders choice question without a badge when recommendation label does not match", () => {
     const blocks = parseMarkdownToBlocks(`Pick one
 
 - Option A: Alpha
@@ -299,12 +356,62 @@ Recommendation: Option AB, because it is best.`);
 
 Recommendation: Option C.`);
 
-    expect(blocks.map(block => block.type)).toEqual([
-      "paragraph",
-      "list-item",
-      "list-item",
-      "paragraph",
-    ]);
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: undefined,
+    }));
+  });
+
+  test("renders choice question when recommendation is omitted", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha
+- Option B: Beta`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      recommendedChoiceLabel: undefined,
+    }));
+  });
+
+  test("accepts indented option continuation lines", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha.
+  - Pros: good.
+  - Cons: bad.
+- Option B: Beta.
+  - Pros: ok.
+  - Cons: worse.
+
+Reccomendation: Option A.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      choiceOptions: [
+        { label: "A", text: "Alpha.\n- Pros: good.\n- Cons: bad." },
+        { label: "B", text: "Beta.\n- Pros: ok.\n- Cons: worse." },
+      ],
+      recommendedChoiceLabel: "A",
+    }));
+  });
+
+  test("accepts indented option continuation lines without a recommendation", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+
+- Option A: Alpha.
+  - Pros: good.
+- Option B: Beta.
+  - Pros: ok.`);
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      type: "choice-question",
+      choiceOptions: [
+        { label: "A", text: "Alpha.\n- Pros: good." },
+        { label: "B", text: "Beta.\n- Pros: ok." },
+      ],
+      recommendedChoiceLabel: undefined,
+    }));
   });
 
   test("preserves adjacent normal markdown", () => {

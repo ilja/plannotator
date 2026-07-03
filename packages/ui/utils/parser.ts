@@ -96,14 +96,20 @@ const HTML_BLOCK_OPEN_RE = /^<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s|>|\/|$)/;
 type ParsedChoiceQuestion = {
   question: string;
   options: ChoiceQuestionOption[];
-  recommendedLabel: string;
+  recommendedLabel?: string;
   sourceText: string;
   sourceLineCount: number;
   endIndex: number;
 };
 
-const OPTION_RE = /^\s*-\s+Option\s+([^:]+):\s+(.+)\s*$/;
-const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+Option\s+(.+?)\s*$/i;
+const OPTION_RE = /^(\s*)-\s+Option\s+([^:]+):\s+(.+)\s*$/;
+const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+(.+?)\s*$/i;
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const matchesRecommendedLabel = (text: string, label: string) => {
+  if (!/\bOptions?\b/.test(text)) return false;
+
+  return new RegExp(`\\b${escapeRegExp(label)}\\b`).test(text);
+};
 
 const parseChoiceQuestionAt = (
   lines: string[],
@@ -116,39 +122,55 @@ const parseChoiceQuestionAt = (
 
   const options: ChoiceQuestionOption[] = [];
   let i = nextIndex + 1;
+  let optionIndent: number | undefined;
   while (i < lines.length) {
     const match = lines[i].match(OPTION_RE);
     if (!match) break;
-    options.push({ label: match[1].trim(), text: match[2].trim() });
+
+    const currentIndent = match[1].length;
+    optionIndent ??= currentIndent;
+    if (currentIndent !== optionIndent) break;
+
+    const optionTextLines = [match[3].trim()];
     i += 1;
+
+    while (i < lines.length) {
+      const nextOptionMatch = lines[i].match(OPTION_RE);
+      if (nextOptionMatch && nextOptionMatch[1].length === optionIndent) break;
+      if (lines[i].trim() === '') break;
+      if (lines[i].match(/^\s*/)?.[0].length <= optionIndent) break;
+
+      optionTextLines.push(lines[i].trim());
+      i += 1;
+    }
+
+    options.push({ label: match[2].trim(), text: optionTextLines.join('\n') });
   }
 
   if (options.length < 2) return null;
-  if (lines[i]?.trim() !== '') return null;
+  if (i < lines.length && lines[i]?.trim() !== '') return null;
 
-  const recommendationLine = lines[i + 1];
+  const recommendationLine = i < lines.length ? lines[i + 1] : undefined;
   const recommendationMatch = recommendationLine?.match(RECOMMENDATION_RE);
-  if (!recommendationMatch) return null;
+  const recommendationText = recommendationMatch?.[1].trim();
+  const matchingRecommendationLabels = recommendationText
+    ? options
+      .filter(option => matchesRecommendedLabel(recommendationText, option.label))
+      .map(option => option.label)
+    : [];
+  const recommendedLabel = matchingRecommendationLabels.length === 1
+    ? matchingRecommendationLabels[0]
+    : undefined;
+  const endIndex = recommendationMatch ? i + 1 : i - 1;
+  const sourceLines = lines.slice(paragraphStartIndex, endIndex + 1);
 
-  const recommendationText = recommendationMatch[1].trim();
-  const recommendedLabel = [...options]
-    .sort((a, b) => b.label.length - a.label.length)
-    .find(option =>
-      recommendationText === option.label ||
-      recommendationText.startsWith(`${option.label}.`) ||
-      recommendationText.startsWith(`${option.label},`),
-    )?.label;
-
-  if (!recommendedLabel) return null;
-
-  const sourceLines = lines.slice(paragraphStartIndex, i + 2);
   return {
     question: paragraphLines.join('\n'),
     options,
     recommendedLabel,
     sourceText: sourceLines.join('\n'),
     sourceLineCount: sourceLines.length,
-    endIndex: i + 1,
+    endIndex,
   };
 };
 
