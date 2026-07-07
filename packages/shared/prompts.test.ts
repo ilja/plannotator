@@ -49,6 +49,7 @@ describe("resolveTemplate", () => {
 describe("getReviewApprovedPrompt", () => {
   test("falls back to built-in default when no config is present", () => {
     expect(getReviewApprovedPrompt("opencode", {})).toBe(DEFAULT_REVIEW_APPROVED_PROMPT);
+    expect(getReviewApprovedPrompt("opencode", {})).toContain("all changes approved");
   });
 
   test("uses generic configured review approval prompt", () => {

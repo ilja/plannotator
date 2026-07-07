@@ -14,7 +14,7 @@ export function resolveTemplate(
 
 // ─── Default constants ───────────────────────────────────────────────────────
 
-export const DEFAULT_REVIEW_APPROVED_PROMPT = "# Code Review\n\nCode review completed — no changes requested.";
+export const DEFAULT_REVIEW_APPROVED_PROMPT = "# Code Review\n\nCode review completed — all changes approved.";
 
 export const DEFAULT_REVIEW_DENIED_SUFFIX = "\n\nThis feedback came from review. Please triage it and verify it against the code and then come back to me with your thoughts on the findings. Do not change any code until we've discussed the findings.";
 

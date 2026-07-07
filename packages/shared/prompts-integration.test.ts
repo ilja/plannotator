@@ -217,6 +217,6 @@ describe("prompts integration (config from disk)", () => {
       console.log(getReviewApprovedPrompt("pi"));
     `);
 
-    expect(result).toContain("Code review completed");
+    expect(result).toContain("Code review completed — all changes approved");
   });
 });
