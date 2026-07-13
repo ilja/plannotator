@@ -247,6 +247,86 @@ Recommendation: Option B.`);
     ]);
   });
 
+  test("parses unbulleted options with blank-separated details", () => {
+    const blocks = parseMarkdownToBlocks(`# Feature flag representation
+
+How should the five accepted order types be represented in feature-toggle state?
+Option A: Five global Flipper booleans, one per order type.
+
+  cart_order_lines_sim_only
+  cart_order_lines_fixed
+  cart_order_lines_accessory_only
+  cart_order_lines_standalone_phone
+  cart_order_lines_phone_subscription
+
+This follows the current order-processing Flipper pattern, supports simultaneous activation, and keeps runtime administration in the existing Flipper UI.
+
+Option B: One Flipper feature plus a value list elsewhere.
+
+This keeps one visible feature name but introduces a second storage/parsing mechanism for category values, which is not a pattern currently used by application code.
+
+Option C: Environment-based FeatureToggleRouter keys.
+
+This avoids adding several Flipper features but cannot be changed through the Flipper UI and introduces a separate rollout mechanism for this order-processing behavior.
+
+Recommendation: Option A, because it matches the current boolean Flipper usage and satisfies independent simultaneous activation without new infrastructure.`);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: "heading",
+        content: "Feature flag representation",
+      }),
+      expect.objectContaining({
+        type: "choice-question",
+        content: "How should the five accepted order types be represented in feature-toggle state?",
+        choiceOptions: [
+          {
+            label: "A",
+            text: `Five global Flipper booleans, one per order type.
+
+cart_order_lines_sim_only
+cart_order_lines_fixed
+cart_order_lines_accessory_only
+cart_order_lines_standalone_phone
+cart_order_lines_phone_subscription
+
+This follows the current order-processing Flipper pattern, supports simultaneous activation, and keeps runtime administration in the existing Flipper UI.`,
+          },
+          {
+            label: "B",
+            text: `One Flipper feature plus a value list elsewhere.
+
+This keeps one visible feature name but introduces a second storage/parsing mechanism for category values, which is not a pattern currently used by application code.`,
+          },
+          {
+            label: "C",
+            text: `Environment-based FeatureToggleRouter keys.
+
+This avoids adding several Flipper features but cannot be changed through the Flipper UI and introduces a separate rollout mechanism for this order-processing behavior.`,
+          },
+        ],
+        recommendedChoiceLabel: "A",
+      }),
+    ]);
+  });
+
+  test("does not scan across a heading for a rich choice recommendation", () => {
+    const blocks = parseMarkdownToBlocks(`Pick one
+Option A: Alpha
+
+# Separate decision
+
+Option B: Beta
+
+Recommendation: Option B.`);
+
+    expect(blocks.some(block => block.type === "choice-question")).toBe(false);
+    expect(blocks).toContainEqual(expect.objectContaining({
+      type: "heading",
+      content: "Separate decision",
+    }));
+  });
+
   test("accepts Reccomendation spelling", () => {
     const blocks = parseMarkdownToBlocks(`Pick one
 
