@@ -129,14 +129,48 @@ describe('AIChatComposer', () => {
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('uses the same composer for attached and unattached prompts', async () => {
+  test.skipIf(!hasDom)('replaces pending context on rerender', async () => {
     const session = await mountComposer({ pendingContext: context, value: 'Attached?' });
     expect(session.host.querySelector('textarea')?.value).toBe('Attached?');
     expect(session.host.textContent).toContain('Line 3');
+    expect(session.host.textContent).toContain('example.ts');
+
+    await session.rerender({
+      pendingContext: {
+        filePath: 'src/other.ts',
+        lineStart: 9,
+        lineEnd: 11,
+        side: 'old',
+        selectedCode: 'removed();',
+      },
+    });
+
+    expect(session.host.textContent).not.toContain('example.ts');
+    expect(session.host.textContent).toContain('other.ts');
+    expect(session.host.textContent).toContain('Lines 9-11');
+    expect(session.host.textContent).not.toContain('removed();');
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('uses the same composer for attached submit and plain follow-up', async () => {
+    const submissions: string[] = [];
+    const session = await mountComposer({
+      pendingContext: context,
+      value: 'Attached?',
+      onSubmit: () => submissions.push('submit'),
+    });
+
+    const send = session.host.querySelector('button[title^="Send"]') as HTMLButtonElement;
+    await act(async () => send.click());
+    expect(submissions).toEqual(['submit']);
 
     await session.rerender({ pendingContext: null, value: 'General?' });
     expect(session.host.querySelector('textarea')?.value).toBe('General?');
     expect(session.host.textContent).not.toContain('Line 3');
+
+    await act(async () => send.click());
+    expect(submissions).toEqual(['submit', 'submit']);
 
     await session.unmount();
   });

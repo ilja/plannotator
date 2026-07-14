@@ -178,14 +178,9 @@ interface DiffViewerProps {
   activeSearchMatch?: ReviewSearchMatch | null;
   // AI props
   aiAvailable?: boolean;
-  onAskAI?: (question: string) => void;
-  isAILoading?: boolean;
-  onViewAIResponse?: (questionId?: string) => void;
   aiMessages?: AIChatEntry[];
   onClickAIMarker?: (questionId: string) => void;
   onAttachAIContext?: (lineNumber: number, side: 'additions' | 'deletions') => void;
-  /** AI messages overlapping the current pending selection */
-  aiHistoryMessages?: AIChatEntry[];
   // Code navigation
   onCodeNavRequest?: (request: import('@plannotator/shared/code-nav').CodeNavRequest) => void;
 }
@@ -230,13 +225,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   activeSearchMatchId = null,
   activeSearchMatch = null,
   aiAvailable = false,
-  onAskAI,
-  isAILoading = false,
-  onViewAIResponse,
   aiMessages = [],
   onClickAIMarker,
   onAttachAIContext,
-  aiHistoryMessages = [],
   onCodeNavRequest,
 }) => {
   const pierreTheme = usePierreTheme({ fontFamily, fontSize });
@@ -735,11 +726,6 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         onLineSelection={onLineSelection}
         onAddAnnotation={onAddAnnotation}
         onEditAnnotation={onEditAnnotation}
-        aiAvailable={aiAvailable}
-        onAskAI={onAskAI}
-        isAILoading={isAILoading}
-        onViewAIResponse={onViewAIResponse}
-        aiHistoryMessages={aiHistoryMessages}
       />
 
       {fileCommentAnchor && (

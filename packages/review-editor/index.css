@@ -976,12 +976,6 @@ diffs-container {
 
 /* AI Chat — toolbar divider, bubbles, line references, streaming cursor */
 
-.ai-ask-divider {
-  border-top: 1px solid var(--border);
-  margin-top: 0.5rem;
-  opacity: 0.5;
-}
-
 .ai-line-ref {
   display: inline-flex;
   align-items: center;
@@ -1049,28 +1043,6 @@ diffs-container {
 @keyframes ai-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
-}
-
-.ai-preview-link {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  width: 100%;
-  margin-top: 0.5rem;
-  padding: 0.375rem 0.5rem;
-  border-radius: var(--radius-sm);
-  background: oklch(from var(--primary) l c h / 0.05);
-  border: 1px solid oklch(from var(--primary) l c h / 0.12);
-  font-size: 0.625rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition: background 150ms, border-color 150ms;
-  text-align: left;
-}
-
-.ai-preview-link:hover {
-  background: oklch(from var(--primary) l c h / 0.1);
-  border-color: oklch(from var(--primary) l c h / 0.2);
 }
 
 /* AI inline markers in diff */

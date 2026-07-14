@@ -167,7 +167,7 @@ export const AITab: React.FC<AITabProps> = ({
             <SparklesIcon className="w-5 h-5" />
           </div>
           <p className="text-xs">
-            Select lines and click <strong>Ask AI</strong>, or ask a general question below.
+            Hover a line and click the sparkle to attach it, or ask a question below.
           </p>
         </div>
         <AIConfigBar

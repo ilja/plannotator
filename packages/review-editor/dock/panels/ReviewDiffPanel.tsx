@@ -110,12 +110,8 @@ export const ReviewDiffPanel: React.FC<IDockviewPanelProps> = (props) => {
             : null
         }
         aiAvailable={state.aiAvailable}
-        onAskAI={state.onAskAI}
-        isAILoading={state.isAILoading}
-        onViewAIResponse={state.onViewAIResponse}
         aiMessages={aiMessagesForFile}
         onClickAIMarker={state.onClickAIMarker}
-        aiHistoryMessages={isFocusedFile ? state.aiHistoryForSelection : []}
         onAttachAIContext={(lineNumber, side) =>
           state.onAttachAIContextForFile(file.path, lineNumber, side)
         }
