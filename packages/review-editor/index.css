@@ -1002,6 +1002,40 @@ diffs-container {
   color: var(--primary);
 }
 
+.ai-pending-context {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  margin-bottom: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: oklch(from var(--primary) l c h / 0.06);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+
+.ai-pending-context-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.ai-pending-context-remove:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
 .ai-streaming-cursor {
   display: inline-block;
   width: 0.375rem;

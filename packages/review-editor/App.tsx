@@ -40,6 +40,7 @@ import { useAIChat } from './hooks/useAIChat';
 import { toast, Toaster } from 'sonner';
 import { useCodeNav, type CodeNavRequest } from './hooks/useCodeNav';
 import { extractLinesFromPatch } from './utils/patchParser';
+import { buildPendingAIContext, type PendingAIContext } from './utils/pendingAIContext';
 import { isTypingTarget, useReviewSearch, type ReviewSearchMatch } from './hooks/useReviewSearch';
 import { useEditorAnnotations } from '@plannotator/ui/hooks/useEditorAnnotations';
 import { useExternalAnnotations } from '@plannotator/ui/hooks/useExternalAnnotations';
@@ -131,6 +132,8 @@ const ReviewApp: React.FC = () => {
   const [isDiffPanelActive, setIsDiffPanelActive] = useState(false);
   const [allFilesVisibleFile, setAllFilesVisibleFile] = useState<string | null>(null);
   const [pendingSelection, setPendingSelection] = useState<SelectedLineRange | null>(null);
+  const [pendingAIContext, setPendingAIContext] = useState<PendingAIContext | null>(null);
+  const [aiComposerFocusToken, setAIComposerFocusToken] = useState(0);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showWorktreeDialog, setShowWorktreeDialog] = useState(false);
   const [openSettingsMenu, setOpenSettingsMenu] = useState(false);
@@ -535,6 +538,19 @@ const ReviewApp: React.FC = () => {
     resetAISession();
   }, [aiProviders, origin, resetAISession]);
 
+  const handleAttachAIContextForFile = useCallback((
+    filePath: string,
+    lineNumber: number,
+    side: 'additions' | 'deletions',
+  ) => {
+    const file = files.find(candidate => candidate.path === filePath);
+    if (!file) return;
+
+    setPendingAIContext(buildPendingAIContext(file, lineNumber, side));
+    setAIComposerFocusToken(token => token + 1);
+    reviewSidebar.open('ai');
+  }, [files, reviewSidebar.open]);
+
   // File-aware Ask AI: the all-files surface resolves the owning file itself
   // (its toolbar selection lives in a file the single-file panel may never
   // have focused), so it must NOT go through activeFileIndex.
@@ -614,10 +630,16 @@ const ReviewApp: React.FC = () => {
     setTimeout(() => setScrollToQuestionId(null), 500);
   }, []);
 
-  // General AI question from sidebar input
-  const handleAskGeneral = useCallback((question: string) => {
-    askAI({ prompt: question });
-  }, [askAI]);
+  const handleAskChat = useCallback((question: string) => {
+    void askAI(pendingAIContext
+      ? { prompt: question, ...pendingAIContext }
+      : { prompt: question });
+    setPendingAIContext(null);
+  }, [askAI, pendingAIContext]);
+
+  const handleRemovePendingAIContext = useCallback(() => {
+    setPendingAIContext(null);
+  }, []);
 
   // Resizable panels
   const panelResize = useResizablePanel({
@@ -1567,6 +1589,7 @@ const ReviewApp: React.FC = () => {
     onClickAIMarker: handleClickAIMarker,
     aiHistoryForSelection,
     getAIHistoryForFile,
+    onAttachAIContextForFile: handleAttachAIContextForFile,
     prMetadata,
     prContext,
     isPRContextLoading,
@@ -1598,7 +1621,7 @@ const ReviewApp: React.FC = () => {
     activeFileSearchMatches, activeSearchMatchId, activeSearchMatch, searchMatches,
     aiAvailable, aiMessages, aiIsCreatingSession, aiIsStreaming,
     handleAskAI, handleAskAIForFile, handleViewAIResponse, handleClickAIMarker,
-    aiHistoryForSelection, getAIHistoryForFile, prMetadata, prContext,
+    aiHistoryForSelection, getAIHistoryForFile, handleAttachAIContextForFile, prMetadata, prContext,
     isPRContextLoading, prContextError, fetchPRContext, platformUser, openDiffFile,
     isAllFilesActive, isSemanticDiffActive, semanticDiffAvailable,
     handleSemanticDiffUnavailable, handleSemanticDiffLoadError, handleSemanticDiffLoadSuccess, handleAddAnnotationForFile,
@@ -2496,7 +2519,10 @@ const ReviewApp: React.FC = () => {
                 onScrollToAILines={handleScrollToAILines}
                 activeFilePath={files[activeFileIndex]?.path}
                 scrollToQuestionId={scrollToQuestionId}
-                onAskGeneral={handleAskGeneral}
+                onAskChat={handleAskChat}
+                pendingAIContext={pendingAIContext}
+                aiComposerFocusToken={aiComposerFocusToken}
+                onRemovePendingAIContext={handleRemovePendingAIContext}
                 aiPermissionRequests={aiPermissionRequests}
                 onRespondToPermission={respondToAIPermission}
                 aiProviders={aiProviders}

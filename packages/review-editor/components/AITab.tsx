@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo, useCallback, memo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, memo } from 'react';
 import type { AIChatEntry, PendingPermission } from '../hooks/useAIChat';
 import { renderChatMarkdown } from '../utils/renderChatMarkdown';
 import { formatLineRange } from '../utils/formatLineRange';
@@ -9,9 +9,10 @@ import { CountBadge } from './CountBadge';
 import { CopyButton } from './CopyButton';
 import { PermissionCard } from './PermissionCard';
 import { AIConfigBar } from './AIConfigBar';
-import { submitHint } from '@plannotator/ui/utils/platform';
 import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea';
 import type { AIProviderOption } from '@plannotator/ui/utils/aiProvider';
+import { AIChatComposer } from './AIChatComposer';
+import type { PendingAIContext } from '../utils/pendingAIContext';
 
 interface AITabProps {
   messages: AIChatEntry[];
@@ -20,7 +21,10 @@ interface AITabProps {
   activeFilePath?: string;
   scrollToQuestionId?: string | null;
   onScrollToLines: (filePath: string, lineStart: number, lineEnd: number, side: 'old' | 'new') => void;
-  onAskGeneral?: (question: string) => void;
+  onAskChat?: (question: string) => void;
+  pendingAIContext?: PendingAIContext | null;
+  aiComposerFocusToken?: number;
+  onRemovePendingAIContext?: () => void;
   permissionRequests?: PendingPermission[];
   onRespondToPermission?: (requestId: string, allow: boolean) => void;
   aiProviders?: AIProviderOption[];
@@ -47,7 +51,10 @@ export const AITab: React.FC<AITabProps> = ({
   activeFilePath,
   scrollToQuestionId,
   onScrollToLines,
-  onAskGeneral,
+  onAskChat,
+  pendingAIContext = null,
+  aiComposerFocusToken = 0,
+  onRemovePendingAIContext,
   permissionRequests = [],
   onRespondToPermission,
   aiProviders = [],
@@ -145,9 +152,9 @@ export const AITab: React.FC<AITabProps> = ({
     });
   };
 
-  const handleGeneralSubmit = () => {
-    if (!generalInput.trim() || !onAskGeneral) return;
-    onAskGeneral(generalInput.trim());
+  const handleChatSubmit = () => {
+    if (!generalInput.trim() || !onAskChat) return;
+    onAskChat(generalInput.trim());
     setGeneralInput('');
   };
 
@@ -173,7 +180,7 @@ export const AITab: React.FC<AITabProps> = ({
           onReasoningEffortChange={(effort) => onAIConfigChange?.({ reasoningEffort: effort })}
           hasSession={hasAISession}
         />
-        {onAskGeneral && <GeneralInput value={generalInput} onChange={setGeneralInput} onSubmit={handleGeneralSubmit} disabled={isStreaming} />}
+        {onAskChat && <AIChatComposer value={generalInput} pendingContext={pendingAIContext} focusToken={aiComposerFocusToken} onChange={setGeneralInput} onSubmit={handleChatSubmit} onRemoveContext={onRemovePendingAIContext ?? (() => {})} disabled={isStreaming} isStreaming={isStreaming} />}
       </div>
     );
   }
@@ -269,60 +276,8 @@ export const AITab: React.FC<AITabProps> = ({
       />
 
       {/* General question input */}
-      {onAskGeneral && <GeneralInput value={generalInput} onChange={setGeneralInput} onSubmit={handleGeneralSubmit} disabled={isStreaming} />}
-    </div>
-  );
-};
+      {onAskChat && <AIChatComposer value={generalInput} pendingContext={pendingAIContext} focusToken={aiComposerFocusToken} onChange={setGeneralInput} onSubmit={handleChatSubmit} onRemoveContext={onRemovePendingAIContext ?? (() => {})} disabled={isStreaming} isStreaming={isStreaming} />}
 
-/** General question input pinned at bottom — textarea grows upward on multi-line */
-const GeneralInput: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: () => void;
-  disabled?: boolean;
-}> = ({ value, onChange, onSubmit, disabled }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const autoResize = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    // Cap at ~6 lines (6 * 16px line-height + padding)
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, []);
-
-  useEffect(() => { autoResize(); }, [value, autoResize]);
-
-  return (
-    <div className="border-t border-border/50 p-2">
-      <div className="flex items-end gap-1.5">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Ask about the overall changes..."
-          rows={1}
-          className="flex-1 px-2.5 py-1.5 bg-muted rounded-md text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 leading-relaxed"
-          style={{ maxHeight: 120 }}
-          disabled={disabled}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing && !disabled) {
-              e.preventDefault();
-              onSubmit();
-            }
-          }}
-        />
-        <button
-          onClick={onSubmit}
-          disabled={disabled || !value.trim()}
-          className="p-1.5 mb-px rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-          title={`Send (${submitHint})`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 };

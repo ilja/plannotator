@@ -14,6 +14,7 @@ import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea'
 import type { AIChatEntry } from '../hooks/useAIChat';
 import type { DiffFile } from '../types';
 import type { AIProviderOption } from '@plannotator/ui/utils/aiProvider';
+import type { PendingAIContext } from '../utils/pendingAIContext';
 
 export type ReviewSidebarTab = 'annotations' | 'ai';
 
@@ -42,7 +43,10 @@ interface ReviewSidebarProps {
   onScrollToAILines?: (filePath: string, lineStart: number, lineEnd: number, side: 'old' | 'new') => void;
   activeFilePath?: string;
   scrollToQuestionId?: string | null;
-  onAskGeneral?: (question: string) => void;
+  onAskChat?: (question: string) => void;
+  pendingAIContext?: PendingAIContext | null;
+  aiComposerFocusToken?: number;
+  onRemovePendingAIContext?: () => void;
   aiPermissionRequests?: import('../hooks/useAIChat').PendingPermission[];
   onRespondToPermission?: (requestId: string, allow: boolean) => void;
   aiProviders?: AIProviderOption[];
@@ -120,7 +124,10 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
   onScrollToAILines,
   activeFilePath,
   scrollToQuestionId,
-  onAskGeneral,
+  onAskChat,
+  pendingAIContext,
+  aiComposerFocusToken,
+  onRemovePendingAIContext,
   aiPermissionRequests = [],
   onRespondToPermission,
   aiProviders,
@@ -371,7 +378,10 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
               activeFilePath={activeFilePath}
               scrollToQuestionId={scrollToQuestionId}
               onScrollToLines={onScrollToAILines ?? (() => {})}
-              onAskGeneral={onAskGeneral}
+              onAskChat={onAskChat}
+              pendingAIContext={pendingAIContext}
+              aiComposerFocusToken={aiComposerFocusToken}
+              onRemovePendingAIContext={onRemovePendingAIContext}
               permissionRequests={aiPermissionRequests}
               onRespondToPermission={onRespondToPermission}
               aiProviders={aiProviders}

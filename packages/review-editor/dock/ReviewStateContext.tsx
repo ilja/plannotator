@@ -99,6 +99,11 @@ export interface ReviewState {
   aiHistoryForSelection: AIChatEntry[];
   /** File-aware variant of aiHistoryForSelection (same single-file caveat). */
   getAIHistoryForFile: (filePath: string) => AIChatEntry[];
+  onAttachAIContextForFile: (
+    filePath: string,
+    lineNumber: number,
+    side: 'additions' | 'deletions',
+  ) => void;
 
   // PR
   prMetadata: PRMetadata | null;
