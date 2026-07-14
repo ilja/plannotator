@@ -42,6 +42,7 @@ import {
   clearItemSearchHighlights,
   swapActiveSearchHighlight,
 } from '../utils/reviewSearchHighlight';
+import { createReviewGutterActionsElement, type HoveredDiffLine } from './ReviewGutterActions';
 
 /**
  * AllFilesCodeView (migration phases P1 + P2 + P3 + P4)
@@ -211,6 +212,11 @@ interface AllFilesCodeViewProps {
   // single-file panel's focus) must not be used here.
   aiAvailable?: boolean;
   onAskAIForFile?: (filePath: string, question: string) => void;
+  onAttachAIContextForFile?: (
+    filePath: string,
+    lineNumber: number,
+    side: 'additions' | 'deletions',
+  ) => void;
   isAILoading?: boolean;
   onViewAIResponse?: (questionId?: string) => void;
   getAIHistoryForFile?: (filePath: string) => AIChatEntry[];
@@ -406,6 +412,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   isActive = true,
   aiAvailable = false,
   onAskAIForFile,
+  onAttachAIContextForFile,
   isAILoading = false,
   onViewAIResponse,
   getAIHistoryForFile,
@@ -1482,12 +1489,26 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     },
   );
 
-  const handleGutterUtilityClick = useStableCallback(
-    (range: SelectedLineRange, item: CodeViewItem<DiffAnnotationMetadata>) => {
-      if (item.type !== 'diff') return;
-      const filePath = itemIdToFilePath.get(item.id);
-      if (filePath == null) return;
-      routeSelectionToToolbar(range, filePath);
+  const renderGutterUtility = useStableCallback(
+    (
+      getHoveredLine: () => HoveredDiffLine | undefined,
+      context: { item: CodeViewItem<DiffAnnotationMetadata> },
+    ) => {
+      const { item } = context;
+      if (item.type !== 'diff') return null;
+      const file = itemIdToFile.get(item.id);
+      if (file == null) return null;
+
+      return createReviewGutterActionsElement({
+        getHoveredLine,
+        aiAvailable,
+        onComment: (range) => routeSelectionToToolbar(range, file.path),
+        onAttachAI: (line) => onAttachAIContextForFile?.(
+          file.path,
+          line.lineNumber,
+          line.side,
+        ),
+      });
     },
   );
 
@@ -1901,8 +1922,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       onLineSelectionEnd(range, context) {
         handleLineSelectionEnd(range, context.item);
       },
-      onGutterUtilityClick(range, context) {
-        handleGutterUtilityClick(range, context.item);
+      renderGutterUtility(getHoveredLine, context) {
+        return renderGutterUtility(getHoveredLine as () => HoveredDiffLine | undefined, context);
       },
       // P7: token code navigation. CodeView appends the owning-item context as
       // the final arg to every shared callback (same as the selection/gutter
@@ -1943,7 +1964,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       expandUnchanged,
       customLineHeight,
       handleLineSelectionEnd,
-      handleGutterUtilityClick,
+      renderGutterUtility,
       onCodeNavRequest,
       handleTokenClick,
       handleTokenEnter,
