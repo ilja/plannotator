@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { DiffLineBgIntensity } from '@plannotator/shared/config';
 import { useTheme } from '@plannotator/ui/components/ThemeProvider';
 import { useConfigValue } from '@plannotator/ui/config';
+import { FRAMER_LIGHT_SYNTAX_THEME_NAME } from '../themes/framerLightSyntax';
 
 export const SHIKI_THEME_MAP: Record<string, { dark: string | null; light: string | null }> = {
   'andromeeda': { dark: 'andromeeda', light: null },
@@ -13,6 +14,7 @@ export const SHIKI_THEME_MAP: Record<string, { dark: string | null; light: strin
   'everforest': { dark: 'everforest-dark', light: 'everforest-light' },
   'everforest-hard': { dark: 'everforest-dark', light: 'everforest-light' },
   'everforest-soft': { dark: 'everforest-dark', light: 'everforest-light' },
+  'framer-light': { dark: FRAMER_LIGHT_SYNTAX_THEME_NAME, light: FRAMER_LIGHT_SYNTAX_THEME_NAME },
   'github': { dark: 'github-dark', light: 'github-light' },
   'gruvbox': { dark: 'gruvbox-dark-medium', light: 'gruvbox-light-medium' },
   'houston': { dark: 'houston', light: null },

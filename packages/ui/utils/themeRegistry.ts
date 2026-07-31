@@ -199,6 +199,17 @@ export const BUILT_IN_THEMES: ThemeInfo[] = [
     },
   },
   {
+    id: 'framer-light',
+    name: 'Framer Light',
+    builtIn: true,
+    modeSupport: 'light-only',
+    syntaxHighlighting: true,
+    colors: {
+      dark: { primary: '#0099ff', secondary: '#dfdfdf', accent: '#00bbcc', background: '#fdfdfd', foreground: '#666666' },
+      light: { primary: '#0099ff', secondary: '#dfdfdf', accent: '#00bbcc', background: '#fdfdfd', foreground: '#666666' },
+    },
+  },
+  {
     id: 'github',
     name: 'GitHub',
     builtIn: true,

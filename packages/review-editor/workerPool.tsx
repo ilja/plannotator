@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
 import { WorkerPoolContextProvider, useWorkerPool } from '@pierre/diffs/react';
 import type { WorkerInitializationRenderOptions, WorkerPoolOptions } from '@pierre/diffs/react';
+import './themes/framerLightSyntax';
 // Vite-inlined worker (base64 blob) — required by the single-file HTML build:
 // the review UI ships as one self-contained file, so there is no separate
 // asset URL to load a worker script from.
