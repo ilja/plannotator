@@ -1,4 +1,5 @@
 import { loadConfig, type PlannotatorConfig, type PromptRuntime } from "./config";
+import { appendFeedbackDiscussionInstruction } from "./feedback-templates";
 
 // ─── Template engine ─────────────────────────────────────────────────────────
 
@@ -16,13 +17,17 @@ export function resolveTemplate(
 
 export const DEFAULT_REVIEW_APPROVED_PROMPT = "# Code Review\n\nCode review completed — all changes approved.";
 
-export const DEFAULT_REVIEW_DENIED_SUFFIX = "\n\nThis feedback came from review. Please triage it and verify it against the code and then come back to me with your thoughts on the findings. Do not change any code until we've discussed the findings.";
+export const DEFAULT_REVIEW_DENIED_SUFFIX = appendFeedbackDiscussionInstruction(
+  "\n\nThis feedback came from review. Please triage it and verify it against the code, then come back to me with your thoughts on the findings.",
+);
 
-export const DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT =
-  "# Markdown Annotations\n\n{{fileHeader}}: {{filePath}}\n\n{{feedback}}\n\nPlease address the annotation feedback above.";
+export const DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT = appendFeedbackDiscussionInstruction(
+  "# Markdown Annotations\n\n{{fileHeader}}: {{filePath}}\n\n{{feedback}}\n\nPlease address the annotation feedback above.",
+);
 
-export const DEFAULT_ANNOTATE_MESSAGE_FEEDBACK_PROMPT =
-  "# Message Annotations\n\n{{feedback}}\n\nPlease address the annotation feedback above.";
+export const DEFAULT_ANNOTATE_MESSAGE_FEEDBACK_PROMPT = appendFeedbackDiscussionInstruction(
+  "# Message Annotations\n\n{{feedback}}\n\nPlease address the annotation feedback above.",
+);
 
 export const DEFAULT_ANNOTATE_APPROVED_PROMPT = "The user approved.";
 
@@ -85,13 +90,13 @@ export function getReviewDeniedSuffix(
   // triage-first instruction so none of them start coding off raw review
   // feedback. Per-runtime customization stays available via config
   // (prompts.review.runtimes.<runtime>.denied).
-  return getConfiguredPrompt({
+  return appendFeedbackDiscussionInstruction(getConfiguredPrompt({
     section: "review",
     key: "denied",
     runtime,
     config,
     fallback: DEFAULT_REVIEW_DENIED_SUFFIX,
-  });
+  }));
 }
 
 // ─── Annotate wrappers ──────────────────────────────────────────────────────
@@ -108,7 +113,7 @@ export function getAnnotateFileFeedbackPrompt(
     config,
     fallback: DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT,
   });
-  return resolveTemplate(template, vars ?? {});
+  return appendFeedbackDiscussionInstruction(resolveTemplate(template, vars ?? {}));
 }
 
 export function getAnnotateMessageFeedbackPrompt(
@@ -123,7 +128,7 @@ export function getAnnotateMessageFeedbackPrompt(
     config,
     fallback: DEFAULT_ANNOTATE_MESSAGE_FEEDBACK_PROMPT,
   });
-  return resolveTemplate(template, vars ?? {});
+  return appendFeedbackDiscussionInstruction(resolveTemplate(template, vars ?? {}));
 }
 
 export function getAnnotateApprovedPrompt(

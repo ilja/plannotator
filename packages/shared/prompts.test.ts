@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mergePromptConfig } from "./config";
+import { FEEDBACK_DISCUSSION_INSTRUCTION } from "./feedback-templates";
 import {
   DEFAULT_ANNOTATE_APPROVED_PROMPT,
   DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT,
@@ -97,13 +98,13 @@ describe("getReviewDeniedSuffix", () => {
     for (const runtime of runtimes) {
       expect(getReviewDeniedSuffix(runtime, {})).toBe(DEFAULT_REVIEW_DENIED_SUFFIX);
     }
-    expect(DEFAULT_REVIEW_DENIED_SUFFIX).toContain("Do not change any code until we've discussed");
+    expect(DEFAULT_REVIEW_DENIED_SUFFIX).toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
   });
 
-  test("uses configured override", () => {
+  test("keeps the discussion instruction when using a configured override", () => {
     expect(getReviewDeniedSuffix("claude-code", {
       prompts: { review: { denied: "\nFix everything." } },
-    })).toBe("\nFix everything.");
+    })).toBe(`\nFix everything.\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 });
 
@@ -134,7 +135,7 @@ describe("getAnnotateFileFeedbackPrompt", () => {
     const result = getAnnotateFileFeedbackPrompt("opencode", {
       prompts: { annotate: { fileFeedback: "Review {{filePath}}: {{feedback}}" } },
     }, { filePath: "x.ts", feedback: "fix it" });
-    expect(result).toBe("Review x.ts: fix it");
+    expect(result).toBe(`Review x.ts: fix it\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
   test("runtime-specific override wins over generic", () => {
@@ -146,7 +147,7 @@ describe("getAnnotateFileFeedbackPrompt", () => {
         },
       },
     }, { feedback: "note" });
-    expect(result).toBe("Pi: note");
+    expect(result).toBe(`Pi: note\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 });
 
@@ -159,13 +160,14 @@ describe("getAnnotateMessageFeedbackPrompt", () => {
     const result = getAnnotateMessageFeedbackPrompt("pi", {}, { feedback: "Wrong output" });
     expect(result).toContain("Message Annotations");
     expect(result).toContain("Wrong output");
+    expect(result).toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
   });
 
-  test("uses configured override", () => {
+  test("keeps the discussion instruction when using a configured override", () => {
     const result = getAnnotateMessageFeedbackPrompt("pi", {
       prompts: { annotate: { messageFeedback: "Notes: {{feedback}}" } },
     }, { feedback: "fix" });
-    expect(result).toBe("Notes: fix");
+    expect(result).toBe(`Notes: fix\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 });
 

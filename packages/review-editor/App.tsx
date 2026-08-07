@@ -62,6 +62,7 @@ import { usePRSession, type PRSessionUpdate } from './hooks/usePRSession';
 import { useAnnotationFactory } from './hooks/useAnnotationFactory';
 import { DEMO_DIFF } from './demoData';
 import { exportReviewFeedback } from './utils/exportFeedback';
+import { buildReviewFeedbackAnnotations } from './utils/reviewFeedbackAnnotations';
 import { parseDiffToFiles } from './utils/diffParser';
 import { ReviewSubmissionDialog, buildReviewSubmission, type ReviewSubmission, type SubmissionTarget } from './components/ReviewSubmissionDialog';
 import { ReviewStateProvider, type ReviewState } from './dock/ReviewStateContext';
@@ -1664,7 +1665,7 @@ const ReviewApp: React.FC = () => {
           draftGeneration: getDraftGeneration(),
           approved: false,
           feedback: feedbackMarkdown,
-          annotations: allAnnotations,
+          annotations: buildReviewFeedbackAnnotations(allAnnotations, editorAnnotations),
         }),
       });
       if (res.ok) {
@@ -1678,7 +1679,7 @@ const ReviewApp: React.FC = () => {
       setTimeout(() => setCopyFeedback(null), 2000);
       setIsSendingFeedback(false);
     }
-  }, [totalAnnotationCount, feedbackMarkdown, allAnnotations, getDraftGeneration]);
+  }, [totalAnnotationCount, feedbackMarkdown, allAnnotations, editorAnnotations, getDraftGeneration]);
 
   // Exit review session without sending any feedback
   const handleExit = useCallback(async () => {

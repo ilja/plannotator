@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { FEEDBACK_DISCUSSION_INSTRUCTION } from "./feedback-templates";
 
 const TEST_HOME = join(tmpdir(), `prompts-integration-test-${Date.now()}`);
 const CONFIG_DIR = join(TEST_HOME, ".plannotator");
@@ -79,7 +80,7 @@ describe("prompts integration (config from disk)", () => {
       console.log(JSON.stringify(getReviewDeniedSuffix("pi")));
     `);
 
-    expect(JSON.parse(result)).toBe("\n\nFix everything now.");
+    expect(JSON.parse(result)).toBe(`\n\nFix everything now.\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
   test("annotate file feedback reads override from config.json", async () => {
@@ -100,7 +101,7 @@ describe("prompts integration (config from disk)", () => {
       }));
     `);
 
-    expect(result).toBe("# Notes\n\nsrc/app.ts: Fix line 10");
+    expect(result).toBe(`# Notes\n\nsrc/app.ts: Fix line 10\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
   test("annotate file feedback reads runtime-specific override", async () => {
@@ -121,7 +122,7 @@ describe("prompts integration (config from disk)", () => {
         fileHeader: "File", filePath: "x.ts", feedback: "fix",
       }));
     `);
-    expect(pi).toBe("Pi: x.ts — fix");
+    expect(pi).toBe(`Pi: x.ts — fix\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
 
     const opencode = await runScript(`
       import { getAnnotateFileFeedbackPrompt } from "./packages/shared/prompts";
@@ -129,7 +130,7 @@ describe("prompts integration (config from disk)", () => {
         fileHeader: "File", filePath: "x.ts", feedback: "fix",
       }));
     `);
-    expect(opencode).toBe("Generic: fix");
+    expect(opencode).toBe(`Generic: fix\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
   test("annotate message feedback reads override from config.json", async () => {
@@ -148,7 +149,7 @@ describe("prompts integration (config from disk)", () => {
       }));
     `);
 
-    expect(result).toBe("Message review:\n\nWrong output");
+    expect(result).toBe(`Message review:\n\nWrong output\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
   test("annotate approved reads override from config.json", async () => {

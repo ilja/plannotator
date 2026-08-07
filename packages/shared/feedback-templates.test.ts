@@ -3,6 +3,8 @@ import {
   annotateFileFeedback,
   annotateMessageFeedback,
   annotationFeedback,
+  appendFeedbackDiscussionInstruction,
+  FEEDBACK_DISCUSSION_INSTRUCTION,
 } from "./feedback-templates";
 
 describe("feedback-templates", () => {
@@ -20,6 +22,30 @@ describe("feedback-templates", () => {
 
     expect(result).toContain("Annotation feedback requested.");
     expect(result).toBe(result.trimEnd());
+  });
+
+  test("annotation feedback tells the agent to discuss unclear feedback first", () => {
+    const results = [
+      annotationFeedback("Review this."),
+      annotateFileFeedback("Review this.", { filePath: "/repo/README.md" }),
+      annotateMessageFeedback("Review this."),
+    ];
+
+    for (const result of results) {
+      expect(result).toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
+    }
+
+    const instruction = results[0];
+    expect(instruction).toContain("If any comment contains a question or is ambiguous, do not make any changes, including changes requested by clear comments.");
+    expect(instruction).toContain("Discuss the unclear comments with me and wait for my response.");
+    expect(instruction).toContain("Only start making changes after we have reached a shared understanding of every comment.");
+    expect(instruction).toContain("If no comment contains a question and none is ambiguous, apply the feedback.");
+  });
+
+  test("does not duplicate the discussion instruction", () => {
+    const prompt = `Base prompt\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`;
+
+    expect(appendFeedbackDiscussionInstruction(prompt)).toBe(prompt);
   });
 
   test("annotate file feedback mirrors the runtime file prompt shape", () => {
