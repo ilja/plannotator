@@ -19,7 +19,8 @@ import { act } from 'react';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { useAnnotationDraft, type DraftEditedDocument, type DraftSavedFileChange } from './hooks/useAnnotationDraft';
+import { useAnnotationDraft } from './hooks/useAnnotationDraft';
+import type { SourceBackedDocumentDraftData, SourceBackedSavedFileChangeDraftData } from '../shared/draft';
 import { AnnotationType, type Annotation } from './types';
 import { saveDraft, loadDraft, deleteDraft, contentHash, getDraftGeneration } from '../shared/draft';
 
@@ -95,7 +96,7 @@ const SOURCE_SAVE = {
   eol: 'lf',
 } as const;
 
-const SAVED_FILE_CHANGE: DraftSavedFileChange = {
+const SAVED_FILE_CHANGE: SourceBackedSavedFileChangeDraftData = {
   key: 'file:/repo/docs/a.md',
   path: '/repo/docs/a.md',
   basename: 'a.md',
@@ -350,7 +351,7 @@ describe('direct-edit draft persistence', () => {
   });
 
   test.skipIf(!hasDom)('dirty source drafts carry their already-saved edit context', async () => {
-    const dirtyWithSavedChange: DraftEditedDocument = {
+    const dirtyWithSavedChange: SourceBackedDocumentDraftData = {
       key: SAVED_FILE_CHANGE.key,
       sourceSave: SOURCE_SAVE,
       sessionOpenText: SAVED_FILE_CHANGE.beforeText,
@@ -375,6 +376,32 @@ describe('direct-edit draft persistence', () => {
 
     expect(restored!.editedDocuments).toEqual([dirtyWithSavedChange]);
     expect(restored!.savedFileChanges).toEqual([SAVED_FILE_CHANGE]);
+    await s2.unmount();
+  });
+
+  test.skipIf(!hasDom)('missing source state survives draft serialization and restoration', async () => {
+    const missingDraft: SourceBackedDocumentDraftData = {
+      key: SAVED_FILE_CHANGE.key,
+      sourceSave: SOURCE_SAVE,
+      sessionOpenText: SAVED_FILE_CHANGE.beforeText,
+      diskBaseline: SAVED_FILE_CHANGE.afterText,
+      currentText: 'after\nlocal work\n',
+      missingOnDisk: true,
+    };
+    const s1 = await mountSession(options({ getEditedDocuments: () => [missingDraft] }));
+    act(() => s1.result.current!.scheduleDraftSave());
+    await tick(DEBOUNCE_WAIT_MS);
+    await s1.unmount();
+
+    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    expect(onDisk?.editedDocuments).toEqual([missingDraft]);
+
+    const s2 = await mountSession(options());
+    let restored: ReturnType<HookResult['restoreDraft']>;
+    act(() => {
+      restored = s2.result.current!.restoreDraft();
+    });
+    expect(restored!.editedDocuments).toEqual([missingDraft]);
     await s2.unmount();
   });
 
@@ -467,7 +494,7 @@ describe('direct-edit draft persistence', () => {
   });
 
   test.skipIf(!hasDom)('clearing saved file changes deletes an edits-only draft', async () => {
-    const saved: { value: DraftSavedFileChange[] } = { value: [SAVED_FILE_CHANGE] };
+    const saved: { value: SourceBackedSavedFileChangeDraftData[] } = { value: [SAVED_FILE_CHANGE] };
     const session = await mountSession(options({ getSavedFileChanges: () => saved.value }));
     act(() => session.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);

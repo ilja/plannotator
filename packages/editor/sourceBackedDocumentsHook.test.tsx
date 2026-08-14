@@ -5,6 +5,7 @@ import { act } from 'react';
 import {
   useSourceBackedDocuments,
   type SourceBackedDocumentLifecycleOptions,
+  type SourceBackedSavedFileChangeDraftData,
   type EnabledSourceSaveCapability,
 } from './sourceBackedDocuments';
 
@@ -344,6 +345,26 @@ describe('useSourceBackedDocuments conflict actions', () => {
     await session.unmount();
   });
 
+  test.skipIf(!hasDom)('missing source state is retained in dirty draft projections', async () => {
+    const session = await mountSourceBackedDocuments({
+      readSourceDocument: async () => ({ status: 'missing' }),
+    });
+
+    await act(async () => {
+      session.current().openSourceBackedDocument({ key: KEY, text: 'a\n', sourceSave: SOURCE_A });
+      session.current().updateSourceBackedDocumentText(KEY, 'local\n');
+      await session.current().reconcileSourceBackedDocuments();
+    });
+
+    expect(session.current().getSourceBackedDraftDocuments()).toEqual([expect.objectContaining({
+      key: KEY,
+      currentText: 'local\n',
+      missingOnDisk: true,
+    })]);
+
+    await session.unmount();
+  });
+
   test.skipIf(!hasDom)('saving a missing source file clears missing state', async () => {
     const session = await mountSourceBackedDocuments({
       readSourceDocument: async () => ({ status: 'missing' }),
@@ -390,6 +411,55 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('useSourceBackedDocuments lifecycle commands', () => {
+  test.skipIf(!hasDom)('validates saved changes through the lifecycle probe adapter', async () => {
+    const change = (key: string, path: string, overrides: Partial<SourceBackedSavedFileChangeDraftData> = {}): SourceBackedSavedFileChangeDraftData => ({
+      key,
+      path,
+      basename: `${key}.md`,
+      beforeText: 'before\n',
+      afterText: 'after\n',
+      afterHash: SOURCE_A.hash,
+      sourceSave: SOURCE_A,
+      ...overrides,
+    });
+    const refreshedSource = { ...SOURCE_A, mtimeMs: 4000, size: 7 };
+    const externalSource = { ...SOURCE_A, hash: 'sha256:external', mtimeMs: 5000 };
+    const fresh = change('fresh', '/repo/docs/fresh.md', { afterHash: undefined });
+    const stale = change('stale', '/repo/docs/stale.md');
+    const missing = change('missing', '/repo/docs/missing.md');
+    const noop = change('noop', '/repo/docs/noop.md', { beforeText: 'after\n' });
+    const unavailable = change('unavailable', '/repo/docs/unavailable.md');
+    const probed: string[] = [];
+    const session = await mountSourceBackedDocuments({
+      probeSourceSave: async (path) => {
+        probed.push(path);
+        if (path.endsWith('fresh.md')) return { status: 'ok', sourceSave: refreshedSource };
+        if (path.endsWith('stale.md')) return { status: 'ok', sourceSave: externalSource };
+        if (path.endsWith('missing.md')) return { status: 'missing' };
+        if (path.endsWith('unavailable.md')) return { status: 'unavailable' };
+        return { status: 'ok', sourceSave: SOURCE_A };
+      },
+    });
+
+    let result: Awaited<ReturnType<SourceBackedDocumentsApi['validateSourceBackedSavedFileChanges']>>;
+    await act(async () => {
+      result = await session.current().validateSourceBackedSavedFileChanges([fresh, stale, missing, noop, unavailable]);
+    });
+
+    expect(result!).toEqual({
+      valid: [{ ...fresh, sourceSave: refreshedSource, afterHash: refreshedSource.hash }],
+      dropped: [
+        { change: stale, reason: 'changed' },
+        { change: missing, reason: 'missing' },
+        { change: noop, reason: 'noop' },
+      ],
+      unverified: [unavailable],
+    });
+    expect(probed).toEqual([fresh.path, stale.path, missing.path, unavailable.path]);
+
+    await session.unmount();
+  });
+
   test.skipIf(!hasDom)('returns applied, unavailable, and ignored read outcomes', async () => {
     const firstRead = deferred<Awaited<ReturnType<NonNullable<SourceBackedDocumentLifecycleOptions['readSourceDocument']>>>>();
     const reads = [
@@ -419,11 +489,12 @@ describe('useSourceBackedDocuments lifecycle commands', () => {
     await act(async () => {
       session.current().updateSourceBackedDocumentText(KEY, 'local\n');
     });
+    const beforeUnavailable = session.current().getSourceBackedDocument(KEY);
     const unavailable = session.current().reconcileSourceBackedDocuments();
     let unavailableOutcomes: Awaited<typeof unavailable> = [];
     await act(async () => { unavailableOutcomes = await unavailable; });
     expect(unavailableOutcomes).toEqual([{ type: 'disk-observation-unavailable', key: KEY }]);
-    expect(session.current().getSourceBackedDocument(KEY)?.currentText).toBe('local\n');
+    expect(session.current().getSourceBackedDocument(KEY)).toEqual(beforeUnavailable);
 
     const staleRead = deferred<Awaited<ReturnType<NonNullable<SourceBackedDocumentLifecycleOptions['readSourceDocument']>>>>();
     reads.push(staleRead.promise);
@@ -431,10 +502,12 @@ describe('useSourceBackedDocuments lifecycle commands', () => {
     await act(async () => {
       await session.current().saveSourceBackedDocument({ key: KEY, text: 'b\n' });
     });
+    const afterSave = session.current().getSourceBackedDocument(KEY);
     staleRead.resolve({ status: 'ok', snapshot: { markdown: 'old\n', sourceSave: SOURCE_EXTERNAL } });
     let staleOutcomes: Awaited<typeof staleReconcile> = [];
     await act(async () => { staleOutcomes = await staleReconcile; });
     expect(staleOutcomes).toEqual([expect.objectContaining({ type: 'disk-observation-ignored', reason: 'known-disk-hash-changed' })]);
+    expect(session.current().getSourceBackedDocument(KEY)).toEqual(afterSave);
 
     await session.unmount();
   });
@@ -619,6 +692,37 @@ describe('useSourceBackedDocuments lifecycle commands', () => {
     expect(outcome).toEqual(expect.objectContaining({ type: 'save-disk-update-applied', previousText: 'a\n' }));
     expect(session.current().getSourceBackedDocument(KEY)?.currentText).toBe('external\n');
     expect(session.current().getSourceBackedDocument(KEY)?.diskConflict).toBeUndefined();
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('uses the Save conflict snapshot without reading the document again', async () => {
+    let readCount = 0;
+    const session = await mountSourceBackedDocuments({
+      readSourceDocument: async () => {
+        readCount += 1;
+        return { status: 'unavailable' };
+      },
+      saveSourceDocument: async () => ({
+        status: 'conflict',
+        message: 'changed',
+        snapshot: { text: 'external\n', hash: 'sha256:external', mtimeMs: 5000, size: 9, eol: 'lf' },
+      }),
+    });
+
+    await act(async () => {
+      session.current().openSourceBackedDocument({ key: KEY, text: 'a\n', sourceSave: SOURCE_A });
+      session.current().updateSourceBackedDocumentText(KEY, 'local\n');
+    });
+
+    let outcome: Awaited<ReturnType<SourceBackedDocumentsApi['saveSourceBackedDocument']>>;
+    await act(async () => {
+      outcome = await session.current().saveSourceBackedDocument({ key: KEY, text: 'local\n' });
+    });
+
+    expect(outcome).toEqual(expect.objectContaining({ type: 'save-conflict' }));
+    expect(readCount).toBe(0);
+    expect(session.current().getSourceBackedDocument(KEY)?.diskConflict?.text).toBe('external\n');
 
     await session.unmount();
   });

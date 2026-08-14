@@ -15,34 +15,16 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { SourceSaveCapability } from '@plannotator/shared/source-save';
+import type {
+  SourceBackedDocumentDraftData,
+  SourceBackedDraftSourceSaveCapability,
+  SourceBackedSavedFileChangeDraftData,
+} from '@plannotator/shared/draft';
 import type { Annotation, CodeAnnotation, ImageAttachment } from '../types';
 import { fromShareable, parseShareableImages } from '../utils/sharing';
 import type { ShareableAnnotation } from '../utils/sharing';
 
 const DEBOUNCE_MS = 500;
-
-type DraftSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
-
-export interface DraftEditedDocument {
-  key: string;
-  sourceSave: DraftSourceSaveCapability;
-  sessionOpenText: string;
-  diskBaseline: string;
-  currentText: string;
-  savedChange?: DraftSavedFileChange;
-}
-
-export interface DraftSavedFileChange {
-  key: string;
-  path: string;
-  basename: string;
-  beforeText: string;
-  afterText: string;
-  beforeHash?: string;
-  afterHash?: string;
-  sourceSave: DraftSourceSaveCapability;
-}
 
 /** New format: full objects. */
 interface DraftData {
@@ -53,9 +35,9 @@ interface DraftData {
       as-submitted baseline ('' is a real value: a committed emptied doc). */
   editedMarkdown?: string;
   /** Source-backed direct edits for folder/single-file annotate sessions. */
-  editedDocuments?: DraftEditedDocument[];
+  editedDocuments?: SourceBackedDocumentDraftData[];
   /** Source-backed edits that were already saved to disk but not sent yet. */
-  savedFileChanges?: DraftSavedFileChange[];
+  savedFileChanges?: SourceBackedSavedFileChangeDraftData[];
   /** Client-side generation used to ignore stale saves after a draft delete. */
   draftGeneration?: number;
   ts: number;
@@ -78,40 +60,42 @@ function isLegacyDraft(data: unknown): data is LegacyDraftData {
   return !!data && typeof data === 'object' && 'a' in data && Array.isArray((data as LegacyDraftData).a);
 }
 
-function parseDraftEditedDocument(value: unknown): DraftEditedDocument | null {
+function parseSourceBackedDocumentDraft(value: unknown): SourceBackedDocumentDraftData | null {
   if (!value || typeof value !== 'object') return null;
-  const doc = value as Partial<DraftEditedDocument>;
-  const sourceSave = doc.sourceSave as Partial<DraftSourceSaveCapability> | undefined;
+  const doc = value as Partial<SourceBackedDocumentDraftData>;
+  const sourceSave = doc.sourceSave as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
   if (!(
     typeof doc.key === 'string' &&
     typeof doc.sessionOpenText === 'string' &&
     typeof doc.diskBaseline === 'string' &&
     typeof doc.currentText === 'string' &&
+    (doc.missingOnDisk === undefined || typeof doc.missingOnDisk === 'boolean') &&
     isDraftSourceSaveCapability(sourceSave)
   )) {
     return null;
   }
-  const savedChange = parseDraftSavedFileChange(doc.savedChange, sourceSave);
+  const savedChange = parseSourceBackedSavedFileChange(doc.savedChange, sourceSave);
   return {
     key: doc.key,
     sourceSave,
     sessionOpenText: doc.sessionOpenText,
     diskBaseline: doc.diskBaseline,
     currentText: doc.currentText,
+    ...(doc.missingOnDisk ? { missingOnDisk: true } : {}),
     ...(savedChange ? { savedChange } : {}),
   };
 }
 
-function isDraftSavedFileChange(value: unknown): value is DraftSavedFileChange {
-  return parseDraftSavedFileChange(value) !== null;
+function isSourceBackedSavedFileChange(value: unknown): value is SourceBackedSavedFileChangeDraftData {
+  return parseSourceBackedSavedFileChange(value) !== null;
 }
 
-function parseDraftSavedFileChange(
+function parseSourceBackedSavedFileChange(
   value: unknown,
-  fallbackSourceSave?: DraftSourceSaveCapability,
-): DraftSavedFileChange | null {
+  fallbackSourceSave?: SourceBackedDraftSourceSaveCapability,
+): SourceBackedSavedFileChangeDraftData | null {
   if (!value || typeof value !== 'object') return null;
-  const change = value as Partial<DraftSavedFileChange>;
+  const change = value as Partial<SourceBackedSavedFileChangeDraftData>;
   if (!(
     typeof change.key === 'string' &&
     typeof change.path === 'string' &&
@@ -139,8 +123,8 @@ function parseDraftSavedFileChange(
   };
 }
 
-function isDraftSourceSaveCapability(value: unknown): value is DraftSourceSaveCapability {
-  const sourceSave = value as Partial<DraftSourceSaveCapability> | undefined;
+function isDraftSourceSaveCapability(value: unknown): value is SourceBackedDraftSourceSaveCapability {
+  const sourceSave = value as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
   return (
     !!sourceSave &&
     sourceSave.enabled === true &&
@@ -176,9 +160,9 @@ interface UseAnnotationDraftOptions {
       document matches the as-submitted baseline. Read at save time. */
   getEditedMarkdown?: () => string | null;
   /** Current dirty source-backed documents. Read at save time. */
-  getEditedDocuments?: () => DraftEditedDocument[];
+  getEditedDocuments?: () => SourceBackedDocumentDraftData[];
   /** Current saved source-backed edits. Read at save time. */
-  getSavedFileChanges?: () => DraftSavedFileChange[];
+  getSavedFileChanges?: () => SourceBackedSavedFileChangeDraftData[];
   isApiMode: boolean;
   isSharedSession: boolean;
   submitted: boolean;
@@ -189,8 +173,8 @@ interface RestoredDraft {
   codeAnnotations: CodeAnnotation[];
   globalAttachments: ImageAttachment[];
   editedMarkdown: string | null;
-  editedDocuments: DraftEditedDocument[];
-  savedFileChanges: DraftSavedFileChange[];
+  editedDocuments: SourceBackedDocumentDraftData[];
+  savedFileChanges: SourceBackedSavedFileChangeDraftData[];
 }
 
 interface UseAnnotationDraftResult {
@@ -288,12 +272,12 @@ export function useAnnotationDraft({
         const restoredEditedDocuments =
           !isLegacyDraft(data) && Array.isArray((data as DraftData).editedDocuments)
             ? (data as DraftData).editedDocuments!
-                .map(parseDraftEditedDocument)
-                .filter((doc): doc is DraftEditedDocument => doc !== null)
+                .map(parseSourceBackedDocumentDraft)
+                .filter((doc): doc is SourceBackedDocumentDraftData => doc !== null)
             : [];
         const restoredSavedFileChanges =
           !isLegacyDraft(data) && Array.isArray((data as DraftData).savedFileChanges)
-            ? (data as DraftData).savedFileChanges!.filter(isDraftSavedFileChange)
+            ? (data as DraftData).savedFileChanges!.filter(isSourceBackedSavedFileChange)
             : [];
 
         const totalCount = restoredAnnotations.length + restoredCodeAnnotations.length + restoredGlobal.length;

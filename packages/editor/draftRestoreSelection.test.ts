@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import type { DraftEditedDocument } from '@plannotator/ui/hooks/useAnnotationDraft';
+import type { SourceBackedDocumentDraftData } from './sourceBackedDocuments';
 import { pickRestoredSingleFileDraftToDisplay } from './draftRestoreSelection';
 
-function draft(key: string, scope: 'single-file' | 'folder-file' = 'single-file'): DraftEditedDocument {
+function draft(key: string, scope: 'single-file' | 'folder-file' = 'single-file'): SourceBackedDocumentDraftData {
   return {
     key,
     sourceSave: {

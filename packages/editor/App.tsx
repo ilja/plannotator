@@ -55,7 +55,7 @@ import { deriveImageName } from '@plannotator/ui/components/AttachmentsButton';
 import { useSidebar, type SidebarTab } from '@plannotator/ui/hooks/useSidebar';
 import { useLinkedDoc, type LinkedDocSessionState } from '@plannotator/ui/hooks/useLinkedDoc';
 import { useCodeFilePopout } from '@plannotator/ui/hooks/useCodeFilePopout';
-import { useAnnotationDraft, type DraftEditedDocument, type DraftSavedFileChange } from '@plannotator/ui/hooks/useAnnotationDraft';
+import { useAnnotationDraft } from '@plannotator/ui/hooks/useAnnotationDraft';
 import { useEditorAnnotations } from '@plannotator/ui/hooks/useEditorAnnotations';
 import { useExternalAnnotations } from '@plannotator/ui/hooks/useExternalAnnotations';
 import { useExternalAnnotationHighlights } from '@plannotator/ui/hooks/useExternalAnnotationHighlights';
@@ -101,15 +101,13 @@ import {
 } from './directEdits';
 import {
   sourceBackedDocumentKey,
+  sourceBackedLinkedDocumentKey,
   useSourceBackedDocuments,
   type EnabledSourceSaveCapability,
+  type SourceBackedDocumentDraftData,
   type SourceBackedSavedFileChangeDraftData,
   type SourceBackedDocumentLifecycleOutcome,
 } from './sourceBackedDocuments';
-import {
-  validateSavedFileChanges,
-} from './savedFileChangeValidation';
-import { probeSourceSave } from './sourceDocumentClient';
 import { createSourceDocumentWatch } from './sourceDocumentWatch';
 import { dirnameBrowserPath, normalizeBrowserPath, pathIsInsideDir } from './sourceDocumentPaths';
 import { pickRestoredSingleFileDraftToDisplay } from './draftRestoreSelection';
@@ -611,7 +609,8 @@ const App: React.FC = () => {
   }, [activeSourceBackedDocument, displayedMarkdown, sourceBackedDocuments, isEditingMarkdown]);
 
   const getLinkedDocumentMarkdown = useCallback((filepath: string, fallback?: string) => {
-    return sourceBackedDocuments.getSourceBackedDocumentText(`file:${filepath}`) ?? fallback;
+    const record = sourceBackedDocuments.getSourceBackedDocument(`file:${filepath}`);
+    return record?.sourceSave?.enabled ? record.currentText : fallback;
   }, [sourceBackedDocuments]);
 
   const restoreLinkedDocumentSourceBackedKey = useCallback(() => {
@@ -634,8 +633,13 @@ const App: React.FC = () => {
       return undefined;
     }
 
-    const sourceSave = doc.sourceSave ?? null;
-    const key = sourceBackedDocumentKey(sourceSave, `file:${doc.filepath}`);
+    const key = sourceBackedLinkedDocumentKey(doc.sourceSave, doc.filepath);
+    if (!key || !doc.sourceSave?.enabled) {
+      setActiveSourceDocumentKey(null);
+      return undefined;
+    }
+
+    const sourceSave = doc.sourceSave;
     sourceBackedDocuments.openSourceBackedDocument({ key, text: doc.markdown, sourceSave });
     setActiveSourceDocumentKey(key);
     const currentText = sourceBackedDocuments.getSourceBackedDocumentText(key) ?? doc.markdown;
@@ -1493,17 +1497,11 @@ const App: React.FC = () => {
   // and the baseline exists. Edits flow through the same helpers
   // commitMarkdownEdits uses, with the RESTORED annotations remapped against
   // the edited document (they aren't in state yet when the remap runs).
-  const resolveSavedFileChangeSource = useCallback((
-    change: SourceBackedSavedFileChangeDraftData,
-  ) => {
-    return probeSourceSave(change.path);
-  }, []);
-
   const validateDraftSavedFileChanges = useCallback(async (
     changes: SourceBackedSavedFileChangeDraftData[],
   ): Promise<{ kept: SourceBackedSavedFileChangeDraftData[]; changedOrMissing: SourceBackedSavedFileChangeDraftData[]; unverified: SourceBackedSavedFileChangeDraftData[] }> => {
     if (changes.length === 0) return { kept: [], changedOrMissing: [], unverified: [] };
-    const result = await validateSavedFileChanges(changes, resolveSavedFileChangeSource);
+    const result = await sourceBackedDocuments.validateSourceBackedSavedFileChanges(changes);
     const changedOrMissing = result.dropped
       .filter((entry) => entry.reason === 'changed' || entry.reason === 'missing')
       .map((entry) => entry.change);
@@ -1526,7 +1524,7 @@ const App: React.FC = () => {
       changedOrMissing,
       unverified: result.unverified,
     };
-  }, [resolveSavedFileChangeSource]);
+  }, [sourceBackedDocuments]);
 
   const handleRestoreDraft = React.useCallback(async () => {
     const {
@@ -1551,7 +1549,7 @@ const App: React.FC = () => {
     const validSavedChangeByKey = new Map(validatedSaved.kept.map((change) => [change.key, change]));
     const editedDocumentKeys = new Set(editedDocuments.map((doc) => doc.key));
     const cleanSavedFileChanges = validatedSaved.kept.filter((change) => !editedDocumentKeys.has(change.key));
-    const editedDocumentsForRestore: DraftEditedDocument[] = editedDocuments.map((doc) =>
+    const editedDocumentsForRestore: SourceBackedDocumentDraftData[] = editedDocuments.map((doc) =>
       doc.savedChange
         ? { ...doc, savedChange: validSavedChangeByKey.get(doc.savedChange.key) }
         : doc
@@ -1726,14 +1724,8 @@ const App: React.FC = () => {
     [sourceBackedDocuments, sourceBackedDocuments.version],
   );
   const savedFileChangesForValidation = useMemo(() => {
-    const sourceByKey = new Map(openSourceDocuments.map((doc) => [doc.key, doc.sourceSave]));
-    return savedFileChanges
-      .map((change): SourceBackedSavedFileChangeDraftData | null => {
-        const sourceSave = sourceByKey.get(change.key);
-        return sourceSave ? { ...change, sourceSave } : null;
-      })
-      .filter((change): change is SourceBackedSavedFileChangeDraftData => change !== null);
-  }, [openSourceDocuments, savedFileChanges]);
+    return sourceBackedDocuments.getSourceBackedSavedFileChangesForValidation();
+  }, [sourceBackedDocuments, sourceBackedDocuments.version]);
   const activeSourceSave = activeSourceBackedDocument?.sourceSave?.enabled
     ? activeSourceBackedDocument.sourceSave
     : null;
@@ -1866,7 +1858,7 @@ const App: React.FC = () => {
 
   const validateSavedFileChangesBeforeSubmit = useCallback(async (): Promise<SourceBackedSavedFileChangeDraftData[] | null> => {
     if (savedFileChangesForValidation.length === 0) return [];
-    const result = await validateSavedFileChanges(savedFileChangesForValidation, resolveSavedFileChangeSource);
+    const result = await sourceBackedDocuments.validateSourceBackedSavedFileChanges(savedFileChangesForValidation);
     const stale = result.dropped.filter((entry) => entry.reason === 'changed' || entry.reason === 'missing');
 
     if (stale.length > 0) {
@@ -1886,7 +1878,7 @@ const App: React.FC = () => {
     }
 
     return result.valid;
-  }, [sourceBackedDocuments, resolveSavedFileChangeSource, savedFileChangesForValidation, scheduleDraftSave]);
+  }, [sourceBackedDocuments, savedFileChangesForValidation, scheduleDraftSave]);
 
   const handleSourceBackedDocumentLifecycleOutcome = useCallback((outcome: SourceBackedDocumentLifecycleOutcome) => {
     if (outcome.type === 'missing-file') {

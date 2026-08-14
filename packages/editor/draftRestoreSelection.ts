@@ -1,10 +1,10 @@
-import type { DraftEditedDocument } from '@plannotator/ui/hooks/useAnnotationDraft';
+import type { SourceBackedDocumentDraftData } from './sourceBackedDocuments';
 
 export function pickRestoredSingleFileDraftToDisplay(
-  documents: DraftEditedDocument[],
+  documents: SourceBackedDocumentDraftData[],
   restoredKeys: string[],
   activeKey: string | null,
-): DraftEditedDocument | undefined {
+): SourceBackedDocumentDraftData | undefined {
   const restored = documents.filter((doc) =>
     doc.sourceSave.scope === 'single-file' && restoredKeys.includes(doc.key)
   );

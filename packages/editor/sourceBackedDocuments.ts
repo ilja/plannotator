@@ -1,13 +1,24 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import type {
+  SourceBackedDocumentDraftData,
+  SourceBackedSavedFileChangeDraftData,
+} from '@plannotator/shared/draft';
 import type { SourceSaveCapability } from '@plannotator/shared/source-save';
 import { pathIsInsideDir } from '@plannotator/shared/browser-paths';
 import {
   fetchSourceDocumentSnapshot,
+  probeSourceSave,
   saveSourceDocument,
   type SourceDocumentSaveRequest,
   type SourceDocumentSaveResult,
   type SourceDocumentSnapshotResult,
+  type SourceSaveProbeResult,
 } from './sourceDocumentClient';
+
+export type {
+  SourceBackedDocumentDraftData,
+  SourceBackedSavedFileChangeDraftData,
+} from '@plannotator/shared/draft';
 
 export type EnabledSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
 
@@ -53,19 +64,6 @@ export interface SourceBackedDocumentStatus {
   conflict: boolean;
 }
 
-export interface SourceBackedDocumentDraftData {
-  key: string;
-  sourceSave: EnabledSourceSaveCapability;
-  sessionOpenText: string;
-  diskBaseline: string;
-  currentText: string;
-  savedChange?: SourceBackedSavedFileChangeDraftData;
-}
-
-export interface SourceBackedSavedFileChangeDraftData extends SourceBackedSavedFileChange {
-  sourceSave: EnabledSourceSaveCapability;
-}
-
 interface OpenSourceBackedDocumentInput {
   key: string;
   text: string;
@@ -100,6 +98,7 @@ interface UpdateSourceBackedDocumentTextOptions {
 /** Read and Save capabilities injected into the source-backed document lifecycle. */
 export interface SourceBackedDocumentLifecycleAdapters {
   readSourceDocument: (path: string) => Promise<SourceDocumentSnapshotResult>;
+  probeSourceSave: (path: string) => Promise<SourceSaveProbeResult>;
   saveSourceDocument: (input: SourceDocumentSaveRequest) => Promise<SourceDocumentSaveResult>;
 }
 
@@ -223,6 +222,13 @@ export function sourceBackedDocumentKey(sourceSave: SourceSaveCapability | null 
   return sourceSave?.enabled ? `file:${sourceSave.path}` : fallback;
 }
 
+export function sourceBackedLinkedDocumentKey(
+  sourceSave: SourceSaveCapability | null | undefined,
+  filepath: string,
+): string | null {
+  return sourceSave?.enabled ? sourceBackedDocumentKey(sourceSave, `file:${filepath}`) : null;
+}
+
 export function getSourceBackedDocumentKnownDiskHash(record: SourceBackedDocumentRecord | null | undefined): string | undefined {
   return record?.diskConflict?.sourceSave.hash
     ?? (record?.sourceSave?.enabled ? record.sourceSave.hash : record?.lastKnownHash);
@@ -256,6 +262,51 @@ export function canRestoreSourceBackedDocumentDraft(
     !record.diskConflict &&
     !record.missingOnDisk
   );
+}
+
+interface SourceBackedSavedFileChangeValidationResult {
+  valid: SourceBackedSavedFileChangeDraftData[];
+  dropped: Array<{ change: SourceBackedSavedFileChangeDraftData; reason: 'changed' | 'missing' | 'noop' }>;
+  unverified: SourceBackedSavedFileChangeDraftData[];
+}
+
+async function validateSourceBackedSavedFileChanges(
+  changes: SourceBackedSavedFileChangeDraftData[],
+  resolveSourceSave: (change: SourceBackedSavedFileChangeDraftData) => Promise<SourceSaveProbeResult>,
+): Promise<SourceBackedSavedFileChangeValidationResult> {
+  const valid: SourceBackedSavedFileChangeDraftData[] = [];
+  const dropped: SourceBackedSavedFileChangeValidationResult['dropped'] = [];
+  const unverified: SourceBackedSavedFileChangeDraftData[] = [];
+
+  for (const change of changes) {
+    if (change.beforeText === change.afterText) {
+      dropped.push({ change, reason: 'noop' });
+      continue;
+    }
+
+    const expectedHash = change.afterHash ?? change.sourceSave.hash;
+    const probe = await resolveSourceSave(change);
+    if (probe.status === 'unavailable') {
+      unverified.push(change);
+      continue;
+    }
+    if (probe.status === 'missing') {
+      dropped.push({ change, reason: 'missing' });
+      continue;
+    }
+    if (probe.sourceSave.hash !== expectedHash) {
+      dropped.push({ change, reason: 'changed' });
+      continue;
+    }
+
+    valid.push({
+      ...change,
+      sourceSave: probe.sourceSave,
+      afterHash: probe.sourceSave.hash,
+    });
+  }
+
+  return { valid, dropped, unverified };
 }
 
 export function markSourceBackedDocumentSaved(record: SourceBackedDocumentRecord, input: SourceBackedDocumentSaveInput): void {
@@ -386,6 +437,7 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
   const reconcileSequenceRef = useRef<Map<string, number>>(new Map());
   const [version, setVersion] = useState(0);
   const readSourceDocument = options.readSourceDocument ?? fetchSourceDocumentSnapshot;
+  const probeSourceSaveAdapter = options.probeSourceSave ?? probeSourceSave;
   const saveSourceDocumentAdapter = options.saveSourceDocument ?? saveSourceDocument;
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -593,9 +645,10 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
         diskBaseline,
         currentText,
         editMountText: currentText,
-        saveStatus: currentText === diskBaseline ? 'clean' : 'dirty',
+        saveStatus: doc.missingOnDisk ? 'missing' : currentText === diskBaseline ? 'clean' : 'dirty',
         lastKnownHash: doc.sourceSave.hash,
         lastKnownMtimeMs: doc.sourceSave.mtimeMs,
+        ...(doc.missingOnDisk ? { missingOnDisk: true } : {}),
         savedChange,
       });
       restoredKeys.push(doc.key);
@@ -644,6 +697,15 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
 
     bump();
   }, [bump]);
+
+  const validateSourceBackedSavedFileChangesForLifecycle = useCallback(async (
+    changes: SourceBackedSavedFileChangeDraftData[],
+  ): Promise<SourceBackedSavedFileChangeValidationResult> => {
+    return validateSourceBackedSavedFileChanges(
+      changes,
+      (change) => probeSourceSaveAdapter(change.path),
+    );
+  }, [probeSourceSaveAdapter]);
 
   const markSourceBackedDocumentMissing = useCallback((key: string): { record: SourceBackedDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean } | null => {
     const result = markSourceBackedDocumentFileMissing(docsRef.current.get(key));
@@ -845,6 +907,7 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
         sessionOpenText: record.sessionOpenText,
         diskBaseline: record.diskBaseline,
         currentText: record.currentText,
+        ...(record.missingOnDisk ? { missingOnDisk: true } : {}),
         savedChange: record.savedChange ? { ...record.savedChange, sourceSave: record.sourceSave } : undefined,
       }));
   }, []);
@@ -853,6 +916,17 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
     return Array.from(docsRef.current.values())
       .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability; savedChange: SourceBackedSavedFileChange } =>
         record.sourceSave?.enabled === true && !!record.savedChange && !recordIsDirty(record)
+      )
+      .map((record) => ({
+        ...record.savedChange,
+        sourceSave: record.sourceSave,
+      }));
+  }, []);
+
+  const getSourceBackedSavedFileChangesForValidation = useCallback((): SourceBackedSavedFileChangeDraftData[] => {
+    return Array.from(docsRef.current.values())
+      .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability; savedChange: SourceBackedSavedFileChange } =>
+        record.sourceSave?.enabled === true && !!record.savedChange
       )
       .map((record) => ({
         ...record.savedChange,
@@ -900,10 +974,12 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
     clearSourceBackedSavedFileChanges,
     restoreSourceBackedDraftDocuments,
     restoreSourceBackedSavedFileChanges,
+    validateSourceBackedSavedFileChanges: validateSourceBackedSavedFileChangesForLifecycle,
     getUnsavedSourceBackedDocuments,
     getSourceBackedSavedFileChanges,
     getSourceBackedDraftDocuments,
     getSourceBackedDraftSavedFileChanges,
+    getSourceBackedSavedFileChangesForValidation,
     getSourceBackedDocuments,
   };
 }

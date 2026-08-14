@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { disabledSourceSave } from '@plannotator/shared/source-save';
 import {
   canApplySourceBackedDocumentDiskSnapshot,
   canRestoreSourceBackedDocumentDraft,
@@ -6,6 +7,7 @@ import {
   markSourceBackedDocumentSaved,
   markSourceBackedDocumentFileMissing,
   reconcileSourceBackedDocumentDiskSnapshot,
+  sourceBackedLinkedDocumentKey,
   type SourceBackedDocumentRecord,
   type EnabledSourceSaveCapability,
 } from './sourceBackedDocuments';
@@ -52,6 +54,17 @@ function record(overrides: Partial<SourceBackedDocumentRecord> = {}): SourceBack
     ...overrides,
   };
 }
+
+describe('sourceBackedLinkedDocumentKey', () => {
+  test('enrolls enabled linked documents in the lifecycle collection', () => {
+    expect(sourceBackedLinkedDocumentKey(sourceSave('sha256:after'), '/repo/docs/a.md')).toBe('file:/repo/docs/a.md');
+  });
+
+  test('keeps absent or disabled linked documents on the markdown cache path', () => {
+    expect(sourceBackedLinkedDocumentKey(undefined, '/repo/docs/a.md')).toBeNull();
+    expect(sourceBackedLinkedDocumentKey(disabledSourceSave('unsupported-extension'), '/repo/docs/a.md')).toBeNull();
+  });
+});
 
 describe('reconcileSourceBackedDocumentDiskSnapshot', () => {
   test('known disk hash follows an active disk-conflict snapshot', () => {
