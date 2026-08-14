@@ -71,9 +71,7 @@ import { CodeFilePopout, type CodeFileAnnotationInput } from '@plannotator/ui/co
 import type { AIContext } from '@plannotator/ai';
 import type { CommentAskAIContext } from '@plannotator/ui/components/CommentPopover';
 import {
-  hasSourceSaveConflictSnapshot,
   type SourceSaveCapability,
-  type SourceSaveResponse,
 } from '@plannotator/shared/source-save';
 import type { AgentTerminalCapability } from '@plannotator/shared/agent-terminal';
 import { DEMO_PLAN_CONTENT } from './demoPlan';
@@ -106,12 +104,13 @@ import {
   useSourceBackedDocuments,
   type EnabledSourceSaveCapability,
   type SourceBackedSavedFileChangeDraftData,
+  type SourceBackedDocumentLifecycleOutcome,
 } from './sourceBackedDocuments';
 import {
   validateSavedFileChanges,
 } from './savedFileChangeValidation';
-import { fetchSourceDocumentSnapshot, probeSourceSave } from './sourceDocumentClient';
-import { reconcileSourceDocuments, type SourceDocumentReconcileEvent } from './sourceDocumentReconciliation';
+import { probeSourceSave } from './sourceDocumentClient';
+import { createSourceDocumentWatch } from './sourceDocumentWatch';
 import { dirnameBrowserPath, normalizeBrowserPath, pathIsInsideDir } from './sourceDocumentPaths';
 import { pickRestoredSingleFileDraftToDisplay } from './draftRestoreSelection';
 
@@ -1442,8 +1441,9 @@ const App: React.FC = () => {
     if (sourceKey && !targetRecord?.sourceSave?.enabled) return;
 
     if (targetKey && targetRecord?.sourceSave?.enabled) {
-      const discarded = sourceBackedDocuments.discardSourceBackedDocument(targetKey);
-      if (!discarded) return;
+      const outcome = sourceBackedDocuments.discardSourceBackedDocumentEdits(targetKey);
+      if (outcome.type !== 'document-discarded') return;
+      const discarded = outcome.record;
       if (!targetIsActive) {
         scheduleDraftSave();
         return;
@@ -1888,78 +1888,69 @@ const App: React.FC = () => {
     return result.valid;
   }, [sourceBackedDocuments, resolveSavedFileChangeSource, savedFileChangesForValidation, scheduleDraftSave]);
 
-  const sourceReconcileSeqRef = useRef<Map<string, number>>(new Map());
+  const handleSourceBackedDocumentLifecycleOutcome = useCallback((outcome: SourceBackedDocumentLifecycleOutcome) => {
+    if (outcome.type === 'missing-file') {
+      if (!outcome.alreadyMissing && outcome.record.key === activeSourceDocumentKeyRef.current) {
+        setEditorDiffersFromBaseline(outcome.record.currentText !== outcome.record.diskBaseline);
+        if (isEditingMarkdownRef.current) {
+          setEditorDirty(outcome.record.currentText !== editSessionBaseRef.current);
+          setEditStats(
+            outcome.record.currentText !== outcome.record.diskBaseline
+              ? computeEditStats(outcome.record.diskBaseline, outcome.record.currentText)
+              : null,
+          );
+        }
+        toast('File no longer exists on disk', {
+          description: `Save ${outcome.record.basename} to recreate it.`,
+          duration: 5000,
+        });
+      }
+      return;
+    }
 
-  const reconcileOpenSourceDocuments = useCallback(async (changedDir?: string) => {
+    if (outcome.type === 'disk-update-applied') {
+      if (outcome.record.key === activeSourceDocumentKeyRef.current) {
+        const remapped = applyEditedDocument(outcome.record.currentText);
+        repaintHighlights(remapped);
+        editSessionBaseRef.current = outcome.record.currentText;
+        setEditorDirty(false);
+        setEditorDiffersFromBaseline(false);
+        setEditStats(null);
+      }
+      if (outcome.clearedSavedChange) {
+        toast('File updated from disk', {
+          description: `${outcome.record.basename} changed outside Plannotator, so its old Edits card was cleared.`,
+        });
+      }
+      return;
+    }
+
+    if (outcome.type === 'disk-conflict-applied' && outcome.record.key === activeSourceDocumentKeyRef.current) {
+      setEditorDirty(true);
+      setEditorDiffersFromBaseline(true);
+      setEditStats(computeEditStats(outcome.record.diskBaseline, outcome.record.currentText));
+      toast.error('File changed on disk', {
+        description: 'Choose whether to overwrite disk or reload the file.',
+      });
+    }
+  }, [applyEditedDocument, repaintHighlights]);
+
+  const runSourceBackedDocumentReconciliation = useCallback(async (changedDir?: string) => {
     const activeKey = activeSourceDocumentKeyRef.current;
     if (isEditingMarkdownRef.current && activeKey) {
       const live = markdownEditorHandleRef.current?.getMarkdown();
       if (live != null) sourceBackedDocuments.updateSourceBackedDocumentText(activeKey, live, { forceNotify: true });
     }
-
-    const handleReconcileEvent = (event: SourceDocumentReconcileEvent) => {
-      const { result } = event;
-      if (event.type === 'file-missing') {
-        if (!result.alreadyMissing && result.record.key === activeSourceDocumentKeyRef.current) {
-          setEditorDiffersFromBaseline(result.record.currentText !== result.record.diskBaseline);
-          if (isEditingMarkdownRef.current) {
-            setEditorDirty(result.record.currentText !== editSessionBaseRef.current);
-            setEditStats(
-              result.record.currentText !== result.record.diskBaseline
-                ? computeEditStats(result.record.diskBaseline, result.record.currentText)
-                : null,
-            );
-          }
-          toast('File no longer exists on disk', {
-            description: `Save ${result.record.basename} to recreate it.`,
-            duration: 5000,
-          });
-        }
-        return;
-      }
-
-      if (event.type === 'clean-updated') {
-        if (result.record.key === activeSourceDocumentKeyRef.current) {
-          const remapped = applyEditedDocument(result.record.currentText);
-          repaintHighlights(remapped);
-          editSessionBaseRef.current = result.record.currentText;
-          setEditorDirty(false);
-          setEditorDiffersFromBaseline(false);
-          setEditStats(null);
-        }
-        if (result.clearedSavedChange) {
-          toast('File updated from disk', {
-            description: `${result.record.basename} changed outside Plannotator, so its old Edits card was cleared.`,
-          });
-        }
-      } else if (event.type === 'conflict') {
-        if (result.record.key === activeSourceDocumentKeyRef.current) {
-          setEditorDirty(true);
-          setEditorDiffersFromBaseline(true);
-          setEditStats(computeEditStats(result.record.diskBaseline, result.record.currentText));
-          toast.error('File changed on disk', {
-            description: 'Choose whether to overwrite disk or reload the file.',
-          });
-        }
-      }
-    };
-
-    const changed = await reconcileSourceDocuments({
-      changedDir,
-      documents: sourceBackedDocuments.getSourceBackedDocuments(),
-      sequenceByKey: sourceReconcileSeqRef.current,
-      getSourceBackedDocument: sourceBackedDocuments.getSourceBackedDocument,
-      fetchSnapshot: fetchSourceDocumentSnapshot,
-      markSourceBackedDocumentFileMissing: sourceBackedDocuments.markSourceBackedDocumentMissing,
-      reconcileDiskSnapshot: sourceBackedDocuments.reconcileDiskSnapshot,
-      onEvent: handleReconcileEvent,
-    });
-    if (changed) scheduleDraftSave();
-  }, [applyEditedDocument, sourceBackedDocuments, repaintHighlights, scheduleDraftSave]);
-  const reconcileOpenSourceDocumentsRef = useRef(reconcileOpenSourceDocuments);
+    const outcomes = await sourceBackedDocuments.reconcileSourceBackedDocuments(changedDir);
+    for (const outcome of outcomes) handleSourceBackedDocumentLifecycleOutcome(outcome);
+    if (outcomes.some((outcome) => ['disk-update-applied', 'disk-status-updated', 'disk-conflict-applied', 'missing-file'].includes(outcome.type))) {
+      scheduleDraftSave();
+    }
+  }, [handleSourceBackedDocumentLifecycleOutcome, sourceBackedDocuments, scheduleDraftSave]);
+  const sourceBackedDocumentReconciliationRef = useRef(runSourceBackedDocumentReconciliation);
   useEffect(() => {
-    reconcileOpenSourceDocumentsRef.current = reconcileOpenSourceDocuments;
-  }, [reconcileOpenSourceDocuments]);
+    sourceBackedDocumentReconciliationRef.current = runSourceBackedDocumentReconciliation;
+  }, [runSourceBackedDocumentReconciliation]);
 
   const sourceWatchDirsKey = useMemo(() => {
     const dirs = new Set<string>();
@@ -1968,43 +1959,11 @@ const App: React.FC = () => {
   }, [openSourceDocuments]);
 
   useEffect(() => {
-    if (!sourceWatchDirsKey || typeof EventSource === 'undefined') return;
-
-    const dirs = sourceWatchDirsKey.split('\n').filter(Boolean);
-    const timers = new Map<string, ReturnType<typeof setTimeout>>();
-    const params = new URLSearchParams();
-    for (const dir of dirs) params.append('dirPath', dir);
-    const source = new EventSource(`/api/reference/files/stream?${params.toString()}`);
-
-    const schedule = (dir?: string) => {
-      const key = dir ?? '*';
-      const existing = timers.get(key);
-      if (existing) clearTimeout(existing);
-      timers.set(key, setTimeout(() => {
-        timers.delete(key);
-        void reconcileOpenSourceDocumentsRef.current(dir);
-      }, 120));
-    };
-
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as { type?: string; dirPath?: string };
-        const dir = typeof data.dirPath === 'string' && dirs.includes(data.dirPath) ? data.dirPath : undefined;
-        if (data.type === 'ready') {
-          schedule(dir);
-          return;
-        }
-        if (data.type !== 'changed') return;
-        schedule(dir);
-      } catch {
-        return;
-      }
-    };
-
-    return () => {
-      for (const timer of timers.values()) clearTimeout(timer);
-      source.close();
-    };
+    if (!sourceWatchDirsKey) return;
+    return createSourceDocumentWatch({
+      directories: sourceWatchDirsKey.split('\n').filter(Boolean),
+      onReconcile: (changedDir) => sourceBackedDocumentReconciliationRef.current(changedDir),
+    });
   }, [sourceWatchDirsKey]);
 
   const handleEditorModeChange = (mode: EditorMode) => {
@@ -3011,118 +2970,62 @@ const App: React.FC = () => {
       return true;
     }
 
-    if (activeDocument.diskConflict && !options?.overwriteDiskConflict) {
-      toast.error('Resolve the disk conflict first', {
-        description: 'Choose Overwrite disk or Reload from disk.',
-      });
-      return true;
-    }
-
-    const saveBaseSource = options?.overwriteDiskConflict && activeDocument.diskConflict
-      ? activeDocument.diskConflict.sourceSave
-      : activeSourceSave;
-    const savedChangeBaseText = options?.overwriteDiskConflict
-      ? activeDocument.diskConflict?.text
-      : undefined;
-    const savedChangeBaseHash = options?.overwriteDiskConflict
-      ? activeDocument.diskConflict?.sourceSave.hash
-      : undefined;
-
-    sourceBackedDocuments.updateSourceBackedDocumentText(activeDocument.key, edited);
-    sourceBackedDocuments.markSourceBackedDocumentSaving(activeDocument.key);
+    const savedChangedFromOpen = edited.replace(/\r\n?/g, '\n') !== activeDocument.sessionOpenText;
     try {
-      const res = await fetch('/api/source/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: saveBaseSource.scope === 'folder-file' ? saveBaseSource.path : undefined,
-          text: edited,
-          baseHash: saveBaseSource.hash,
-          baseMtimeMs: saveBaseSource.mtimeMs,
-          baseEol: saveBaseSource.eol,
-          allowMissingBase: true,
-        }),
+      const outcome = await sourceBackedDocuments.saveSourceBackedDocument({
+        key: activeDocument.key,
+        text: edited,
+        overwriteDiskConflict: options?.overwriteDiskConflict,
       });
-      const data = (await res.json()) as SourceSaveResponse;
-
-      if (!res.ok || !data.ok) {
-        const message = !data.ok ? data.message : 'Save failed';
-        if (!data.ok && data.code === 'conflict') {
-          const hasConflictSnapshot = hasSourceSaveConflictSnapshot(data);
-          if (hasConflictSnapshot) {
-            const conflictSourceSave: EnabledSourceSaveCapability = {
-              ...saveBaseSource,
-              hash: data.currentHash,
-              mtimeMs: data.currentMtimeMs,
-              size: data.currentSize,
-              eol: data.currentEol,
-            };
-            const result = sourceBackedDocuments.reconcileDiskSnapshot({
-              key: activeDocument.key,
-              text: data.currentText,
-              sourceSave: conflictSourceSave,
-            });
-            if (result.type === 'conflict' && activeSourceDocumentKeyRef.current === activeDocument.key) {
-              setEditorDirty(true);
-              setEditorDiffersFromBaseline(true);
-              setEditStats(computeEditStats(result.record.diskBaseline, result.record.currentText));
-              scheduleDraftSave();
-              toast.error('File changed on disk', {
-                description: 'Choose whether to overwrite disk or reload the file.',
-              });
-            } else if (result.type === 'conflict') {
-              scheduleDraftSave();
-              toast.error('File changed on disk', {
-                description: 'Choose whether to overwrite disk or reload the file.',
-              });
-            } else if (result.type === 'clean-updated') {
-              if (activeSourceDocumentKeyRef.current === activeDocument.key) {
-                const remapped = applyEditedDocument(result.record.currentText);
-                repaintHighlights(remapped);
-                editSessionBaseRef.current = result.record.currentText;
-                setEditorDirty(false);
-                setEditorDiffersFromBaseline(false);
-                setEditStats(null);
-              }
-              scheduleDraftSave();
-              toast('File updated from disk', {
-                description: `${result.record.basename} changed outside Plannotator, so it was reloaded instead of saved.`,
-              });
-            } else if (!sourceBackedDocuments.getSourceBackedDocument(activeDocument.key)?.diskConflict) {
-              sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, message);
-              toast.error('File changed on disk', {
-                description: 'Plannotator could not load the latest disk version. Try saving again.',
-              });
-            }
-          } else {
-            sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, message);
-            toast.error('File changed on disk', {
-              description: 'Plannotator could not load the latest disk version. Try saving again.',
-            });
-          }
-        } else {
-          sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, message);
-          toast.error(message);
-        }
+      if (!outcome || outcome.type === 'save-blocked-conflict') {
+        toast.error('Resolve the disk conflict first', {
+          description: 'Choose Overwrite disk or Reload from disk.',
+        });
         return true;
       }
 
-      const nextSourceSave = {
-        ...saveBaseSource,
-        hash: data.hash,
-        mtimeMs: data.mtimeMs,
-        size: data.size,
-        eol: data.eol,
-      };
-      sourceBackedDocuments.saveSourceBackedDocument({
-        key: activeDocument.key,
-        text: edited,
-        sourceSave: nextSourceSave,
-        savedChangeBaseText,
-        savedChangeBaseHash,
-      });
+      if (outcome.type === 'save-conflict') {
+        if (activeSourceDocumentKeyRef.current === activeDocument.key) {
+          setEditorDirty(true);
+          setEditorDiffersFromBaseline(true);
+          setEditStats(computeEditStats(outcome.record.diskBaseline, outcome.record.currentText));
+        }
+        scheduleDraftSave();
+        toast.error('File changed on disk', {
+          description: 'Choose whether to overwrite disk or reload the file.',
+        });
+        return true;
+      }
+
+      if (outcome.type === 'save-disk-update-applied') {
+        if (activeSourceDocumentKeyRef.current === activeDocument.key) {
+          const remapped = applyEditedDocument(outcome.record.currentText);
+          repaintHighlights(remapped);
+          editSessionBaseRef.current = outcome.record.currentText;
+          setEditorDirty(false);
+          setEditorDiffersFromBaseline(false);
+          setEditStats(null);
+        }
+        scheduleDraftSave();
+        toast('File updated from disk', {
+          description: `${outcome.record.basename} changed outside Plannotator, so it was reloaded instead of saved.`,
+        });
+        return true;
+      }
+
+      if (outcome.type === 'save-error') {
+        if (outcome.reason === 'conflict-snapshot-unavailable') {
+          toast.error('File changed on disk', {
+            description: 'Plannotator could not load the latest disk version. Try saving again.',
+          });
+          return true;
+        }
+        toast.error(outcome.message);
+        return true;
+      }
+
+      if (outcome.type !== 'save-succeeded') return true;
       const normalizedEdited = edited.replace(/\r\n?/g, '\n');
-      const savedChangedFromOpen = normalizedEdited !== activeDocument.sessionOpenText;
       editedMarkdownRef.current = null;
       if (activeSourceDocumentKeyRef.current === activeDocument.key) {
         const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
@@ -3145,10 +3048,9 @@ const App: React.FC = () => {
         setIsPanelOpen(true);
       }
       scheduleDraftSave();
-      toast.success(`Saved ${activeSourceSave.basename}`);
+      toast.success(`Saved ${outcome.record.basename}`);
       return true;
     } catch {
-      sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, 'Save failed');
       toast.error('Save failed');
       return true;
     }
@@ -3161,16 +3063,16 @@ const App: React.FC = () => {
   const handleReloadDiskConflict = useCallback(() => {
     const activeDocument = activeSourceBackedDocument;
     if (!activeDocument?.diskConflict) return;
-    const reloaded = sourceBackedDocuments.reloadSourceBackedDocumentConflict(activeDocument.key);
-    if (!reloaded) return;
-    const remapped = applyEditedDocument(reloaded.currentText);
+    const outcome = sourceBackedDocuments.reloadSourceBackedDocument(activeDocument.key);
+    if (outcome.type !== 'document-reloaded') return;
+    const remapped = applyEditedDocument(outcome.record.currentText);
     repaintHighlights(remapped);
-    editSessionBaseRef.current = reloaded.currentText;
+    editSessionBaseRef.current = outcome.record.currentText;
     setEditorDirty(false);
     setEditorDiffersFromBaseline(false);
     setEditStats(null);
     scheduleDraftSave();
-    toast.success(`Reloaded ${reloaded.basename} from disk`);
+    toast.success(`Reloaded ${outcome.record.basename} from disk`);
   }, [activeSourceBackedDocument, applyEditedDocument, sourceBackedDocuments, repaintHighlights, scheduleDraftSave]);
 
   const handleCopyShareLink = async () => {

@@ -1,5 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { SourceSaveCapability } from '@plannotator/shared/source-save';
+import { pathIsInsideDir } from '@plannotator/shared/browser-paths';
+import {
+  fetchSourceDocumentSnapshot,
+  saveSourceDocument,
+  type SourceDocumentSaveRequest,
+  type SourceDocumentSaveResult,
+  type SourceDocumentSnapshotResult,
+} from './sourceDocumentClient';
 
 export type EnabledSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
 
@@ -72,6 +80,13 @@ export interface SourceBackedDocumentSaveInput {
   savedChangeBaseHash?: string;
 }
 
+/** A lifecycle Save command; the lifecycle resolves the disk baseline and conflict base. */
+export interface SourceBackedDocumentSaveCommand {
+  key: string;
+  text: string;
+  overwriteDiskConflict?: boolean;
+}
+
 export interface SourceBackedDocumentDiskSnapshotInput {
   key: string;
   text: string;
@@ -81,6 +96,97 @@ export interface SourceBackedDocumentDiskSnapshotInput {
 interface UpdateSourceBackedDocumentTextOptions {
   forceNotify?: boolean;
 }
+
+/** Read and Save capabilities injected into the source-backed document lifecycle. */
+export interface SourceBackedDocumentLifecycleAdapters {
+  readSourceDocument: (path: string) => Promise<SourceDocumentSnapshotResult>;
+  saveSourceDocument: (input: SourceDocumentSaveRequest) => Promise<SourceDocumentSaveResult>;
+}
+
+/** Options for source-backed document lifecycle commands. */
+export type SourceBackedDocumentLifecycleOptions = Partial<SourceBackedDocumentLifecycleAdapters>;
+
+/** Structured result of a source-backed document lifecycle command. */
+export type SourceBackedDocumentLifecycleOutcome =
+  | {
+      type: 'disk-update-applied';
+      record: SourceBackedDocumentRecord;
+      previousText: string;
+      clearedSavedChange: boolean;
+    }
+  | {
+      type: 'disk-status-updated';
+      record: SourceBackedDocumentRecord;
+    }
+  | {
+      type: 'disk-conflict-applied';
+      record: SourceBackedDocumentRecord;
+    }
+  | {
+      type: 'missing-file';
+      record: SourceBackedDocumentRecord;
+      clearedSavedChange: boolean;
+      alreadyMissing: boolean;
+    }
+  | {
+      type: 'disk-observation-unavailable';
+      key: string;
+    }
+  | {
+      type: 'disk-observation-unchanged';
+      key: string;
+      record: SourceBackedDocumentRecord;
+    }
+  | {
+      type: 'disk-observation-ignored';
+      key: string;
+      reason: 'stale-sequence' | 'known-disk-hash-changed' | 'record-missing' | 'saving';
+    }
+  | {
+      type: 'save-succeeded';
+      record: SourceBackedDocumentRecord;
+    }
+  | {
+      type: 'save-conflict';
+      record: SourceBackedDocumentRecord;
+      message: string;
+    }
+  | {
+      type: 'save-disk-update-applied';
+      record: SourceBackedDocumentRecord;
+      previousText: string;
+    }
+  | {
+      type: 'save-error';
+      record: SourceBackedDocumentRecord | null;
+      reason: 'conflict-snapshot-unavailable' | 'write-failed';
+      message: string;
+    }
+  | {
+      type: 'save-blocked-conflict';
+      record: SourceBackedDocumentRecord;
+    }
+  | {
+      type: 'save-command-ignored';
+      key: string;
+      reason: 'saving';
+    }
+  | {
+      type: 'document-reloaded';
+      record: SourceBackedDocumentRecord;
+      previousText: string;
+    }
+  | {
+      type: 'document-discarded';
+      record: SourceBackedDocumentRecord;
+      previousText: string;
+      removed: boolean;
+    }
+  | {
+      type: 'document-command-ignored';
+      key: string;
+      reason: 'record-missing' | 'no-conflict' | 'not-dirty';
+    };
 
 function normalizeDocumentText(text: string): string {
   return text.replace(/\r\n?/g, '\n');
@@ -275,9 +381,12 @@ export function markSourceBackedDocumentFileMissing(
   return { type: 'file-missing', record, clearedSavedChange, alreadyMissing };
 }
 
-export function useSourceBackedDocuments() {
+export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleOptions = {}) {
   const docsRef = useRef<Map<string, SourceBackedDocumentRecord>>(new Map());
+  const reconcileSequenceRef = useRef<Map<string, number>>(new Map());
   const [version, setVersion] = useState(0);
+  const readSourceDocument = options.readSourceDocument ?? fetchSourceDocumentSnapshot;
+  const saveSourceDocumentAdapter = options.saveSourceDocument ?? saveSourceDocument;
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -358,34 +467,6 @@ export function useSourceBackedDocuments() {
     if (previousStatus !== record.saveStatus || (options?.forceNotify && previousText !== normalized)) bump();
   }, [bump]);
 
-  const markSourceBackedDocumentSaving = useCallback((key: string) => {
-    const record = docsRef.current.get(key);
-    if (!record) return;
-    record.saveStatus = 'saving';
-    record.error = undefined;
-    bump();
-  }, [bump]);
-
-  const saveSourceBackedDocument = useCallback(({ key, text, sourceSave, savedChangeBaseText, savedChangeBaseHash }: SourceBackedDocumentSaveInput) => {
-    const record = docsRef.current.get(key);
-    if (!record) return;
-    markSourceBackedDocumentSaved(record, { key, text, sourceSave, savedChangeBaseText, savedChangeBaseHash });
-    bump();
-  }, [bump]);
-
-  const markSourceBackedDocumentError = useCallback((key: string, message: string) => {
-    const record = docsRef.current.get(key);
-    if (!record) return;
-    record.saveStatus = 'error';
-    record.error = message;
-    bump();
-  }, [bump]);
-
-  const clearSourceBackedDocument = useCallback((key: string) => {
-    docsRef.current.delete(key);
-    bump();
-  }, [bump]);
-
   const discardSourceBackedDocument = useCallback((key: string): SourceBackedDocumentRecord | null => {
     const record = docsRef.current.get(key);
     if (!record) return null;
@@ -436,6 +517,31 @@ export function useSourceBackedDocuments() {
     bump();
     return reloaded;
   }, [bump]);
+
+  const reloadSourceBackedDocument = useCallback((key: string): SourceBackedDocumentLifecycleOutcome => {
+    const before = docsRef.current.get(key)?.currentText;
+    const record = reloadSourceBackedDocumentConflict(key);
+    if (!record || before === undefined) return { type: 'document-command-ignored', key, reason: 'no-conflict' };
+    return { type: 'document-reloaded', record, previousText: before };
+  }, [reloadSourceBackedDocumentConflict]);
+
+  const discardSourceBackedDocumentEdits = useCallback((key: string): SourceBackedDocumentLifecycleOutcome => {
+    const before = docsRef.current.get(key)?.currentText;
+    const discarded = discardSourceBackedDocument(key);
+    if (!discarded || before === undefined) {
+      return {
+        type: 'document-command-ignored',
+        key,
+        reason: docsRef.current.has(key) ? 'not-dirty' : 'record-missing',
+      };
+    }
+    return {
+      type: 'document-discarded',
+      record: discarded,
+      previousText: before,
+      removed: discarded.missingOnDisk === true,
+    };
+  }, [discardSourceBackedDocument]);
 
   const clearSourceBackedSavedFileChanges = useCallback((keys: Iterable<string>) => {
     let changed = false;
@@ -546,6 +652,176 @@ export function useSourceBackedDocuments() {
     return { record: cloneRecord(result.record), clearedSavedChange: result.clearedSavedChange, alreadyMissing: result.alreadyMissing };
   }, [bump]);
 
+  const reconcileSourceBackedDocuments = useCallback(async (changedDir?: string): Promise<SourceBackedDocumentLifecycleOutcome[]> => {
+    const documents = Array.from(docsRef.current.values())
+      .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability } =>
+        record.sourceSave?.enabled === true && (!changedDir || pathIsInsideDir(record.sourceSave.path, changedDir))
+      )
+      .map(cloneRecord);
+    const outcomes: SourceBackedDocumentLifecycleOutcome[] = [];
+
+    for (const document of documents) {
+      const startRecord = docsRef.current.get(document.key);
+      if (!startRecord) {
+        outcomes.push({ type: 'disk-observation-ignored', key: document.key, reason: 'record-missing' });
+        continue;
+      }
+      if (startRecord.saveStatus === 'saving') {
+        outcomes.push({ type: 'disk-observation-ignored', key: document.key, reason: 'saving' });
+        continue;
+      }
+
+      const expectedDiskHash = getSourceBackedDocumentKnownDiskHash(startRecord);
+      const sequence = (reconcileSequenceRef.current.get(document.key) ?? 0) + 1;
+      reconcileSequenceRef.current.set(document.key, sequence);
+      let snapshotResult: SourceDocumentSnapshotResult;
+      try {
+        snapshotResult = await readSourceDocument(document.sourceSave.path);
+      } catch {
+        snapshotResult = { status: 'unavailable' };
+      }
+
+      if (reconcileSequenceRef.current.get(document.key) !== sequence) {
+        outcomes.push({ type: 'disk-observation-ignored', key: document.key, reason: 'stale-sequence' });
+        continue;
+      }
+
+      const currentRecord = docsRef.current.get(document.key);
+      if (!currentRecord) {
+        outcomes.push({ type: 'disk-observation-ignored', key: document.key, reason: 'record-missing' });
+        continue;
+      }
+      if (currentRecord.saveStatus === 'saving') {
+        outcomes.push({ type: 'disk-observation-ignored', key: document.key, reason: 'saving' });
+        continue;
+      }
+      if (!canApplySourceBackedDocumentDiskSnapshot(currentRecord, expectedDiskHash)) {
+        outcomes.push({ type: 'disk-observation-ignored', key: document.key, reason: 'known-disk-hash-changed' });
+        continue;
+      }
+      if (snapshotResult.status === 'unavailable') {
+        outcomes.push({ type: 'disk-observation-unavailable', key: document.key });
+        continue;
+      }
+      if (snapshotResult.status === 'missing') {
+        const missing = markSourceBackedDocumentMissing(document.key);
+        if (!missing) {
+          outcomes.push({ type: 'disk-observation-ignored', key: document.key, reason: 'record-missing' });
+          continue;
+        }
+        outcomes.push({ type: 'missing-file', ...missing });
+        continue;
+      }
+
+      const previousText = currentRecord.currentText;
+      const result = reconcileDiskSnapshot({
+        key: document.key,
+        text: snapshotResult.snapshot.markdown,
+        sourceSave: snapshotResult.snapshot.sourceSave,
+      });
+      if (result.type === 'clean-updated') {
+        outcomes.push({ type: 'disk-update-applied', record: result.record, previousText, clearedSavedChange: result.clearedSavedChange });
+      } else if (result.type === 'status-updated') {
+        outcomes.push({ type: 'disk-status-updated', record: result.record });
+      } else if (result.type === 'conflict') {
+        outcomes.push({ type: 'disk-conflict-applied', record: result.record });
+      } else if (result.type === 'unchanged') {
+        outcomes.push({ type: 'disk-observation-unchanged', key: document.key, record: result.record });
+      }
+    }
+
+    return outcomes;
+  }, [bump, markSourceBackedDocumentMissing, readSourceDocument, reconcileDiskSnapshot]);
+
+  const saveSourceBackedDocument = useCallback(async (
+    input: SourceBackedDocumentSaveCommand,
+  ): Promise<SourceBackedDocumentLifecycleOutcome> => {
+    const record = docsRef.current.get(input.key);
+    if (!record?.sourceSave?.enabled) {
+      return {
+        type: 'save-error',
+        record: record ? cloneRecord(record) : null,
+        reason: 'write-failed',
+        message: 'This document cannot be saved to a file',
+      };
+    }
+    if (record.saveStatus === 'saving') {
+      return { type: 'save-command-ignored', key: input.key, reason: 'saving' };
+    }
+    if (record.diskConflict && !input.overwriteDiskConflict) {
+      return { type: 'save-blocked-conflict', record: cloneRecord(record) };
+    }
+
+    const normalizedText = normalizeDocumentText(input.text);
+    record.currentText = normalizedText;
+    const baseSourceSave = input.overwriteDiskConflict && record.diskConflict
+      ? record.diskConflict.sourceSave
+      : record.sourceSave;
+    const savedChangeBaseText = input.overwriteDiskConflict ? record.diskConflict?.text : undefined;
+    const savedChangeBaseHash = input.overwriteDiskConflict ? record.diskConflict?.sourceSave.hash : undefined;
+    record.saveStatus = 'saving';
+    record.error = undefined;
+    bump();
+
+    let saveResult: SourceDocumentSaveResult;
+    try {
+      saveResult = await saveSourceDocumentAdapter({
+        path: baseSourceSave.scope === 'folder-file' ? baseSourceSave.path : undefined,
+        text: normalizedText,
+        baseHash: baseSourceSave.hash,
+        baseMtimeMs: baseSourceSave.mtimeMs,
+        baseEol: baseSourceSave.eol,
+        allowMissingBase: true,
+      });
+    } catch {
+      saveResult = { status: 'error', code: 'unavailable', message: 'Save failed' };
+    }
+
+    if (saveResult.status === 'saved') {
+      markSourceBackedDocumentSaved(record, {
+        key: input.key,
+        text: normalizedText,
+        sourceSave: { ...baseSourceSave, ...saveResult.sourceSave },
+        savedChangeBaseText,
+        savedChangeBaseHash,
+      });
+      bump();
+      return { type: 'save-succeeded', record: cloneRecord(record) };
+    }
+
+    if (saveResult.status === 'conflict') {
+      const previousText = record.currentText;
+      const conflictSourceSave: EnabledSourceSaveCapability = {
+        ...baseSourceSave,
+        hash: saveResult.snapshot.hash,
+        mtimeMs: saveResult.snapshot.mtimeMs,
+        size: saveResult.snapshot.size,
+        eol: saveResult.snapshot.eol,
+      };
+      const conflict = reconcileSourceBackedDocumentDiskSnapshot(record, {
+        key: input.key,
+        text: saveResult.snapshot.text,
+        sourceSave: conflictSourceSave,
+      });
+      if (conflict.type !== 'missing' && conflict.type !== 'unchanged') bump();
+      const current = cloneRecord(record);
+      if (conflict.type === 'clean-updated') {
+        return { type: 'save-disk-update-applied', record: current, previousText };
+      }
+      return { type: 'save-conflict', record: current, message: saveResult.message };
+    }
+
+    record.saveStatus = 'error';
+    record.error = saveResult.message;
+    bump();
+    return {
+      type: 'save-error',
+      record: cloneRecord(record),
+      reason: saveResult.status === 'conflict-incomplete' ? 'conflict-snapshot-unavailable' : 'write-failed',
+      message: saveResult.message,
+    };
+  }, [bump, saveSourceDocumentAdapter]);
+
   const getUnsavedSourceBackedDocuments = useCallback((): SourceBackedDocumentRecord[] => {
     return Array.from(docsRef.current.values())
       .filter((record) => recordIsDirty(record) || !!record.diskConflict)
@@ -617,14 +893,10 @@ export function useSourceBackedDocuments() {
     getSourceBackedDocumentText,
     beginSourceBackedDocumentEdit,
     updateSourceBackedDocumentText,
-    markSourceBackedDocumentSaving,
     saveSourceBackedDocument,
-    markSourceBackedDocumentError,
-    markSourceBackedDocumentMissing,
-    clearSourceBackedDocument,
-    discardSourceBackedDocument,
-    reconcileDiskSnapshot,
-    reloadSourceBackedDocumentConflict,
+    discardSourceBackedDocumentEdits,
+    reconcileSourceBackedDocuments,
+    reloadSourceBackedDocument,
     clearSourceBackedSavedFileChanges,
     restoreSourceBackedDraftDocuments,
     restoreSourceBackedSavedFileChanges,
