@@ -3,9 +3,9 @@ import type { SourceSaveCapability } from '@plannotator/shared/source-save';
 
 export type EnabledSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
 
-export type EditableDocumentSaveStatus = 'clean' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error' | 'missing';
+export type SourceBackedDocumentSaveStatus = 'clean' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error' | 'missing';
 
-export interface SavedFileChange {
+export interface SourceBackedSavedFileChange {
   key: string;
   path: string;
   basename: string;
@@ -15,7 +15,7 @@ export interface SavedFileChange {
   afterHash?: string;
 }
 
-export interface EditableDocumentRecord {
+export interface SourceBackedDocumentRecord {
   key: string;
   path?: string;
   basename: string;
@@ -25,10 +25,10 @@ export interface EditableDocumentRecord {
   diskBaseline: string;
   currentText: string;
   editMountText: string;
-  saveStatus: EditableDocumentSaveStatus;
+  saveStatus: SourceBackedDocumentSaveStatus;
   lastKnownHash?: string;
   lastKnownMtimeMs?: number;
-  savedChange?: SavedFileChange;
+  savedChange?: SourceBackedSavedFileChange;
   missingOnDisk?: boolean;
   diskConflict?: {
     text: string;
@@ -37,34 +37,34 @@ export interface EditableDocumentRecord {
   error?: string;
 }
 
-export interface EditableDocumentStatus {
+export interface SourceBackedDocumentStatus {
   key: string;
   path?: string;
-  status: EditableDocumentSaveStatus;
+  status: SourceBackedDocumentSaveStatus;
   dirty: boolean;
   conflict: boolean;
 }
 
-export interface EditableDocumentDraftData {
+export interface SourceBackedDocumentDraftData {
   key: string;
   sourceSave: EnabledSourceSaveCapability;
   sessionOpenText: string;
   diskBaseline: string;
   currentText: string;
-  savedChange?: SavedFileChangeDraftData;
+  savedChange?: SourceBackedSavedFileChangeDraftData;
 }
 
-export interface SavedFileChangeDraftData extends SavedFileChange {
+export interface SourceBackedSavedFileChangeDraftData extends SourceBackedSavedFileChange {
   sourceSave: EnabledSourceSaveCapability;
 }
 
-interface OpenEditableDocumentInput {
+interface OpenSourceBackedDocumentInput {
   key: string;
   text: string;
   sourceSave: SourceSaveCapability | null;
 }
 
-export interface MarkSavedInput {
+export interface SourceBackedDocumentSaveInput {
   key: string;
   text: string;
   sourceSave: EnabledSourceSaveCapability;
@@ -72,13 +72,13 @@ export interface MarkSavedInput {
   savedChangeBaseHash?: string;
 }
 
-export interface DiskSnapshotInput {
+export interface SourceBackedDocumentDiskSnapshotInput {
   key: string;
   text: string;
   sourceSave: EnabledSourceSaveCapability;
 }
 
-interface UpdateActiveTextOptions {
+interface UpdateSourceBackedDocumentTextOptions {
   forceNotify?: boolean;
 }
 
@@ -92,17 +92,17 @@ function basenameForCapability(sourceSave: SourceSaveCapability | null, fallback
   return normalized.split('/').pop() || fallbackKey;
 }
 
-function recordIsDirty(record: EditableDocumentRecord): boolean {
+function recordIsDirty(record: SourceBackedDocumentRecord): boolean {
   return record.currentText !== record.diskBaseline;
 }
 
-function cleanOrDirty(record: EditableDocumentRecord): EditableDocumentSaveStatus {
+function cleanOrDirty(record: SourceBackedDocumentRecord): SourceBackedDocumentSaveStatus {
   if (record.missingOnDisk) return 'missing';
   if (record.diskConflict) return 'conflict';
   return recordIsDirty(record) ? 'dirty' : 'clean';
 }
 
-function cloneRecord(record: EditableDocumentRecord): EditableDocumentRecord {
+function cloneRecord(record: SourceBackedDocumentRecord): SourceBackedDocumentRecord {
   return {
     ...record,
     sourceSave: record.sourceSave ? { ...record.sourceSave } : null,
@@ -113,28 +113,28 @@ function cloneRecord(record: EditableDocumentRecord): EditableDocumentRecord {
   };
 }
 
-export function editableDocumentKey(sourceSave: SourceSaveCapability | null | undefined, fallback: string): string {
+export function sourceBackedDocumentKey(sourceSave: SourceSaveCapability | null | undefined, fallback: string): string {
   return sourceSave?.enabled ? `file:${sourceSave.path}` : fallback;
 }
 
-export function getEditableDocumentKnownDiskHash(record: EditableDocumentRecord | null | undefined): string | undefined {
+export function getSourceBackedDocumentKnownDiskHash(record: SourceBackedDocumentRecord | null | undefined): string | undefined {
   return record?.diskConflict?.sourceSave.hash
     ?? (record?.sourceSave?.enabled ? record.sourceSave.hash : record?.lastKnownHash);
 }
 
-export function canApplyEditableDocumentDiskSnapshot(
-  record: EditableDocumentRecord | null | undefined,
+export function canApplySourceBackedDocumentDiskSnapshot(
+  record: SourceBackedDocumentRecord | null | undefined,
   expectedDiskHash: string | undefined,
-): record is EditableDocumentRecord & { sourceSave: EnabledSourceSaveCapability } {
+): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability } {
   return (
     record?.sourceSave?.enabled === true &&
     record.saveStatus !== 'saving' &&
-    getEditableDocumentKnownDiskHash(record) === expectedDiskHash
+    getSourceBackedDocumentKnownDiskHash(record) === expectedDiskHash
   );
 }
 
-export function canRestoreEditableDocumentDraft(
-  record: EditableDocumentRecord | null | undefined,
+export function canRestoreSourceBackedDocumentDraft(
+  record: SourceBackedDocumentRecord | null | undefined,
   sourceSave: EnabledSourceSaveCapability,
   diskBaseline: string,
 ): boolean {
@@ -152,7 +152,7 @@ export function canRestoreEditableDocumentDraft(
   );
 }
 
-export function markEditableDocumentSaved(record: EditableDocumentRecord, input: MarkSavedInput): void {
+export function markSourceBackedDocumentSaved(record: SourceBackedDocumentRecord, input: SourceBackedDocumentSaveInput): void {
   const normalized = normalizeDocumentText(input.text);
   const beforeText = normalizeDocumentText(input.savedChangeBaseText ?? record.sessionOpenText);
   const beforeHash = input.savedChangeBaseHash ?? record.sessionOpenHash;
@@ -188,25 +188,25 @@ export function markEditableDocumentSaved(record: EditableDocumentRecord, input:
       };
 }
 
-export type DiskSnapshotReconcileResult =
+export type SourceBackedDocumentDiskSnapshotReconcileResult =
   | { type: 'missing' }
-  | { type: 'unchanged'; record: EditableDocumentRecord }
-  | { type: 'status-updated'; record: EditableDocumentRecord }
-  | { type: 'clean-updated'; record: EditableDocumentRecord; clearedSavedChange: boolean }
-  | { type: 'conflict'; record: EditableDocumentRecord };
+  | { type: 'unchanged'; record: SourceBackedDocumentRecord }
+  | { type: 'status-updated'; record: SourceBackedDocumentRecord }
+  | { type: 'clean-updated'; record: SourceBackedDocumentRecord; clearedSavedChange: boolean }
+  | { type: 'conflict'; record: SourceBackedDocumentRecord };
 
-export type FileMissingReconcileResult =
+export type SourceBackedDocumentFileMissingReconcileResult =
   | { type: 'missing' }
-  | { type: 'file-missing'; record: EditableDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean };
+  | { type: 'file-missing'; record: SourceBackedDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean };
 
-export function reconcileEditableDocumentDiskSnapshot(
-  record: EditableDocumentRecord | undefined,
-  input: DiskSnapshotInput,
-): DiskSnapshotReconcileResult {
+export function reconcileSourceBackedDocumentDiskSnapshot(
+  record: SourceBackedDocumentRecord | undefined,
+  input: SourceBackedDocumentDiskSnapshotInput,
+): SourceBackedDocumentDiskSnapshotReconcileResult {
   if (!record) return { type: 'missing' };
 
   const normalized = normalizeDocumentText(input.text);
-  const previousHash = getEditableDocumentKnownDiskHash(record);
+  const previousHash = getSourceBackedDocumentKnownDiskHash(record);
   const hashChanged = previousHash !== input.sourceSave.hash;
   if (!hashChanged) {
     const wasMissingOnDisk = !!record.missingOnDisk;
@@ -260,9 +260,9 @@ export function reconcileEditableDocumentDiskSnapshot(
   return { type: 'conflict', record };
 }
 
-export function markEditableDocumentFileMissing(
-  record: EditableDocumentRecord | undefined,
-): FileMissingReconcileResult {
+export function markSourceBackedDocumentFileMissing(
+  record: SourceBackedDocumentRecord | undefined,
+): SourceBackedDocumentFileMissingReconcileResult {
   if (!record) return { type: 'missing' };
 
   const clearedSavedChange = !!record.savedChange;
@@ -275,17 +275,15 @@ export function markEditableDocumentFileMissing(
   return { type: 'file-missing', record, clearedSavedChange, alreadyMissing };
 }
 
-export function useEditableDocuments() {
-  const docsRef = useRef<Map<string, EditableDocumentRecord>>(new Map());
-  const activeKeyRef = useRef<string | null>(null);
+export function useSourceBackedDocuments() {
+  const docsRef = useRef<Map<string, SourceBackedDocumentRecord>>(new Map());
   const [version, setVersion] = useState(0);
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
-  const openDocument = useCallback(({ key, text, sourceSave }: OpenEditableDocumentInput) => {
+  const openSourceBackedDocument = useCallback(({ key, text, sourceSave }: OpenSourceBackedDocumentInput) => {
     const normalized = normalizeDocumentText(text);
     const existing = docsRef.current.get(key);
-    activeKeyRef.current = key;
 
     if (!existing) {
       docsRef.current.set(key, {
@@ -307,7 +305,7 @@ export function useEditableDocuments() {
     }
 
     if (sourceSave?.enabled) {
-      reconcileEditableDocumentDiskSnapshot(existing, { key, text: normalized, sourceSave });
+      reconcileSourceBackedDocumentDiskSnapshot(existing, { key, text: normalized, sourceSave });
     } else if (!recordIsDirty(existing) && existing.saveStatus !== 'conflict') {
       existing.sourceSave = sourceSave;
       existing.basename = basenameForCapability(sourceSave, existing.basename);
@@ -327,37 +325,17 @@ export function useEditableDocuments() {
     bump();
   }, [bump]);
 
-  const setActiveKey = useCallback((key: string | null) => {
-    if (activeKeyRef.current === key) return;
-    activeKeyRef.current = key;
-    bump();
-  }, [bump]);
-
-  const getActiveKey = useCallback((): string | null => activeKeyRef.current, []);
-
-  const getDocument = useCallback((key: string): EditableDocumentRecord | null => {
+  const getSourceBackedDocument = useCallback((key: string): SourceBackedDocumentRecord | null => {
     const record = docsRef.current.get(key);
     return record ? cloneRecord(record) : null;
   }, []);
 
-  const getActiveDocument = useCallback((): EditableDocumentRecord | null => {
-    const key = activeKeyRef.current;
-    if (!key) return null;
-    const record = docsRef.current.get(key);
-    return record ? cloneRecord(record) : null;
-  }, []);
-
-  const getActiveDocumentLive = useCallback((): EditableDocumentRecord | null => {
-    const key = activeKeyRef.current;
-    return key ? docsRef.current.get(key) ?? null : null;
-  }, []);
-
-  const getCurrentText = useCallback((key: string): string | null => {
+  const getSourceBackedDocumentText = useCallback((key: string): string | null => {
     return docsRef.current.get(key)?.currentText ?? null;
   }, []);
 
-  const beginEdit = useCallback((text: string) => {
-    const record = getActiveDocumentLive();
+  const beginSourceBackedDocumentEdit = useCallback((key: string, text: string) => {
+    const record = docsRef.current.get(key);
     if (!record) return;
     const normalized = normalizeDocumentText(text);
     record.editMountText = normalized;
@@ -367,10 +345,10 @@ export function useEditableDocuments() {
       record.saveStatus = nextStatus;
       bump();
     }
-  }, [bump, getActiveDocumentLive]);
+  }, [bump]);
 
-  const updateActiveText = useCallback((text: string, options?: UpdateActiveTextOptions) => {
-    const record = getActiveDocumentLive();
+  const updateSourceBackedDocumentText = useCallback((key: string, text: string, options?: UpdateSourceBackedDocumentTextOptions) => {
+    const record = docsRef.current.get(key);
     if (!record) return;
     const normalized = normalizeDocumentText(text);
     const previousStatus = record.saveStatus;
@@ -378,9 +356,9 @@ export function useEditableDocuments() {
     record.currentText = normalized;
     record.saveStatus = previousStatus === 'saving' ? 'saving' : cleanOrDirty(record);
     if (previousStatus !== record.saveStatus || (options?.forceNotify && previousText !== normalized)) bump();
-  }, [bump, getActiveDocumentLive]);
+  }, [bump]);
 
-  const markSaving = useCallback((key: string) => {
+  const markSourceBackedDocumentSaving = useCallback((key: string) => {
     const record = docsRef.current.get(key);
     if (!record) return;
     record.saveStatus = 'saving';
@@ -388,14 +366,14 @@ export function useEditableDocuments() {
     bump();
   }, [bump]);
 
-  const markSaved = useCallback(({ key, text, sourceSave, savedChangeBaseText, savedChangeBaseHash }: MarkSavedInput) => {
+  const saveSourceBackedDocument = useCallback(({ key, text, sourceSave, savedChangeBaseText, savedChangeBaseHash }: SourceBackedDocumentSaveInput) => {
     const record = docsRef.current.get(key);
     if (!record) return;
-    markEditableDocumentSaved(record, { key, text, sourceSave, savedChangeBaseText, savedChangeBaseHash });
+    markSourceBackedDocumentSaved(record, { key, text, sourceSave, savedChangeBaseText, savedChangeBaseHash });
     bump();
   }, [bump]);
 
-  const markError = useCallback((key: string, message: string) => {
+  const markSourceBackedDocumentError = useCallback((key: string, message: string) => {
     const record = docsRef.current.get(key);
     if (!record) return;
     record.saveStatus = 'error';
@@ -403,19 +381,17 @@ export function useEditableDocuments() {
     bump();
   }, [bump]);
 
-  const clearDocument = useCallback((key: string) => {
+  const clearSourceBackedDocument = useCallback((key: string) => {
     docsRef.current.delete(key);
-    if (activeKeyRef.current === key) activeKeyRef.current = null;
     bump();
   }, [bump]);
 
-  const discardDocument = useCallback((key: string): EditableDocumentRecord | null => {
+  const discardSourceBackedDocument = useCallback((key: string): SourceBackedDocumentRecord | null => {
     const record = docsRef.current.get(key);
     if (!record) return null;
     if (record.missingOnDisk) {
       const discarded = cloneRecord(record);
       docsRef.current.delete(key);
-      if (activeKeyRef.current === key) activeKeyRef.current = null;
       bump();
       return discarded;
     }
@@ -429,15 +405,15 @@ export function useEditableDocuments() {
     return discarded;
   }, [bump]);
 
-  const reconcileDiskSnapshot = useCallback((input: DiskSnapshotInput): DiskSnapshotReconcileResult => {
-    const result = reconcileEditableDocumentDiskSnapshot(docsRef.current.get(input.key), input);
+  const reconcileDiskSnapshot = useCallback((input: SourceBackedDocumentDiskSnapshotInput): SourceBackedDocumentDiskSnapshotReconcileResult => {
+    const result = reconcileSourceBackedDocumentDiskSnapshot(docsRef.current.get(input.key), input);
     if (result.type !== 'missing' && result.type !== 'unchanged') bump();
     return result.type === 'missing'
       ? result
-      : { ...result, record: cloneRecord(result.record) } as DiskSnapshotReconcileResult;
+      : { ...result, record: cloneRecord(result.record) } as SourceBackedDocumentDiskSnapshotReconcileResult;
   }, [bump]);
 
-  const reloadDiskConflict = useCallback((key: string): EditableDocumentRecord | null => {
+  const reloadSourceBackedDocumentConflict = useCallback((key: string): SourceBackedDocumentRecord | null => {
     const record = docsRef.current.get(key);
     if (!record?.diskConflict) return null;
     const { text, sourceSave } = record.diskConflict;
@@ -461,7 +437,7 @@ export function useEditableDocuments() {
     return reloaded;
   }, [bump]);
 
-  const clearSavedFileChanges = useCallback((keys: Iterable<string>) => {
+  const clearSourceBackedSavedFileChanges = useCallback((keys: Iterable<string>) => {
     let changed = false;
     for (const key of keys) {
       const record = docsRef.current.get(key);
@@ -479,7 +455,7 @@ export function useEditableDocuments() {
     if (changed) bump();
   }, [bump]);
 
-  const restoreDraftDocuments = useCallback((documents: EditableDocumentDraftData[]): string[] => {
+  const restoreSourceBackedDraftDocuments = useCallback((documents: SourceBackedDocumentDraftData[]): string[] => {
     if (documents.length === 0) return [];
 
     const restoredKeys: string[] = [];
@@ -489,7 +465,7 @@ export function useEditableDocuments() {
       const sessionOpenText = normalizeDocumentText(doc.sessionOpenText);
       const diskBaseline = normalizeDocumentText(doc.diskBaseline);
       const currentText = normalizeDocumentText(doc.currentText);
-      if (!canRestoreEditableDocumentDraft(existing, doc.sourceSave, diskBaseline)) continue;
+      if (!canRestoreSourceBackedDocumentDraft(existing, doc.sourceSave, diskBaseline)) continue;
       const savedChange = doc.savedChange
         ? {
             key: doc.savedChange.key,
@@ -523,7 +499,7 @@ export function useEditableDocuments() {
     return restoredKeys;
   }, [bump]);
 
-  const restoreSavedFileChanges = useCallback((changes: SavedFileChangeDraftData[]) => {
+  const restoreSourceBackedSavedFileChanges = useCallback((changes: SourceBackedSavedFileChangeDraftData[]) => {
     if (changes.length === 0) return;
 
     for (const change of changes) {
@@ -533,8 +509,8 @@ export function useEditableDocuments() {
       const beforeText = normalizeDocumentText(change.beforeText);
       const afterText = normalizeDocumentText(change.afterText);
       // A dirty restored buffer is more specific than a saved-change card.
-      // restoreDraftDocuments carries savedChange too, so do not overwrite it.
-      if (!canRestoreEditableDocumentDraft(existing, change.sourceSave, afterText)) continue;
+      // restoreSourceBackedDraftDocuments carries savedChange too, so do not overwrite it.
+      if (!canRestoreSourceBackedDocumentDraft(existing, change.sourceSave, afterText)) continue;
       docsRef.current.set(change.key, {
         key: change.key,
         path: change.sourceSave.path,
@@ -563,28 +539,28 @@ export function useEditableDocuments() {
     bump();
   }, [bump]);
 
-  const markFileMissing = useCallback((key: string): { record: EditableDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean } | null => {
-    const result = markEditableDocumentFileMissing(docsRef.current.get(key));
+  const markSourceBackedDocumentMissing = useCallback((key: string): { record: SourceBackedDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean } | null => {
+    const result = markSourceBackedDocumentFileMissing(docsRef.current.get(key));
     if (result.type === 'missing') return null;
     if (!result.alreadyMissing || result.clearedSavedChange) bump();
     return { record: cloneRecord(result.record), clearedSavedChange: result.clearedSavedChange, alreadyMissing: result.alreadyMissing };
   }, [bump]);
 
-  const getUnsavedDocuments = useCallback((): EditableDocumentRecord[] => {
+  const getUnsavedSourceBackedDocuments = useCallback((): SourceBackedDocumentRecord[] => {
     return Array.from(docsRef.current.values())
       .filter((record) => recordIsDirty(record) || !!record.diskConflict)
       .map(cloneRecord);
   }, []);
 
-  const getSavedFileChanges = useCallback((): SavedFileChange[] => {
+  const getSourceBackedSavedFileChanges = useCallback((): SourceBackedSavedFileChange[] => {
     return Array.from(docsRef.current.values())
       .map((record) => record.savedChange)
-      .filter((change): change is SavedFileChange => !!change);
+      .filter((change): change is SourceBackedSavedFileChange => !!change);
   }, []);
 
-  const getDraftDocuments = useCallback((): EditableDocumentDraftData[] => {
+  const getSourceBackedDraftDocuments = useCallback((): SourceBackedDocumentDraftData[] => {
     return Array.from(docsRef.current.values())
-      .filter((record): record is EditableDocumentRecord & { sourceSave: EnabledSourceSaveCapability } =>
+      .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability } =>
         record.sourceSave?.enabled === true && recordIsDirty(record)
       )
       .map((record) => ({
@@ -597,9 +573,9 @@ export function useEditableDocuments() {
       }));
   }, []);
 
-  const getDraftSavedFileChanges = useCallback((): SavedFileChangeDraftData[] => {
+  const getSourceBackedDraftSavedFileChanges = useCallback((): SourceBackedSavedFileChangeDraftData[] => {
     return Array.from(docsRef.current.values())
-      .filter((record): record is EditableDocumentRecord & { sourceSave: EnabledSourceSaveCapability; savedChange: SavedFileChange } =>
+      .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability; savedChange: SourceBackedSavedFileChange } =>
         record.sourceSave?.enabled === true && !!record.savedChange && !recordIsDirty(record)
       )
       .map((record) => ({
@@ -608,16 +584,16 @@ export function useEditableDocuments() {
       }));
   }, []);
 
-  const getSourceDocuments = useCallback((): Array<EditableDocumentRecord & { sourceSave: EnabledSourceSaveCapability }> => {
+  const getSourceBackedDocuments = useCallback((): Array<SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability }> => {
     return Array.from(docsRef.current.values())
-      .filter((record): record is EditableDocumentRecord & { sourceSave: EnabledSourceSaveCapability } =>
+      .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability } =>
         record.sourceSave?.enabled === true
       )
-      .map((record) => cloneRecord(record) as EditableDocumentRecord & { sourceSave: EnabledSourceSaveCapability });
+      .map((record) => cloneRecord(record) as SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability });
   }, []);
 
-  const getFileEditStatuses = useCallback((): Map<string, EditableDocumentStatus> => {
-    const statuses = new Map<string, EditableDocumentStatus>();
+  const getFileEditStatuses = useCallback((): Map<string, SourceBackedDocumentStatus> => {
+    const statuses = new Map<string, SourceBackedDocumentStatus>();
     for (const record of docsRef.current.values()) {
       if (!record.path) continue;
       statuses.set(record.path, {
@@ -631,37 +607,31 @@ export function useEditableDocuments() {
     return statuses;
   }, []);
 
-  const activeDocument = useMemo(() => getActiveDocument(), [getActiveDocument, version]);
   const fileEditStatuses = useMemo(() => getFileEditStatuses(), [getFileEditStatuses, version]);
 
   return {
     version,
-    activeDocument,
     fileEditStatuses,
-    openDocument,
-    setActiveKey,
-    getActiveKey,
-    getDocument,
-    getActiveDocument,
-    getActiveDocumentLive,
-    getCurrentText,
-    beginEdit,
-    updateActiveText,
-    markSaving,
-    markSaved,
-    markError,
-    markFileMissing,
-    clearDocument,
-    discardDocument,
+    openSourceBackedDocument,
+    getSourceBackedDocument,
+    getSourceBackedDocumentText,
+    beginSourceBackedDocumentEdit,
+    updateSourceBackedDocumentText,
+    markSourceBackedDocumentSaving,
+    saveSourceBackedDocument,
+    markSourceBackedDocumentError,
+    markSourceBackedDocumentMissing,
+    clearSourceBackedDocument,
+    discardSourceBackedDocument,
     reconcileDiskSnapshot,
-    reloadDiskConflict,
-    clearSavedFileChanges,
-    restoreDraftDocuments,
-    restoreSavedFileChanges,
-    getUnsavedDocuments,
-    getSavedFileChanges,
-    getDraftDocuments,
-    getDraftSavedFileChanges,
-    getSourceDocuments,
+    reloadSourceBackedDocumentConflict,
+    clearSourceBackedSavedFileChanges,
+    restoreSourceBackedDraftDocuments,
+    restoreSourceBackedSavedFileChanges,
+    getUnsavedSourceBackedDocuments,
+    getSourceBackedSavedFileChanges,
+    getSourceBackedDraftDocuments,
+    getSourceBackedDraftSavedFileChanges,
+    getSourceBackedDocuments,
   };
 }

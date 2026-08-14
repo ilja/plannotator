@@ -1,36 +1,36 @@
 import { pathIsInsideDir } from '@plannotator/shared/browser-paths';
 import {
-  canApplyEditableDocumentDiskSnapshot,
-  getEditableDocumentKnownDiskHash,
-  type DiskSnapshotReconcileResult,
-  type EditableDocumentRecord,
+  canApplySourceBackedDocumentDiskSnapshot,
+  getSourceBackedDocumentKnownDiskHash,
+  type SourceBackedDocumentDiskSnapshotReconcileResult,
+  type SourceBackedDocumentRecord,
   type EnabledSourceSaveCapability,
-} from './editableDocuments';
+} from './sourceBackedDocuments';
 import type { SourceDocumentSnapshotResult } from './sourceDocumentClient';
 
-export type OpenSourceDocumentRecord = EditableDocumentRecord & { sourceSave: EnabledSourceSaveCapability };
+export type OpenSourceBackedDocumentRecord = SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability };
 
 export type SourceDocumentReconcileEvent =
   | {
       type: 'file-missing';
-      result: { record: EditableDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean };
+      result: { record: SourceBackedDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean };
     }
-  | { type: 'clean-updated'; result: Extract<DiskSnapshotReconcileResult, { type: 'clean-updated' }> }
-  | { type: 'status-updated'; result: Extract<DiskSnapshotReconcileResult, { type: 'status-updated' }> }
-  | { type: 'conflict'; result: Extract<DiskSnapshotReconcileResult, { type: 'conflict' }> };
+  | { type: 'clean-updated'; result: Extract<SourceBackedDocumentDiskSnapshotReconcileResult, { type: 'clean-updated' }> }
+  | { type: 'status-updated'; result: Extract<SourceBackedDocumentDiskSnapshotReconcileResult, { type: 'status-updated' }> }
+  | { type: 'conflict'; result: Extract<SourceBackedDocumentDiskSnapshotReconcileResult, { type: 'conflict' }> };
 
 interface ReconcileSourceDocumentsOptions {
   changedDir?: string;
-  documents: OpenSourceDocumentRecord[];
+  documents: OpenSourceBackedDocumentRecord[];
   sequenceByKey: Map<string, number>;
-  getDocument: (key: string) => EditableDocumentRecord | null;
+  getSourceBackedDocument: (key: string) => SourceBackedDocumentRecord | null;
   fetchSnapshot: (path: string) => Promise<SourceDocumentSnapshotResult>;
-  markFileMissing: (key: string) => { record: EditableDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean } | null;
+  markSourceBackedDocumentFileMissing: (key: string) => { record: SourceBackedDocumentRecord; clearedSavedChange: boolean; alreadyMissing: boolean } | null;
   reconcileDiskSnapshot: (input: {
     key: string;
     text: string;
     sourceSave: EnabledSourceSaveCapability;
-  }) => DiskSnapshotReconcileResult;
+  }) => SourceBackedDocumentDiskSnapshotReconcileResult;
   onEvent: (event: SourceDocumentReconcileEvent) => void;
 }
 
@@ -38,9 +38,9 @@ export async function reconcileSourceDocuments({
   changedDir,
   documents,
   sequenceByKey,
-  getDocument,
+  getSourceBackedDocument,
   fetchSnapshot,
-  markFileMissing,
+  markSourceBackedDocumentFileMissing,
   reconcileDiskSnapshot,
   onEvent,
 }: ReconcileSourceDocumentsOptions): Promise<boolean> {
@@ -48,18 +48,18 @@ export async function reconcileSourceDocuments({
   let changed = false;
 
   for (const doc of docs) {
-    const startRecord = getDocument(doc.key);
+    const startRecord = getSourceBackedDocument(doc.key);
     if (startRecord?.saveStatus === 'saving') continue;
-    const expectedDiskHash = getEditableDocumentKnownDiskHash(startRecord);
+    const expectedDiskHash = getSourceBackedDocumentKnownDiskHash(startRecord);
     const seq = (sequenceByKey.get(doc.key) ?? 0) + 1;
     sequenceByKey.set(doc.key, seq);
     const snapshotResult = await fetchSnapshot(doc.sourceSave.path);
     if (sequenceByKey.get(doc.key) !== seq) continue;
-    const currentRecord = getDocument(doc.key);
-    if (!canApplyEditableDocumentDiskSnapshot(currentRecord, expectedDiskHash)) continue;
+    const currentRecord = getSourceBackedDocument(doc.key);
+    if (!canApplySourceBackedDocumentDiskSnapshot(currentRecord, expectedDiskHash)) continue;
 
     if (snapshotResult.status === 'missing') {
-      const result = markFileMissing(doc.key);
+      const result = markSourceBackedDocumentFileMissing(doc.key);
       if (!result) continue;
       if (!result.alreadyMissing || result.clearedSavedChange) changed = true;
       onEvent({ type: 'file-missing', result });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { EnabledSourceSaveCapability, SavedFileChangeDraftData } from './editableDocuments';
+import type { EnabledSourceSaveCapability, SourceBackedSavedFileChangeDraftData } from './sourceBackedDocuments';
 import { validateSavedFileChanges } from './savedFileChangeValidation';
 import type { SourceSaveProbeResult } from './sourceDocumentClient';
 
@@ -18,7 +18,7 @@ function sourceSave(hash: string): EnabledSourceSaveCapability {
   };
 }
 
-function change(overrides: Partial<SavedFileChangeDraftData> = {}): SavedFileChangeDraftData {
+function change(overrides: Partial<SourceBackedSavedFileChangeDraftData> = {}): SourceBackedSavedFileChangeDraftData {
   return {
     key: 'file:/repo/docs/a.md',
     path: '/repo/docs/a.md',

@@ -102,11 +102,11 @@ import {
   normalizeEditedMarkdown,
 } from './directEdits';
 import {
-  editableDocumentKey,
-  useEditableDocuments,
+  sourceBackedDocumentKey,
+  useSourceBackedDocuments,
   type EnabledSourceSaveCapability,
-  type SavedFileChangeDraftData,
-} from './editableDocuments';
+  type SourceBackedSavedFileChangeDraftData,
+} from './sourceBackedDocuments';
 import {
   validateSavedFileChanges,
 } from './savedFileChangeValidation';
@@ -225,9 +225,17 @@ const App: React.FC = () => {
   const [codeAnnotations, setCodeAnnotations] = useState<CodeAnnotation[]>([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [selectedCodeAnnotationId, setSelectedCodeAnnotationId] = useState<string | null>(null);
-  const editableDocuments = useEditableDocuments();
-  const activeEditableDocument = editableDocuments.activeDocument;
-  const displayedMarkdown = activeEditableDocument?.currentText ?? markdown;
+  const [activeSourceDocumentKey, setActiveSourceDocumentKey] = useState<string | null>(null);
+  const activeSourceDocumentKeyRef = useRef<string | null>(activeSourceDocumentKey);
+  useEffect(() => {
+    activeSourceDocumentKeyRef.current = activeSourceDocumentKey;
+  }, [activeSourceDocumentKey]);
+  const sourceBackedDocuments = useSourceBackedDocuments();
+  const activeSourceBackedDocument = useMemo(
+    () => activeSourceDocumentKey ? sourceBackedDocuments.getSourceBackedDocument(activeSourceDocumentKey) : null,
+    [activeSourceDocumentKey, sourceBackedDocuments, sourceBackedDocuments.version],
+  );
+  const displayedMarkdown = activeSourceBackedDocument?.currentText ?? markdown;
   const frontmatter = useMemo(() => extractFrontmatter(displayedMarkdown).frontmatter, [displayedMarkdown]);
   const blocks = useMemo(() => parseMarkdownToBlocks(displayedMarkdown), [displayedMarkdown]);
   const [showExport, setShowExport] = useState(false);
@@ -310,7 +318,7 @@ const App: React.FC = () => {
   // What the current edit session mounted with, for live dirty tracking.
   const editSessionBaseRef = useRef<string>('');
   const markdownEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
-  const suspendedRootEditableKeyRef = useRef<string | null>(null);
+  const suspendedRootSourceBackedDocumentKeyRef = useRef<string | null>(null);
   const [globalAttachments, setGlobalAttachments] = useState<ImageAttachment[]>([]);
   const [annotateMode, setAnnotateMode] = useState(false);
   const [gate, setGate] = useState(false);
@@ -593,45 +601,46 @@ const App: React.FC = () => {
     toggleSidebarTab,
   ]);
 
-  const snapshotActiveEditableDocument = useCallback(() => {
-    if (!activeEditableDocument) return;
+  const snapshotActiveSourceBackedDocument = useCallback(() => {
+    if (!activeSourceBackedDocument) return;
     if (isEditingMarkdown) {
       const live = markdownEditorHandleRef.current?.getMarkdown();
-      if (live != null) editableDocuments.updateActiveText(live, { forceNotify: true });
+      if (live != null) sourceBackedDocuments.updateSourceBackedDocumentText(activeSourceBackedDocument.key, live, { forceNotify: true });
       return;
     }
-    editableDocuments.updateActiveText(displayedMarkdown, { forceNotify: true });
-  }, [activeEditableDocument, displayedMarkdown, editableDocuments, isEditingMarkdown]);
+    sourceBackedDocuments.updateSourceBackedDocumentText(activeSourceBackedDocument.key, displayedMarkdown, { forceNotify: true });
+  }, [activeSourceBackedDocument, displayedMarkdown, sourceBackedDocuments, isEditingMarkdown]);
 
   const getLinkedDocumentMarkdown = useCallback((filepath: string, fallback?: string) => {
-    return editableDocuments.getCurrentText(`file:${filepath}`) ?? fallback;
-  }, [editableDocuments]);
+    return sourceBackedDocuments.getSourceBackedDocumentText(`file:${filepath}`) ?? fallback;
+  }, [sourceBackedDocuments]);
 
-  const restoreLinkedDocumentEditableKey = useCallback(() => {
-    const restoreKey = suspendedRootEditableKeyRef.current;
-    suspendedRootEditableKeyRef.current = null;
-    editableDocuments.setActiveKey(restoreKey);
-  }, [editableDocuments]);
+  const restoreLinkedDocumentSourceBackedKey = useCallback(() => {
+    const restoreKey = suspendedRootSourceBackedDocumentKeyRef.current;
+    suspendedRootSourceBackedDocumentKeyRef.current = null;
+    setActiveSourceDocumentKey(restoreKey);
+  }, []);
 
   const handleLinkedDocumentLoaded = useCallback((doc: { markdown?: string; filepath?: string; renderAs?: 'markdown' | 'html'; sourceSave?: SourceSaveCapability }) => {
     if (annotateSource !== 'folder') {
-      if (activeEditableDocument?.sourceSave?.enabled) {
-        suspendedRootEditableKeyRef.current = activeEditableDocument.key;
-        editableDocuments.setActiveKey(null);
+      if (activeSourceBackedDocument?.sourceSave?.enabled) {
+        suspendedRootSourceBackedDocumentKeyRef.current = activeSourceBackedDocument.key;
+        setActiveSourceDocumentKey(null);
       }
       return undefined;
     }
 
     if (doc.renderAs === 'html' || !doc.filepath || doc.markdown == null) {
-      editableDocuments.setActiveKey(null);
+      setActiveSourceDocumentKey(null);
       return undefined;
     }
 
     const sourceSave = doc.sourceSave ?? null;
-    const key = editableDocumentKey(sourceSave, `file:${doc.filepath}`);
-    editableDocuments.openDocument({ key, text: doc.markdown, sourceSave });
-    const currentText = editableDocuments.getCurrentText(key) ?? doc.markdown;
-    const record = editableDocuments.getDocument(key);
+    const key = sourceBackedDocumentKey(sourceSave, `file:${doc.filepath}`);
+    sourceBackedDocuments.openSourceBackedDocument({ key, text: doc.markdown, sourceSave });
+    setActiveSourceDocumentKey(key);
+    const currentText = sourceBackedDocuments.getSourceBackedDocumentText(key) ?? doc.markdown;
+    const record = sourceBackedDocuments.getSourceBackedDocument(key);
 
     if (isEditingMarkdown) {
       editSessionBaseRef.current = currentText;
@@ -640,7 +649,7 @@ const App: React.FC = () => {
     }
 
     return currentText;
-  }, [activeEditableDocument, annotateSource, editableDocuments, isEditingMarkdown]);
+  }, [activeSourceBackedDocument, annotateSource, sourceBackedDocuments, isEditingMarkdown]);
 
   // Linked document navigation
   const linkedDocHook = useLinkedDoc({
@@ -648,10 +657,10 @@ const App: React.FC = () => {
     setMarkdown, setAnnotations, setSelectedAnnotationId, setGlobalAttachments,
     renderAs, rawHtml, shareHtml, setRenderAs, setRawHtml, setShareHtml,
     viewerRef, sidebar: linkedDocSidebar, sourceFilePath, sourceConverted,
-    onBeforeNavigate: snapshotActiveEditableDocument,
+    onBeforeNavigate: snapshotActiveSourceBackedDocument,
     onDocumentLoaded: handleLinkedDocumentLoaded,
     getDocumentMarkdown: getLinkedDocumentMarkdown,
-    onAfterBack: restoreLinkedDocumentEditableKey,
+    onAfterBack: restoreLinkedDocumentSourceBackedKey,
   });
 
   // Active document's directory — feeds both click-time popout fetches and
@@ -873,29 +882,29 @@ const App: React.FC = () => {
       : normalizedAbsolutePath.startsWith(dirPrefix)
         ? normalizedAbsolutePath.slice(dirPrefix.length)
         : undefined;
-    const editableStatus = getFileEditStatus(
+    const sourceBackedStatus = getFileEditStatus(
       absolutePath,
-      editableDocuments.fileEditStatuses,
+      sourceBackedDocuments.fileEditStatuses,
       relativePath,
       dirState?.workspaceStatus,
     );
-    const editableKey = editableStatus?.key ?? `file:${absolutePath}`;
-    const editableRecord = editableDocuments.getDocument(editableKey);
-    if (editableRecord?.missingOnDisk && editableRecord.sourceSave?.enabled) {
+    const sourceBackedKey = sourceBackedStatus?.key ?? `file:${absolutePath}`;
+    const sourceBackedRecord = sourceBackedDocuments.getSourceBackedDocument(sourceBackedKey);
+    if (sourceBackedRecord?.missingOnDisk && sourceBackedRecord.sourceSave?.enabled) {
       linkedDocHook.openLoaded({
-        filepath: editableRecord.path ?? absolutePath,
-        markdown: editableRecord.currentText,
+        filepath: sourceBackedRecord.path ?? absolutePath,
+        markdown: sourceBackedRecord.currentText,
         renderAs: 'markdown',
-        sourceSave: editableRecord.sourceSave,
+        sourceSave: sourceBackedRecord.sourceSave,
       }, 'files', { notifyDocumentLoaded: false });
-      editableDocuments.setActiveKey(editableKey);
+      setActiveSourceDocumentKey(sourceBackedKey);
       if (isEditingMarkdown) {
-        editSessionBaseRef.current = editableRecord.currentText;
+        editSessionBaseRef.current = sourceBackedRecord.currentText;
         setEditorDirty(false);
-        setEditorDiffersFromBaseline(editableRecord.currentText !== editableRecord.diskBaseline);
+        setEditorDiffersFromBaseline(sourceBackedRecord.currentText !== sourceBackedRecord.diskBaseline);
         setEditStats(
-          editableRecord.currentText !== editableRecord.diskBaseline
-            ? computeEditStats(editableRecord.diskBaseline, editableRecord.currentText)
+          sourceBackedRecord.currentText !== sourceBackedRecord.diskBaseline
+            ? computeEditStats(sourceBackedRecord.diskBaseline, sourceBackedRecord.currentText)
             : null,
         );
       }
@@ -908,7 +917,7 @@ const App: React.FC = () => {
       : (path: string) => `/api/doc?path=${encodeURIComponent(path)}&base=${encodeURIComponent(dirPath)}${convertHtml ? '&convert=1' : ''}`;
     linkedDocHook.open(absolutePath, buildUrl, 'files');
     fileBrowser.setActiveFile(absolutePath);
-  }, [editableDocuments, linkedDocHook, fileBrowser, convertHtml, isEditingMarkdown]);
+  }, [sourceBackedDocuments, linkedDocHook, fileBrowser, convertHtml, isEditingMarkdown]);
 
   // Route linked doc opens through the correct endpoint based on current context
   const handleOpenLinkedDoc = React.useCallback((docPath: string) => {
@@ -1269,22 +1278,21 @@ const App: React.FC = () => {
   // checkbox toggles legitimately mutate. Feeds both the draft auto-save and
   // the Direct Edits feedback section.
   const getEditedMarkdown = useCallback((): string | null => {
-    const activeDocument = editableDocuments.getActiveDocumentLive();
-    if (activeDocument?.sourceSave?.enabled) {
+    if (activeSourceBackedDocument?.sourceSave?.enabled) {
       const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
-      return normalizeEditedMarkdown(activeDocument.diskBaseline, live ?? activeDocument.currentText);
+      return normalizeEditedMarkdown(activeSourceBackedDocument.diskBaseline, live ?? activeSourceBackedDocument.currentText);
     }
 
     const base = originalMarkdownRef.current;
     if (base === null) return null;
     const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
     return normalizeEditedMarkdown(base, live ?? editedMarkdownRef.current);
-  }, [editableDocuments, isEditingMarkdown]);
+  }, [activeSourceBackedDocument, isEditingMarkdown]);
 
   const getDraftEditedMarkdown = useCallback((): string | null => {
-    if (editableDocuments.getActiveDocumentLive()?.sourceSave?.enabled) return null;
+    if (activeSourceBackedDocument?.sourceSave?.enabled) return null;
     return getEditedMarkdown();
-  }, [editableDocuments, getEditedMarkdown]);
+  }, [activeSourceBackedDocument, getEditedMarkdown]);
 
   // Auto-save annotation drafts
   const { draftBanner, restoreDraft, scheduleDraftSave, scheduleDraftSaveAfterSubmitFailure, getDraftGeneration, dismissDraft } = useAnnotationDraft({
@@ -1292,8 +1300,8 @@ const App: React.FC = () => {
     codeAnnotations,
     globalAttachments,
     getEditedMarkdown: getDraftEditedMarkdown,
-    getEditedDocuments: editableDocuments.getDraftDocuments,
-    getSavedFileChanges: editableDocuments.getDraftSavedFileChanges,
+    getEditedDocuments: sourceBackedDocuments.getSourceBackedDraftDocuments,
+    getSavedFileChanges: sourceBackedDocuments.getSourceBackedDraftSavedFileChanges,
     isApiMode,
     isSharedSession,
     // isSubmitting counts: a save firing while approve/deny is in flight can
@@ -1327,9 +1335,9 @@ const App: React.FC = () => {
     renderAs !== 'html' &&
     // editStats non-null keeps the toggle available after committing an
     // emptied document, so the user can re-enter and undo. Source-backed files
-    // are editable even when they start empty.
-    (activeEditableDocument?.sourceSave?.enabled || displayedMarkdown !== '' || editStats !== null) &&
-    (!linkedDocHook.isActive || (annotateSource === 'folder' && activeEditableDocument?.sourceSave?.enabled)) &&
+    // are source-backed even when they start empty.
+    (activeSourceBackedDocument?.sourceSave?.enabled || displayedMarkdown !== '' || editStats !== null) &&
+    (!linkedDocHook.isActive || (annotateSource === 'folder' && activeSourceBackedDocument?.sourceSave?.enabled)) &&
     !isSharedSession &&
     annotateSource !== 'message' &&
     !submitted;
@@ -1398,11 +1406,11 @@ const App: React.FC = () => {
 
     const base = originalMarkdownRef.current;
     if (edited != null) {
-      if (activeEditableDocument?.sourceSave?.enabled) {
-        editableDocuments.updateActiveText(edited, { forceNotify: true });
-        const sourceEdited = normalizeEditedMarkdown(activeEditableDocument.diskBaseline, edited);
+      if (activeSourceBackedDocument?.sourceSave?.enabled) {
+        sourceBackedDocuments.updateSourceBackedDocumentText(activeSourceBackedDocument.key, edited, { forceNotify: true });
+        const sourceEdited = normalizeEditedMarkdown(activeSourceBackedDocument.diskBaseline, edited);
         editedMarkdownRef.current = null;
-        setEditStats(sourceEdited !== null ? computeEditStats(activeEditableDocument.diskBaseline, sourceEdited) : null);
+        setEditStats(sourceEdited !== null ? computeEditStats(activeSourceBackedDocument.diskBaseline, sourceEdited) : null);
         if (sourceEdited !== null && window.innerWidth >= 768) {
           setRightSidebarTab('annotations');
           setIsPanelOpen(true);
@@ -1419,22 +1427,22 @@ const App: React.FC = () => {
       }
     }
 
-    const renderedBaseline = activeEditableDocument?.sourceSave?.enabled ? markdown : displayedMarkdown;
+    const renderedBaseline = activeSourceBackedDocument?.sourceSave?.enabled ? markdown : displayedMarkdown;
     const remapped = edited != null && edited !== renderedBaseline ? applyEditedDocument(edited) : annotations;
     repaintHighlights(remapped);
     scheduleDraftSave();
-  }, [activeEditableDocument, displayedMarkdown, editableDocuments, isEditingMarkdown, annotations, markdown, applyEditedDocument, repaintHighlights, scheduleDraftSave]);
+  }, [activeSourceBackedDocument, displayedMarkdown, sourceBackedDocuments, isEditingMarkdown, annotations, markdown, applyEditedDocument, repaintHighlights, scheduleDraftSave]);
 
   // Discards direct edits for one document. Source-backed folder edits are
   // file-scoped; the root annotation document has a single document.
   const handleDiscardEdits = useCallback((sourceKey?: string) => {
-    const targetKey = sourceKey ?? activeEditableDocument?.key;
-    const targetIsActive = !!targetKey && editableDocuments.getActiveKey() === targetKey;
-    const targetRecord = targetKey ? editableDocuments.getDocument(targetKey) : null;
+    const targetKey = sourceKey ?? activeSourceBackedDocument?.key;
+    const targetIsActive = !!targetKey && activeSourceDocumentKey === targetKey;
+    const targetRecord = targetKey ? sourceBackedDocuments.getSourceBackedDocument(targetKey) : null;
     if (sourceKey && !targetRecord?.sourceSave?.enabled) return;
 
     if (targetKey && targetRecord?.sourceSave?.enabled) {
-      const discarded = editableDocuments.discardDocument(targetKey);
+      const discarded = sourceBackedDocuments.discardSourceBackedDocument(targetKey);
       if (!discarded) return;
       if (!targetIsActive) {
         scheduleDraftSave();
@@ -1447,6 +1455,7 @@ const App: React.FC = () => {
       editedMarkdownRef.current = null;
       setEditStats(null);
       if (discarded.missingOnDisk) {
+        setActiveSourceDocumentKey(null);
         if (linkedDocHook.isActive) {
           linkedDocHook.back();
           fileBrowser.setActiveFile(null);
@@ -1478,21 +1487,21 @@ const App: React.FC = () => {
     const remapped = markdown !== base ? applyEditedDocument(base) : annotations;
     repaintHighlights(remapped);
     scheduleDraftSave();
-  }, [activeEditableDocument, editableDocuments, displayedMarkdown, markdown, annotations, applyEditedDocument, repaintHighlights, linkedDocHook, fileBrowser, scheduleDraftSave]);
+  }, [activeSourceBackedDocument, activeSourceDocumentKey, sourceBackedDocuments, displayedMarkdown, markdown, annotations, applyEditedDocument, repaintHighlights, linkedDocHook, fileBrowser, scheduleDraftSave]);
 
   // Restores a recovered draft: annotations always; direct edits when present
   // and the baseline exists. Edits flow through the same helpers
   // commitMarkdownEdits uses, with the RESTORED annotations remapped against
   // the edited document (they aren't in state yet when the remap runs).
   const resolveSavedFileChangeSource = useCallback((
-    change: SavedFileChangeDraftData,
+    change: SourceBackedSavedFileChangeDraftData,
   ) => {
     return probeSourceSave(change.path);
   }, []);
 
   const validateDraftSavedFileChanges = useCallback(async (
-    changes: SavedFileChangeDraftData[],
-  ): Promise<{ kept: SavedFileChangeDraftData[]; changedOrMissing: SavedFileChangeDraftData[]; unverified: SavedFileChangeDraftData[] }> => {
+    changes: SourceBackedSavedFileChangeDraftData[],
+  ): Promise<{ kept: SourceBackedSavedFileChangeDraftData[]; changedOrMissing: SourceBackedSavedFileChangeDraftData[]; unverified: SourceBackedSavedFileChangeDraftData[] }> => {
     if (changes.length === 0) return { kept: [], changedOrMissing: [], unverified: [] };
     const result = await validateSavedFileChanges(changes, resolveSavedFileChangeSource);
     const changedOrMissing = result.dropped
@@ -1533,8 +1542,8 @@ const App: React.FC = () => {
 
     const nestedSavedFileChanges = editedDocuments
       .map((doc) => doc.savedChange)
-      .filter((change): change is SavedFileChangeDraftData => !!change);
-    const savedChangeCandidates = new Map<string, SavedFileChangeDraftData>();
+      .filter((change): change is SourceBackedSavedFileChangeDraftData => !!change);
+    const savedChangeCandidates = new Map<string, SourceBackedSavedFileChangeDraftData>();
     for (const change of [...savedFileChanges, ...nestedSavedFileChanges]) {
       savedChangeCandidates.set(change.key, change);
     }
@@ -1549,7 +1558,7 @@ const App: React.FC = () => {
     );
 
     if (cleanSavedFileChanges.length > 0) {
-      editableDocuments.restoreSavedFileChanges(cleanSavedFileChanges);
+      sourceBackedDocuments.restoreSourceBackedSavedFileChanges(cleanSavedFileChanges);
       if (window.innerWidth >= 768) {
         setRightSidebarTab('annotations');
         setIsPanelOpen(true);
@@ -1563,7 +1572,7 @@ const App: React.FC = () => {
           duration: 5000,
         });
       } else {
-        const restoredDocumentKeys = editableDocuments.restoreDraftDocuments(editedDocumentsForRestore);
+        const restoredDocumentKeys = sourceBackedDocuments.restoreSourceBackedDraftDocuments(editedDocumentsForRestore);
         if (restoredDocumentKeys.length < editedDocumentsForRestore.length) {
           toast('Some draft file edits were not restored', {
             description: 'You already have edits in this session — those take precedence.',
@@ -1573,11 +1582,12 @@ const App: React.FC = () => {
         const restoredSingleFileDraft = pickRestoredSingleFileDraftToDisplay(
           editedDocumentsForRestore,
           restoredDocumentKeys,
-          editableDocuments.getActiveKey(),
+          activeSourceDocumentKeyRef.current,
         );
+        const nextActiveSourceDocumentKey = restoredSingleFileDraft?.key ?? activeSourceDocumentKeyRef.current;
         if (restoredSingleFileDraft) {
-          editableDocuments.setActiveKey(restoredSingleFileDraft.key);
-          const restoredDocument = editableDocuments.getDocument(restoredSingleFileDraft.key);
+          setActiveSourceDocumentKey(restoredSingleFileDraft.key);
+          const restoredDocument = sourceBackedDocuments.getSourceBackedDocument(restoredSingleFileDraft.key);
           if (restoredDocument?.sourceSave?.enabled) {
             const remapped = applyEditedDocument(restoredDocument.currentText, restored);
             repaintHighlights(remapped);
@@ -1592,7 +1602,9 @@ const App: React.FC = () => {
             return;
           }
         }
-        const activeRestoredDocument = editableDocuments.getActiveDocumentLive();
+        const activeRestoredDocument = nextActiveSourceDocumentKey
+          ? sourceBackedDocuments.getSourceBackedDocument(nextActiveSourceDocumentKey)
+          : null;
         const activeDraft = activeRestoredDocument?.sourceSave?.enabled && restoredDocumentKeys.includes(activeRestoredDocument.key)
           ? editedDocumentsForRestore.find((doc) => doc.key === activeRestoredDocument.key)
           : undefined;
@@ -1649,7 +1661,7 @@ const App: React.FC = () => {
       }, 100);
     }
     scheduleDraftSave();
-  }, [restoreDraft, validateDraftSavedFileChanges, editStats, isEditingMarkdown, editableDocuments, activeEditableDocument, markdown, applyEditedDocument, repaintHighlights, scheduleDraftSave]);
+  }, [restoreDraft, validateDraftSavedFileChanges, editStats, isEditingMarkdown, sourceBackedDocuments, activeSourceBackedDocument, markdown, applyEditedDocument, repaintHighlights, scheduleDraftSave]);
 
   const handleEditToggle = useCallback(() => {
     if (isEditingMarkdown) {
@@ -1660,8 +1672,8 @@ const App: React.FC = () => {
     // CM6 emits \n-joined text, and a CRLF baseline would fabricate a full diff.
     const normalized = displayedMarkdown.includes('\r') ? displayedMarkdown.replace(/\r\n?/g, '\n') : displayedMarkdown;
     if (normalized !== displayedMarkdown) {
-      if (activeEditableDocument?.sourceSave?.enabled) {
-        editableDocuments.updateActiveText(normalized, { forceNotify: true });
+      if (activeSourceBackedDocument?.sourceSave?.enabled) {
+        sourceBackedDocuments.updateSourceBackedDocumentText(activeSourceBackedDocument.key, normalized, { forceNotify: true });
       } else {
         setMarkdown(normalized);
       }
@@ -1670,25 +1682,25 @@ const App: React.FC = () => {
     if (originalMarkdownRef.current === null) originalMarkdownRef.current = normalized;
     const base = originalMarkdownRef.current;
     editSessionBaseRef.current = normalized;
-    if (activeEditableDocument?.sourceSave?.enabled) {
-      editableDocuments.beginEdit(normalized);
+    if (activeSourceBackedDocument?.sourceSave?.enabled) {
+      sourceBackedDocuments.beginSourceBackedDocumentEdit(activeSourceBackedDocument.key, normalized);
     }
     setEditorDirty(false);
     setEditorDiffersFromBaseline(
-      activeEditableDocument?.sourceSave?.enabled
-        ? normalized !== activeEditableDocument.diskBaseline
+      activeSourceBackedDocument?.sourceSave?.enabled
+        ? normalized !== activeSourceBackedDocument.diskBaseline
         : base !== null && normalized !== base
     );
     setIsEditingMarkdown(true);
-  }, [activeEditableDocument, displayedMarkdown, editableDocuments, isEditingMarkdown, commitMarkdownEdits]);
+  }, [activeSourceBackedDocument, displayedMarkdown, sourceBackedDocuments, isEditingMarkdown, commitMarkdownEdits]);
 
   // Live dirty tracking for the open editor session. String compare per
   // keystroke is fine at plan sizes; setState bails out on unchanged values.
   const handleEditorChange = useCallback((md: string) => {
     setEditorDirty(md !== editSessionBaseRef.current);
-    if (activeEditableDocument?.sourceSave?.enabled) {
-      editableDocuments.updateActiveText(md);
-      setEditorDiffersFromBaseline(md !== activeEditableDocument.diskBaseline);
+    if (activeSourceBackedDocument?.sourceSave?.enabled) {
+      sourceBackedDocuments.updateSourceBackedDocumentText(activeSourceBackedDocument.key, md);
+      setEditorDiffersFromBaseline(md !== activeSourceBackedDocument.diskBaseline);
     } else {
       const base = originalMarkdownRef.current;
       setEditorDiffersFromBaseline(base !== null && md !== base);
@@ -1699,36 +1711,36 @@ const App: React.FC = () => {
       setAgentFeedbackRevision((version) => version + 1);
     }
     scheduleDraftSave();
-  }, [activeEditableDocument, editableDocuments, scheduleDraftSave]);
+  }, [activeSourceBackedDocument, sourceBackedDocuments, scheduleDraftSave]);
 
-  const unsavedEditableDocuments = useMemo(
-    () => editableDocuments.getUnsavedDocuments(),
-    [editableDocuments, editableDocuments.version],
+  const unsavedSourceBackedDocuments = useMemo(
+    () => sourceBackedDocuments.getUnsavedSourceBackedDocuments(),
+    [sourceBackedDocuments, sourceBackedDocuments.version],
   );
   const savedFileChanges = useMemo(
-    () => editableDocuments.getSavedFileChanges(),
-    [editableDocuments, editableDocuments.version],
+    () => sourceBackedDocuments.getSourceBackedSavedFileChanges(),
+    [sourceBackedDocuments, sourceBackedDocuments.version],
   );
   const openSourceDocuments = useMemo(
-    () => editableDocuments.getSourceDocuments(),
-    [editableDocuments, editableDocuments.version],
+    () => sourceBackedDocuments.getSourceBackedDocuments(),
+    [sourceBackedDocuments, sourceBackedDocuments.version],
   );
   const savedFileChangesForValidation = useMemo(() => {
     const sourceByKey = new Map(openSourceDocuments.map((doc) => [doc.key, doc.sourceSave]));
     return savedFileChanges
-      .map((change): SavedFileChangeDraftData | null => {
+      .map((change): SourceBackedSavedFileChangeDraftData | null => {
         const sourceSave = sourceByKey.get(change.key);
         return sourceSave ? { ...change, sourceSave } : null;
       })
-      .filter((change): change is SavedFileChangeDraftData => change !== null);
+      .filter((change): change is SourceBackedSavedFileChangeDraftData => change !== null);
   }, [openSourceDocuments, savedFileChanges]);
-  const activeSourceSave = activeEditableDocument?.sourceSave?.enabled
-    ? activeEditableDocument.sourceSave
+  const activeSourceSave = activeSourceBackedDocument?.sourceSave?.enabled
+    ? activeSourceBackedDocument.sourceSave
     : null;
 
-  // Save-button display is driven by the editableDocuments state machine — one
+  // Save-button display is driven by the sourceBackedDocuments state machine — one
   // source of truth for dirty/saving/saved, rather than a parallel flag.
-  const activeSaveStatus = activeEditableDocument?.saveStatus;
+  const activeSaveStatus = activeSourceBackedDocument?.saveStatus;
   const hasUnsavedDiskChanges =
     activeSaveStatus === 'dirty' || activeSaveStatus === 'conflict' || activeSaveStatus === 'error' || activeSaveStatus === 'missing';
   // Emphasize the Save control (dot + primary text) whenever there is work to
@@ -1738,12 +1750,12 @@ const App: React.FC = () => {
   // dot/label so it reads as "save failed, retry" rather than ordinary unsaved.
   const saveFailed = activeSaveStatus === 'conflict' || activeSaveStatus === 'error';
   const activeSourceBufferDirty =
-    activeEditableDocument?.sourceSave?.enabled === true &&
-    activeEditableDocument.currentText !== activeEditableDocument.diskBaseline;
+    activeSourceBackedDocument?.sourceSave?.enabled === true &&
+    activeSourceBackedDocument.currentText !== activeSourceBackedDocument.diskBaseline;
   const canOverwriteDiskConflict =
-    activeEditableDocument?.sourceSave?.enabled === true &&
-    !!activeEditableDocument.diskConflict &&
-    activeEditableDocument.currentText !== activeEditableDocument.diskConflict.text;
+    activeSourceBackedDocument?.sourceSave?.enabled === true &&
+    !!activeSourceBackedDocument.diskConflict &&
+    activeSourceBackedDocument.currentText !== activeSourceBackedDocument.diskConflict.text;
 
   // Editing exit control: a source-backed session with unsaved edits gets a
   // two-step "Cancel" (discard + exit). Plan mode and clean source sessions keep
@@ -1772,9 +1784,9 @@ const App: React.FC = () => {
   // armed "Discard?" on one file can never drop another file's edits on first click.
   useEffect(() => {
     setConfirmCancelEdits(false);
-  }, [activeEditableDocument?.key]);
+  }, [activeSourceBackedDocument?.key]);
 
-  const hasUnsavedSourceFileBuffers = unsavedEditableDocuments.length > 0;
+  const hasUnsavedSourceFileBuffers = unsavedSourceBackedDocuments.length > 0;
 
   // True when the feedback payload carries unsaved direct edits. Source-backed
   // file buffers are ordinary dirty editor state; they only become review
@@ -1805,13 +1817,13 @@ const App: React.FC = () => {
       return buildSavedFileChangePanelItems(savedFileChanges);
     }
 
-    if (activeEditableDocument?.sourceSave?.enabled) return null;
+    if (activeSourceBackedDocument?.sourceSave?.enabled) return null;
     if (!editStats) return null;
     const base = originalMarkdownRef.current;
     const edited = editedMarkdownRef.current;
     if (base === null || edited === null) return null;
     return [buildPlanEditPanelItem(base, edited)];
-  }, [activeEditableDocument, editStats, savedFileChanges]);
+  }, [activeSourceBackedDocument, editStats, savedFileChanges]);
 
   // "Direct Edits" feedback section: unified diff of user edits vs the
   // as-submitted baseline. getEditedMarkdown owns the read discipline.
@@ -1852,13 +1864,13 @@ const App: React.FC = () => {
     return `${path}${separator}draftGeneration=${getDraftGeneration()}`;
   }, [getDraftGeneration]);
 
-  const validateSavedFileChangesBeforeSubmit = useCallback(async (): Promise<SavedFileChangeDraftData[] | null> => {
+  const validateSavedFileChangesBeforeSubmit = useCallback(async (): Promise<SourceBackedSavedFileChangeDraftData[] | null> => {
     if (savedFileChangesForValidation.length === 0) return [];
     const result = await validateSavedFileChanges(savedFileChangesForValidation, resolveSavedFileChangeSource);
     const stale = result.dropped.filter((entry) => entry.reason === 'changed' || entry.reason === 'missing');
 
     if (stale.length > 0) {
-      editableDocuments.clearSavedFileChanges(stale.map((entry) => entry.change.key));
+      sourceBackedDocuments.clearSourceBackedSavedFileChanges(stale.map((entry) => entry.change.key));
       scheduleDraftSave();
       toast.error('Saved edits changed on disk', {
         description: 'Plannotator removed the stale edit context. Nothing was sent.',
@@ -1874,21 +1886,21 @@ const App: React.FC = () => {
     }
 
     return result.valid;
-  }, [editableDocuments, resolveSavedFileChangeSource, savedFileChangesForValidation, scheduleDraftSave]);
+  }, [sourceBackedDocuments, resolveSavedFileChangeSource, savedFileChangesForValidation, scheduleDraftSave]);
 
   const sourceReconcileSeqRef = useRef<Map<string, number>>(new Map());
 
   const reconcileOpenSourceDocuments = useCallback(async (changedDir?: string) => {
-    const activeKey = editableDocuments.getActiveKey();
+    const activeKey = activeSourceDocumentKeyRef.current;
     if (isEditingMarkdownRef.current && activeKey) {
       const live = markdownEditorHandleRef.current?.getMarkdown();
-      if (live != null) editableDocuments.updateActiveText(live, { forceNotify: true });
+      if (live != null) sourceBackedDocuments.updateSourceBackedDocumentText(activeKey, live, { forceNotify: true });
     }
 
     const handleReconcileEvent = (event: SourceDocumentReconcileEvent) => {
       const { result } = event;
       if (event.type === 'file-missing') {
-        if (!result.alreadyMissing && result.record.key === editableDocuments.getActiveKey()) {
+        if (!result.alreadyMissing && result.record.key === activeSourceDocumentKeyRef.current) {
           setEditorDiffersFromBaseline(result.record.currentText !== result.record.diskBaseline);
           if (isEditingMarkdownRef.current) {
             setEditorDirty(result.record.currentText !== editSessionBaseRef.current);
@@ -1907,7 +1919,7 @@ const App: React.FC = () => {
       }
 
       if (event.type === 'clean-updated') {
-        if (result.record.key === editableDocuments.getActiveKey()) {
+        if (result.record.key === activeSourceDocumentKeyRef.current) {
           const remapped = applyEditedDocument(result.record.currentText);
           repaintHighlights(remapped);
           editSessionBaseRef.current = result.record.currentText;
@@ -1921,7 +1933,7 @@ const App: React.FC = () => {
           });
         }
       } else if (event.type === 'conflict') {
-        if (result.record.key === editableDocuments.getActiveKey()) {
+        if (result.record.key === activeSourceDocumentKeyRef.current) {
           setEditorDirty(true);
           setEditorDiffersFromBaseline(true);
           setEditStats(computeEditStats(result.record.diskBaseline, result.record.currentText));
@@ -1934,16 +1946,16 @@ const App: React.FC = () => {
 
     const changed = await reconcileSourceDocuments({
       changedDir,
-      documents: editableDocuments.getSourceDocuments(),
+      documents: sourceBackedDocuments.getSourceBackedDocuments(),
       sequenceByKey: sourceReconcileSeqRef.current,
-      getDocument: editableDocuments.getDocument,
+      getSourceBackedDocument: sourceBackedDocuments.getSourceBackedDocument,
       fetchSnapshot: fetchSourceDocumentSnapshot,
-      markFileMissing: editableDocuments.markFileMissing,
-      reconcileDiskSnapshot: editableDocuments.reconcileDiskSnapshot,
+      markSourceBackedDocumentFileMissing: sourceBackedDocuments.markSourceBackedDocumentMissing,
+      reconcileDiskSnapshot: sourceBackedDocuments.reconcileDiskSnapshot,
       onEvent: handleReconcileEvent,
     });
     if (changed) scheduleDraftSave();
-  }, [applyEditedDocument, editableDocuments, repaintHighlights, scheduleDraftSave]);
+  }, [applyEditedDocument, sourceBackedDocuments, repaintHighlights, scheduleDraftSave]);
   const reconcileOpenSourceDocumentsRef = useRef(reconcileOpenSourceDocuments);
   useEffect(() => {
     reconcileOpenSourceDocumentsRef.current = reconcileOpenSourceDocuments;
@@ -2043,8 +2055,9 @@ const App: React.FC = () => {
           setMarkdown(normalizedPlan);
           originalMarkdownRef.current = normalizedPlan;
           if (data.mode === 'annotate' && data.sourceSave?.enabled) {
-            const key = editableDocumentKey(data.sourceSave, `file:${data.sourceSave.path}`);
-            editableDocuments.openDocument({ key, text: normalizedPlan, sourceSave: data.sourceSave });
+            const key = sourceBackedDocumentKey(data.sourceSave, `file:${data.sourceSave.path}`);
+            sourceBackedDocuments.openSourceBackedDocument({ key, text: normalizedPlan, sourceSave: data.sourceSave });
+            setActiveSourceDocumentKey(key);
           }
         }
         setIsApiMode(true);
@@ -2343,7 +2356,7 @@ const App: React.FC = () => {
 
   const currentFeedbackPayload = useMemo(() => getCurrentFeedbackPayload(), [
     agentFeedbackRevision,
-    editableDocuments.version,
+    sourceBackedDocuments.version,
     editorDiffersFromBaseline,
     getCurrentFeedbackPayload,
     savedFileChanges,
@@ -2382,7 +2395,7 @@ const App: React.FC = () => {
   const handleAnnotateFeedback = async () => {
     setIsSubmitting(true);
     try {
-      snapshotActiveEditableDocument();
+      snapshotActiveSourceBackedDocument();
       const checkedSavedFileChanges = await validateSavedFileChangesBeforeSubmit();
       if (checkedSavedFileChanges === null) {
         setIsSubmitting(false);
@@ -2983,7 +2996,7 @@ const App: React.FC = () => {
   };
 
   const handleSaveEditedSourceFile = useCallback(async (options?: { overwriteDiskConflict?: boolean }): Promise<boolean> => {
-    const activeDocument = editableDocuments.getActiveDocumentLive();
+    const activeDocument = activeSourceBackedDocument;
     const activeSourceSave = activeDocument?.sourceSave;
     if (!activeDocument || !activeSourceSave?.enabled) {
       toast.error('This document cannot be saved to a file');
@@ -3015,8 +3028,8 @@ const App: React.FC = () => {
       ? activeDocument.diskConflict?.sourceSave.hash
       : undefined;
 
-    editableDocuments.updateActiveText(edited);
-    editableDocuments.markSaving(activeDocument.key);
+    sourceBackedDocuments.updateSourceBackedDocumentText(activeDocument.key, edited);
+    sourceBackedDocuments.markSourceBackedDocumentSaving(activeDocument.key);
     try {
       const res = await fetch('/api/source/save', {
         method: 'POST',
@@ -3044,12 +3057,12 @@ const App: React.FC = () => {
               size: data.currentSize,
               eol: data.currentEol,
             };
-            const result = editableDocuments.reconcileDiskSnapshot({
+            const result = sourceBackedDocuments.reconcileDiskSnapshot({
               key: activeDocument.key,
               text: data.currentText,
               sourceSave: conflictSourceSave,
             });
-            if (result.type === 'conflict' && editableDocuments.getActiveKey() === activeDocument.key) {
+            if (result.type === 'conflict' && activeSourceDocumentKeyRef.current === activeDocument.key) {
               setEditorDirty(true);
               setEditorDiffersFromBaseline(true);
               setEditStats(computeEditStats(result.record.diskBaseline, result.record.currentText));
@@ -3063,7 +3076,7 @@ const App: React.FC = () => {
                 description: 'Choose whether to overwrite disk or reload the file.',
               });
             } else if (result.type === 'clean-updated') {
-              if (editableDocuments.getActiveKey() === activeDocument.key) {
+              if (activeSourceDocumentKeyRef.current === activeDocument.key) {
                 const remapped = applyEditedDocument(result.record.currentText);
                 repaintHighlights(remapped);
                 editSessionBaseRef.current = result.record.currentText;
@@ -3075,20 +3088,20 @@ const App: React.FC = () => {
               toast('File updated from disk', {
                 description: `${result.record.basename} changed outside Plannotator, so it was reloaded instead of saved.`,
               });
-            } else if (!editableDocuments.getDocument(activeDocument.key)?.diskConflict) {
-              editableDocuments.markError(activeDocument.key, message);
+            } else if (!sourceBackedDocuments.getSourceBackedDocument(activeDocument.key)?.diskConflict) {
+              sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, message);
               toast.error('File changed on disk', {
                 description: 'Plannotator could not load the latest disk version. Try saving again.',
               });
             }
           } else {
-            editableDocuments.markError(activeDocument.key, message);
+            sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, message);
             toast.error('File changed on disk', {
               description: 'Plannotator could not load the latest disk version. Try saving again.',
             });
           }
         } else {
-          editableDocuments.markError(activeDocument.key, message);
+          sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, message);
           toast.error(message);
         }
         return true;
@@ -3101,7 +3114,7 @@ const App: React.FC = () => {
         size: data.size,
         eol: data.eol,
       };
-      editableDocuments.markSaved({
+      sourceBackedDocuments.saveSourceBackedDocument({
         key: activeDocument.key,
         text: edited,
         sourceSave: nextSourceSave,
@@ -3111,17 +3124,17 @@ const App: React.FC = () => {
       const normalizedEdited = edited.replace(/\r\n?/g, '\n');
       const savedChangedFromOpen = normalizedEdited !== activeDocument.sessionOpenText;
       editedMarkdownRef.current = null;
-      if (editableDocuments.getActiveKey() === activeDocument.key) {
+      if (activeSourceDocumentKeyRef.current === activeDocument.key) {
         const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
         const normalizedLive = live?.replace(/\r\n?/g, '\n');
         editSessionBaseRef.current = normalizedEdited;
-        const currentText = normalizedLive ?? editableDocuments.getDocument(activeDocument.key)?.currentText ?? normalizedEdited;
+        const currentText = normalizedLive ?? sourceBackedDocuments.getSourceBackedDocument(activeDocument.key)?.currentText ?? normalizedEdited;
         if (currentText === normalizedEdited) {
           setEditorDirty(false);
           setEditorDiffersFromBaseline(false);
           setEditStats(null);
         } else {
-          editableDocuments.updateActiveText(currentText, { forceNotify: true });
+          sourceBackedDocuments.updateSourceBackedDocumentText(activeDocument.key, currentText, { forceNotify: true });
           setEditorDirty(true);
           setEditorDiffersFromBaseline(true);
           setEditStats(computeEditStats(normalizedEdited, currentText));
@@ -3135,20 +3148,20 @@ const App: React.FC = () => {
       toast.success(`Saved ${activeSourceSave.basename}`);
       return true;
     } catch {
-      editableDocuments.markError(activeDocument.key, 'Save failed');
+      sourceBackedDocuments.markSourceBackedDocumentError(activeDocument.key, 'Save failed');
       toast.error('Save failed');
       return true;
     }
-  }, [applyEditedDocument, editableDocuments, isEditingMarkdown, repaintHighlights, scheduleDraftSave]);
+  }, [activeSourceBackedDocument, applyEditedDocument, sourceBackedDocuments, isEditingMarkdown, repaintHighlights, scheduleDraftSave]);
 
   const handleOverwriteDiskConflict = useCallback(() => {
     void handleSaveEditedSourceFile({ overwriteDiskConflict: true });
   }, [handleSaveEditedSourceFile]);
 
   const handleReloadDiskConflict = useCallback(() => {
-    const activeDocument = editableDocuments.getActiveDocumentLive();
+    const activeDocument = activeSourceBackedDocument;
     if (!activeDocument?.diskConflict) return;
-    const reloaded = editableDocuments.reloadDiskConflict(activeDocument.key);
+    const reloaded = sourceBackedDocuments.reloadSourceBackedDocumentConflict(activeDocument.key);
     if (!reloaded) return;
     const remapped = applyEditedDocument(reloaded.currentText);
     repaintHighlights(remapped);
@@ -3158,7 +3171,7 @@ const App: React.FC = () => {
     setEditStats(null);
     scheduleDraftSave();
     toast.success(`Reloaded ${reloaded.basename} from disk`);
-  }, [applyEditedDocument, editableDocuments, repaintHighlights, scheduleDraftSave]);
+  }, [activeSourceBackedDocument, applyEditedDocument, sourceBackedDocuments, repaintHighlights, scheduleDraftSave]);
 
   const handleCopyShareLink = async () => {
     const url = await ensureShareLink();
@@ -3191,7 +3204,7 @@ const App: React.FC = () => {
 
       if (submitted || !isApiMode) return;
 
-      if (isEditingMarkdown && editableDocuments.getActiveDocumentLive()?.sourceSave?.enabled) {
+      if (isEditingMarkdown && activeSourceBackedDocument?.sourceSave?.enabled) {
         e.preventDefault();
         void handleSaveEditedSourceFile();
         return;
@@ -3223,7 +3236,7 @@ const App: React.FC = () => {
   }, [
     showExport, showFeedbackPrompt, showSourceFileEditWarning, showExitWarning,
     pendingPasteImage,
-    submitted, isApiMode, isEditingMarkdown, handleSaveEditedSourceFile, displayedMarkdown, annotationsOutput,
+    submitted, isApiMode, isEditingMarkdown, activeSourceBackedDocument, handleSaveEditedSourceFile, displayedMarkdown, annotationsOutput,
   ]);
 
   // Cmd/Ctrl+P keyboard shortcut — print document
@@ -3408,10 +3421,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeEditableDocument?.diskConflict && (
+        {activeSourceBackedDocument?.diskConflict && (
           <div className="bg-warning/10 border-b border-warning/25 px-4 py-2 flex items-center gap-3 flex-shrink-0">
             <span className="min-w-0 flex-1 text-xs text-warning-foreground">
-              {activeEditableDocument.basename} changed on disk{isEditingMarkdown ? ' while you were editing' : ''}.
+              {activeSourceBackedDocument.basename} changed on disk{isEditingMarkdown ? ' while you were editing' : ''}.
             </span>
             {canOverwriteDiskConflict && (
               <button
@@ -3432,10 +3445,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeEditableDocument?.missingOnDisk && !activeEditableDocument.diskConflict && (
+        {activeSourceBackedDocument?.missingOnDisk && !activeSourceBackedDocument.diskConflict && (
           <div className="bg-warning/10 border-b border-warning/25 px-4 py-2 flex items-center gap-3 flex-shrink-0">
             <span className="min-w-0 flex-1 text-xs text-warning-foreground">
-              {activeEditableDocument.basename} no longer exists on disk. Save to recreate it.
+              {activeSourceBackedDocument.basename} no longer exists on disk. Save to recreate it.
             </span>
             <button
               type="button"
@@ -3524,7 +3537,7 @@ const App: React.FC = () => {
                 showFilesTab={showFilesTab}
                 fileAnnotationCounts={fileAnnotationCounts}
                 highlightedFiles={highlightedFiles}
-                fileEditStatuses={editableDocuments.fileEditStatuses}
+                fileEditStatuses={sourceBackedDocuments.fileEditStatuses}
                 fileBrowser={fileBrowser}
                 onFilesSelectFile={(...args: Parameters<typeof handleFileBrowserSelect>) => {
                   // Plan/review linked-doc browsing still swaps the root document
@@ -3759,7 +3772,7 @@ const App: React.FC = () => {
                 ) : isEditingMarkdown ? (
                   <MarkdownEditor
                     markdown={displayedMarkdown}
-                    documentId={`edit:${activeEditableDocument?.key ?? 'root'}:${editGeneration}`}
+                    documentId={`edit:${activeSourceBackedDocument?.key ?? 'root'}:${editGeneration}`}
                     editorHandleRef={markdownEditorHandleRef}
                     onMarkdownChange={handleEditorChange}
                     maxWidth={annotateReaderMaxWidth}

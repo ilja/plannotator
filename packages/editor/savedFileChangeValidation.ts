@@ -1,19 +1,19 @@
-import type { SavedFileChangeDraftData } from './editableDocuments';
+import type { SourceBackedSavedFileChangeDraftData } from './sourceBackedDocuments';
 import type { SourceSaveProbeResult } from './sourceDocumentClient';
 
 export interface SavedFileChangeValidationResult {
-  valid: SavedFileChangeDraftData[];
-  dropped: Array<{ change: SavedFileChangeDraftData; reason: 'changed' | 'missing' | 'noop' }>;
-  unverified: SavedFileChangeDraftData[];
+  valid: SourceBackedSavedFileChangeDraftData[];
+  dropped: Array<{ change: SourceBackedSavedFileChangeDraftData; reason: 'changed' | 'missing' | 'noop' }>;
+  unverified: SourceBackedSavedFileChangeDraftData[];
 }
 
 export async function validateSavedFileChanges(
-  changes: SavedFileChangeDraftData[],
-  resolveSourceSave: (change: SavedFileChangeDraftData) => Promise<SourceSaveProbeResult>,
+  changes: SourceBackedSavedFileChangeDraftData[],
+  resolveSourceSave: (change: SourceBackedSavedFileChangeDraftData) => Promise<SourceSaveProbeResult>,
 ): Promise<SavedFileChangeValidationResult> {
-  const valid: SavedFileChangeDraftData[] = [];
+  const valid: SourceBackedSavedFileChangeDraftData[] = [];
   const dropped: SavedFileChangeValidationResult['dropped'] = [];
-  const unverified: SavedFileChangeDraftData[] = [];
+  const unverified: SourceBackedSavedFileChangeDraftData[] = [];
 
   for (const change of changes) {
     if (change.beforeText === change.afterText) {

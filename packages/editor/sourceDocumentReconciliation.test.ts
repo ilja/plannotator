@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import type { SourceDocumentSnapshotResult } from './sourceDocumentClient';
 import {
   reconcileSourceDocuments,
-  type OpenSourceDocumentRecord,
+  type OpenSourceBackedDocumentRecord,
   type SourceDocumentReconcileEvent,
 } from './sourceDocumentReconciliation';
-import type { EditableDocumentRecord, EnabledSourceSaveCapability } from './editableDocuments';
+import type { SourceBackedDocumentRecord, EnabledSourceSaveCapability } from './sourceBackedDocuments';
 
 function sourceSave(hash: string, text = 'after\n'): EnabledSourceSaveCapability {
   return {
@@ -22,7 +22,7 @@ function sourceSave(hash: string, text = 'after\n'): EnabledSourceSaveCapability
   };
 }
 
-function record(source = sourceSave('sha256:after'), text = 'after\n'): OpenSourceDocumentRecord {
+function record(source = sourceSave('sha256:after'), text = 'after\n'): OpenSourceBackedDocumentRecord {
   return {
     key: 'file:/repo/docs/a.md',
     path: source.path,
@@ -49,7 +49,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 describe('reconcileSourceDocuments', () => {
   test('ignores an older disk read after a newer reconcile starts', async () => {
-    let current: EditableDocumentRecord = record();
+    let current: SourceBackedDocumentRecord = record();
     const oldFetch = deferred<SourceDocumentSnapshotResult>();
     const newSource = sourceSave('sha256:new', 'new\n');
     const fetches = [
@@ -63,11 +63,11 @@ describe('reconcileSourceDocuments', () => {
     const appliedEvents: SourceDocumentReconcileEvent[] = [];
     const sequenceByKey = new Map<string, number>();
     const options = {
-      documents: [current as OpenSourceDocumentRecord],
+      documents: [current as OpenSourceBackedDocumentRecord],
       sequenceByKey,
-      getDocument: () => current,
+      getSourceBackedDocument: () => current,
       fetchSnapshot: () => fetches.shift() ?? Promise.reject(new Error('unexpected fetch')),
-      markFileMissing: () => null,
+      markSourceBackedDocumentFileMissing: () => null,
       reconcileDiskSnapshot: () => {
         applied.push(newSource.hash);
         current = record(newSource, 'new\n');
@@ -95,16 +95,16 @@ describe('reconcileSourceDocuments', () => {
   });
 
   test('ignores a disk read when the document changed while fetch was pending', async () => {
-    let current: EditableDocumentRecord = record();
+    let current: SourceBackedDocumentRecord = record();
     const staleFetch = deferred<SourceDocumentSnapshotResult>();
     let applied = false;
     const appliedEvents: SourceDocumentReconcileEvent[] = [];
     const reconcile = reconcileSourceDocuments({
-      documents: [current as OpenSourceDocumentRecord],
+      documents: [current as OpenSourceBackedDocumentRecord],
       sequenceByKey: new Map(),
-      getDocument: () => current,
+      getSourceBackedDocument: () => current,
       fetchSnapshot: () => staleFetch.promise,
-      markFileMissing: () => null,
+      markSourceBackedDocumentFileMissing: () => null,
       reconcileDiskSnapshot: () => {
         applied = true;
         return { type: 'clean-updated' as const, record: current, clearedSavedChange: false };

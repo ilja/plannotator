@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  canApplyEditableDocumentDiskSnapshot,
-  canRestoreEditableDocumentDraft,
-  getEditableDocumentKnownDiskHash,
-  markEditableDocumentSaved,
-  markEditableDocumentFileMissing,
-  reconcileEditableDocumentDiskSnapshot,
-  type EditableDocumentRecord,
+  canApplySourceBackedDocumentDiskSnapshot,
+  canRestoreSourceBackedDocumentDraft,
+  getSourceBackedDocumentKnownDiskHash,
+  markSourceBackedDocumentSaved,
+  markSourceBackedDocumentFileMissing,
+  reconcileSourceBackedDocumentDiskSnapshot,
+  type SourceBackedDocumentRecord,
   type EnabledSourceSaveCapability,
-} from './editableDocuments';
+} from './sourceBackedDocuments';
 
 function sourceSave(hash: string, text = 'after\n'): EnabledSourceSaveCapability {
   return {
@@ -25,7 +25,7 @@ function sourceSave(hash: string, text = 'after\n'): EnabledSourceSaveCapability
   };
 }
 
-function record(overrides: Partial<EditableDocumentRecord> = {}): EditableDocumentRecord {
+function record(overrides: Partial<SourceBackedDocumentRecord> = {}): SourceBackedDocumentRecord {
   const source = sourceSave('sha256:after');
   return {
     key: 'file:/repo/docs/a.md',
@@ -53,7 +53,7 @@ function record(overrides: Partial<EditableDocumentRecord> = {}): EditableDocume
   };
 }
 
-describe('reconcileEditableDocumentDiskSnapshot', () => {
+describe('reconcileSourceBackedDocumentDiskSnapshot', () => {
   test('known disk hash follows an active disk-conflict snapshot', () => {
     const nextSource = sourceSave('sha256:external', 'external\n');
     const doc = record({
@@ -65,23 +65,23 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
       },
     });
 
-    expect(getEditableDocumentKnownDiskHash(doc)).toBe('sha256:external');
+    expect(getSourceBackedDocumentKnownDiskHash(doc)).toBe('sha256:external');
   });
 
   test('disk snapshots only apply to the record version that requested them', () => {
     const doc = record();
 
-    expect(canApplyEditableDocumentDiskSnapshot(doc, 'sha256:after')).toBe(true);
-    expect(canApplyEditableDocumentDiskSnapshot(doc, 'sha256:before')).toBe(false);
-    expect(canApplyEditableDocumentDiskSnapshot({ ...doc, saveStatus: 'saving' }, 'sha256:after')).toBe(false);
-    expect(canApplyEditableDocumentDiskSnapshot(null, 'sha256:after')).toBe(false);
+    expect(canApplySourceBackedDocumentDiskSnapshot(doc, 'sha256:after')).toBe(true);
+    expect(canApplySourceBackedDocumentDiskSnapshot(doc, 'sha256:before')).toBe(false);
+    expect(canApplySourceBackedDocumentDiskSnapshot({ ...doc, saveStatus: 'saving' }, 'sha256:after')).toBe(false);
+    expect(canApplySourceBackedDocumentDiskSnapshot(null, 'sha256:after')).toBe(false);
   });
 
   test('clean files adopt disk changes and clear stale saved edit cards', () => {
     const doc = record();
     const nextSource = sourceSave('sha256:external', 'external\n');
 
-    const result = reconcileEditableDocumentDiskSnapshot(doc, {
+    const result = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: 'external\n',
       sourceSave: nextSource,
@@ -106,7 +106,7 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
     });
     const nextSource = sourceSave('sha256:external', 'external\n');
 
-    const result = reconcileEditableDocumentDiskSnapshot(doc, {
+    const result = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: 'external\n',
       sourceSave: nextSource,
@@ -133,7 +133,7 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
     });
     const nextSource = sourceSave('sha256:external', 'external\n');
 
-    const result = reconcileEditableDocumentDiskSnapshot(doc, {
+    const result = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: 'external\n',
       sourceSave: nextSource,
@@ -157,12 +157,12 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
     });
     const nextSource = sourceSave('sha256:external', 'external\n');
 
-    const first = reconcileEditableDocumentDiskSnapshot(doc, {
+    const first = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: 'external\n',
       sourceSave: nextSource,
     });
-    const second = reconcileEditableDocumentDiskSnapshot(doc, {
+    const second = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: 'external\n',
       sourceSave: nextSource,
@@ -186,7 +186,7 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
       mtimeMs: 3000,
     };
 
-    const result = reconcileEditableDocumentDiskSnapshot(doc, {
+    const result = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: 'after\n',
       sourceSave: nextSource,
@@ -218,7 +218,7 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
       mtimeMs: 3000,
     };
 
-    const result = reconcileEditableDocumentDiskSnapshot(doc, {
+    const result = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: 'after\n',
       sourceSave: nextSource,
@@ -239,7 +239,7 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
       saveStatus: 'dirty',
     });
 
-    const result = markEditableDocumentFileMissing(doc);
+    const result = markSourceBackedDocumentFileMissing(doc);
 
     expect(result.type).toBe('file-missing');
     if (result.type !== 'file-missing') throw new Error('expected file missing');
@@ -253,7 +253,7 @@ describe('reconcileEditableDocumentDiskSnapshot', () => {
   });
 });
 
-describe('canRestoreEditableDocumentDraft', () => {
+describe('canRestoreSourceBackedDocumentDraft', () => {
   test('allows restoring over the initial clean file snapshot', () => {
     const source = sourceSave('sha256:after');
     const doc = record({
@@ -263,7 +263,7 @@ describe('canRestoreEditableDocumentDraft', () => {
       sessionOpenHash: source.hash,
     });
 
-    expect(canRestoreEditableDocumentDraft(doc, source, 'after\n')).toBe(true);
+    expect(canRestoreSourceBackedDocumentDraft(doc, source, 'after\n')).toBe(true);
   });
 
   test('does not restore over newer session state', () => {
@@ -275,15 +275,15 @@ describe('canRestoreEditableDocumentDraft', () => {
       sessionOpenHash: source.hash,
     });
 
-    expect(canRestoreEditableDocumentDraft({ ...cleanDoc, currentText: 'live\n' }, source, 'after\n')).toBe(false);
-    expect(canRestoreEditableDocumentDraft({ ...cleanDoc, diskBaseline: 'newer\n', currentText: 'newer\n' }, source, 'after\n')).toBe(false);
-    expect(canRestoreEditableDocumentDraft({ ...cleanDoc, saveStatus: 'missing', missingOnDisk: true }, source, 'after\n')).toBe(false);
-    expect(canRestoreEditableDocumentDraft({ ...cleanDoc, saveStatus: 'saved', savedChange: record().savedChange }, source, 'after\n')).toBe(false);
-    expect(canRestoreEditableDocumentDraft({ ...cleanDoc, sourceSave: sourceSave('sha256:external') }, source, 'after\n')).toBe(false);
+    expect(canRestoreSourceBackedDocumentDraft({ ...cleanDoc, currentText: 'live\n' }, source, 'after\n')).toBe(false);
+    expect(canRestoreSourceBackedDocumentDraft({ ...cleanDoc, diskBaseline: 'newer\n', currentText: 'newer\n' }, source, 'after\n')).toBe(false);
+    expect(canRestoreSourceBackedDocumentDraft({ ...cleanDoc, saveStatus: 'missing', missingOnDisk: true }, source, 'after\n')).toBe(false);
+    expect(canRestoreSourceBackedDocumentDraft({ ...cleanDoc, saveStatus: 'saved', savedChange: record().savedChange }, source, 'after\n')).toBe(false);
+    expect(canRestoreSourceBackedDocumentDraft({ ...cleanDoc, sourceSave: sourceSave('sha256:external') }, source, 'after\n')).toBe(false);
   });
 });
 
-describe('markEditableDocumentSaved', () => {
+describe('markSourceBackedDocumentSaved', () => {
   test('carries a conflict overwrite base forward for later saved edit diffs', () => {
     const doc = record({
       sessionOpenText: 'original\n',
@@ -294,7 +294,7 @@ describe('markEditableDocumentSaved', () => {
     });
     const overwriteSource = sourceSave('sha256:overwrite', 'local\n');
 
-    markEditableDocumentSaved(doc, {
+    markSourceBackedDocumentSaved(doc, {
       key: doc.key,
       text: 'local\n',
       sourceSave: overwriteSource,
@@ -314,7 +314,7 @@ describe('markEditableDocumentSaved', () => {
 
     doc.currentText = 'second\n';
     const secondSource = sourceSave('sha256:second', 'second\n');
-    markEditableDocumentSaved(doc, {
+    markSourceBackedDocumentSaved(doc, {
       key: doc.key,
       text: 'second\n',
       sourceSave: secondSource,
