@@ -17,9 +17,14 @@ export function resolveTemplate(
 
 export const DEFAULT_REVIEW_APPROVED_PROMPT = "# Code Review\n\nCode review completed — all changes approved.";
 
-export const DEFAULT_REVIEW_DENIED_SUFFIX = appendFeedbackDiscussionInstruction(
-  "\n\nThis feedback came from review. Please triage it and verify it against the code, then come back to me with your thoughts on the findings.",
-);
+export const DEFAULT_REVIEW_DENIED_SUFFIX = [
+  "",
+  "",
+  "Treat the findings above as unverified review input. Inspect every finding against the actual code; do not assume automated feedback is correct.",
+  "For each finding, give a clear verdict (Confirmed / Partly / Not a bug / Intended) with concise code evidence. Say whether it was introduced by the current changes, was pre-existing, or reflects deliberate scope.",
+  "",
+  "Do not change any code until we have discussed the verdicts, validated the findings and have reached a shared understanding of what should be done.",
+].join("\n");
 
 export const DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT = appendFeedbackDiscussionInstruction(
   "# Markdown Annotations\n\n{{fileHeader}}: {{filePath}}\n\n{{feedback}}\n\nPlease address the annotation feedback above.",
@@ -87,16 +92,16 @@ export function getReviewDeniedSuffix(
   config?: PlannotatorConfig,
 ): string {
   // Intentionally no per-runtime defaults: every agent gets the same
-  // triage-first instruction so none of them start coding off raw review
-  // feedback. Per-runtime customization stays available via config
+  // verification-first instruction so none of them start coding off raw
+  // review feedback. Per-runtime customization stays available via config
   // (prompts.review.runtimes.<runtime>.denied).
-  return appendFeedbackDiscussionInstruction(getConfiguredPrompt({
+  return getConfiguredPrompt({
     section: "review",
     key: "denied",
     runtime,
     config,
     fallback: DEFAULT_REVIEW_DENIED_SUFFIX,
-  }));
+  });
 }
 
 // ─── Annotate wrappers ──────────────────────────────────────────────────────

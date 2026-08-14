@@ -11,7 +11,7 @@ export interface AnnotateFileFeedbackOptions {
   fileHeader?: "File" | "Folder" | string;
 }
 
-/** Prompt that requires discussion of questions or ambiguous feedback before changes. */
+/** Annotation-only prompt rule for questions or ambiguous feedback. */
 export const FEEDBACK_DISCUSSION_INSTRUCTION =
   "Before making changes, review all feedback. If any comment contains a question or is ambiguous, do not make any changes, including changes requested by clear comments. Discuss the unclear comments with me and wait for my response. Only start making changes after we have reached a shared understanding of every comment. If no comment contains a question and none is ambiguous, apply the feedback.";
 

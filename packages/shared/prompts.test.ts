@@ -16,6 +16,15 @@ import {
   resolveTemplate,
 } from "./prompts";
 
+const EXPECTED_REVIEW_DENIED_SUFFIX = [
+  "",
+  "",
+  "Treat the findings above as unverified review input. Inspect every finding against the actual code; do not assume automated feedback is correct.",
+  "For each finding, give a clear verdict (Confirmed / Partly / Not a bug / Intended) with concise code evidence. Say whether it was introduced by the current changes, was pre-existing, or reflects deliberate scope.",
+  "",
+  "Do not change any code until we have discussed the verdicts, validated the findings and have reached a shared understanding of what should be done.",
+].join("\n");
+
 // ─── Template engine ─────────────────────────────────────────────────────
 
 describe("resolveTemplate", () => {
@@ -93,18 +102,26 @@ describe("getReviewApprovedPrompt", () => {
 });
 
 describe("getReviewDeniedSuffix", () => {
-  test("every runtime gets the same triage-first default", () => {
+  test("every runtime gets the same review verification default", () => {
     const runtimes = ["claude-code", "opencode", "pi", "amp", "droid", "codex", "copilot-cli", "gemini-cli", "kiro-cli"] as const;
     for (const runtime of runtimes) {
-      expect(getReviewDeniedSuffix(runtime, {})).toBe(DEFAULT_REVIEW_DENIED_SUFFIX);
+      expect(getReviewDeniedSuffix(runtime, {})).toBe(EXPECTED_REVIEW_DENIED_SUFFIX);
     }
-    expect(DEFAULT_REVIEW_DENIED_SUFFIX).toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
+    expect(DEFAULT_REVIEW_DENIED_SUFFIX).toBe(EXPECTED_REVIEW_DENIED_SUFFIX);
+    expect(DEFAULT_REVIEW_DENIED_SUFFIX).not.toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
+
+    const assembled = `# Submitted findings${getReviewDeniedSuffix("pi", {})}`;
+    expect(assembled).toContain("# Submitted findings\n\nTreat the findings above as unverified review input.");
   });
 
-  test("keeps the discussion instruction when using a configured override", () => {
+  test("returns a configured review override unchanged", () => {
+    const configuredPrompt = "\nFix everything.";
     expect(getReviewDeniedSuffix("claude-code", {
-      prompts: { review: { denied: "\nFix everything." } },
-    })).toBe(`\nFix everything.\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
+      prompts: { review: { denied: configuredPrompt } },
+    })).toBe(configuredPrompt);
+    expect(getReviewDeniedSuffix("claude-code", {
+      prompts: { review: { denied: configuredPrompt } },
+    })).not.toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
   });
 });
 

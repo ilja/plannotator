@@ -80,7 +80,8 @@ describe("prompts integration (config from disk)", () => {
       console.log(JSON.stringify(getReviewDeniedSuffix("pi")));
     `);
 
-    expect(JSON.parse(result)).toBe(`\n\nFix everything now.\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
+    expect(JSON.parse(result)).toBe("\n\nFix everything now.");
+    expect(JSON.parse(result)).not.toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
   });
 
   test("annotate file feedback reads override from config.json", async () => {
