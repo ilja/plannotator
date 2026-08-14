@@ -3,6 +3,7 @@ import type { SourceDocumentSnapshotResult } from './sourceDocumentClient';
 import {
   reconcileSourceDocuments,
   type OpenSourceDocumentRecord,
+  type SourceDocumentReconcileEvent,
 } from './sourceDocumentReconciliation';
 import type { EditableDocumentRecord, EnabledSourceSaveCapability } from './editableDocuments';
 
@@ -59,6 +60,7 @@ describe('reconcileSourceDocuments', () => {
       }),
     ];
     const applied: string[] = [];
+    const appliedEvents: SourceDocumentReconcileEvent[] = [];
     const sequenceByKey = new Map<string, number>();
     const options = {
       documents: [current as OpenSourceDocumentRecord],
@@ -71,13 +73,15 @@ describe('reconcileSourceDocuments', () => {
         current = record(newSource, 'new\n');
         return { type: 'clean-updated' as const, record: current, clearedSavedChange: false };
       },
-      onEvent: () => {},
+      onEvent: (event) => appliedEvents.push(event),
     };
 
     const first = reconcileSourceDocuments(options);
     const second = reconcileSourceDocuments(options);
 
     await expect(second).resolves.toBe(true);
+    const stateAfterNewerReconcile = structuredClone(current);
+    const eventsAfterNewerReconcile = structuredClone(appliedEvents);
     oldFetch.resolve({
       status: 'ok',
       snapshot: { markdown: 'old\n', sourceSave: sourceSave('sha256:old', 'old\n') },
@@ -85,13 +89,16 @@ describe('reconcileSourceDocuments', () => {
     await expect(first).resolves.toBe(false);
 
     expect(applied).toEqual(['sha256:new']);
-    expect(current.sourceSave.hash).toBe('sha256:new');
+    expect(current).toEqual(stateAfterNewerReconcile);
+    expect(appliedEvents).toEqual(eventsAfterNewerReconcile);
+    expect(appliedEvents).toHaveLength(1);
   });
 
   test('ignores a disk read when the document changed while fetch was pending', async () => {
     let current: EditableDocumentRecord = record();
     const staleFetch = deferred<SourceDocumentSnapshotResult>();
     let applied = false;
+    const appliedEvents: SourceDocumentReconcileEvent[] = [];
     const reconcile = reconcileSourceDocuments({
       documents: [current as OpenSourceDocumentRecord],
       sequenceByKey: new Map(),
@@ -102,10 +109,11 @@ describe('reconcileSourceDocuments', () => {
         applied = true;
         return { type: 'clean-updated' as const, record: current, clearedSavedChange: false };
       },
-      onEvent: () => {},
+      onEvent: (event) => appliedEvents.push(event),
     });
 
     current = record(sourceSave('sha256:newer', 'newer\n'), 'newer\n');
+    const stateBeforeStaleReconcile = structuredClone(current);
     staleFetch.resolve({
       status: 'ok',
       snapshot: { markdown: 'old\n', sourceSave: sourceSave('sha256:old', 'old\n') },
@@ -113,6 +121,7 @@ describe('reconcileSourceDocuments', () => {
 
     await expect(reconcile).resolves.toBe(false);
     expect(applied).toBe(false);
-    expect(current.sourceSave.hash).toBe('sha256:newer');
+    expect(current).toEqual(stateBeforeStaleReconcile);
+    expect(appliedEvents).toEqual([]);
   });
 });

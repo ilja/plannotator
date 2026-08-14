@@ -105,6 +105,7 @@ function cleanOrDirty(record: EditableDocumentRecord): EditableDocumentSaveStatu
 function cloneRecord(record: EditableDocumentRecord): EditableDocumentRecord {
   return {
     ...record,
+    sourceSave: record.sourceSave ? { ...record.sourceSave } : null,
     savedChange: record.savedChange ? { ...record.savedChange } : undefined,
     diskConflict: record.diskConflict
       ? { text: record.diskConflict.text, sourceSave: { ...record.diskConflict.sourceSave } }

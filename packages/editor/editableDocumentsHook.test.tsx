@@ -77,6 +77,78 @@ afterEach(async () => {
   for (const container of containers.splice(0)) container.remove();
 });
 
+describe('useEditableDocuments lifecycle actions', () => {
+  test.skipIf(!hasDom)('editing the current text preserves the disk baseline', async () => {
+    const session = await mountEditableDocuments();
+
+    await act(async () => {
+      session.current().openDocument({ key: KEY, text: 'a\n', sourceSave: SOURCE_A });
+      session.current().updateActiveText('local\n');
+    });
+
+    const doc = session.current().getDocument(KEY);
+    expect(doc?.sessionOpenText).toBe('a\n');
+    expect(doc?.diskBaseline).toBe('a\n');
+    expect(doc?.currentText).toBe('local\n');
+    expect(doc?.saveStatus).toBe('dirty');
+    expect(doc?.sourceSave).toEqual(SOURCE_A);
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('document snapshots do not mutate collection state', async () => {
+    const session = await mountEditableDocuments();
+    const initialSource = { ...SOURCE_A };
+
+    await act(async () => {
+      session.current().openDocument({ key: KEY, text: 'a\n', sourceSave: initialSource });
+      session.current().updateActiveText('local\n');
+      session.current().reconcileDiskSnapshot({
+        key: KEY,
+        text: 'external\n',
+        sourceSave: SOURCE_EXTERNAL,
+      });
+    });
+
+    const snapshot = session.current().getDocument(KEY);
+    if (!snapshot?.diskConflict || !snapshot.sourceSave?.enabled) throw new Error('expected a conflict snapshot');
+    snapshot.currentText = 'mutated\n';
+    snapshot.sourceSave.hash = 'sha256:mutated';
+    snapshot.diskConflict.text = 'mutated external\n';
+    snapshot.diskConflict.sourceSave.hash = 'sha256:mutated';
+
+    const current = session.current().getDocument(KEY);
+    expect(current?.currentText).toBe('local\n');
+    expect(current?.sourceSave?.enabled && current.sourceSave.hash).toBe('sha256:a');
+    expect(current?.diskConflict?.text).toBe('external\n');
+    expect(current?.diskConflict?.sourceSave.hash).toBe('sha256:external');
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('discarding edits restores the existing file baseline', async () => {
+    const session = await mountEditableDocuments();
+
+    await act(async () => {
+      session.current().openDocument({ key: KEY, text: 'a\n', sourceSave: SOURCE_A });
+      session.current().updateActiveText('local\n');
+    });
+
+    let discarded: ReturnType<EditableDocumentsApi['discardDocument']> = null;
+    await act(async () => {
+      discarded = session.current().discardDocument(KEY);
+    });
+
+    expect(discarded?.currentText).toBe('a\n');
+    expect(discarded?.diskBaseline).toBe('a\n');
+    expect(discarded?.saveStatus).toBe('clean');
+    expect(session.current().getDocument(KEY)?.currentText).toBe('a\n');
+    expect(session.current().getUnsavedDocuments()).toEqual([]);
+
+    await session.unmount();
+  });
+});
+
 describe('useEditableDocuments conflict actions', () => {
   test.skipIf(!hasDom)('overwrite conflict records the diff from the latest disk version', async () => {
     const session = await mountEditableDocuments();
