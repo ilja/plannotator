@@ -13,6 +13,7 @@ import { ExportModal } from '@plannotator/ui/components/ExportModal';
 import { ImportModal } from '@plannotator/ui/components/ImportModal';
 import { ConfirmDialog } from '@plannotator/ui/components/ConfirmDialog';
 import { Annotation, AnnotationType, Block, EditorMode, type CodeAnnotation, type InputMethod, type ImageAttachment, type ActionsLabelMode } from '@plannotator/ui/types';
+import { isChoiceAnnotation, reconcileChoiceAnnotations } from '@plannotator/ui/utils/choiceAnnotations';
 import { ThemeProvider } from '@plannotator/ui/components/ThemeProvider';
 import { Tooltip, TooltipProvider } from '@plannotator/ui/components/Tooltip';
 import { AnnotationToolstrip } from '@plannotator/ui/components/AnnotationToolstrip';
@@ -212,6 +213,24 @@ const feedbackLossDescription = (annotationCount: number, hasDirectEdits: boolea
 
 type SourceFileEditWarningAction = 'send-feedback' | 'approve' | 'close';
 
+const choiceQuestionsFromBlocks = (blocks: Block[]) => blocks.flatMap((block) => (
+  block.type === 'choice-question'
+    ? [{
+        blockId: block.id,
+        question: block.content,
+        options: block.choiceOptions ?? [],
+        recommendedLabel: block.recommendedChoiceLabel,
+        sourceText: block.sourceText ?? block.content,
+        sourceLineCount: block.sourceLineCount ?? 1,
+      }]
+    : []
+));
+
+const reconcileDocumentChoiceAnnotations = (
+  annotations: readonly Annotation[],
+  blocks: Block[],
+) => reconcileChoiceAnnotations(annotations, choiceQuestionsFromBlocks(blocks));
+
 const App: React.FC = () => {
   const [markdown, setMarkdown] = useState(DEMO_PLAN_CONTENT);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -221,6 +240,10 @@ const App: React.FC = () => {
   }, [annotations]);
   const [codeAnnotations, setCodeAnnotations] = useState<CodeAnnotation[]>([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const selectedAnnotationIdRef = useRef<string | null>(selectedAnnotationId);
+  useEffect(() => {
+    selectedAnnotationIdRef.current = selectedAnnotationId;
+  }, [selectedAnnotationId]);
   const [selectedCodeAnnotationId, setSelectedCodeAnnotationId] = useState<string | null>(null);
   const [activeSourceDocumentKey, setActiveSourceDocumentKey] = useState<string | null>(null);
   const activeSourceDocumentKeyRef = useRef<string | null>(activeSourceDocumentKey);
@@ -1042,13 +1065,26 @@ const App: React.FC = () => {
 
   const { editorAnnotations, deleteEditorAnnotation } = useEditorAnnotations();
   const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations<Annotation>({ enabled: isApiMode });
+  const externalChoiceReconciliation = useMemo(
+    () => reconcileDocumentChoiceAnnotations(externalAnnotations, blocks),
+    [externalAnnotations, blocks],
+  );
+  const safeExternalAnnotations = externalChoiceReconciliation.retained;
+  useEffect(() => {
+    const invalidatedIds = new Set(externalChoiceReconciliation.invalidatedIds);
+    for (const id of externalChoiceReconciliation.invalidatedIds) deleteExternalAnnotation(id);
+    if (selectedAnnotationIdRef.current && invalidatedIds.has(selectedAnnotationIdRef.current)) {
+      selectedAnnotationIdRef.current = null;
+      setSelectedAnnotationId(null);
+    }
+  }, [deleteExternalAnnotation, externalChoiceReconciliation]);
 
   // Drive DOM highlights for SSE-delivered external annotations. Disabled
   // while a linked doc overlay is open (Viewer DOM is hidden) and while the
   // a dedicated diff surface is active (diff view has its own annotation surface).
   const { reset: resetExternalHighlights } = useExternalAnnotationHighlights({
     viewerRef,
-    externalAnnotations,
+    externalAnnotations: safeExternalAnnotations,
     enabled: isApiMode && !linkedDocHook.isActive && true && !isEditingMarkdown,
     planKey: markdown,
   });
@@ -1058,19 +1094,19 @@ const App: React.FC = () => {
   // type, and originalText). This avoids the timing issues of an effect-based
   // cleanup — draft-restored externals persist until SSE actually re-delivers them.
   const allAnnotations = useMemo(() => {
-    if (externalAnnotations.length === 0) return annotations;
+    if (safeExternalAnnotations.length === 0) return annotations;
 
     const local = annotations.filter(a => {
       if (!a.source) return true;
-      return !externalAnnotations.some(ext =>
+      return !safeExternalAnnotations.some(ext =>
         ext.source === a.source &&
         ext.type === a.type &&
         ext.originalText === a.originalText
       );
     });
 
-    return [...local, ...externalAnnotations];
-  }, [annotations, externalAnnotations]);
+    return [...local, ...safeExternalAnnotations];
+  }, [annotations, safeExternalAnnotations]);
 
   // Plan diff state — memoize filtered annotation lists to avoid new references per render
   const diffAnnotations = useMemo(() => allAnnotations.filter(a => !!a.diffContext), [allAnnotations]);
@@ -1317,11 +1353,24 @@ const App: React.FC = () => {
   // Apply shared annotations to DOM after they're loaded
   useEffect(() => {
     if (pendingSharedAnnotations && pendingSharedAnnotations.length > 0) {
+      const pendingChoiceReconciliation = reconcileDocumentChoiceAnnotations(
+        pendingSharedAnnotations,
+        blocks,
+      );
+      const invalidatedPendingIds = new Set(pendingChoiceReconciliation.invalidatedIds);
+      pendingChoiceReconciliation.invalidatedIds.forEach(id => viewerRef.current?.removeHighlight(id));
+      if (selectedAnnotationIdRef.current && invalidatedPendingIds.has(selectedAnnotationIdRef.current)) {
+        selectedAnnotationIdRef.current = null;
+        setSelectedAnnotationId(null);
+      }
+      const safePendingAnnotations = pendingChoiceReconciliation.retained;
+      setAnnotations(safePendingAnnotations);
+
       // Small delay to ensure DOM is rendered
       const timer = setTimeout(() => {
         // Clear existing highlights first (important when loading new share URL)
         viewerRef.current?.clearAllHighlights();
-        viewerRef.current?.applySharedAnnotations(pendingSharedAnnotations.filter(a => !a.diffContext));
+        viewerRef.current?.applySharedAnnotations(safePendingAnnotations.filter(a => !a.diffContext));
         clearPendingSharedAnnotations();
         // `clearAllHighlights` wiped live external SSE highlights too;
         // tell the external-highlight bookkeeper to re-apply them.
@@ -1329,7 +1378,7 @@ const App: React.FC = () => {
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [pendingSharedAnnotations, clearPendingSharedAnnotations, resetExternalHighlights]);
+  }, [blocks, pendingSharedAnnotations, clearPendingSharedAnnotations, resetExternalHighlights]);
 
   // Markdown edit mode: single consolidated gate. The editor only ever opens on
   // the main plan/file markdown — never on HTML surfaces, linked docs, messages,
@@ -1356,13 +1405,30 @@ const App: React.FC = () => {
   const applyEditedDocument = useCallback((next: string, list?: Annotation[]): Annotation[] => {
     const sourceAnnotations = list ?? annotationsRef.current;
     const newBlocks = parseMarkdownToBlocks(next);
-    const remapped = sourceAnnotations.map((a) => {
-      if (a.diffContext || a.type === AnnotationType.GLOBAL_COMMENT || a.id.startsWith('ann-checkbox-')) return a;
+    const choiceReconciliation = reconcileDocumentChoiceAnnotations(sourceAnnotations, newBlocks);
+    const retainedChoices = new Map(
+      choiceReconciliation.retained
+        .filter(isChoiceAnnotation)
+        .map(annotation => [annotation.id, annotation]),
+    );
+    const invalidatedChoiceIds = new Set(choiceReconciliation.invalidatedIds);
+    choiceReconciliation.invalidatedIds.forEach(id => viewerRef.current?.removeHighlight(id));
+    if (selectedAnnotationIdRef.current && invalidatedChoiceIds.has(selectedAnnotationIdRef.current)) {
+      selectedAnnotationIdRef.current = null;
+      setSelectedAnnotationId(null);
+    }
+
+    const remapped = sourceAnnotations.flatMap((a) => {
+      if (isChoiceAnnotation(a)) {
+        const retainedChoice = retainedChoices.get(a.id);
+        return retainedChoice ? [retainedChoice] : [];
+      }
+      if (a.diffContext || a.type === AnnotationType.GLOBAL_COMMENT || a.id.startsWith('ann-checkbox-')) return [a];
       const blk = newBlocks.find((b) => b.content.includes(a.originalText));
-      if ((blk?.id ?? '') === a.blockId) return a;
+      if ((blk?.id ?? '') === a.blockId) return [a];
       // Block moved: also strip startMeta/endMeta — fromStore() anchors by
       // positional parent index without validating text. Text-search is safe.
-      return { ...a, blockId: blk?.id ?? '', startMeta: undefined, endMeta: undefined };
+      return [{ ...a, blockId: blk?.id ?? '', startMeta: undefined, endMeta: undefined }];
     });
     setMarkdown(next);
     setEditGeneration((g) => g + 1);
@@ -1651,12 +1717,25 @@ const App: React.FC = () => {
       });
     }
 
+    const restoredChoiceReconciliation = reconcileDocumentChoiceAnnotations(
+      restored,
+      parseMarkdownToBlocks(markdown),
+    );
+    const restoredInvalidatedIds = new Set(restoredChoiceReconciliation.invalidatedIds);
+    restoredChoiceReconciliation.invalidatedIds.forEach(id => viewerRef.current?.removeHighlight(id));
+    if (selectedAnnotationIdRef.current && restoredInvalidatedIds.has(selectedAnnotationIdRef.current)) {
+      selectedAnnotationIdRef.current = null;
+      setSelectedAnnotationId(null);
+    }
+    const restoredAnnotations = restoredChoiceReconciliation.retained;
     if (restored.length > 0) {
-      setAnnotations(restored);
-      // Apply highlights to DOM after a tick
-      setTimeout(() => {
-        viewerRef.current?.applySharedAnnotations(restored.filter(a => !a.diffContext));
-      }, 100);
+      setAnnotations(restoredAnnotations);
+      if (restoredAnnotations.length > 0) {
+        // Apply highlights to DOM after a tick
+        setTimeout(() => {
+          viewerRef.current?.applySharedAnnotations(restoredAnnotations.filter(a => !a.diffContext));
+        }, 100);
+      }
     }
     scheduleDraftSave();
   }, [restoreDraft, validateDraftSavedFileChanges, editStats, isEditingMarkdown, sourceBackedDocuments, activeSourceBackedDocument, markdown, applyEditedDocument, repaintHighlights, scheduleDraftSave]);
@@ -2520,8 +2599,10 @@ const App: React.FC = () => {
   ]);
 
   const handleAddAnnotation = (ann: Annotation) => {
-    setAnnotations(prev => [...prev, ann]);
-    setSelectedAnnotationId(ann.id);
+    const safeAnnotation = reconcileDocumentChoiceAnnotations([ann], blocks).retained[0];
+    if (!safeAnnotation) return;
+    setAnnotations(prev => [...prev, safeAnnotation]);
+    setSelectedAnnotationId(safeAnnotation.id);
     setSelectedCodeAnnotationId(null);
   };
 
@@ -2576,7 +2657,11 @@ const App: React.FC = () => {
   // Core annotation removal — highlight cleanup + state filter + selection clear
   const removeAnnotation = (id: string) => {
     viewerRef.current?.removeHighlight(id);
-    setAnnotations(prev => prev.filter(a => a.id !== id));
+    if (externalAnnotations.some(annotation => annotation.id === id)) {
+      deleteExternalAnnotation(id);
+    } else {
+      setAnnotations(prev => prev.filter(a => a.id !== id));
+    }
     if (selectedAnnotationId === id) setSelectedAnnotationId(null);
   };
 

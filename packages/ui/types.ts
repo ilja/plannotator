@@ -40,6 +40,7 @@ export interface Annotation {
   isQuickLabel?: boolean; // true if created via quick label chip
   quickLabelTip?: string; // optional instruction tip from the label definition
   choiceOptionLabel?: string; // selected option label for choice-question widgets
+  choiceValidationEvidence?: ChoiceValidationEvidence;
   diffContext?: 'added' | 'removed' | 'modified'; // set when annotation is created from a diff context
   // web-highlighter metadata for cross-element selections
   startMeta?: {
@@ -59,6 +60,11 @@ export type AlertKind = 'note' | 'tip' | 'warning' | 'caution' | 'important';
 export interface ChoiceQuestionOption {
   label: string;
   text: string;
+}
+
+export interface ChoiceValidationEvidence {
+  question: string;
+  options: ChoiceQuestionOption[];
 }
 
 export interface Block {

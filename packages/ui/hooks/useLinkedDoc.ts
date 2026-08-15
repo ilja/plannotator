@@ -8,6 +8,8 @@
 
 import { useState, useCallback, useRef } from "react";
 import type { Annotation, ImageAttachment } from "../types";
+import { parseMarkdownToBlocks } from "../utils/parser";
+import { reconcileChoiceAnnotations } from "../utils/choiceAnnotations";
 import type { ViewerHandle } from "../components/Viewer";
 import type { SidebarTab } from "./useSidebar";
 import type { SourceSaveCapability } from "@plannotator/shared/source-save";
@@ -113,6 +115,26 @@ export interface UseLinkedDocReturn {
 
 const HIGHLIGHT_REAPPLY_DELAY = 100;
 
+const reconcileLinkedDocumentAnnotations = (
+  markdown: string | undefined,
+  annotations: Annotation[],
+): Annotation[] => {
+  const blocks = parseMarkdownToBlocks(markdown ?? '');
+  const questions = blocks.flatMap((block) => (
+    block.type === 'choice-question'
+      ? [{
+          blockId: block.id,
+          question: block.content,
+          options: block.choiceOptions ?? [],
+          recommendedLabel: block.recommendedChoiceLabel,
+          sourceText: block.sourceText ?? block.content,
+          sourceLineCount: block.sourceLineCount ?? 1,
+        }]
+      : []
+  ));
+  return reconcileChoiceAnnotations(annotations, questions).retained;
+};
+
 export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
   const {
     markdown,
@@ -164,10 +186,11 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
 
     // Cache current linked doc annotations
     if (linkedDoc) {
+      const currentMarkdown = getDocumentMarkdown?.(linkedDoc.filepath, linkedDoc.markdown) ?? linkedDoc.markdown;
       docCache.current.set(linkedDoc.filepath, {
-        annotations: [...annotations],
+        annotations: reconcileLinkedDocumentAnnotations(currentMarkdown, [...annotations]),
         globalAttachments: [...globalAttachments],
-        markdown: getDocumentMarkdown?.(linkedDoc.filepath, linkedDoc.markdown) ?? linkedDoc.markdown,
+        markdown: currentMarkdown,
         isConverted: linkedDoc.isConverted,
       });
       // Update reactive count so button labels can respond
@@ -181,22 +204,27 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     // Restore plan state (including render mode — an HTML base restores to HTML)
     const saved = savedPlanState.current;
     setRenderAs(saved.renderAs);
+    const restoredAnnotations = reconcileLinkedDocumentAnnotations(saved.markdown, saved.annotations);
     setRawHtml(saved.rawHtml);
     setShareHtml(saved.shareHtml);
     setMarkdown(saved.markdown);
-    setAnnotations(saved.annotations);
+    setAnnotations(restoredAnnotations);
     setGlobalAttachments(saved.globalAttachments);
-    setSelectedAnnotationId(saved.selectedAnnotationId);
+    setSelectedAnnotationId(
+      saved.selectedAnnotationId && restoredAnnotations.some(annotation => annotation.id === saved.selectedAnnotationId)
+        ? saved.selectedAnnotationId
+        : null,
+    );
     setLinkedDoc(null);
     setError(null);
     savedPlanState.current = null;
     onAfterBack?.();
 
     // Re-apply plan annotation highlights after DOM settles
-    if (saved.annotations.length) {
+    if (restoredAnnotations.length) {
       setTimeout(() => {
         viewerRef.current?.clearAllHighlights();
-        viewerRef.current?.applySharedAnnotations(saved.annotations);
+        viewerRef.current?.applySharedAnnotations(restoredAnnotations);
       }, HIGHLIGHT_REAPPLY_DELAY);
     }
   }, [
@@ -259,10 +287,11 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
       setDocAnnotationCount(total);
     } else if (linkedDoc) {
       // Already viewing a linked doc — cache its annotations before moving on
+      const currentMarkdown = getDocumentMarkdown?.(linkedDoc.filepath, linkedDoc.markdown) ?? linkedDoc.markdown;
       docCache.current.set(linkedDoc.filepath, {
-        annotations: [...annotations],
+        annotations: reconcileLinkedDocumentAnnotations(currentMarkdown, [...annotations]),
         globalAttachments: [...globalAttachments],
-        markdown: getDocumentMarkdown?.(linkedDoc.filepath, linkedDoc.markdown) ?? linkedDoc.markdown,
+        markdown: currentMarkdown,
         isConverted: linkedDoc.isConverted,
       });
       let total = 0;
@@ -287,11 +316,15 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     const nextMarkdown = notifyDocumentLoaded
       ? hostMarkdown ?? cached?.markdown ?? data.markdown ?? ''
       : data.markdown ?? cached?.markdown ?? '';
+    const nextAnnotations = reconcileLinkedDocumentAnnotations(
+      docRenderAs === 'html' ? '' : nextMarkdown,
+      cached?.annotations ?? [],
+    );
     setRenderAs(docRenderAs);
     setRawHtml(docRenderAs === 'html' ? (data.rawHtml ?? '') : '');
     setShareHtml(docRenderAs === 'html' ? (data.shareHtml ?? '') : '');
     setMarkdown(docRenderAs === 'html' ? '' : nextMarkdown);
-    setAnnotations(cached?.annotations ?? []);
+    setAnnotations(nextAnnotations);
     setGlobalAttachments(cached?.globalAttachments ?? []);
     setSelectedAnnotationId(null);
     setLinkedDoc({
@@ -303,10 +336,10 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     sidebar.open(targetTab ?? "toc");
 
     // Re-apply cached annotations after DOM settles
-    if (cached?.annotations.length) {
+    if (nextAnnotations.length) {
       setTimeout(() => {
         viewerRef.current?.clearAllHighlights();
-        viewerRef.current?.applySharedAnnotations(cached.annotations);
+        viewerRef.current?.applySharedAnnotations(nextAnnotations);
       }, HIGHLIGHT_REAPPLY_DELAY);
     }
   }, [
@@ -421,27 +454,37 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     viewerRef.current?.clearAllHighlights();
 
     savedPlanState.current = null;
-    docCache.current = new Map(state.docs);
+    docCache.current = new Map(
+      [...state.docs.entries()].map(([filepath, cached]) => [filepath, {
+        ...cached,
+        annotations: reconcileLinkedDocumentAnnotations(cached.markdown, cached.annotations),
+      }]),
+    );
     let total = 0;
     for (const cached of docCache.current.values()) {
       total += cached.annotations.length + cached.globalAttachments.length;
     }
     setDocAnnotationCount(total);
 
+    const rootAnnotations = reconcileLinkedDocumentAnnotations(state.root.markdown, state.root.annotations);
     setMarkdown(state.root.markdown);
     setRenderAs(state.root.renderAs);
     setRawHtml(state.root.rawHtml);
     setShareHtml(state.root.shareHtml);
-    setAnnotations([...state.root.annotations]);
+    setAnnotations(rootAnnotations);
     setGlobalAttachments([...state.root.globalAttachments]);
-    setSelectedAnnotationId(state.root.selectedAnnotationId);
+    setSelectedAnnotationId(
+      state.root.selectedAnnotationId && rootAnnotations.some(annotation => annotation.id === state.root.selectedAnnotationId)
+        ? state.root.selectedAnnotationId
+        : null,
+    );
     setLinkedDoc(null);
     setError(null);
 
-    if (state.root.annotations.length) {
+    if (rootAnnotations.length) {
       setTimeout(() => {
         viewerRef.current?.clearAllHighlights();
-        viewerRef.current?.applySharedAnnotations(state.root.annotations);
+        viewerRef.current?.applySharedAnnotations(rootAnnotations);
       }, HIGHLIGHT_REAPPLY_DELAY);
     }
   }, [
@@ -460,7 +503,10 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     // Include stashed original-file annotations when viewing a linked doc
     if (linkedDoc && savedPlanState.current && sourceFilePath) {
       result.set(sourceFilePath, {
-        annotations: [...savedPlanState.current.annotations],
+        annotations: reconcileLinkedDocumentAnnotations(
+          savedPlanState.current.markdown,
+          savedPlanState.current.annotations,
+        ),
         globalAttachments: [...savedPlanState.current.globalAttachments],
         markdown: savedPlanState.current.markdown,
         isConverted: !!sourceConverted,

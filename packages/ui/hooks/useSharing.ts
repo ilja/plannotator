@@ -10,6 +10,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Annotation, type ImageAttachment } from '../types';
+import { parseMarkdownToBlocks } from '../utils/parser';
+import { reconcileChoiceAnnotations } from '../utils/choiceAnnotations';
 import {
   type SharePayload,
   parseShareHash,
@@ -89,6 +91,26 @@ function looksLikeSharePayload(rawHash: string): boolean {
   return hash.length >= 30 && /^[A-Za-z0-9_-]+$/.test(hash) && /[A-Z]/.test(hash);
 }
 
+const reconcileSharedChoiceAnnotations = (
+  annotations: Annotation[],
+  markdown: string,
+): Annotation[] => {
+  const blocks = parseMarkdownToBlocks(markdown);
+  const questions = blocks.flatMap((block) => (
+    block.type === 'choice-question'
+      ? [{
+          blockId: block.id,
+          question: block.content,
+          options: block.choiceOptions ?? [],
+          recommendedLabel: block.recommendedChoiceLabel,
+          sourceText: block.sourceText ?? block.content,
+          sourceLineCount: block.sourceLineCount ?? 1,
+        }]
+      : []
+  ));
+  return reconcileChoiceAnnotations(annotations, questions).retained;
+};
+
 export function useSharing(
   markdown: string,
   annotations: Annotation[],
@@ -153,7 +175,10 @@ export function useSharing(
             setShareHtml?.('');
           }
 
-          const restoredAnnotations = fromShareable(payload.a, payload.d, payload.s);
+          const restoredAnnotations = reconcileSharedChoiceAnnotations(
+            fromShareable(payload.a, payload.d, payload.s, payload.cv, payload.co),
+            payload.p ?? '',
+          );
           setAnnotations(restoredAnnotations);
 
           const parsedGlobalAttachments = parseShareableImages(payload.g) ?? [];
@@ -201,7 +226,10 @@ export function useSharing(
         }
 
         // Convert shareable annotations to full annotations
-        const restoredAnnotations = fromShareable(payload.a, payload.d, payload.s);
+        const restoredAnnotations = reconcileSharedChoiceAnnotations(
+          fromShareable(payload.a, payload.d, payload.s, payload.cv, payload.co),
+          payload.p ?? '',
+        );
         setAnnotations(restoredAnnotations);
 
         const parsedGlobalAttachments = parseShareableImages(payload.g) ?? [];
@@ -369,7 +397,10 @@ export function useSharing(
       }
 
       // Convert to full annotations
-      const importedAnnotations = fromShareable(payload.a, payload.d, payload.s);
+      const importedAnnotations = reconcileSharedChoiceAnnotations(
+        fromShareable(payload.a, payload.d, payload.s, payload.cv, payload.co),
+        markdown,
+      );
 
       if (importedAnnotations.length === 0) {
         return { success: true, count: 0, planTitle, error: 'No annotations found in share link' };
@@ -419,7 +450,7 @@ export function useSharing(
       const errorMessage = e instanceof Error ? e.message : 'Failed to decompress share URL';
       return { success: false, count: 0, planTitle: '', error: errorMessage };
     }
-  }, [annotations, globalAttachments, setAnnotations, setGlobalAttachments, pasteApiUrl]);
+  }, [annotations, globalAttachments, markdown, setAnnotations, setGlobalAttachments, pasteApiUrl]);
 
   return {
     isSharedSession,

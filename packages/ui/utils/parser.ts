@@ -1,5 +1,6 @@
-import { Block, type Annotation, type ChoiceQuestionOption, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
+import { Block, type Annotation, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
 import { annotationFeedback } from '@plannotator/shared/feedback-templates';
+import { parseChoiceQuestion } from './choiceAnnotations';
 
 /**
  * Parsed YAML frontmatter as key-value pairs.
@@ -92,172 +93,6 @@ export const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 const HTML_BLOCK_OPEN_RE = /^<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s|>|\/|$)/;
-
-type ParsedChoiceQuestion = {
-  question: string;
-  options: ChoiceQuestionOption[];
-  recommendedLabel?: string;
-  sourceText: string;
-  sourceLineCount: number;
-  endIndex: number;
-};
-
-const OPTION_RE = /^(\s*)-\s+Option\s+([^:]+):\s+(.+)\s*$/;
-const RICH_OPTION_RE = /^(\s*)(?:-\s+)?Option\s+([^:]+):\s+(.+)\s*$/;
-const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+(.+?)\s*$/i;
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const matchesRecommendedLabel = (text: string, label: string) => {
-  if (!/\bOptions?\b/.test(text)) return false;
-
-  return new RegExp(`\\b${escapeRegExp(label)}\\b`).test(text);
-};
-
-const findRecommendedLabel = (
-  options: ChoiceQuestionOption[],
-  recommendationLine: string | undefined,
-): string | undefined => {
-  const recommendationText = recommendationLine?.match(RECOMMENDATION_RE)?.[1].trim();
-  const matchingLabels = recommendationText
-    ? options
-      .filter(option => matchesRecommendedLabel(recommendationText, option.label))
-      .map(option => option.label)
-    : [];
-
-  return matchingLabels.length === 1 ? matchingLabels[0] : undefined;
-};
-
-const parseStrictChoiceQuestionAt = (
-  lines: string[],
-  paragraphLines: string[],
-  paragraphStartIndex: number,
-  nextIndex: number,
-): ParsedChoiceQuestion | null => {
-  const options: ChoiceQuestionOption[] = [];
-  let i = nextIndex + 1;
-  let optionIndent: number | undefined;
-  while (i < lines.length) {
-    const match = lines[i].match(OPTION_RE);
-    if (!match) break;
-
-    const currentIndent = match[1].length;
-    optionIndent ??= currentIndent;
-    if (currentIndent !== optionIndent) break;
-
-    const optionTextLines = [match[3].trim()];
-    i += 1;
-
-    while (i < lines.length) {
-      const nextOptionMatch = lines[i].match(OPTION_RE);
-      if (nextOptionMatch && nextOptionMatch[1].length === optionIndent) break;
-      if (lines[i].trim() === '') break;
-      if (lines[i].match(/^\s*/)?.[0].length <= optionIndent) break;
-
-      optionTextLines.push(lines[i].trim());
-      i += 1;
-    }
-
-    options.push({ label: match[2].trim(), text: optionTextLines.join('\n') });
-  }
-
-  if (options.length < 2) return null;
-  if (i < lines.length && lines[i]?.trim() !== '') return null;
-
-  const recommendationLine = i < lines.length ? lines[i + 1] : undefined;
-  const recommendationMatch = recommendationLine?.match(RECOMMENDATION_RE);
-  const endIndex = recommendationMatch ? i + 1 : i - 1;
-  const sourceLines = lines.slice(paragraphStartIndex, endIndex + 1);
-
-  return {
-    question: paragraphLines.join('\n'),
-    options,
-    recommendedLabel: findRecommendedLabel(options, recommendationLine),
-    sourceText: sourceLines.join('\n'),
-    sourceLineCount: sourceLines.length,
-    endIndex,
-  };
-};
-
-const parseRichChoiceQuestionAt = (
-  lines: string[],
-  paragraphLines: string[],
-  paragraphStartIndex: number,
-  nextIndex: number,
-): ParsedChoiceQuestion | null => {
-  const optionOffset = paragraphLines.findIndex((line, index) => (
-    index > 0 && RICH_OPTION_RE.test(line)
-  ));
-  const optionStartIndex = optionOffset >= 0
-    ? paragraphStartIndex + optionOffset
-    : nextIndex + 1;
-  const firstOptionMatch = lines[optionStartIndex]?.match(RICH_OPTION_RE);
-  if (!firstOptionMatch) return null;
-
-  const questionLines = optionOffset >= 0
-    ? paragraphLines.slice(0, optionOffset)
-    : paragraphLines;
-  let recommendationIndex = -1;
-  for (let i = optionStartIndex + 1; i < lines.length; i++) {
-    if (/^#{1,6}(?:\s|$)/.test(lines[i].trim())) return null;
-    if (RECOMMENDATION_RE.test(lines[i])) {
-      recommendationIndex = i;
-      break;
-    }
-  }
-  if (recommendationIndex < 0) return null;
-
-  const optionIndent = firstOptionMatch[1].length;
-  const optionHeaders: Array<{ index: number; match: RegExpMatchArray }> = [];
-  for (let i = optionStartIndex; i < recommendationIndex; i++) {
-    const match = lines[i].match(RICH_OPTION_RE);
-    if (match && match[1].length === optionIndent) {
-      optionHeaders.push({ index: i, match });
-    }
-  }
-  if (optionHeaders.length < 2) return null;
-
-  const options = optionHeaders.map(({ index, match }, optionIndex) => {
-    const nextHeaderIndex = optionHeaders[optionIndex + 1]?.index ?? recommendationIndex;
-    const textLines = [match[3].trim(), ...lines.slice(index + 1, nextHeaderIndex)];
-    while (textLines.at(-1)?.trim() === '') textLines.pop();
-
-    return {
-      label: match[2].trim(),
-      text: textLines.map(line => line.trim()).join('\n'),
-    };
-  });
-  const sourceLines = lines.slice(paragraphStartIndex, recommendationIndex + 1);
-
-  return {
-    question: questionLines.join('\n'),
-    options,
-    recommendedLabel: findRecommendedLabel(options, lines[recommendationIndex]),
-    sourceText: sourceLines.join('\n'),
-    sourceLineCount: sourceLines.length,
-    endIndex: recommendationIndex,
-  };
-};
-
-const parseChoiceQuestionAt = (
-  lines: string[],
-  paragraphLines: string[],
-  paragraphStartIndex: number,
-  nextIndex: number,
-): ParsedChoiceQuestion | null => {
-  if (paragraphLines.length === 0) return null;
-  if (lines[nextIndex]?.trim() !== '') return null;
-
-  return parseStrictChoiceQuestionAt(
-    lines,
-    paragraphLines,
-    paragraphStartIndex,
-    nextIndex,
-  ) ?? parseRichChoiceQuestionAt(
-    lines,
-    paragraphLines,
-    paragraphStartIndex,
-    nextIndex,
-  );
-};
 
 /**
  * A simplified markdown parser that splits content into linear blocks.
@@ -548,12 +383,10 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
 
     // Empty lines separate paragraphs
     if (trimmed === '') {
-      const choice = parseChoiceQuestionAt(
-        lines,
-        buffer,
-        bufferStartLine - contentStartLine,
-        i,
-      );
+      const candidateStartIndex = bufferStartLine - contentStartLine;
+      const choice = buffer.length > 0
+        ? parseChoiceQuestion(lines.slice(candidateStartIndex).join('\n'))
+        : null;
 
       if (choice) {
         blocks.push({
@@ -570,7 +403,7 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
         buffer = [];
         currentType = 'paragraph';
         lastLineWasBlank = false;
-        i = choice.endIndex;
+        i = candidateStartIndex + choice.sourceLineCount - 1;
         continue;
       }
 

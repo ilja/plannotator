@@ -48,7 +48,11 @@ import { usePinpoint } from '../hooks/usePinpoint';
 import { useAnnotationHighlighter } from '../hooks/useAnnotationHighlighter';
 import { useScrollViewport } from '../hooks/useScrollViewport';
 import { decodeAnchorHash } from '../utils/anchors';
-import { isChoiceAnnotationForBlock, nextChoiceAnnotationId } from '../utils/choiceAnnotations';
+import {
+  isChoiceAnnotationForBlock,
+  nextChoiceAnnotationId,
+  selectChoiceOption,
+} from '../utils/choiceAnnotations';
 
 interface ViewerProps {
   blocks: Block[];
@@ -184,6 +188,13 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   const [locationHash, setLocationHash] = useState(() => window.location.hash);
   const globalCommentButtonRef = useRef<HTMLButtonElement>(null);
   const lastChoiceAnnotationByBlockRef = useRef(new Map<string, { id: string; label: string }>());
+  useEffect(() => {
+    for (const [blockId, choice] of lastChoiceAnnotationByBlockRef.current) {
+      if (!annotations.some(annotation => annotation.id === choice.id && annotation.blockId === blockId)) {
+        lastChoiceAnnotationByBlockRef.current.delete(blockId);
+      }
+    }
+  }, [annotations]);
 
   const handleCopyPlan = async () => {
     try {
@@ -260,15 +271,23 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   const handleSelectChoice = useCallback((block: Block, option: ChoiceQuestionOption) => {
     const previousChoiceAnnotations = annotations.filter(ann => isChoiceAnnotationForBlock(ann, block.id));
     const lastLocalChoice = lastChoiceAnnotationByBlockRef.current.get(block.id);
-    const clickedAlreadySelected =
-      previousChoiceAnnotations.some(ann => ann.choiceOptionLabel === option.label) ||
-      lastLocalChoice?.label === option.label;
+    const previousChoice = previousChoiceAnnotations.find(ann => ann.choiceOptionLabel !== undefined);
+    const currentChoice = previousChoice
+      ? { id: previousChoice.id, choiceOptionLabel: previousChoice.choiceOptionLabel }
+      : lastLocalChoice
+        ? { id: lastLocalChoice.id, choiceOptionLabel: lastLocalChoice.label }
+        : undefined;
+    const choice = selectChoiceOption(
+      currentChoice,
+      { question: block.content, options: block.choiceOptions ?? [] },
+      option,
+    );
+    if (choice.kind === 'invalid') return;
     const idsToRemove = new Set(previousChoiceAnnotations.map(ann => ann.id));
     if (lastLocalChoice) idsToRemove.add(lastLocalChoice.id);
-
     idsToRemove.forEach(id => onRemoveAnnotation?.(id));
 
-    if (clickedAlreadySelected) {
+    if (choice.kind === 'cleared') {
       lastChoiceAnnotationByBlockRef.current.delete(block.id);
       window.getSelection()?.removeAllRanges();
       return;
@@ -284,6 +303,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
       originalText: option.text,
       isQuickLabel: true,
       choiceOptionLabel: option.label,
+      choiceValidationEvidence: choice.validationEvidence,
       createdA: Date.now(),
       author: getIdentity(),
     };

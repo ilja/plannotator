@@ -79,6 +79,13 @@ const CHOICE_ANNOTATION: Annotation = {
   originalText: 'Beta',
   isQuickLabel: true,
   choiceOptionLabel: 'B',
+  choiceValidationEvidence: {
+    question: 'Pick one',
+    options: [
+      { label: 'A', text: 'Alpha' },
+      { label: 'B', text: 'Beta' },
+    ],
+  },
   createdA: 1718000000000,
   author: 'tater',
 };
@@ -289,6 +296,13 @@ describe('direct-edit draft persistence', () => {
       id: CHOICE_ANNOTATION.id,
       isQuickLabel: true,
       choiceOptionLabel: 'B',
+      choiceValidationEvidence: {
+        question: 'Pick one',
+        options: [
+          { label: 'A', text: 'Alpha' },
+          { label: 'B', text: 'Beta' },
+        ],
+      },
     }));
     await s2.unmount();
   });

@@ -8,7 +8,7 @@
  * Inspired by textarea.my's approach.
  */
 
-import { Annotation, AnnotationType, type ImageAttachment } from '../types';
+import { Annotation, AnnotationType, type ChoiceValidationEvidence, type ImageAttachment } from '../types';
 import { compress, decompress } from '@plannotator/shared/compress';
 import { encrypt, decrypt } from '@plannotator/shared/crypto';
 
@@ -27,6 +27,8 @@ export interface SharePayload {
   g?: ShareableImage[];  // global attachments (path strings or [path, name] tuples)
   d?: (string | null)[];  // diffContext per annotation, parallel to `a`
   s?: (string | undefined)[];  // source per annotation (external tool identifier), parallel to `a`
+  cv?: (ChoiceValidationEvidence | null)[];  // choice evidence per annotation, parallel to `a`
+  co?: (string | null)[];  // selected choice label per annotation, parallel to `a`
   h?: string;  // raw HTML content (direct HTML rendering mode)
   r?: 'html';  // render mode flag (omitted = markdown)
 }
@@ -87,7 +89,13 @@ export function toShareable(annotations: Annotation[]): ShareableAnnotation[] {
  * Note: blockId, offsets, and meta will need to be populated separately
  * by finding the text in the rendered document.
  */
-export function fromShareable(data: ShareableAnnotation[], diffContexts?: (string | null)[] | null, sources?: (string | undefined)[] | null): Annotation[] {
+export function fromShareable(
+  data: ShareableAnnotation[],
+  diffContexts?: (string | null)[] | null,
+  sources?: (string | undefined)[] | null,
+  choiceValidationEvidence?: (ChoiceValidationEvidence | null)[] | null,
+  choiceOptionLabels?: (string | null)[] | null,
+): Annotation[] {
   const typeMap: Record<string, AnnotationType> = {
     'D': AnnotationType.DELETION,
     'C': AnnotationType.COMMENT,
@@ -126,9 +134,13 @@ export function fromShareable(data: ShareableAnnotation[], diffContexts?: (strin
     const rawImages = type === 'D' ? item[3] as ShareableImage[] | undefined : item[4] as ShareableImage[] | undefined;
     // Comment annotations may have isQuickLabel flag at index 5
     const isQuickLabel = type === 'C' && item.length > 5 && item[5] === 1 ? true : undefined;
+    const choiceOptionLabel = type === 'C' ? choiceOptionLabels?.[index] ?? undefined : undefined;
+    const choiceAnnotationId = choiceOptionLabel !== undefined
+      ? `ann-choice-shared-${index}-${Date.now()}`
+      : `shared-${index}-${Date.now()}`;
 
     return {
-      id: `shared-${index}-${Date.now()}`,
+      id: choiceAnnotationId,
       blockId: '',  // Will be populated during highlight restoration
       startOffset: 0,
       endOffset: 0,
@@ -139,8 +151,10 @@ export function fromShareable(data: ShareableAnnotation[], diffContexts?: (strin
       author: author || undefined,
       images: parseShareableImages(rawImages),
       ...(isQuickLabel ? { isQuickLabel } : {}),
+      ...(choiceOptionLabel !== undefined ? { choiceOptionLabel } : {}),
       ...(diffContexts?.[index] ? { diffContext: diffContexts[index] as Annotation['diffContext'] } : {}),
       ...(sources?.[index] ? { source: sources[index] } : {}),
+      ...(choiceValidationEvidence?.[index] ? { choiceValidationEvidence: choiceValidationEvidence[index]! } : {}),
       // startMeta/endMeta will be set by web-highlighter
     };
   });
@@ -154,6 +168,16 @@ function buildDiffContextArray(annotations: Annotation[]): (string | null)[] | n
 function buildSourceArray(annotations: Annotation[]): (string | undefined)[] | null {
   const arr = annotations.map(a => a.source || undefined);
   return arr.some(v => v !== undefined) ? arr : null;
+}
+
+function buildChoiceValidationEvidenceArray(annotations: Annotation[]): (ChoiceValidationEvidence | null)[] | null {
+  const arr = annotations.map(annotation => annotation.choiceValidationEvidence ?? null);
+  return arr.some(value => value !== null) ? arr : null;
+}
+
+function buildChoiceOptionLabelArray(annotations: Annotation[]): (string | null)[] | null {
+  const arr = annotations.map(annotation => annotation.choiceOptionLabel ?? null);
+  return arr.some(value => value !== null) ? arr : null;
 }
 
 /**
@@ -170,12 +194,16 @@ export async function generateShareUrl(
   if (rawHtml) return null;
   const diffContexts = buildDiffContextArray(annotations);
   const sources = buildSourceArray(annotations);
+  const choiceValidationEvidence = buildChoiceValidationEvidenceArray(annotations);
+  const choiceOptionLabels = buildChoiceOptionLabelArray(annotations);
   const payload: SharePayload = {
     p: markdown,
     a: toShareable(annotations),
     g: globalAttachments?.length ? toShareableImages(globalAttachments) : undefined,
     ...(diffContexts ? { d: diffContexts } : {}),
     ...(sources ? { s: sources } : {}),
+    ...(choiceValidationEvidence ? { cv: choiceValidationEvidence } : {}),
+    ...(choiceOptionLabels ? { co: choiceOptionLabels } : {}),
   };
 
   const hash = await compress(payload);
@@ -254,12 +282,16 @@ export async function createShortShareUrl(
   try {
     const diffContexts = buildDiffContextArray(annotations);
     const sources = buildSourceArray(annotations);
+    const choiceValidationEvidence = buildChoiceValidationEvidenceArray(annotations);
+    const choiceOptionLabels = buildChoiceOptionLabelArray(annotations);
     const payload: SharePayload = {
       p: markdown,
       a: toShareable(annotations),
       g: globalAttachments?.length ? toShareableImages(globalAttachments) : undefined,
       ...(diffContexts ? { d: diffContexts } : {}),
       ...(sources ? { s: sources } : {}),
+      ...(choiceValidationEvidence ? { cv: choiceValidationEvidence } : {}),
+      ...(choiceOptionLabels ? { co: choiceOptionLabels } : {}),
       ...(rawHtml ? { h: rawHtml, r: 'html' as const } : {}),
     };
 

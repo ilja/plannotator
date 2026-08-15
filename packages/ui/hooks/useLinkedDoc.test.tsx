@@ -21,12 +21,32 @@ const annotation = (id: string, originalText: string): Annotation => ({
 
 type LinkedDocApi = ReturnType<typeof useLinkedDoc>;
 
+const CHOICE_MARKDOWN = `Pick one
+
+- Option A: Alpha
+- Option B: Beta
+
+Recommendation: Option B.`;
+
+const LEGACY_CHOICE: Annotation = {
+  id: 'ann-choice-legacy',
+  blockId: 'block-0',
+  startOffset: 0,
+  endOffset: 4,
+  type: AnnotationType.COMMENT,
+  originalText: 'Beta',
+  createdA: 1,
+  choiceOptionLabel: 'B',
+};
+
 type Session = {
   current: () => {
     hook: LinkedDocApi;
     markdown: string;
     annotations: Annotation[];
+    selectedAnnotationId: string | null;
     setAnnotations: React.Dispatch<React.SetStateAction<Annotation[]>>;
+    setSelectedAnnotationId: React.Dispatch<React.SetStateAction<string | null>>;
   };
   unmount: () => Promise<void>;
 };
@@ -67,7 +87,7 @@ async function mountLinkedDoc(): Promise<Session> {
       sidebar: { open: () => undefined },
       onDocumentLoaded: () => undefined,
     });
-    latest = { hook, markdown, annotations, setAnnotations };
+    latest = { hook, markdown, annotations, selectedAnnotationId, setAnnotations, setSelectedAnnotationId };
     return null;
   }
 
@@ -126,6 +146,40 @@ describe('useLinkedDoc unsupported Markdown path', () => {
     expect(session.current().markdown).toBe('linked markdown');
     expect(session.current().annotations).toEqual([linkedAnnotation]);
     expect(session.current().hook.getDocAnnotations().get(filepath)?.markdown).toBe('linked markdown');
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('reconciles invalid cached choices and clears the selected id', async () => {
+    const session = await mountLinkedDoc();
+    const filepath = '/repo/docs/choices.md';
+
+    await act(async () => {
+      session.current().hook.openLoaded({
+        filepath,
+        markdown: CHOICE_MARKDOWN,
+        sourceSave: unsupportedSourceSave,
+      });
+    });
+    await act(async () => {
+      session.current().setAnnotations([LEGACY_CHOICE]);
+      session.current().setSelectedAnnotationId(LEGACY_CHOICE.id);
+    });
+    await act(async () => {
+      session.current().hook.back();
+    });
+
+    expect(session.current().hook.getDocAnnotations().get(filepath)?.annotations).toEqual([]);
+
+    await act(async () => {
+      session.current().hook.openLoaded({
+        filepath,
+        markdown: CHOICE_MARKDOWN,
+        sourceSave: unsupportedSourceSave,
+      });
+    });
+    expect(session.current().annotations).toEqual([]);
+    expect(session.current().selectedAnnotationId).toBeNull();
 
     await session.unmount();
   });
