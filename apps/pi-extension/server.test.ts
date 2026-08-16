@@ -506,11 +506,11 @@ describe("pi review server", () => {
         semSource: "env",
       });
 
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
         summary?: { added: number; fileCount: number };
         changes?: Array<{ entityType: string; entityName: string; filePath: string }>;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json());
       expect(semanticPayload).toMatchObject({
         status: "ok",
         summary: { added: 1, fileCount: 1 },
@@ -542,9 +542,9 @@ describe("pi review server", () => {
     });
 
     try {
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload.status).toBe("ok");
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(agentCwd));
     } finally {
@@ -570,9 +570,9 @@ describe("pi review server", () => {
     });
 
     try {
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload.status).toBe("ok");
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(repoDir));
     } finally {
@@ -593,15 +593,15 @@ describe("pi review server", () => {
     });
 
     try {
-      const diffPayload = await fetch(`${server.url}/api/diff`).then((response) => response.json()) as {
+      const diffPayload: {
         semanticDiff?: { available: boolean };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
       expect(diffPayload.semanticDiff).toEqual({ available: false });
 
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
         reason?: string;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload).toMatchObject({
         status: "unavailable",
         reason: "sem-path-missing",
@@ -637,12 +637,12 @@ describe("pi review server", () => {
     try {
       const diffResponse = await fetch(`${server.url}/api/diff`);
       expect(diffResponse.status).toBe(200);
-      const diffPayload = await diffResponse.json() as {
+      const diffPayload: {
         rawPatch: string;
         gitContext?: { diffOptions: Array<{ id: string }> };
         origin?: string;
         repoInfo?: { display: string };
-      };
+      } = await diffResponse.json();
       expect(diffPayload.origin).toBe("pi");
       expect(diffPayload.rawPatch).toContain("diff --git a/untracked.txt b/untracked.txt");
       expect(diffPayload.gitContext?.diffOptions.map((option) => option.id)).toEqual(
@@ -651,10 +651,10 @@ describe("pi review server", () => {
       expect(diffPayload.repoInfo?.display).toBeTruthy();
 
       const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
-      const fileContent = await fileContentResponse.json() as {
+      const fileContent: {
         oldContent: string | null;
         newContent: string | null;
-      };
+      } = await fileContentResponse.json();
       expect(fileContent.oldContent).toBe("before\n");
       expect(fileContent.newContent).toBe("after\n");
 
@@ -682,11 +682,11 @@ describe("pi review server", () => {
         }),
       });
       expect(annotationCreate.status).toBe(200);
-      const createdAnnotation = await annotationCreate.json() as { id: string };
+      const createdAnnotation: { id: string } = await annotationCreate.json();
       expect(createdAnnotation.id).toBeTruthy();
 
       const annotationsList = await fetch(`${server.url}/api/editor-annotations`);
-      const annotationsPayload = await annotationsList.json() as { annotations: Array<{ id: string }> };
+      const annotationsPayload: { annotations: Array<{ id: string }> } = await annotationsList.json();
       expect(annotationsPayload.annotations).toHaveLength(1);
       expect(annotationsPayload.annotations[0].id).toBe(createdAnnotation.id);
 
@@ -704,7 +704,7 @@ describe("pi review server", () => {
         body: formData,
       });
       expect(uploadResponse.status).toBe(200);
-      const uploadPayload = await uploadResponse.json() as { path: string; originalName: string };
+      const uploadPayload: { path: string; originalName: string } = await uploadResponse.json();
       expect(uploadPayload.originalName).toBe("diagram.png");
 
       const imageResponse = await fetch(
