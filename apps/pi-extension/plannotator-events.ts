@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { DiffType, VcsSelection } from "./server.js";
 import { getRecentAssistantMessages } from "./assistant-message.js";
@@ -88,9 +89,60 @@ export type PlannotatorResponseMap = {
 	"annotate-last": PlannotatorResponse<PlannotatorAnnotationResult>;
 };
 
-function isPlannotatorAction(value: unknown): value is PlannotatorAction {
-	return value === "code-review" || value === "annotate" || value === "annotate-last";
-}
+// Channel contract ("Supported actions and payloads" in README): each action is a
+// request/response flow; senders provide a respond callback. `respond` cannot be
+// validated as callable by a schema (no Function schema), so it is accepted as
+// `Schema.Any` and guarded nullish at the handler.
+const DiffTypeSchema = Schema.Union([
+	Schema.Literals([
+		"uncommitted", "staged", "unstaged", "last-commit",
+		"jj-current", "jj-last", "jj-line", "jj-all", "jj-evolog",
+		"branch", "merge-base", "all", "p4-default",
+	]),
+	Schema.TemplateLiteral(["worktree:", Schema.String]),
+	Schema.TemplateLiteral(["p4-changelist:", Schema.String]),
+]);
+
+const PlannotatorCodeReviewPayloadSchema = Schema.Struct({
+	diffType: Schema.optionalKey(DiffTypeSchema),
+	defaultBranch: Schema.optionalKey(Schema.String),
+	vcsType: Schema.optionalKey(Schema.Literals(["auto", "git", "jj", "p4"])),
+	useLocal: Schema.optionalKey(Schema.Boolean),
+	cwd: Schema.optionalKey(Schema.String),
+	prUrl: Schema.optionalKey(Schema.String),
+});
+
+const PlannotatorAnnotatePayloadSchema = Schema.Struct({
+	filePath: Schema.String,
+	markdown: Schema.optionalKey(Schema.String),
+	mode: Schema.optionalKey(Schema.Literals(["annotate", "annotate-folder", "annotate-last"])),
+	folderPath: Schema.optionalKey(Schema.String),
+	gate: Schema.optionalKey(Schema.Boolean),
+});
+
+const PlannotatorAnnotateLastPayloadSchema = Schema.Struct({
+	markdown: Schema.optionalKey(Schema.String),
+	gate: Schema.optionalKey(Schema.Boolean),
+});
+
+// Discriminated on `action`, so the handler's switch narrows payload per case.
+const PlannotatorRequestMessage = Schema.Union([
+	Schema.Struct({
+		action: Schema.Literal("code-review"),
+		payload: Schema.optionalKey(PlannotatorCodeReviewPayloadSchema),
+		respond: Schema.Any,
+	}),
+	Schema.Struct({
+		action: Schema.Literal("annotate"),
+		payload: Schema.optionalKey(PlannotatorAnnotatePayloadSchema),
+		respond: Schema.Any,
+	}),
+	Schema.Struct({
+		action: Schema.Literal("annotate-last"),
+		payload: Schema.optionalKey(PlannotatorAnnotateLastPayloadSchema),
+		respond: Schema.Any,
+	}),
+]);
 
 function createActiveSessionContext() {
 	let currentCtx: ExtensionContext | undefined;
@@ -117,12 +169,11 @@ export function registerPlannotatorEventListeners(pi: ExtensionAPI): void {
 		activeSessionContext.set(ctx);
 	});
 	pi.events.on(PLANNOTATOR_REQUEST_CHANNEL, async (data) => {
-		const request = data as Partial<PlannotatorRequest> | null;
+		const request = Option.getOrUndefined(
+			Schema.decodeUnknownOption(PlannotatorRequestMessage)(data),
+		);
+		if (!request || request.respond == null) return;
 		const ctx = activeSessionContext.get();
-
-		if (!request || typeof request.respond !== "function" || !isPlannotatorAction(request.action)) {
-			return;
-		}
 
 		try {
 			if (!ctx) {

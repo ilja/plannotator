@@ -143,7 +143,7 @@ function reservePort(): Promise<number> {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
-      if (!address || typeof address === "string") {
+      if (!address || !("port" in address)) {
         server.close();
         reject(new Error("Failed to reserve test port"));
         return;
@@ -240,10 +240,10 @@ setInterval(() => {}, 1000);
         new Request("http://localhost/api/ai/capabilities"),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as {
+      const body: {
         available: boolean;
         providers: Array<{ id: string; name: string; models?: Array<{ id: string }> }>;
-      };
+      } = await response.json();
       expect(body.available).toBe(true);
       expect(body.providers).toHaveLength(1);
       expect(body.providers[0]).toMatchObject({ id: "pi-sdk", name: "pi-sdk" });
@@ -275,10 +275,10 @@ describe("pi annotate server", () => {
     try {
       const response = await fetch(`${server.url}/api/plan`);
       expect(response.status).toBe(200);
-      const payload = await response.json() as {
+      const payload: {
         mode?: string;
         recentMessages?: Array<{ messageId: string; text: string }>;
-      };
+      } = await response.json();
 
       expect(payload.mode).toBe("annotate-last");
       expect(payload.recentMessages).toEqual([{ messageId: "entry-1", text: "assistant text" }]);
@@ -424,11 +424,11 @@ describe("pi annotate server", () => {
     });
 
     try {
-      const payload = await fetch(`${server.url}/api/plan`).then((response) => response.json()) as {
+      const payload: {
         mode?: string;
         projectRoot?: string;
         sourceSave?: { enabled?: boolean; reason?: string };
-      };
+      } = await fetch(`${server.url}/api/plan`).then((response) => response.json());
 
       expect(payload.mode).toBe("annotate-folder");
       expect(payload.projectRoot).toBe(folderPath);
@@ -457,8 +457,8 @@ describe("pi annotate server", () => {
     try {
       const response = await fetch(`${server.url}/api/ai/capabilities`);
       expect(response.status).toBe(200);
-      const payload = await response.json() as { available?: boolean; providers?: unknown[] };
-      expect(typeof payload.available).toBe("boolean");
+      const payload: { available?: boolean; providers?: unknown[] } = await response.json();
+      expect(payload.available).toBeTypeOf("boolean");
       expect(Array.isArray(payload.providers)).toBe(true);
     } finally {
       server.stop();
@@ -497,9 +497,9 @@ describe("pi review server", () => {
     });
 
     try {
-      const diffPayload = await fetch(`${server.url}/api/diff`).then((response) => response.json()) as {
+      const diffPayload: {
         semanticDiff?: { available: boolean; semVersion?: string; semSource?: string };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
       expect(diffPayload.semanticDiff).toMatchObject({
         available: true,
         semVersion: "0.8.0",
