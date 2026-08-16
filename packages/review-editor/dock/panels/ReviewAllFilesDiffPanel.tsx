@@ -49,10 +49,7 @@ export const ReviewAllFilesDiffPanel: React.FC<IDockviewPanelProps> = () => {
       onVisibleFileChange={state.onAllFilesVisibleFileChange}
       isActive={state.isAllFilesActive}
       aiAvailable={state.aiAvailable}
-      onAskAIForFile={state.onAskAIForFile}
-      isAILoading={state.isAILoading}
-      onViewAIResponse={state.onViewAIResponse}
-      getAIHistoryForFile={state.getAIHistoryForFile}
+      onAttachAIContextForFile={state.onAttachAIContextForFile}
     />
   );
 };

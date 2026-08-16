@@ -13,7 +13,6 @@ import { useAnnotationToolbar } from '../hooks/useAnnotationToolbar';
 import { AnnotationToolbar } from './AnnotationToolbar';
 import { SuggestionModal } from './SuggestionModal';
 import { getEnabledLabels } from './ConventionalLabelPicker';
-import type { AIChatEntry } from '../hooks/useAIChat';
 
 export interface ToolbarHostHandle {
   handleLineSelectionEnd: (range: SelectedLineRange | null) => void;
@@ -43,12 +42,6 @@ interface ToolbarHostProps {
     conventionalLabel?: ConventionalLabel | null,
     decorations?: ConventionalDecoration[],
   ) => void;
-  // AI props (optional — only DiffViewer wires these today)
-  aiAvailable?: boolean;
-  onAskAI?: (question: string) => void;
-  isAILoading?: boolean;
-  onViewAIResponse?: (questionId?: string) => void;
-  aiHistoryMessages?: AIChatEntry[];
 }
 
 /**
@@ -63,11 +56,6 @@ export const ToolbarHost = forwardRef<ToolbarHostHandle, ToolbarHostProps>(funct
     onLineSelection,
     onAddAnnotation,
     onEditAnnotation,
-    aiAvailable,
-    onAskAI,
-    isAILoading,
-    onViewAIResponse,
-    aiHistoryMessages,
   },
   ref,
 ) {
@@ -129,11 +117,6 @@ export const ToolbarHost = forwardRef<ToolbarHostHandle, ToolbarHostProps>(funct
           decorations={toolbar.decorations}
           onDecorationsChange={toolbar.setDecorations}
           enabledLabels={enabledLabels}
-          aiAvailable={aiAvailable}
-          onAskAI={onAskAI}
-          isAILoading={isAILoading}
-          onViewAIResponse={onViewAIResponse}
-          aiHistoryMessages={aiHistoryMessages}
         />
       )}
 

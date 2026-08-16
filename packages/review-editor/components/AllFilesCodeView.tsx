@@ -35,13 +35,13 @@ import { annotationMatchesPrScope, isFileScopedAnnotation, lineRangeForAnnotatio
 import { lineAnnotationMetadata } from '../utils/annotationDisplay';
 import { InlineAnnotation } from './InlineAnnotation';
 import { detectLanguage } from '../utils/detectLanguage';
-import type { AIChatEntry } from '../hooks/useAIChat';
 import type { ReviewSearchMatch } from '../utils/reviewSearch';
 import {
   applyItemSearchHighlights,
   clearItemSearchHighlights,
   swapActiveSearchHighlight,
 } from '../utils/reviewSearchHighlight';
+import { createReviewGutterActionsElement, type HoveredDiffLine } from './ReviewGutterActions';
 
 /**
  * AllFilesCodeView (migration phases P1 + P2 + P3 + P4)
@@ -205,15 +205,13 @@ interface AllFilesCodeViewProps {
   onVisibleFileChange?: (filePath: string | null) => void;
   // Only handle [/]/z/v/a/c/x keyboard nav when this surface is the active panel.
   isActive?: boolean;
-  // AI props (optional — surfaced into the toolbar). File-aware variants: this
-  // surface owns which file the selection lives in (activeFilePath), so the
-  // index-based onAskAI/aiHistoryForSelection (which resolve the file from the
-  // single-file panel's focus) must not be used here.
+  // AI props for the custom gutter action. The sidebar owns the actual chat.
   aiAvailable?: boolean;
-  onAskAIForFile?: (filePath: string, question: string) => void;
-  isAILoading?: boolean;
-  onViewAIResponse?: (questionId?: string) => void;
-  getAIHistoryForFile?: (filePath: string) => AIChatEntry[];
+  onAttachAIContextForFile?: (
+    filePath: string,
+    lineNumber: number,
+    side: 'additions' | 'deletions',
+  ) => void;
 }
 
 // Diffshub-style stable path-based id allocation. Plannotator's file list is
@@ -405,10 +403,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   onVisibleFileChange,
   isActive = true,
   aiAvailable = false,
-  onAskAIForFile,
-  isAILoading = false,
-  onViewAIResponse,
-  getAIHistoryForFile,
+  onAttachAIContextForFile,
 }) => {
   // showFileHeader: true suppresses usePierreTheme's `[data-title]` hide rule.
   // With renderCustomHeader the built-in header runs in 'custom' mode (only the
@@ -439,9 +434,6 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // keyed off this file's path + patch, but the value is sourced from the
   // CodeView callback context (item.id) — never from geometry inference.
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  // Mirror ref so stable callbacks (Ask AI) read the active file at CALL time.
-  const activeFilePathRef = useRef(activeFilePath);
-  activeFilePathRef.current = activeFilePath;
   const [selectedLines, setSelectedLines] = useState<CodeViewLineSelection | null>(null);
   // A range whose toolbar must open only after the ToolbarHost remounts against
   // the newly-activated file (its patch/filePath props changed this render).
@@ -627,21 +619,6 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       );
     },
     [activeFilePath, onAddAnnotationForFile],
-  );
-
-  // Ask AI + AI history routed by THIS surface's active file (the file the
-  // toolbar selection lives in) — never by the single-file panel's focus index.
-  const handleAskAIForActiveFile = useMemo(() => {
-    if (!onAskAIForFile) return undefined;
-    return (question: string) => {
-      const filePath = activeFilePathRef.current;
-      if (filePath) onAskAIForFile(filePath, question);
-    };
-  }, [onAskAIForFile]);
-
-  const aiHistoryForActiveFile = useMemo(
-    () => (getAIHistoryForFile && activeFilePath ? getAIHistoryForFile(activeFilePath) : []),
-    [getAIHistoryForFile, activeFilePath],
   );
 
   // Edit routes through the ToolbarHost handle (same as AllFilesDiffView). The
@@ -1482,12 +1459,26 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     },
   );
 
-  const handleGutterUtilityClick = useStableCallback(
-    (range: SelectedLineRange, item: CodeViewItem<DiffAnnotationMetadata>) => {
-      if (item.type !== 'diff') return;
-      const filePath = itemIdToFilePath.get(item.id);
-      if (filePath == null) return;
-      routeSelectionToToolbar(range, filePath);
+  const renderGutterUtility = useStableCallback(
+    (
+      getHoveredLine: () => HoveredDiffLine | undefined,
+      context: { item: CodeViewItem<DiffAnnotationMetadata> },
+    ) => {
+      const { item } = context;
+      if (item.type !== 'diff') return null;
+      const file = itemIdToFile.get(item.id);
+      if (file == null) return null;
+
+      return createReviewGutterActionsElement({
+        getHoveredLine,
+        aiAvailable,
+        onComment: (range) => routeSelectionToToolbar(range, file.path),
+        onAttachAI: (line) => onAttachAIContextForFile?.(
+          file.path,
+          line.lineNumber,
+          line.side,
+        ),
+      });
     },
   );
 
@@ -1901,8 +1892,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       onLineSelectionEnd(range, context) {
         handleLineSelectionEnd(range, context.item);
       },
-      onGutterUtilityClick(range, context) {
-        handleGutterUtilityClick(range, context.item);
+      renderGutterUtility(getHoveredLine, context) {
+        return renderGutterUtility(getHoveredLine as () => HoveredDiffLine | undefined, context);
       },
       // P7: token code navigation. CodeView appends the owning-item context as
       // the final arg to every shared callback (same as the selection/gutter
@@ -1943,7 +1934,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       expandUnchanged,
       customLineHeight,
       handleLineSelectionEnd,
-      handleGutterUtilityClick,
+      renderGutterUtility,
       onCodeNavRequest,
       handleTokenClick,
       handleTokenEnter,
@@ -2026,11 +2017,6 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
         onLineSelection={onLineSelection}
         onAddAnnotation={handleAddAnnotation}
         onEditAnnotation={onEditAnnotation}
-        aiAvailable={aiAvailable}
-        onAskAI={handleAskAIForActiveFile}
-        isAILoading={isAILoading}
-        onViewAIResponse={onViewAIResponse}
-        aiHistoryMessages={aiHistoryForActiveFile}
       />
 
       {fileCommentAnchor && onAddFileCommentForFile && (

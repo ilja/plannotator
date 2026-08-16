@@ -21,6 +21,7 @@ import { getLineNumberFromNode, getSideFromNode, getDiffSelection } from '../uti
 import { isContentConsistentWithPatch } from '../utils/patchConsistency';
 import { InlineAnnotation } from './InlineAnnotation';
 import { InlineAIMarker } from './InlineAIMarker';
+import { ReviewGutterActions, type HoveredDiffLine } from './ReviewGutterActions';
 import type { AIChatEntry } from '../hooks/useAIChat';
 import { type ReviewSearchMatch } from '../utils/reviewSearch';
 import {
@@ -45,7 +46,7 @@ interface PierreDiffContentProps {
   mergedAnnotations: DiffLineAnnotation<DiffAnnotationMetadata>[];
   pendingSelection: SelectedLineRange | null;
   onLineSelectionEnd: (range: SelectedLineRange | null) => void;
-  onGutterUtilityClick: (range: SelectedLineRange) => void;
+  renderGutterUtility: NonNullable<React.ComponentProps<typeof FileDiff>['renderGutterUtility']>;
   renderAnnotation: (annotation: { side: string; lineNumber: number; metadata?: DiffAnnotationMetadata }) => React.ReactNode;
   onTokenClick?: (props: DiffTokenEventBaseProps, event: MouseEvent) => void;
   onTokenEnter?: (props: DiffTokenEventBaseProps, event: PointerEvent) => void;
@@ -66,7 +67,7 @@ const PierreDiffContent = React.memo(({
   mergedAnnotations,
   pendingSelection,
   onLineSelectionEnd,
-  onGutterUtilityClick,
+  renderGutterUtility,
   renderAnnotation,
   onTokenClick,
   onTokenEnter,
@@ -93,7 +94,6 @@ const PierreDiffContent = React.memo(({
         hunkSeparators: 'line-info',
         enableLineSelection: true,
         enableGutterUtility: true,
-        onGutterUtilityClick,
         onLineSelectionEnd,
         // Pierre's renderer-options builder drops onToken* before it evaluates
         // shouldUseTokenTransformer, so passing the handlers alone never wraps
@@ -107,6 +107,7 @@ const PierreDiffContent = React.memo(({
       lineAnnotations={mergedAnnotations}
       selectedLines={pendingSelection || undefined}
       renderAnnotation={renderAnnotation}
+      renderGutterUtility={renderGutterUtility}
     />
   );
 }, (prev, next) => (
@@ -126,7 +127,7 @@ const PierreDiffContent = React.memo(({
   prev.mergedAnnotations === next.mergedAnnotations &&
   prev.pendingSelection === next.pendingSelection &&
   prev.onLineSelectionEnd === next.onLineSelectionEnd &&
-  prev.onGutterUtilityClick === next.onGutterUtilityClick &&
+  prev.renderGutterUtility === next.renderGutterUtility &&
   prev.renderAnnotation === next.renderAnnotation &&
   prev.onTokenClick === next.onTokenClick &&
   prev.onTokenEnter === next.onTokenEnter &&
@@ -177,13 +178,9 @@ interface DiffViewerProps {
   activeSearchMatch?: ReviewSearchMatch | null;
   // AI props
   aiAvailable?: boolean;
-  onAskAI?: (question: string) => void;
-  isAILoading?: boolean;
-  onViewAIResponse?: (questionId?: string) => void;
   aiMessages?: AIChatEntry[];
   onClickAIMarker?: (questionId: string) => void;
-  /** AI messages overlapping the current pending selection */
-  aiHistoryMessages?: AIChatEntry[];
+  onAttachAIContext?: (lineNumber: number, side: 'additions' | 'deletions') => void;
   // Code navigation
   onCodeNavRequest?: (request: import('@plannotator/shared/code-nav').CodeNavRequest) => void;
 }
@@ -228,12 +225,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   activeSearchMatchId = null,
   activeSearchMatch = null,
   aiAvailable = false,
-  onAskAI,
-  isAILoading = false,
-  onViewAIResponse,
   aiMessages = [],
   onClickAIMarker,
-  aiHistoryMessages = [],
+  onAttachAIContext,
   onCodeNavRequest,
 }) => {
   const pierreTheme = usePierreTheme({ fontFamily, fontSize });
@@ -576,9 +570,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     );
   }, [filePath, selectedAnnotationId, onSelectAnnotation, handleEdit, onDeleteAnnotation, onClickAIMarker]);
 
-  const handleGutterUtilityClick = useCallback((range: SelectedLineRange) => {
-    toolbarHostRef.current?.handleLineSelectionEnd(range);
-  }, []);
+  const renderGutterUtility = useCallback((getHoveredLine: () => HoveredDiffLine | undefined) => (
+    <ReviewGutterActions
+      getHoveredLine={getHoveredLine}
+      aiAvailable={aiAvailable}
+      onComment={(range) => toolbarHostRef.current?.handleLineSelectionEnd(range)}
+      onAttachAI={(line) => onAttachAIContext?.(line.lineNumber, line.side)}
+    />
+  ), [aiAvailable, onAttachAIContext]);
 
   useEffect(() => {
     const root = diffContentRef.current;
@@ -710,7 +709,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
               mergedAnnotations={mergedAnnotations}
               pendingSelection={pendingSelection ?? selectedAnnotationRange}
               onLineSelectionEnd={handlePierreLineSelectionEnd}
-              onGutterUtilityClick={handleGutterUtilityClick}
+              renderGutterUtility={renderGutterUtility}
               renderAnnotation={renderAnnotation}
               onTokenClick={handleTokenClick}
               onTokenEnter={handleTokenEnter}
@@ -727,11 +726,6 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         onLineSelection={onLineSelection}
         onAddAnnotation={onAddAnnotation}
         onEditAnnotation={onEditAnnotation}
-        aiAvailable={aiAvailable}
-        onAskAI={onAskAI}
-        isAILoading={isAILoading}
-        onViewAIResponse={onViewAIResponse}
-        aiHistoryMessages={aiHistoryMessages}
       />
 
       {fileCommentAnchor && (
