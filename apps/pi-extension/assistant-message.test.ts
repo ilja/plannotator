@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { Option, Schema } from "effect";
 import {
+	AssistantMessage,
+	getAssistantMessageText,
 	getLastAssistantMessageSnapshot,
 	getRecentAssistantMessages,
 	type SessionBranchReader,
@@ -31,6 +34,71 @@ function assistantEntry(
 function fakeCtx(branch: FixtureEntry[]): SessionBranchReader {
 	return { sessionManager: { getBranch: () => branch } };
 }
+
+describe("getAssistantMessageText", () => {
+	test("extracts text blocks and joins them", () => {
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)({
+				role: "assistant",
+				content: [
+					{ type: "text", text: "a" },
+					{ type: "text", text: "b" },
+				],
+			}),
+		);
+
+		expect(parsed !== undefined && getAssistantMessageText(parsed)).toBe("a\nb");
+	});
+
+	test("skips non-text blocks", () => {
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)({
+				role: "assistant",
+				content: [
+					{ type: "tool_call", name: "x" },
+					{ type: "text", text: "only" },
+				],
+			}),
+		);
+
+		expect(parsed !== undefined && getAssistantMessageText(parsed)).toBe("only");
+	});
+
+	test("rejects non-assistant roles at the boundary", () => {
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)({
+				role: "user",
+				content: [{ type: "text", text: "hi" }],
+			}),
+		);
+
+		expect(parsed).toBeUndefined();
+	});
+
+	test("rejects non-array content at the boundary", () => {
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)({ role: "assistant", content: "text" }),
+		);
+
+		expect(parsed).toBeUndefined();
+	});
+
+	test("rejects non-object input at the boundary", () => {
+		expect(Option.getOrUndefined(Schema.decodeUnknownOption(AssistantMessage)("hi"))).toBeUndefined();
+		expect(Option.getOrUndefined(Schema.decodeUnknownOption(AssistantMessage)(null))).toBeUndefined();
+	});
+
+	test("returns null when the extracted text is only whitespace", () => {
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)({
+				role: "assistant",
+				content: [{ type: "text", text: "   " }],
+			}),
+		);
+
+		expect(parsed !== undefined && getAssistantMessageText(parsed)).toBeNull();
+	});
+});
 
 describe("getLastAssistantMessageSnapshot", () => {
 	test("returns the newest assistant message with text", () => {

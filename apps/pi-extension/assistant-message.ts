@@ -1,6 +1,5 @@
 import { Effect, Option, Schema, SchemaGetter } from "effect";
 
-type AssistantTextBlock = { type?: string; text?: string };
 type AssistantMessageLike = {
 	role?: unknown;
 	content?: unknown;
@@ -63,26 +62,26 @@ const SessionEntryTimestamp = Schema.Union([
 	}),
 );
 
-function isAssistantMessage(message: AssistantMessageLike): message is { role: "assistant"; content: AssistantTextBlock[] } {
-	return message.role === "assistant" && Array.isArray(message.content);
-}
+const AssistantTextBlock = Schema.Struct({
+	type: Schema.optionalKey(Schema.String),
+	text: Schema.optionalKey(Schema.String),
+});
 
-function getTextContent(message: { content: AssistantTextBlock[] }): string {
-	return message.content
-		.filter((block): block is { type: "text"; text: string } => block.type === "text")
-		.map((block) => block.text)
+type AssistantTextBlock = Schema.Schema.Type<typeof AssistantTextBlock>;
+
+/** Assistant message contract for session entries; decodes at the branch boundary. */
+export const AssistantMessage = Schema.Struct({
+	role: Schema.Literal("assistant"),
+	content: Schema.Array(AssistantTextBlock),
+});
+
+export type AssistantMessage = Schema.Schema.Type<typeof AssistantMessage>;
+
+export function getAssistantMessageText(message: AssistantMessage): string | null {
+	const text = message.content
+		.filter((block) => block.type === "text")
+		.map((block) => block.text ?? "")
 		.join("\n");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
-
-export function getAssistantMessageText(message: unknown): string | null {
-	if (!isRecord(message)) return null;
-	const candidate = { role: message.role, content: message.content };
-	if (!isAssistantMessage(candidate)) return null;
-	const text = getTextContent(candidate);
 	return text.trim() ? text : null;
 }
 
@@ -96,10 +95,13 @@ export function getLastAssistantMessageSnapshot(ctx: SessionBranchReader): LastA
 	const branch = getCurrentBranch(ctx);
 	for (let i = branch.length - 1; i >= 0; i--) {
 		const entry = branch[i];
-		if (entry.type === "message" && entry.message) {
-			const text = getAssistantMessageText(entry.message);
-			if (text) return { entryId: entry.id, text };
-		}
+		if (entry.type !== "message" || !entry.message) continue;
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)(entry.message),
+		);
+		if (!parsed) continue;
+		const text = getAssistantMessageText(parsed);
+		if (text) return { entryId: entry.id, text };
 	}
 	return null;
 }
@@ -115,7 +117,11 @@ export function findAssistantMessageByEntryId(
 	const branch = getCurrentBranch(ctx);
 	for (const entry of branch) {
 		if (entry.id !== entryId || entry.type !== "message" || !entry.message) continue;
-		const text = getAssistantMessageText(entry.message);
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)(entry.message),
+		);
+		if (!parsed) continue;
+		const text = getAssistantMessageText(parsed);
 		if (text) return { entryId: entry.id, text };
 	}
 	return null;
@@ -130,7 +136,11 @@ export function getRecentAssistantMessages(
 	for (let i = branch.length - 1; i >= 0 && out.length < limit; i--) {
 		const entry = branch[i];
 		if (entry.type !== "message" || !entry.message) continue;
-		const text = getAssistantMessageText(entry.message);
+		const parsed = Option.getOrUndefined(
+			Schema.decodeUnknownOption(AssistantMessage)(entry.message),
+		);
+		if (!parsed) continue;
+		const text = getAssistantMessageText(parsed);
 		if (!text) continue;
 		const timestamp = Option.getOrUndefined(
 			Schema.decodeUnknownOption(SessionEntryTimestamp)(entry.timestamp),

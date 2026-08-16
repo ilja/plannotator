@@ -179,7 +179,9 @@ export function registerPlannotatorEventListeners(pi: ExtensionAPI): void {
 				}
 			}
 		} catch (err) {
-			const message = getStartupErrorMessage(err);
+			const message = getStartupErrorMessage(
+				err instanceof Error ? err : new Error(String(err)),
+			);
 			if (/unavailable|not available/i.test(message)) {
 				request.respond({ status: "unavailable", error: message });
 				return;

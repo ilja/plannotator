@@ -32,6 +32,8 @@ export type PiSessionIdentity = {
 	cwd?: string;
 };
 
+// SAFETY: PlannotatorGlobal marks the store property optional; getStore()
+// initializes it (??=) before any read and setCurrentPiSession writes it.
 const globalStore = globalThis as PlannotatorGlobal;
 
 function getStore(): CurrentPiSessionStore {
@@ -39,8 +41,8 @@ function getStore(): CurrentPiSessionStore {
 	return globalStore.__plannotatorCurrentPiSession;
 }
 
-function getErrorMessage(err: unknown): string {
-	return err instanceof Error ? err.message : String(err);
+function getErrorMessage(err: Error): string {
+	return err.message;
 }
 
 export function getPiSessionIdentity(ctx: ExtensionContext): PiSessionIdentity {
@@ -104,7 +106,8 @@ export function notifyCurrentPiSession(
 		current.notify(message, type);
 		return true;
 	} catch (err) {
-		console.error(`Plannotator current-session notification failed: ${getErrorMessage(err)}`);
+		const error = err instanceof Error ? err : new Error(String(err));
+		console.error(`Plannotator current-session notification failed: ${getErrorMessage(error)}`);
 		return false;
 	}
 }
@@ -120,7 +123,7 @@ function getCurrentPiSessionLabel(): string {
 }
 
 export function withCurrentPiSessionFallbackHeader(content: SendUserMessageContent): SendUserMessageContent {
-	if (typeof content !== "string") return content;
+	if (Array.isArray(content)) return content;
 	return `This Plannotator feedback was submitted from a browser tab opened before Pi switched sessions. It is being delivered to ${getCurrentPiSessionLabel()} because the original Pi session is no longer active.
 
 ${content}`;
@@ -130,7 +133,7 @@ export function sendUserMessageToCurrentPiSession(
 	content: SendUserMessageContent,
 	options?: SendUserMessageOptions,
 	origin?: PiSessionIdentity,
-): { ok: true } | { ok: false; reason: "no-current" | "same-session" | "send-failed"; error: unknown } {
+): { ok: true } | { ok: false; reason: "no-current" | "same-session" | "send-failed"; error: Error } {
 	const current = getStore().current;
 	if (!current) {
 		return { ok: false, reason: "no-current", error: new Error("No active Pi session is available.") };
@@ -142,6 +145,6 @@ export function sendUserMessageToCurrentPiSession(
 		current.sendUserMessage(content, options);
 		return { ok: true };
 	} catch (err) {
-		return { ok: false, reason: "send-failed", error: err };
+		return { ok: false, reason: "send-failed", error: err instanceof Error ? err : new Error(String(err)) };
 	}
 }
