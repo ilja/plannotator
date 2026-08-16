@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createServer } from "node:http";
+import type { PtySpawnOptions } from "@plannotator/webtui/core";
 import { AGENT_TERMINAL_WS_BASE_PATH } from "../generated/agent-terminal.js";
 import { createNodeAgentTerminalBridge, normalizeSpawnOptions } from "./agent-terminal";
 import { startAnnotateServer } from "./serverAnnotate";
@@ -50,6 +51,46 @@ describe("pi annotate agent terminal capability", () => {
 				preflightTrust: "codex",
 			},
 		});
+	});
+
+	test("caps and drops invalid terminal dimensions at the spawn boundary", () => {
+		const launchPlan = () => ({
+			agent: "pi",
+			command: "pi",
+			expectedProcess: "pi",
+			env: {},
+			followupPrompt: null,
+			promptInjectionMode: "argv",
+			preflightTrust: "codex",
+			draftPasteReadySignal: null,
+			promptDelivery: "none",
+		});
+
+		const cases: Array<{ cols: number | undefined; expectedCols: number | undefined }> = [
+			{ cols: 1, expectedCols: 1 },
+			{ cols: 1000, expectedCols: 1000 },
+			{ cols: 1001, expectedCols: 1000 },
+			{ cols: 0, expectedCols: undefined },
+			{ cols: -5, expectedCols: undefined },
+			{ cols: 2.5, expectedCols: undefined },
+			{ cols: Number.NaN, expectedCols: undefined },
+			{ cols: undefined, expectedCols: undefined },
+		];
+
+		for (const { cols, expectedCols } of cases) {
+			const normalized = normalizeSpawnOptions(
+				{ agent: "pi", cols, startupCommandMode: "shell-command" },
+				"/server/cwd",
+				new Set(["pi"]),
+				launchPlan,
+			);
+			if (!normalized.ok) throw new Error(normalized.message);
+			if (expectedCols === undefined) {
+				expect(normalized.value).not.toHaveProperty("cols");
+			} else {
+				expect(normalized.value.cols).toBe(expectedCols);
+			}
+		}
 	});
 
 	test("reports disabled capability in remote mode without terminal opt-in", async () => {
@@ -141,7 +182,10 @@ describe("pi annotate agent terminal capability", () => {
 	});
 });
 
-function websocketRoundTrip(url: string, payload: unknown): Promise<string> {
+function websocketRoundTrip(
+	url: string,
+	payload: { type: "spawn"; requestId: string; options: PtySpawnOptions },
+): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const ws = new WebSocket(url);
 		const timer = setTimeout(() => {

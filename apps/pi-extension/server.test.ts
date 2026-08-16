@@ -1178,12 +1178,12 @@ describe("pi review server", () => {
     });
 
     try {
-      const initial = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const initial: {
         diffType: string;
         rawPatch: string;
         base?: string;
         gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       expect(initial.diffType).toBe("jj-current");
       expect(initial.base).toBe(expectedJjBase);
       expect(initial.gitContext?.vcsType).toBe("jj");
@@ -1201,7 +1201,7 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "jj-last" }),
       });
       expect(lastResponse.status).toBe(200);
-      const last = await lastResponse.json() as { rawPatch: string; diffType: string };
+      const last: { rawPatch: string; diffType: string } = await lastResponse.json();
       expect(last.diffType).toBe("jj-last");
       expect(last.rawPatch).toContain("last.txt");
 
@@ -1212,7 +1212,7 @@ describe("pi review server", () => {
           body: JSON.stringify({ diffType: nextType }),
         });
         expect(response.status).toBe(200);
-        const payload = await response.json() as { diffType: string; rawPatch: string };
+        const payload: { diffType: string; rawPatch: string } = await response.json();
         expect(payload.diffType).toBe(nextType);
         expect(payload.rawPatch).toContain("tracked.txt");
       }
@@ -1223,16 +1223,16 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "jj-current", hideWhitespace: true }),
       });
       expect(hideWhitespaceResponse.status).toBe(200);
-      const hidden = await hideWhitespaceResponse.json() as { rawPatch: string };
+      const hidden: { rawPatch: string } = await hideWhitespaceResponse.json();
       expect(hidden.rawPatch).toContain("+after");
       expect(hidden.rawPatch).not.toContain("+const  x = 1;");
 
       const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
       expect(fileContentResponse.status).toBe(200);
-      const fileContent = await fileContentResponse.json() as {
+      const fileContent: {
         oldContent: string | null;
         newContent: string | null;
-      };
+      } = await fileContentResponse.json();
       expect(fileContent.oldContent).toBe("before\n");
       expect(fileContent.newContent).toBe("after\n");
 
