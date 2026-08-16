@@ -893,13 +893,13 @@ describe("pi review server", () => {
 
     try {
       const diffResponse = await fetch(`${server.url}/api/diff`);
-      const diffPayload = await diffResponse.json() as {
+      const diffPayload: {
         mode?: string;
         agentCwd?: string;
         diffType?: string;
         diffOptions?: Array<{ id: string }>;
         semanticDiff?: { available: boolean };
-      };
+      } = await diffResponse.json();
       expect(diffPayload.mode).toBe("workspace");
       expect(diffPayload.diffType).toBe("workspace-current");
       expect(diffPayload.diffOptions?.map((option) => option.id)).toContain("workspace-last");
@@ -907,9 +907,9 @@ describe("pi review server", () => {
       expect(diffPayload.semanticDiff).toEqual(expect.objectContaining({ available: true }));
       expect("workspace" in diffPayload).toBe(false);
 
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload.status).toBe("ok");
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(root));
       expect(readFileSync(inputLogPath, "utf-8")).toContain("diff --git a/api/tracked.txt b/api/tracked.txt");
@@ -920,11 +920,11 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "workspace-last", hideWhitespace: true }),
       });
       expect(switchResponse.status).toBe(200);
-      const switched = await switchResponse.json() as {
+      const switched: {
         diffType?: string;
         diffOptions?: Array<{ id: string }>;
         semanticDiff?: { available: boolean };
-      };
+      } = await switchResponse.json();
       expect(switched.diffType).toBe("workspace-last");
       expect(switched.diffOptions?.map((option) => option.id)).toContain("workspace-current");
       expect(switched.semanticDiff).toEqual(expect.objectContaining({ available: true }));
@@ -938,10 +938,10 @@ describe("pi review server", () => {
 
       const fileContentResponse = await fetch(`${server.url}/api/file-content?path=api/tracked.txt`);
       expect(fileContentResponse.status).toBe(200);
-      const fileContent = await fileContentResponse.json() as {
+      const fileContent: {
         oldContent: string | null;
         newContent: string | null;
-      };
+      } = await fileContentResponse.json();
       expect(fileContent.oldContent).toBe("before\n");
       expect(fileContent.newContent).toBe("after\n");
 
@@ -997,10 +997,10 @@ describe("pi review server", () => {
 
     try {
       // Initial load: server echoes the detected default as the active base.
-      const initial = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const initial: {
         base?: string;
         gitContext?: { defaultBranch: string };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       expect(initial.base).toBe(gitContext.defaultBranch);
       expect(initial.base).toBe(initial.gitContext?.defaultBranch);
 
@@ -1011,7 +1011,7 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "branch", base: "develop" }),
       });
       expect(switchResponse.status).toBe(200);
-      const switched = await switchResponse.json() as { base?: string; diffType: string };
+      const switched: { base?: string; diffType: string } = await switchResponse.json();
       expect(switched.base).toBe("develop");
       expect(switched.diffType).toBe("branch");
 
@@ -1025,9 +1025,9 @@ describe("pi review server", () => {
 
       // Subsequent /api/diff load reflects the switched base — this is what
       // survives a page refresh / reconnect.
-      const rehydrate = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const rehydrate: {
         base?: string;
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       expect(rehydrate.base).toBe("develop");
 
       // Unknown refs pass through verbatim — the resolver trusts callers so
@@ -1038,7 +1038,7 @@ describe("pi review server", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ diffType: "branch", base: "nope-does-not-exist" }),
       });
-      const unknown = await unknownResponse.json() as { base?: string; error?: string };
+      const unknown: { base?: string; error?: string } = await unknownResponse.json();
       expect(unknown.base).toBe("nope-does-not-exist");
       expect(unknown.error).toBeTruthy();
 
@@ -1088,10 +1088,10 @@ describe("pi review server", () => {
     });
 
     try {
-      const payload = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const payload: {
         base?: string;
         gitContext?: { defaultBranch: string };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       // The server must echo the caller's override, not the detected default.
       expect(payload.base).toBe("develop");
       expect(payload.gitContext?.defaultBranch).toBe("main");
@@ -1155,9 +1155,9 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "merge-base", base: "main" }),
       });
       expect(switchResponse.status).toBe(200);
-      const switched = await switchResponse.json() as {
+      const switched: {
         gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-      };
+      } = await switchResponse.json();
       expect(switched.gitContext?.vcsType).toBe("git");
       expect(switched.gitContext?.diffOptions.map((option) => option.id)).toContain("merge-base");
       expect(switched.gitContext?.diffOptions.map((option) => option.id)).not.toContain("jj-current");
