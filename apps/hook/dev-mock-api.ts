@@ -8,6 +8,7 @@ import type { Plugin } from 'vite';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { isCodeFilePath } from '../../packages/shared/code-file';
+import { Schema } from 'effect';
 import { preloadFile } from '@pierre/diffs/ssr';
 
 // ─── Default plans (Real-time Collaboration) ─────────────────────────────
@@ -217,7 +218,12 @@ const versions = [
   { version: 3, timestamp: new Date(now - 60_000).toISOString() },
 ];
 
-const versionPlans: Record<number, string> = {
+/** Demo plan versions served by /api/plan/version, keyed by version number. */
+interface VersionPlanTable {
+  [version: number]: string;
+}
+
+const versionPlans: VersionPlanTable = {
   1: PLAN_V1,
   2: PLAN_V2,
   // Version 3 is the current demo document — served live by the editor.
@@ -263,11 +269,9 @@ export function devMockApi(): Plugin {
           req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
           req.on('end', async () => {
             try {
-              const { saveConfig } = await import('@plannotator/shared/config');
-              const parsed = JSON.parse(body);
-              const toSave: Record<string, unknown> = {};
-              if (parsed.pfmReminder !== undefined) toSave.pfmReminder = parsed.pfmReminder;
-              if (Object.keys(toSave).length > 0) saveConfig(toSave as any);
+              const { saveConfig, ConfigPatch } = await import('@plannotator/shared/config');
+              const patch = Schema.decodeUnknownSync(ConfigPatch)(JSON.parse(body));
+              if (patch.pfmReminder !== undefined) saveConfig(patch);
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({ ok: true }));
             } catch {

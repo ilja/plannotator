@@ -54,6 +54,7 @@
   },
   "dependencies": {
     "@joplin/turndown-plugin-gfm": "^1.0.64",
+    "effect": "4.0.0-rc.109",
     "parse5": "^7.3.0",
     "turndown": "^7.2.4"
   }

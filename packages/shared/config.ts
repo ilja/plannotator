@@ -9,6 +9,7 @@ import { join } from "path";
 import { getPlannotatorDataDir } from "./data-dir";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { execSync } from "child_process";
+import { Schema } from "effect";
 
 export type DefaultDiffType = 'uncommitted' | 'unstaged' | 'staged' | 'merge-base' | 'all';
 export type DiffLineBgIntensity = 'subtle' | 'normal' | 'strong';
@@ -162,6 +163,16 @@ export function loadConfig(): PlannotatorConfig {
     return {};
   }
 }
+
+/**
+ * Partial config accepted from the config update endpoint. Decode the request
+ * body with this schema at the HTTP boundary; saveConfig takes the result.
+ */
+export const ConfigPatch = Schema.Struct({
+  pfmReminder: Schema.optionalKey(Schema.Boolean),
+});
+
+export type ConfigPatch = Schema.Schema.Type<typeof ConfigPatch>;
 
 /**
  * Save config by merging partial values into the existing file.

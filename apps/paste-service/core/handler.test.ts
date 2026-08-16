@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createPaste,
   DEFAULT_PASTE_MAX_SIZE,
+  handleRequest,
 } from "./handler";
 import type { PasteStore } from "./storage";
 
@@ -36,5 +37,93 @@ describe("paste payload limits", () => {
         status: 413,
         message: "Payload too large (max 5 MB encrypted)",
       });
+  });
+});
+
+describe("handleRequest", () => {
+  const cors: Record<string, string> = {};
+
+  function post(body: string): Request {
+    return new Request("http://localhost/api/paste", { method: "POST", body });
+  }
+
+  test("creates a paste from a valid body", async () => {
+    const store = new MemoryPasteStore();
+
+    const response = await handleRequest(
+      post(JSON.stringify({ data: "hello" })),
+      store,
+      cors
+    );
+
+    expect(response.status).toBe(201);
+    const { id } = await response.json();
+    expect(id).toHaveLength(8);
+    expect(store.values.get(id)).toBe("hello");
+  });
+
+  test("rejects a missing data field", async () => {
+    const store = new MemoryPasteStore();
+
+    const response = await handleRequest(post(JSON.stringify({})), store, cors);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Missing or invalid "data" field',
+    });
+  });
+
+  test("rejects a non-string data field", async () => {
+    const store = new MemoryPasteStore();
+
+    const response = await handleRequest(
+      post(JSON.stringify({ data: 42 })),
+      store,
+      cors
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Missing or invalid "data" field',
+    });
+  });
+
+  test("rejects an empty string data field", async () => {
+    const store = new MemoryPasteStore();
+
+    const response = await handleRequest(
+      post(JSON.stringify({ data: "" })),
+      store,
+      cors
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Missing or invalid "data" field',
+    });
+  });
+
+  test("rejects malformed JSON", async () => {
+    const store = new MemoryPasteStore();
+
+    const response = await handleRequest(post("not json"), store, cors);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid JSON body" });
+  });
+
+  test("rejects payloads above the limit", async () => {
+    const store = new MemoryPasteStore();
+
+    const response = await handleRequest(
+      post(JSON.stringify({ data: "x".repeat(DEFAULT_PASTE_MAX_SIZE + 1) })),
+      store,
+      cors
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      error: "Payload too large (max 5 MB encrypted)",
+    });
   });
 });

@@ -1,5 +1,13 @@
 import type { PasteStore } from "./storage";
 import { corsHeaders } from "./cors";
+import { Schema } from "effect";
+
+/** POST /api/paste request body contract, decoded at the HTTP boundary. */
+export const PasteCreateRequest = Schema.Struct({
+  data: Schema.NonEmptyString,
+});
+
+export type PasteCreateRequest = Schema.Schema.Type<typeof PasteCreateRequest>;
 
 export interface PasteOptions {
   maxSize: number;
@@ -43,10 +51,6 @@ export async function createPaste(
   options: Partial<PasteOptions> = {}
 ): Promise<{ id: string }> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-
-  if (!data || typeof data !== "string") {
-    throw new PasteError('Missing or invalid "data" field', 400);
-  }
 
   if (data.length > opts.maxSize) {
     throw new PasteError(
@@ -100,17 +104,23 @@ export async function handleRequest(
   }
 
   if (url.pathname === "/api/paste" && request.method === "POST") {
-    let body: { data?: unknown };
+    let body: PasteCreateRequest;
     try {
-      body = (await request.json()) as { data?: unknown };
-    } catch {
+      body = Schema.decodeUnknownSync(PasteCreateRequest)(await request.json());
+    } catch (error) {
+      if (Schema.isSchemaError(error)) {
+        return Response.json(
+          { error: 'Missing or invalid "data" field' },
+          { status: 400, headers: cors }
+        );
+      }
       return Response.json(
         { error: "Invalid JSON body" },
         { status: 400, headers: cors }
       );
     }
     try {
-      const result = await createPaste(body.data as string, store, options);
+      const result = await createPaste(body.data, store, options);
       return Response.json(result, { status: 201, headers: cors });
     } catch (e) {
       if (e instanceof PasteError) {

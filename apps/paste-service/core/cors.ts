@@ -1,4 +1,12 @@
-const BASE_CORS_HEADERS = {
+/** Named contract for the CORS response header set. */
+export type CorsHeaders = {
+  readonly "Access-Control-Allow-Methods": string;
+  readonly "Access-Control-Allow-Headers": string;
+  readonly "Access-Control-Max-Age": string;
+  readonly "Access-Control-Allow-Origin": string;
+};
+
+const BASE_CORS_HEADERS: Omit<CorsHeaders, "Access-Control-Allow-Origin"> = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Max-Age": "86400",
@@ -18,7 +26,7 @@ export function getAllowedOrigins(envValue?: string): string[] {
 export function corsHeaders(
   requestOrigin: string,
   allowedOrigins: string[]
-): Record<string, string> {
+): CorsHeaders | Record<never, never> {
   const isLocalhost = /^https?:\/\/localhost(:\d+)?$/.test(requestOrigin);
   if (isLocalhost || allowedOrigins.includes(requestOrigin) || allowedOrigins.includes("*")) {
     return {

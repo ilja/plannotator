@@ -1,7 +1,6 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Effect, Option, Schema, SchemaGetter } from "effect";
 
 type AssistantTextBlock = { type?: string; text?: string };
-
 type AssistantMessageLike = {
 	role?: unknown;
 	content?: unknown;
@@ -12,6 +11,18 @@ type SessionEntryLike = {
 	type: string;
 	timestamp?: unknown;
 	message?: AssistantMessageLike;
+};
+
+/**
+ * The session-branch surface these helpers need. Any Pi ExtensionContext
+ * satisfies it; declaring it structurally keeps tests assertion-free and
+ * keeps Pi's full context type out of the module's contract.
+ */
+export type SessionBranchReader = {
+	sessionManager: {
+		getBranch(): SessionEntryLike[];
+	};
+	isIdle(): boolean;
 };
 
 export type LastAssistantMessageSnapshot = {
@@ -28,20 +39,29 @@ export type RecentAssistantMessage = {
 // Pi's SDK currently types `SessionEntryBase.timestamp` as `string`, but the
 // picker contract everywhere else is ISO and we don't want a silent drift if
 // that ever changes. Accept string/number(ms)/Date; drop anything else.
-function normalizeTimestamp(value: unknown): string | undefined {
-	if (value instanceof Date) {
-		return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
-	}
-	if (typeof value === "number" && Number.isFinite(value)) {
-		const d = new Date(value);
-		return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-	}
-	if (typeof value === "string" && value.trim()) {
-		const d = new Date(value);
-		return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-	}
-	return undefined;
-}
+const SessionEntryTimestamp = Schema.Union([
+	Schema.String,
+	Schema.Number,
+	Schema.Date,
+]).pipe(
+	Schema.decodeTo(Schema.String, {
+		decode: SchemaGetter.checkEffect<string | number | Date>((value) =>
+			Effect.succeed(
+				Number.isNaN(
+					(value instanceof Date ? value : new Date(value)).getTime(),
+				)
+					? "session entry timestamp is not a parseable date"
+					: undefined,
+			),
+		).compose(
+			SchemaGetter.transform((value) => {
+				const date = value instanceof Date ? value : new Date(value);
+				return date.toISOString();
+			}),
+		),
+		encode: SchemaGetter.transform((iso) => iso),
+	}),
+);
 
 function isAssistantMessage(message: AssistantMessageLike): message is { role: "assistant"; content: AssistantTextBlock[] } {
 	return message.role === "assistant" && Array.isArray(message.content);
@@ -66,11 +86,11 @@ export function getAssistantMessageText(message: unknown): string | null {
 	return text.trim() ? text : null;
 }
 
-function getCurrentBranch(ctx: ExtensionContext): SessionEntryLike[] {
-	return ctx.sessionManager.getBranch() as SessionEntryLike[];
+function getCurrentBranch(ctx: SessionBranchReader): SessionEntryLike[] {
+	return ctx.sessionManager.getBranch();
 }
 
-export function getLastAssistantMessageSnapshot(ctx: ExtensionContext): LastAssistantMessageSnapshot | null {
+export function getLastAssistantMessageSnapshot(ctx: SessionBranchReader): LastAssistantMessageSnapshot | null {
 	// "Last" means the active conversation branch, not the newest message anywhere
 	// in the append-only session file.
 	const branch = getCurrentBranch(ctx);
@@ -84,12 +104,12 @@ export function getLastAssistantMessageSnapshot(ctx: ExtensionContext): LastAssi
 	return null;
 }
 
-export function getLastAssistantMessageText(ctx: ExtensionContext): string | null {
+export function getLastAssistantMessageText(ctx: SessionBranchReader): string | null {
 	return getLastAssistantMessageSnapshot(ctx)?.text ?? null;
 }
 
 export function findAssistantMessageByEntryId(
-	ctx: ExtensionContext,
+	ctx: SessionBranchReader,
 	entryId: string,
 ): LastAssistantMessageSnapshot | null {
 	const branch = getCurrentBranch(ctx);
@@ -102,7 +122,7 @@ export function findAssistantMessageByEntryId(
 }
 
 export function getRecentAssistantMessages(
-	ctx: ExtensionContext,
+	ctx: SessionBranchReader,
 	limit: number,
 ): RecentAssistantMessage[] {
 	const branch = getCurrentBranch(ctx);
@@ -112,12 +132,15 @@ export function getRecentAssistantMessages(
 		if (entry.type !== "message" || !entry.message) continue;
 		const text = getAssistantMessageText(entry.message);
 		if (!text) continue;
-		out.push({ messageId: entry.id, text, timestamp: normalizeTimestamp(entry.timestamp) });
+		const timestamp = Option.getOrUndefined(
+			Schema.decodeUnknownOption(SessionEntryTimestamp)(entry.timestamp),
+		);
+		out.push({ messageId: entry.id, text, timestamp });
 	}
 	return out;
 }
 
-export function hasSessionMovedPastEntry(ctx: ExtensionContext, entryId: string): boolean {
+export function hasSessionMovedPastEntry(ctx: SessionBranchReader, entryId: string): boolean {
 	if (!ctx.isIdle()) return true;
 
 	const branch = getCurrentBranch(ctx);
