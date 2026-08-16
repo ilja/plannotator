@@ -25,6 +25,7 @@
     "build:pi": "bun run build:review && bun run build:annotation && bun run --cwd apps/pi-extension build",
     "build": "bun run build:pi",
     "test": "bun test",
+    "lint": "oxlint apps packages",
     "typecheck": "bash apps/pi-extension/vendor.sh && tsc --noEmit -p packages/shared/tsconfig.json && tsc --noEmit -p packages/ai/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p apps/pi-extension/tsconfig.json"
   },
   "dependencies": {
@@ -36,8 +37,10 @@
     "sonner": "^2.0.7"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.77.0",
     "@types/node": "^25.5.2",
     "@types/turndown": "^5.0.6",
-    "bun-types": "^1.3.11"
+    "bun-types": "^1.3.11",
+    "oxlint": "1.77.0"
   }
 }
