@@ -8,11 +8,11 @@
  * Used by the Pi extension which runs under jiti (Node.js).
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { BaseSession } from "../base-session.ts";
 import { buildEffectivePrompt, buildSystemPrompt } from "../context.ts";
+import { Option, Schema } from "effect";
 import type {
-	AIJsonObject,
 	AIMessage,
 	AIProvider,
 	AIProviderCapabilities,
@@ -25,6 +25,16 @@ import {
 	killWindowsProcessTree,
 	resolveWindowsCommandShim,
 } from "./command-path.ts";
+import {
+	PiCommandSchema,
+	PiJsonObjectSchema,
+	PiModelsResponseSchema,
+	PiResponseSchema,
+	PiSDKConfigSchema,
+	PiStateResponseSchema,
+	type PiCommand,
+	type PiJsonObject,
+} from "./pi-protocol.ts";
 
 // Re-export mapPiEvent from shared (runtime-agnostic)
 export { mapPiEvent } from "./pi-events.ts";
@@ -35,15 +45,15 @@ const PROVIDER_NAME = "pi-sdk";
 // JSONL subprocess wrapper (Node.js)
 // ---------------------------------------------------------------------------
 
-type EventListener = (event: AIJsonObject) => void;
+type EventListener = (event: PiJsonObject) => void;
 
 class PiProcessNode {
-	private proc: ChildProcess | null = null;
+	private proc: ChildProcessWithoutNullStreams | null = null;
 	private listeners: EventListener[] = [];
 	private pendingRequests = new Map<
 		string,
 		{
-			resolve: (data: Record<string, unknown>) => void;
+			resolve: (data: PiJsonObject) => void;
 			reject: (err: Error) => void;
 		}
 	>();
@@ -59,7 +69,7 @@ class PiProcessNode {
 				"--mode",
 				"rpc",
 			];
-		let proc: ChildProcess;
+		let proc: ChildProcessWithoutNullStreams;
 		try {
 			const [file, ...args] = command;
 			proc = spawn(file, args, {
@@ -134,15 +144,18 @@ class PiProcessNode {
 		});
 	}
 
-	private routeMessage(msg: AIJsonObject): void {
-		if (msg.type === "response" && typeof msg.id === "string") {
-			const pending = this.pendingRequests.get(msg.id);
+	private routeMessage(input: PiJsonObject): void {
+		const msg = Option.getOrUndefined(Schema.decodeUnknownOption(PiJsonObjectSchema)(input));
+		if (!msg) return;
+		const response = Option.getOrUndefined(Schema.decodeUnknownOption(PiResponseSchema)(msg));
+		if (response) {
+			const pending = this.pendingRequests.get(response.id);
 			if (pending) {
-				this.pendingRequests.delete(msg.id);
-				if (msg.success === false) {
-					pending.reject(new Error((msg.error as string) ?? "RPC error"));
+				this.pendingRequests.delete(response.id);
+				if (response.success === false) {
+					pending.reject(new Error(response.error ?? "RPC error"));
 				} else {
-					pending.resolve((msg.data as Record<string, unknown>) ?? {});
+					pending.resolve(response.data ?? {});
 				}
 				return;
 			}
@@ -153,18 +166,19 @@ class PiProcessNode {
 		}
 	}
 
-	send(command: Record<string, unknown>): void {
+	send(command: PiCommand): void {
 		if (!this.proc?.stdin || this.proc.stdin.destroyed) return;
 		this.proc.stdin.write(`${JSON.stringify(command)}\n`);
 	}
 
 	sendAndWait(
-		command: Record<string, unknown>,
-	): Promise<Record<string, unknown>> {
+		command: PiCommand,
+	): Promise<PiJsonObject> {
 		const id = `req_${++this.nextId}`;
 		return new Promise((resolve, reject) => {
 			this.pendingRequests.set(id, { resolve, reject });
-			this.send({ ...command, id });
+			const request = Schema.decodeUnknownSync(PiCommandSchema)({ ...command, id });
+			this.send(request);
 		});
 	}
 
@@ -260,11 +274,11 @@ export class PiSDKNodeProvider implements AIProvider {
 					setTimeout(() => reject(new Error("Timeout")), 10_000),
 				),
 			]);
-			const rawModels = (
-				data as { models?: Array<{ provider: string; id: string; name?: string }> }
-			).models;
-			if (rawModels && rawModels.length > 0) {
-				this.models = rawModels.map((m, i) => ({
+			const models = Option.getOrUndefined(
+				Schema.decodeUnknownOption(PiModelsResponseSchema)(data),
+			);
+			if (models && models.models.length > 0) {
+				this.models = models.models.map((m, i) => ({
 					id: `${m.provider}/${m.id}`,
 					label: m.name ?? m.id,
 					...(i === 0 && { default: true }),
@@ -326,9 +340,10 @@ class PiSDKNodeSession extends BaseSession {
 
 				try {
 					const state = await this.process.sendAndWait({ type: "get_state" });
-					if (typeof state.sessionId === "string") {
-						this.resolveId(state.sessionId);
-					}
+					const parsedState = Option.getOrUndefined(
+						Schema.decodeUnknownOption(PiStateResponseSchema)(state),
+					);
+					if (parsedState?.sessionId) this.resolveId(parsedState.sessionId);
 				} catch { /* Continue with placeholder ID */ }
 
 				if (!this.process.alive) {
@@ -422,5 +437,5 @@ class PiSDKNodeSession extends BaseSession {
 
 registerProviderFactory(
 	PROVIDER_NAME,
-	async (config) => new PiSDKNodeProvider(config as PiSDKConfig),
+	async (config) => new PiSDKNodeProvider(Schema.decodeUnknownSync(PiSDKConfigSchema)(config)),
 );

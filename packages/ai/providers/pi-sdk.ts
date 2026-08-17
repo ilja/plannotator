@@ -9,8 +9,8 @@
 
 import { BaseSession } from "../base-session.ts";
 import { buildEffectivePrompt, buildSystemPrompt } from "../context.ts";
+import { Option, Schema } from "effect";
 import type {
-	AIJsonObject,
 	AIMessage,
 	AIProvider,
 	AIProviderCapabilities,
@@ -22,6 +22,16 @@ import {
 	killWindowsProcessTree,
 	resolveWindowsCommandShim,
 } from "./command-path.ts";
+import {
+	PiCommandSchema,
+	PiJsonObjectSchema,
+	PiModelsResponseSchema,
+	PiResponseSchema,
+	PiSDKConfigSchema,
+	PiStateResponseSchema,
+	type PiCommand,
+	type PiJsonObject,
+} from "./pi-protocol.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,15 +43,15 @@ const PROVIDER_NAME = "pi-sdk";
 // JSONL subprocess wrapper
 // ---------------------------------------------------------------------------
 
-type EventListener = (event: AIJsonObject) => void;
+type EventListener = (event: PiJsonObject) => void;
 
 class PiProcess {
-	private proc: ReturnType<typeof Bun.spawn> | null = null;
+	private proc: Bun.PipedSubprocess | null = null;
 	private listeners: EventListener[] = [];
 	private pendingRequests = new Map<
 		string,
 		{
-			resolve: (data: Record<string, unknown>) => void;
+			resolve: (data: PiJsonObject) => void;
 			reject: (err: Error) => void;
 		}
 	>();
@@ -94,8 +104,9 @@ class PiProcess {
 	}
 
 	private async readStream(): Promise<void> {
-		if (!this.proc?.stdout || typeof this.proc.stdout === "number") return;
-		const reader = (this.proc.stdout as ReadableStream<Uint8Array>).getReader();
+		const proc = this.proc;
+		if (!proc) return;
+		const reader = proc.stdout.getReader();
 		const decoder = new TextDecoder();
 
 		try {
@@ -123,16 +134,19 @@ class PiProcess {
 		}
 	}
 
-	private routeMessage(msg: AIJsonObject): void {
+	private routeMessage(input: PiJsonObject): void {
+		const msg = Option.getOrUndefined(Schema.decodeUnknownOption(PiJsonObjectSchema)(input));
+		if (!msg) return;
+		const response = Option.getOrUndefined(Schema.decodeUnknownOption(PiResponseSchema)(msg));
 		// Response to a command we sent
-		if (msg.type === "response" && typeof msg.id === "string") {
-			const pending = this.pendingRequests.get(msg.id);
+		if (response) {
+			const pending = this.pendingRequests.get(response.id);
 			if (pending) {
-				this.pendingRequests.delete(msg.id);
-				if (msg.success === false) {
-					pending.reject(new Error((msg.error as string) ?? "RPC error"));
+				this.pendingRequests.delete(response.id);
+				if (response.success === false) {
+					pending.reject(new Error(response.error ?? "RPC error"));
 				} else {
-					pending.resolve((msg.data as Record<string, unknown>) ?? {});
+					pending.resolve(response.data ?? {});
 				}
 				return;
 			}
@@ -145,22 +159,23 @@ class PiProcess {
 	}
 
 	/** Send a command without waiting for a response. */
-	send(command: Record<string, unknown>): void {
-		if (!this.proc?.stdin || typeof this.proc.stdin === "number") return;
+	send(command: PiCommand): void {
+		const proc = this.proc;
+		if (!proc) return;
 		// Bun.spawn stdin is a FileSink with .write(), not a WritableStream
-		const sink = this.proc.stdin as { write(data: string): void; flush(): void };
-		sink.write(`${JSON.stringify(command)}\n`);
-		sink.flush();
+		proc.stdin.write(`${JSON.stringify(command)}\n`);
+		proc.stdin.flush();
 	}
 
 	/** Send a command and wait for the correlated response. */
 	sendAndWait(
-		command: Record<string, unknown>,
-	): Promise<Record<string, unknown>> {
+		command: PiCommand,
+	): Promise<PiJsonObject> {
 		const id = `req_${++this.nextId}`;
 		return new Promise((resolve, reject) => {
 			this.pendingRequests.set(id, { resolve, reject });
-			this.send({ ...command, id });
+			const request = Schema.decodeUnknownSync(PiCommandSchema)({ ...command, id });
+			this.send(request);
 		});
 	}
 
@@ -262,13 +277,11 @@ export class PiSDKProvider implements AIProvider {
 				),
 			]);
 
-			const rawModels = (
-				data as {
-					models?: Array<{ provider: string; id: string; name?: string }>;
-				}
-			).models;
-			if (rawModels && rawModels.length > 0) {
-				this.models = rawModels.map((m, i) => ({
+			const models = Option.getOrUndefined(
+				Schema.decodeUnknownOption(PiModelsResponseSchema)(data),
+			);
+			if (models && models.models.length > 0) {
+				this.models = models.models.map((m, i) => ({
 					id: `${m.provider}/${m.id}`,
 					label: m.name ?? m.id,
 					...(i === 0 && { default: true }),
@@ -338,9 +351,10 @@ class PiSDKSession extends BaseSession {
 				// Get session ID
 				try {
 					const state = await this.process.sendAndWait({ type: "get_state" });
-					if (typeof state.sessionId === "string") {
-						this.resolveId(state.sessionId);
-					}
+					const parsedState = Option.getOrUndefined(
+						Schema.decodeUnknownOption(PiStateResponseSchema)(state),
+					);
+					if (parsedState?.sessionId) this.resolveId(parsedState.sessionId);
 				} catch {
 					// Continue with placeholder ID
 				}
@@ -466,5 +480,5 @@ import { registerProviderFactory } from "../provider.ts";
 
 registerProviderFactory(
 	PROVIDER_NAME,
-	async (config) => new PiSDKProvider(config as PiSDKConfig),
+	async (config) => new PiSDKProvider(Schema.decodeUnknownSync(PiSDKConfigSchema)(config)),
 );

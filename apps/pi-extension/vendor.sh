@@ -17,7 +17,7 @@ for f in index types provider session-manager endpoints context base-session; do
   printf '// @generated — DO NOT EDIT. Source: packages/ai/%s.ts\n' "$f" | cat - "$src" > "generated/ai/$f.ts"
 done
 
-for f in command-path pi-sdk pi-sdk-node pi-events; do
+for f in command-path pi-protocol pi-sdk pi-sdk-node pi-events; do
   src="../../packages/ai/providers/$f.ts"
   printf '// @generated — DO NOT EDIT. Source: packages/ai/providers/%s.ts\n' "$f" | cat - "$src" > "generated/ai/providers/$f.ts"
 done
