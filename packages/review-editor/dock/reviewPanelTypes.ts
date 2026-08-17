@@ -18,7 +18,7 @@ export const REVIEW_PANEL_TYPES = {
 export const REVIEW_DIFF_PANEL_ID = 'review-diff';
 
 export interface ReviewDiffPanelParams {
-  filePath: string;
+  filePath?: string;
 }
 
 export const REVIEW_PR_SUMMARY_PANEL_ID = 'review-pr-summary';
@@ -33,9 +33,9 @@ export function isReviewDiffPanelId(panelId: string): boolean {
 }
 
 export function getReviewDiffPanelFilePath(
-  params: unknown,
+  params: ReviewDiffPanelParams | undefined,
 ): string | null {
-  if (!params || typeof params !== 'object') return null;
-  const filePath = (params as { filePath?: unknown }).filePath;
-  return typeof filePath === 'string' ? filePath : null;
+  if (!params) return null;
+  const filePath = params.filePath;
+  return filePath === String(filePath) ? filePath : null;
 }
