@@ -5,10 +5,17 @@
 
 import type { IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
+import { Schema } from "effect";
 
-export function parseBody(
-	req: IncomingMessage,
-): Promise<Record<string, unknown>> {
+/**
+ * Parsed JSON request body before endpoint-level schema decoding.
+ * `JSON.parse` yields arbitrary objects; every handler that consumes fields
+ * decodes this into a typed request schema at its boundary.
+ */
+const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
+export type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
+
+export function parseBody(req: IncomingMessage): Promise<ParsedRequestBody> {
 	return new Promise((resolve) => {
 		let data = "";
 		req.on("data", (chunk: string) => (data += chunk));
@@ -22,9 +29,9 @@ export function parseBody(
 	});
 }
 
-export function json(
+export function json<T>(
 	res: import("node:http").ServerResponse,
-	data: unknown,
+	data: T,
 	status = 200,
 ): void {
 	res.writeHead(status, { "Content-Type": "application/json" });
@@ -70,7 +77,10 @@ export function toWebRequest(req: IncomingMessage): Request {
 	};
 
 	if (req.method !== "GET" && req.method !== "HEAD") {
-		init.body = Readable.toWeb(req) as unknown as BodyInit;
+		// SAFETY: `Readable.toWeb` returns the node:stream/web ReadableStream,
+		// which is structurally the WHATWG ReadableStream that BodyInit wraps;
+		// the cast bridges the duplicated lib definitions, not a value mismatch.
+		init.body = Readable.toWeb(req) as BodyInit;
 		init.duplex = "half";
 	}
 

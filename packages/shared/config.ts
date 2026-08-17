@@ -170,6 +170,22 @@ export function loadConfig(): PlannotatorConfig {
  */
 export const ConfigPatch = Schema.Struct({
   pfmReminder: Schema.optionalKey(Schema.Boolean),
+  displayName: Schema.optionalKey(Schema.String),
+  conventionalComments: Schema.optionalKey(Schema.Boolean),
+  diffOptions: Schema.optionalKey(
+    Schema.Struct({
+      diffStyle: Schema.optionalKey(Schema.Literals(["split", "unified"])),
+      overflow: Schema.optionalKey(Schema.Literals(["scroll", "wrap"])),
+      diffIndicators: Schema.optionalKey(Schema.Literals(["bars", "classic", "none"])),
+      lineDiffType: Schema.optionalKey(Schema.Literals(["word-alt", "word", "char", "none"])),
+      showLineNumbers: Schema.optionalKey(Schema.Boolean),
+      showDiffBackground: Schema.optionalKey(Schema.Boolean),
+      fontFamily: Schema.optionalKey(Schema.String),
+      fontSize: Schema.optionalKey(Schema.String),
+      tabSize: Schema.optionalKey(Schema.Number),
+      hideWhitespace: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
 });
 
 export type ConfigPatch = Schema.Schema.Type<typeof ConfigPatch>;

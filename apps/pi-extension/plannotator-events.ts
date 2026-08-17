@@ -2,6 +2,7 @@ import { Option, Schema } from "effect";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { DiffType, VcsSelection } from "./server.js";
 import { getRecentAssistantMessages } from "./assistant-message.js";
+import { DiffTypeSchema } from "./server/request-schemas.js";
 import {
 	getLastAssistantMessageText,
 	getStartupErrorMessage,
@@ -93,16 +94,6 @@ export type PlannotatorResponseMap = {
 // request/response flow; senders provide a respond callback. `respond` cannot be
 // validated as callable by a schema (no Function schema), so it is accepted as
 // `Schema.Any` and guarded nullish at the handler.
-const DiffTypeSchema = Schema.Union([
-	Schema.Literals([
-		"uncommitted", "staged", "unstaged", "last-commit",
-		"jj-current", "jj-last", "jj-line", "jj-all", "jj-evolog",
-		"branch", "merge-base", "all", "p4-default",
-	]),
-	Schema.TemplateLiteral(["worktree:", Schema.String]),
-	Schema.TemplateLiteral(["p4-changelist:", Schema.String]),
-]);
-
 const PlannotatorCodeReviewPayloadSchema = Schema.Struct({
 	diffType: Schema.optionalKey(DiffTypeSchema),
 	defaultBranch: Schema.optionalKey(Schema.String),
