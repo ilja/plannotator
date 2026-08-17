@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 import { resolveCommandFromWhichOutput } from "../generated/ai/providers/command-path.js";
+import type { PiSDKConfig } from "../generated/ai/types.js";
 import { json, toWebRequest } from "./helpers.js";
 
 export interface PiAIRuntime {
@@ -40,16 +42,19 @@ export async function createPiAIRuntime(options: CreatePiAIRuntimeOptions = {}):
 			await import("../generated/ai/providers/pi-sdk-node.js");
 			const piPath = whichCmd("pi");
 			if (piPath) {
-				const provider = await ai.createProvider({
+				const providerConfig: PiSDKConfig = {
 					type: "pi-sdk",
 					cwd,
 					piExecutablePath: piPath,
-				} as any);
+				};
+				const provider = await ai.createProvider(providerConfig);
 				if (provider && "fetchModels" in provider) {
+					// SAFETY: the pi-sdk provider exposes fetchModels when this property exists.
+					const providerWithModelDiscovery = provider as {
+						fetchModels: () => Promise<void>;
+					};
 					modelDiscovery.push(
-						(provider as { fetchModels: () => Promise<void> })
-							.fetchModels()
-							.catch(() => {}),
+						providerWithModelDiscovery.fetchModels().catch(() => {}),
 					);
 				}
 				registry.register(provider);
@@ -109,7 +114,9 @@ export async function handlePiAIRequest(
 		});
 		res.writeHead(webRes.status, headers);
 		if (webRes.body) {
-			Readable.fromWeb(webRes.body as any).pipe(res);
+			const body = webRes.body;
+			// SAFETY: Node and DOM stream declarations differ only in their buffer generic.
+			Readable.fromWeb(body as NodeReadableStream<any>).pipe(res);
 		} else {
 			res.end();
 		}

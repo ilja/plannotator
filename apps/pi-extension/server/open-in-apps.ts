@@ -116,7 +116,7 @@ function run(
 				resolve({ ok: true });
 				return;
 			}
-			const code = (err as NodeJS.ErrnoException).code;
+			const code = err.code;
 			if (code === "ENOENT" || /ENOENT|not found/i.test(err.message)) {
 				resolve({ ok: false, error: `${notFoundLabel} was not found on this system.` });
 			} else {
