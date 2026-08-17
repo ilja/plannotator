@@ -40,7 +40,7 @@ const ptyServer = createNodePtyWebSocketServer({ server, path: wsPath, backend }
 
 server.listen(0, "127.0.0.1", () => {
   const address = server.address();
-  if (!address || typeof address === "string") {
+  if (!address || !(address instanceof Object)) {
     writeReady({ ok: false, error: "Agent terminal sidecar did not bind a TCP port." });
     return;
   }

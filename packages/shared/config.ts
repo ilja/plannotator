@@ -189,6 +189,25 @@ export const ConfigPatch = Schema.Struct({
       lineBgIntensity: Schema.optionalKey(Schema.Literals(["subtle", "normal", "strong"])),
     }),
   ),
+  annotationOptions: Schema.optionalKey(
+    Schema.Struct({
+      proseFontFamily: Schema.optionalKey(Schema.String),
+      proseFontSize: Schema.optionalKey(Schema.String),
+      codeFontFamily: Schema.optionalKey(Schema.String),
+      codeFontSize: Schema.optionalKey(Schema.String),
+    }),
+  ),
+  conventionalLabels: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Array(
+        Schema.Struct({
+          label: Schema.String,
+          display: Schema.String,
+          blocking: Schema.Boolean,
+        }),
+      ),
+    ),
+  ),
 });
 
 export type ConfigPatch = Schema.Schema.Type<typeof ConfigPatch>;
@@ -197,7 +216,7 @@ export type ConfigPatch = Schema.Schema.Type<typeof ConfigPatch>;
  * Save config by merging partial values into the existing file.
  * Creates ~/.plannotator/ directory if needed.
  */
-export function saveConfig(partial: Partial<PlannotatorConfig>): void {
+export function saveConfig(partial: Partial<PlannotatorConfig> | ConfigPatch): void {
   try {
     const current = loadConfig();
     const mergedDiffOptions = (current.diffOptions || partial.diffOptions)
@@ -206,7 +225,10 @@ export function saveConfig(partial: Partial<PlannotatorConfig>): void {
     const mergedAnnotationOptions = (current.annotationOptions || partial.annotationOptions)
       ? { ...current.annotationOptions, ...partial.annotationOptions }
       : undefined;
-    const mergedPrompts = mergePromptConfig(current.prompts, partial.prompts);
+    const mergedPrompts = mergePromptConfig(
+      current.prompts,
+      "prompts" in partial ? partial.prompts : undefined,
+    );
     const merged = {
       ...current,
       ...partial,

@@ -53,6 +53,16 @@ export interface SourceSaveRequest {
 	allowMissingBase?: boolean;
 }
 
+/** Boundary schema for POST /api/source/save bodies; keep in sync with `SourceSaveRequest`. */
+export const SourceSaveRequestSchema = Schema.Struct({
+	path: Schema.optionalKey(Schema.String),
+	text: Schema.String,
+	baseHash: Schema.String,
+	baseMtimeMs: Schema.optionalKey(Schema.Number),
+	baseEol: Schema.optionalKey(Schema.Literals(["lf", "crlf", "mixed", "none"])),
+	allowMissingBase: Schema.optionalKey(Schema.Boolean),
+});
+
 export type SourceSaveResponse =
 	| {
 			ok: true;

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { hasSourceSaveConflictSnapshot, type SourceSaveResponse } from "./source-save";
+import { Option, Schema } from "effect";
+
+import {
+	hasSourceSaveConflictSnapshot,
+	SourceSaveRequestSchema,
+	type SourceSaveResponse,
+} from "./source-save";
 
 describe("source-save response guards", () => {
 	test("recognizes conflict responses with a complete current-disk snapshot", () => {
@@ -30,5 +36,46 @@ describe("source-save response guards", () => {
 		} as unknown as SourceSaveResponse;
 
 		expect(hasSourceSaveConflictSnapshot(response)).toBe(false);
+	});
+});
+
+describe("SourceSaveRequestSchema", () => {
+	test("decodes a valid save request", () => {
+		const request = Option.getOrUndefined(
+			Schema.decodeUnknownOption(SourceSaveRequestSchema)({
+				text: "new content",
+				baseHash: "sha256:base",
+				path: "src/doc.md",
+				allowMissingBase: true,
+			}),
+		);
+		expect(request).toEqual({
+			text: "new content",
+			baseHash: "sha256:base",
+			path: "src/doc.md",
+			allowMissingBase: true,
+		});
+	});
+
+	test("rejects a request without text or baseHash", () => {
+		const missingText = Option.getOrUndefined(
+			Schema.decodeUnknownOption(SourceSaveRequestSchema)({ baseHash: "sha256:base" }),
+		);
+		expect(missingText).toBeUndefined();
+
+		const missingBaseHash = Option.getOrUndefined(
+			Schema.decodeUnknownOption(SourceSaveRequestSchema)({ text: "content" }),
+		);
+		expect(missingBaseHash).toBeUndefined();
+	});
+
+	test("rejects a non-string baseHash", () => {
+		const request = Option.getOrUndefined(
+			Schema.decodeUnknownOption(SourceSaveRequestSchema)({
+				text: "content",
+				baseHash: 12345,
+			}),
+		);
+		expect(request).toBeUndefined();
 	});
 });

@@ -19,7 +19,7 @@ import { handleDoc, handleDocExists, handleFileBrowserFiles, handleObsidianVault
 import { handleFileBrowserFilesStream } from "./reference-watch";
 import { resolveUserPath, warmFileListCache } from "@plannotator/shared/resolve-file";
 import { contentHash, deleteDraft } from "./draft";
-import { disabledSourceSave, type SourceSaveRequest } from "@plannotator/shared/source-save";
+import { disabledSourceSave, SourceSaveRequestSchema } from "@plannotator/shared/source-save";
 import { getAnnotateReferenceRootPaths } from "@plannotator/shared/annotate-reference-roots-node";
 import {
 	createSourceSaveCapability,
@@ -30,7 +30,8 @@ import {
 	saveSourceFileAtomic,
 } from "@plannotator/shared/source-save-node";
 import { createExternalAnnotationHandler } from "./external-annotations";
-import { saveConfig, detectGitUser, getServerConfig } from "./config";
+import { saveConfig, detectGitUser, getServerConfig, ConfigPatch } from "./config";
+import { Option, Schema } from "effect";
 import { existsSync } from "fs";
 import { dirname, resolve as resolvePath } from "path";
 import { isWithinDirectory } from "@plannotator/shared/html-assets-node";
@@ -321,7 +322,7 @@ export async function startAnnotateServer(
           if (url.pathname === "/api/plan" && req.method === "GET") {
             const displayRawHtml = renderHtml && rawHtml ? htmlAssets.rewriteHtml(rawHtml, filePath) : undefined;
             const primarySource = getPrimarySource();
-            return Response.json({
+            const planResponse = {
               plan: primarySource.plan,
               origin,
               mode,
@@ -331,7 +332,6 @@ export async function startAnnotateServer(
               sourceSave: primarySource.sourceSave,
               gate,
               renderAs: displayRawHtml ? 'html' as const : 'markdown' as const,
-              ...(displayRawHtml ? { rawHtml: displayRawHtml } : {}),
               convertHtml,
               sharingEnabled,
               shareBaseUrl,
@@ -341,8 +341,10 @@ export async function startAnnotateServer(
               isWSL: wslFlag,
               serverConfig: getServerConfig(gitUser),
               agentTerminal: agentTerminal.capability,
-              ...(recentMessages ? { recentMessages } : {}),
-            });
+            };
+            if (displayRawHtml) Object.assign(planResponse, { rawHtml: displayRawHtml });
+            if (recentMessages) Object.assign(planResponse, { recentMessages });
+            return Response.json(planResponse);
           }
 
           if (url.pathname === "/api/share-html" && req.method === "GET") {
@@ -376,20 +378,8 @@ export async function startAnnotateServer(
           // API: Update user config (write-back to ~/.plannotator/config.json)
           if (url.pathname === "/api/config" && req.method === "POST") {
             try {
-              const body = (await req.json()) as {
-                displayName?: string;
-                diffOptions?: Record<string, unknown>;
-                annotationOptions?: Record<string, unknown>;
-                conventionalComments?: boolean;
-                conventionalLabels?: unknown[] | null;
-              };
-              const toSave: Record<string, unknown> = {};
-              if (body.displayName !== undefined) toSave.displayName = body.displayName;
-              if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
-              if (body.annotationOptions !== undefined) toSave.annotationOptions = body.annotationOptions;
-              if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
-              if (body.conventionalLabels !== undefined) toSave.conventionalLabels = body.conventionalLabels;
-              if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
+              const patch = Schema.decodeUnknownSync(ConfigPatch)(await req.json());
+              if (Object.keys(patch).length > 0) saveConfig(patch);
               return Response.json({ ok: true });
             } catch {
               return Response.json({ error: "Invalid request" }, { status: 400 });
@@ -432,19 +422,12 @@ export async function startAnnotateServer(
           }
 
           if (url.pathname === "/api/source/save" && req.method === "POST") {
-            let body: SourceSaveRequest;
-            try {
-              body = (await req.json()) as SourceSaveRequest;
-            } catch {
+            const body = Option.getOrUndefined(
+              Schema.decodeUnknownOption(SourceSaveRequestSchema)(await req.json()),
+            );
+            if (!body) {
               return Response.json(
                 { ok: false, code: "invalid-request", message: "Invalid JSON body." },
-                { status: 400 },
-              );
-            }
-
-            if (typeof body.text !== "string" || typeof body.baseHash !== "string") {
-              return Response.json(
-                { ok: false, code: "invalid-request", message: "Expected text and baseHash." },
                 { status: 400 },
               );
             }
@@ -453,7 +436,7 @@ export async function startAnnotateServer(
             if (singleFileSourceSaveEligible) {
               const capability = createSourceSaveCapability("single-file", initialSingleFileSourcePath ?? filePath);
               targetPath = capability.enabled ? capability.path : initialSingleFileSourcePath;
-            } else if (mode === "annotate-folder" && folderPath && typeof body.path === "string") {
+            } else if (mode === "annotate-folder" && folderPath && body.path !== undefined) {
               targetPath = body.allowMissingBase
                 ? resolveFolderSourceFileForSave(body.path, folderPath)
                 : resolveFolderSourceFile(body.path, folderPath);
@@ -542,6 +525,8 @@ export async function startAnnotateServer(
           if (externalResponse) return externalResponse;
 
           if (url.pathname.startsWith("/api/ai/")) {
+            // SAFETY: url.pathname is prefix-checked against /api/ai/ above, and
+            // AIEndpoints is keyed by exactly those API paths.
             const handler = aiRuntime.endpoints[url.pathname as keyof AIEndpoints];
             if (handler) {
               if (url.pathname === AI_QUERY_ENDPOINT) {
@@ -569,13 +554,13 @@ export async function startAnnotateServer(
           // API: Submit annotation feedback
           if (url.pathname === "/api/feedback" && req.method === "POST") {
             try {
-              const body = (await req.json()) as {
+              const body: {
                 feedback: string;
                 annotations: unknown[];
                 selectedMessageId?: string;
                 feedbackScope?: "message" | "messages";
                 draftGeneration?: number;
-              };
+              } = await req.json();
 
               deleteDraft(draftKey, readDraftGenerationFromBody(body));
               resolveDecision({

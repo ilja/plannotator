@@ -149,7 +149,7 @@ export async function createBunAgentTerminalBridge(args: {
         });
       },
       message(ws, raw) {
-        const payload = typeof raw === "string" ? raw : raw.toString("utf8");
+        const payload = Buffer.isBuffer(raw) ? raw.toString("utf8") : raw;
         const upstream = ws.data.upstream;
         if (upstream?.readyState === WebSocket.OPEN) {
           upstream.send(payload);
@@ -259,7 +259,7 @@ async function startNodeAgentTerminalSidecar(
 
   try {
     const line = await withTimeout(readFirstLine(proc.stdout), 5_000);
-    const ready = JSON.parse(line) as { ok?: boolean; wsUrl?: string; error?: string };
+    const ready: { ok?: boolean; wsUrl?: string; error?: string } = JSON.parse(line);
     if (!ready.ok || !ready.wsUrl) {
       throw new Error(ready.error ?? "Agent terminal sidecar did not report a WebSocket URL.");
     }
@@ -308,18 +308,15 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-function toWebSocketPayload(data: unknown): string | ArrayBuffer {
-  if (typeof data === "string") return data;
+function toWebSocketPayload(data: string | ArrayBuffer | Uint8Array | Buffer): string | ArrayBuffer {
+  if (Buffer.isBuffer(data)) return Uint8Array.from(data).buffer;
   if (data instanceof ArrayBuffer) return data;
-  if (Buffer.isBuffer(data)) {
-    return Uint8Array.from(data).buffer;
-  }
   if (data instanceof Uint8Array) {
     return data.buffer instanceof ArrayBuffer
       ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
       : Uint8Array.from(data).buffer;
   }
-  return String(data);
+  return data;
 }
 
 function isAllowedOrigin(req: Request): boolean {
@@ -343,8 +340,12 @@ function listAgents(core: WebTuiCore): AgentTerminalAgent[] {
   });
 }
 
+interface AgentDisplayNameOverrides {
+  [agentId: string]: string;
+}
+
 function formatAgentName(id: string): string {
-  const overrides: Record<string, string> = {
+  const overrides: AgentDisplayNameOverrides = {
     amp: "Amp",
     claude: "Claude",
     codex: "Codex",

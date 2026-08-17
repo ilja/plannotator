@@ -19,6 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Option, Schema } from "effect";
 import { getPlannotatorDataDir } from "@plannotator/shared/data-dir";
 import type { AgentTerminalDisabledReason } from "@plannotator/shared/agent-terminal";
 
@@ -201,7 +202,7 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
     writeRuntimePackageJson(runtimeDir);
     materializeAgentTerminalSidecar(runtimeDir);
   } catch (err) {
-    return fail(runtimeDir, `Skipping agent terminal runtime install (${formatError(err)}).`);
+    return fail(runtimeDir, `Skipping agent terminal runtime install (${formatError(err instanceof Error ? err : new Error(String(err)))}).`);
   }
 
   if (readInstalledWebTuiVersion(runtimeDir) === AGENT_TERMINAL_WEBTUI_VERSION) {
@@ -266,7 +267,7 @@ function tryMaterializeAgentTerminalSidecar(
     return {
       ok: false,
       reason: "runtime-unavailable",
-      message: `Agent terminal runtime sidecar could not be written (${formatError(err)}). Run plannotator install-runtime agent-terminal or reinstall Plannotator.`,
+      message: `Agent terminal runtime sidecar could not be written (${formatError(err instanceof Error ? err : new Error(String(err)))}). Run plannotator install-runtime agent-terminal or reinstall Plannotator.`,
     };
   }
 }
@@ -283,12 +284,18 @@ function writeRuntimePackageJson(runtimeDir: string): void {
   writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
 
+const VersionInfoSchema = Schema.Struct({
+  version: Schema.optionalKey(Schema.String),
+});
+
 function readInstalledWebTuiVersion(runtimeDir: string): string | null {
   const packageJsonPath = join(runtimeDir, "node_modules", "@plannotator", "webtui", "package.json");
   if (!existsSync(packageJsonPath)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: unknown };
-    return typeof parsed.version === "string" ? parsed.version : null;
+    const parsed = Option.getOrUndefined(
+      Schema.decodeUnknownOption(VersionInfoSchema)(JSON.parse(readFileSync(packageJsonPath, "utf8"))),
+    );
+    return parsed?.version ?? null;
   } catch {
     return null;
   }
@@ -422,6 +429,6 @@ function isTruthy(value: string | undefined): boolean {
   return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
 }
 
-function formatError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function formatError(err: Error): string {
+  return err.message;
 }
