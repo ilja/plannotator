@@ -4,7 +4,7 @@
  * Pure function, no runtime-specific dependencies.
  */
 
-import type { AIMessage } from "../types.ts";
+import type { AIJsonObject, AIMessage } from "../types.ts";
 
 /**
  * Map a Pi AgentEvent (received as JSONL) to AIMessage[].
@@ -45,7 +45,7 @@ export function mapPiEvent(
 						{
 							type: "tool_use",
 							toolName: tc.name as string,
-							toolInput: (tc.arguments as Record<string, unknown>) ?? {},
+							toolInput: (tc.arguments as AIJsonObject) ?? {},
 							toolUseId: tc.id as string,
 						},
 					];

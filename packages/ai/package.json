@@ -14,5 +14,7 @@
     "./providers/pi-sdk": "./providers/pi-sdk.ts",
     "./providers/pi-sdk-node": "./providers/pi-sdk-node.ts"
   },
-  "dependencies": {}
+  "dependencies": {
+    "effect": "4.0.0-rc.109"
+  }
 }

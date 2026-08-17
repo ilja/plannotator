@@ -59,6 +59,13 @@ export interface AnnotateContext {
   annotations?: string;
 }
 
+/** JSON values emitted by provider protocols and passed to the UI. */
+export type AIJsonValue = null | string | number | boolean | AIJsonObject | AIJsonValue[];
+
+export interface AIJsonObject {
+	[key: string]: AIJsonValue;
+}
+
 /**
  * Union of mode-specific contexts, discriminated by `mode`.
  */
@@ -83,7 +90,7 @@ export interface AITextDeltaMessage {
 export interface AIToolUseMessage {
   type: "tool_use";
   toolName: string;
-  toolInput: Record<string, unknown>;
+  toolInput: AIJsonObject;
   toolUseId: string;
 }
 
@@ -115,7 +122,7 @@ export interface AIPermissionRequestMessage {
   type: "permission_request";
   requestId: string;
   toolName: string;
-  toolInput: Record<string, unknown>;
+  toolInput: AIJsonObject;
   title?: string;
   displayName?: string;
   description?: string;
@@ -125,7 +132,7 @@ export interface AIPermissionRequestMessage {
 export interface AIUnknownMessage {
   type: "unknown";
   /** The raw message from the provider, for debugging/transparency. */
-  raw: Record<string, unknown>;
+  raw: AIJsonObject;
 }
 
 export type AIMessage =

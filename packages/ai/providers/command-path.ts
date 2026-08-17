@@ -3,11 +3,25 @@ import { existsSync } from "node:fs";
 
 type Platform = NodeJS.Platform;
 type ExistsFn = (path: string) => boolean;
+interface TaskkillResult {
+	status: number | null;
+	error?: Error;
+}
+
 type TaskkillFn = (
 	command: string,
 	args: string[],
 	options: { stdio: "ignore"; windowsHide: boolean },
-) => { status: number | null; error?: Error };
+) => TaskkillResult;
+
+function runDefaultTaskkill(
+	command: string,
+	args: string[],
+	options: { stdio: "ignore"; windowsHide: boolean },
+): TaskkillResult {
+	const result = spawnSync(command, args, options);
+	return { status: result.status, error: result.error };
+}
 
 const WINDOWS_EXECUTABLE_EXTENSIONS = [".cmd", ".exe", ".bat", ".com"] as const;
 const WINDOWS_SHELL_EXTENSIONS = new Set([".cmd", ".bat"]);
@@ -96,14 +110,9 @@ export function buildWindowsCommandScriptSpawnCommand(
 export function killWindowsProcessTree(
 	pid: number | null | undefined,
 	platform: Platform = process.platform,
-	runTaskkill: TaskkillFn = spawnSync as TaskkillFn,
+	runTaskkill: TaskkillFn = runDefaultTaskkill,
 ): boolean {
-	if (
-		platform !== "win32" ||
-		typeof pid !== "number" ||
-		!Number.isFinite(pid) ||
-		pid <= 0
-	) {
+	if (platform !== "win32" || pid == null || !Number.isFinite(pid) || pid <= 0) {
 		return false;
 	}
 

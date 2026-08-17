@@ -100,6 +100,9 @@
     "packages/ai": {
       "name": "@plannotator/ai",
       "version": "0.0.1",
+      "dependencies": {
+        "effect": "4.0.0-rc.109",
+      },
     },
     "packages/editor": {
       "name": "@plannotator/editor",
