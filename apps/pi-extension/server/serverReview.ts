@@ -316,7 +316,14 @@ export async function startReviewServer(options: {
 
 	let currentPatch = options.rawPatch;
 	let currentGitRef = options.gitRef;
-	let currentDiffType: DiffType | WorkspaceDiffType = options.diffType || workspace?.diffType || "uncommitted";
+	const initialDiffType = workspace
+		? Option.getOrUndefined(
+				Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(options.diffType ?? workspace.diffType),
+			) ?? workspace.diffType
+		: Option.getOrUndefined(
+				Schema.decodeUnknownOption(DiffTypeSchema)(options.diffType ?? "uncommitted"),
+			) ?? "uncommitted";
+	let currentDiffType: DiffType | WorkspaceDiffType = initialDiffType;
 	let currentError = options.error;
 	let currentHideWhitespace = loadConfig().diffOptions?.hideWhitespace ?? false;
 	let originalPRPatch = options.rawPatch;
@@ -342,6 +349,10 @@ export async function startReviewServer(options: {
 	// files change mid-review. Best-effort: null = "cannot fingerprint" and is
 	// reported fresh, never stale.
 	let currentFingerprint: string | null = null;
+	function getCurrentVcsDiffType(): DiffType | null {
+		return Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(currentDiffType)) ?? null;
+	}
+
 	const computeDiffFingerprint = async (): Promise<string | null> => {
 		try {
 			if (workspace) return await workspace.getFingerprint();
@@ -364,9 +375,10 @@ export async function startReviewServer(options: {
 				return await getPRFullStackFingerprint(reviewRuntime, prMeta, fullStackCwd);
 			}
 			if (!hasLocalAccess) return null;
-			// SAFETY: workspace and PR modes return above, so this is a local DiffType.
+			const diffType = getCurrentVcsDiffType();
+			if (!diffType) return null;
 			return await getVcsDiffFingerprint(
-				currentDiffType as DiffType,
+				diffType,
 				currentBase,
 				options.gitContext?.cwd,
 				{ hideWhitespace: currentHideWhitespace },
@@ -406,8 +418,10 @@ export async function startReviewServer(options: {
 			if (poolPath) return poolPath;
 		}
 		if (options.agentCwd) return options.agentCwd;
-		// SAFETY: workspace mode returns above, so this is a local DiffType.
-		return resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd) ?? process.cwd();
+		const diffType = getCurrentVcsDiffType();
+		return diffType
+			? resolveVcsCwd(diffType, options.gitContext?.cwd) ?? process.cwd()
+			: process.cwd();
 	}
 	// The current PR's local checkout if one is usable, else null. Mirrors the
 	// Bun review server's resolvePRLocalCwd: a pool entry that exists but isn't
@@ -430,8 +444,8 @@ export async function startReviewServer(options: {
 	function resolveOpenInRoot(): string | string[] {
 		if (workspace) return workspace.root;
 		if (options.worktreePool && prMeta) return resolvePRLocalCwd() ?? [];
-		// SAFETY: workspace and PR pool modes return above, so this is a local DiffType.
-		return options.agentCwd ?? resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd) ?? process.cwd();
+		const diffType = getCurrentVcsDiffType();
+		return options.agentCwd ?? (diffType ? resolveVcsCwd(diffType, options.gitContext?.cwd) : undefined) ?? process.cwd();
 	}
 	const semanticDiffScratchCwd = getSemanticDiffScratchCwd();
 	function resolveSemanticDiffCwd(): string {
@@ -442,9 +456,11 @@ export async function startReviewServer(options: {
 		}
 		if (options.agentCwd) return options.agentCwd;
 		if (options.gitContext) {
-			// SAFETY: workspace and PR pool modes return above, so this is a local DiffType.
-			const vcsCwd = resolveVcsCwd(currentDiffType as DiffType, options.gitContext.cwd);
-			if (vcsCwd) return vcsCwd;
+			const diffType = getCurrentVcsDiffType();
+			if (diffType) {
+				const vcsCwd = resolveVcsCwd(diffType, options.gitContext.cwd);
+				if (vcsCwd) return vcsCwd;
+			}
 			if (options.gitContext.cwd) return options.gitContext.cwd;
 		}
 		return semanticDiffScratchCwd;

@@ -18,6 +18,7 @@ import {
   unstageFile,
 } from "./server";
 import { createPiAIRuntime } from "./server/ai-runtime.js";
+import { loadConfig } from "./generated/config.js";
 import { WorkspaceReviewSession } from "./generated/review-workspace.js";
 
 const tempDirs: string[] = [];
@@ -826,6 +827,14 @@ describe("pi review server", () => {
       expect(stageResponse.status).toBe(200);
       expect(git(repoDir, ["diff", "--staged", "--name-only"])).toContain("stage-me.txt");
 
+      const invalidUndoResponse = await fetch(`${server.url}/api/git-add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath: "stage-me.txt", undo: "false" }),
+      });
+      expect(invalidUndoResponse.status).toBe(400);
+      expect(git(repoDir, ["diff", "--staged", "--name-only"])).toContain("stage-me.txt");
+
       const unstageResponse = await fetch(`${server.url}/api/git-add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -849,6 +858,83 @@ describe("pi review server", () => {
       server.stop();
     }
   }, 15_000);
+
+  test("review config endpoint preserves all supported diff options", async () => {
+    const dataDir = makeTempDir("plannotator-pi-config-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startReviewServer({
+      rawPatch: "",
+      gitRef: "test",
+      origin: "pi",
+      htmlContent: "<!doctype html><html><body>review</body></html>",
+    });
+
+    try {
+      const response = await fetch(`${server.url}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          diffOptions: {
+            expandUnchanged: true,
+            defaultDiffType: "merge-base",
+            lineBgIntensity: "strong",
+          },
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(loadConfig().diffOptions).toMatchObject({
+        expandUnchanged: true,
+        defaultDiffType: "merge-base",
+        lineBgIntensity: "strong",
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("rejects malformed GitHub viewed-file requests before mutation", async () => {
+    const ghDir = makeTempDir("plannotator-pi-gh-");
+    const ghPath = join(ghDir, "gh");
+    writeFileSync(ghPath, "#!/bin/sh\nexit 1\n", "utf-8");
+    chmodSync(ghPath, 0o755);
+    process.env[pathEnvKey] = `${ghDir}${delimiter}${originalPath ?? ""}`;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startReviewServer({
+      rawPatch: "",
+      gitRef: "test",
+      origin: "pi",
+      htmlContent: "<!doctype html><html><body>review</body></html>",
+      prMetadata: {
+        platform: "github",
+        host: "github.com",
+        owner: "owner",
+        repo: "repo",
+        number: 1,
+        prNodeId: "node-1",
+        title: "Test PR",
+        author: "author",
+        baseBranch: "main",
+        headBranch: "feature",
+        baseSha: "base-sha",
+        headSha: "head-sha",
+        url: "https://github.com/owner/repo/pull/1",
+      },
+    });
+
+    try {
+      const response = await fetch(`${server.url}/api/pr-viewed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePaths: "src/app.ts", viewed: "true" }),
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      server.stop();
+    }
+  });
 
   test("workspace mode maps prefixed paths to child repos", async () => {
     const homeDir = makeTempDir("plannotator-pi-home-");
@@ -996,6 +1082,13 @@ describe("pi review server", () => {
     });
 
     try {
+      const invalidWorkspaceSwitch = await fetch(`${server.url}/api/diff/switch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diffType: "workspace-current" }),
+      });
+      expect(invalidWorkspaceSwitch.status).toBe(400);
+
       // Initial load: server echoes the detected default as the active base.
       const initial: {
         base?: string;
