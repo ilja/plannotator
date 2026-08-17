@@ -7,6 +7,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { Option, Schema } from "effect";
 import {
 	createAnnotationStore,
 	transformPlanInput,
@@ -17,7 +18,7 @@ import {
 	type StorableAnnotation,
 	type ExternalAnnotationEvent,
 } from "../generated/external-annotation.js";
-import { json, parseBody } from "./helpers.js";
+import { json, parseBody, type ParsedRequestBody } from "./helpers.js";
 
 // ---------------------------------------------------------------------------
 // Route prefix
@@ -25,6 +26,14 @@ import { json, parseBody } from "./helpers.js";
 
 const BASE = "/api/external-annotations";
 const STREAM = `${BASE}/stream`;
+
+const AnnotationPatchSchema = Schema.StructWithRest(
+	Schema.Struct({
+		id: Schema.optionalKey(Schema.String),
+		source: Schema.optionalKey(Schema.String),
+	}),
+	[Schema.Record(Schema.String, Schema.Unknown)],
+);
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -50,7 +59,7 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 
 	return {
 		/** Push annotations directly into the store (bypasses HTTP, reuses same validation). */
-		addAnnotations(body: unknown): { ids: string[] } | { error: string } {
+		addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
 			const parsed = transform(body);
 			if ("error" in parsed) return { error: parsed.error };
 			const created = store.add(parsed.annotations);
@@ -148,7 +157,14 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 				}
 				try {
 					const body = await parseBody(req);
-					const updated = store.update(id, body as Partial<StorableAnnotation>);
+					const patch = Option.getOrUndefined(
+						Schema.decodeUnknownOption(AnnotationPatchSchema)(body),
+					);
+					if (!patch) {
+						json(res, { error: "Invalid JSON" }, 400);
+						return true;
+					}
+					const updated = store.update(id, patch);
 					if (!updated) {
 						json(res, { error: "Not found" }, 404);
 						return true;

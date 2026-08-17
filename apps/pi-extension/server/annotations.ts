@@ -5,6 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
+import { Option, Schema } from "effect";
 import { json, parseBody } from "./helpers";
 
 interface EditorAnnotation {
@@ -50,7 +51,9 @@ export function createEditorAnnotationHandler() {
 						selectedText: String(body.selectedText),
 						lineStart: Number(body.lineStart),
 						lineEnd: Number(body.lineEnd),
-						comment: typeof body.comment === "string" ? body.comment : undefined,
+						comment: Option.getOrUndefined(
+							Schema.decodeUnknownOption(Schema.String)(body.comment),
+						),
 						createdAt: Date.now(),
 					};
 

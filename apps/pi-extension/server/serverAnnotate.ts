@@ -4,8 +4,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 
 import { contentHash, deleteDraft } from "../generated/draft.js";
-import { saveConfig, detectGitUser, getServerConfig, loadConfig, resolveSharingEnabled } from "../generated/config.js";
-import { disabledSourceSave, type SourceSaveRequest } from "../generated/source-save.js";
+import { ConfigPatch, saveConfig, detectGitUser, getServerConfig, loadConfig, resolveSharingEnabled } from "../generated/config.js";
+import { disabledSourceSave } from "../generated/source-save.js";
 import { getAnnotateReferenceRootPaths } from "../generated/annotate-reference-roots-node.js";
 import {
 	createSourceSaveCapability,
@@ -16,7 +16,7 @@ import {
 	saveSourceFileAtomic,
 } from "../generated/source-save-node.js";
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import {
 	handleDraftRequest,
 	handleFavicon,
@@ -26,7 +26,7 @@ import {
 	handleUploadRequest,
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
-import { FeedbackRequestSchema } from "./request-schemas.js";
+import { FeedbackRequestSchema, OpenInRequestSchema } from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -65,6 +65,15 @@ export interface AnnotateServerResult {
 	waitForDecision: () => Promise<{ feedback: string; annotations: readonly unknown[]; exit?: boolean; approved?: boolean; selectedMessageId?: string; feedbackScope?: "message" | "messages" }>;
 	stop: () => void;
 }
+
+const SourceSaveRequestSchema = Schema.Struct({
+	path: Schema.optionalKey(Schema.String),
+	text: Schema.String,
+	baseHash: Schema.String,
+	baseMtimeMs: Schema.optionalKey(Schema.Number),
+	baseEol: Schema.optionalKey(Schema.Literals(["lf", "crlf", "mixed", "none"])),
+	allowMissingBase: Schema.optionalKey(Schema.Boolean),
+});
 
 function createHtmlAssetRegistry() {
 	const rootsByToken = new Map<string, string>();
@@ -343,7 +352,7 @@ export async function startAnnotateServer(options: {
 				? htmlAssets.rewriteHtml(options.rawHtml, options.filePath)
 				: undefined;
 			const primarySource = getPrimarySource();
-			json(res, {
+			const planResponse = {
 				plan: primarySource.plan,
 				origin: options.origin ?? "pi",
 				mode: options.mode || "annotate",
@@ -352,8 +361,7 @@ export async function startAnnotateServer(options: {
 				sourceConverted: options.sourceConverted ?? false,
 				sourceSave: primarySource.sourceSave,
 				gate: options.gate ?? false,
-				renderAs: displayRawHtml ? 'html' : 'markdown',
-				...(displayRawHtml ? { rawHtml: displayRawHtml } : {}),
+				renderAs: displayRawHtml ? "html" : "markdown",
 				convertHtml: options.convertHtml ?? false,
 				sharingEnabled,
 				shareBaseUrl,
@@ -362,18 +370,16 @@ export async function startAnnotateServer(options: {
 				projectRoot: options.folderPath || process.cwd(),
 				serverConfig: getServerConfig(gitUser),
 				agentTerminal: agentTerminalCapability,
-				...(options.recentMessages ? { recentMessages: options.recentMessages } : {}),
-			});
+			};
+			if (displayRawHtml) Object.assign(planResponse, { rawHtml: displayRawHtml });
+			if (options.recentMessages) Object.assign(planResponse, { recentMessages: options.recentMessages });
+			json(res, planResponse);
 		} else if (url.pathname === "/api/share-html" && req.method === "GET") {
 			handleShareHtml(res, url);
 		} else if (url.pathname === "/api/config" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean };
-				const toSave: Record<string, unknown> = {};
-				if (body.displayName !== undefined) toSave.displayName = body.displayName;
-				if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
-				if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
-				if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
+				const body = Schema.decodeUnknownSync(ConfigPatch)(await parseBody(req));
+				if (Object.keys(body).length > 0) saveConfig(body);
 				json(res, { ok: true });
 			} catch {
 				json(res, { error: "Invalid request" }, 400);
@@ -400,21 +406,21 @@ export async function startAnnotateServer(options: {
 				return;
 			}
 			try {
-				const body = await parseBody(req);
-				const filePath = body.filePath;
-				if (typeof filePath !== "string" || !filePath) {
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(OpenInRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
 					json(res, { ok: false, error: "Missing filePath" }, 400);
 					return;
 				}
-				const appId = typeof body.appId === "string" ? body.appId : undefined;
 				// Confine opens to the same reference roots /api/doc serves from,
 				// so any linked doc the user can view can also be opened.
-				const abs = resolveOpenInTarget(filePath, null, getReferenceRootPaths);
+				const abs = resolveOpenInTarget(body.filePath, null, getReferenceRootPaths);
 				if (abs == null) {
 					json(res, { ok: false, error: "Path is outside the allowed directory" }, 403);
 					return;
 				}
-				const result = await openFileInApp(abs, appId);
+				const result = await openFileInApp(abs, body.appId);
 				json(res, result, 200);
 			} catch (err) {
 				json(
@@ -444,16 +450,11 @@ export async function startAnnotateServer(options: {
 				rootPaths: getReferenceRootPaths(),
 			});
 		} else if (url.pathname === "/api/source/save" && req.method === "POST") {
-			let body: SourceSaveRequest;
-			try {
-				body = (await parseBody(req)) as unknown as SourceSaveRequest;
-			} catch {
+			const body = Option.getOrUndefined(
+				Schema.decodeUnknownOption(SourceSaveRequestSchema)(await parseBody(req)),
+			);
+			if (!body) {
 				json(res, { ok: false, code: "invalid-request", message: "Invalid JSON body." }, 400);
-				return;
-			}
-
-			if (typeof body.text !== "string" || typeof body.baseHash !== "string") {
-				json(res, { ok: false, code: "invalid-request", message: "Expected text and baseHash." }, 400);
 				return;
 			}
 
@@ -461,7 +462,7 @@ export async function startAnnotateServer(options: {
 			if (singleFileSourceSaveEligible) {
 				const capability = createSourceSaveCapability("single-file", initialSingleFileSourcePath ?? options.filePath);
 				targetPath = capability.enabled ? capability.path : initialSingleFileSourcePath;
-			} else if (options.mode === "annotate-folder" && options.folderPath && typeof body.path === "string") {
+			} else if (options.mode === "annotate-folder" && options.folderPath && body.path !== undefined) {
 				targetPath = body.allowMissingBase
 					? resolveFolderSourceFileForSave(body.path, options.folderPath)
 					: resolveFolderSourceFile(body.path, options.folderPath);
