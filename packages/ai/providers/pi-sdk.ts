@@ -10,6 +10,7 @@
 import { BaseSession } from "../base-session.ts";
 import { buildEffectivePrompt, buildSystemPrompt } from "../context.ts";
 import type {
+	AIJsonObject,
 	AIMessage,
 	AIProvider,
 	AIProviderCapabilities,
@@ -32,7 +33,7 @@ const PROVIDER_NAME = "pi-sdk";
 // JSONL subprocess wrapper
 // ---------------------------------------------------------------------------
 
-type EventListener = (event: Record<string, unknown>) => void;
+type EventListener = (event: AIJsonObject) => void;
 
 class PiProcess {
 	private proc: ReturnType<typeof Bun.spawn> | null = null;
@@ -122,7 +123,7 @@ class PiProcess {
 		}
 	}
 
-	private routeMessage(msg: Record<string, unknown>): void {
+	private routeMessage(msg: AIJsonObject): void {
 		// Response to a command we sent
 		if (msg.type === "response" && typeof msg.id === "string") {
 			const pending = this.pendingRequests.get(msg.id);

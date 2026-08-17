@@ -12,6 +12,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { BaseSession } from "../base-session.ts";
 import { buildEffectivePrompt, buildSystemPrompt } from "../context.ts";
 import type {
+	AIJsonObject,
 	AIMessage,
 	AIProvider,
 	AIProviderCapabilities,
@@ -34,7 +35,7 @@ const PROVIDER_NAME = "pi-sdk";
 // JSONL subprocess wrapper (Node.js)
 // ---------------------------------------------------------------------------
 
-type EventListener = (event: Record<string, unknown>) => void;
+type EventListener = (event: AIJsonObject) => void;
 
 class PiProcessNode {
 	private proc: ChildProcess | null = null;
@@ -133,7 +134,7 @@ class PiProcessNode {
 		});
 	}
 
-	private routeMessage(msg: Record<string, unknown>): void {
+	private routeMessage(msg: AIJsonObject): void {
 		if (msg.type === "response" && typeof msg.id === "string") {
 			const pending = this.pendingRequests.get(msg.id);
 			if (pending) {

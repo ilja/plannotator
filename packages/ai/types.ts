@@ -60,10 +60,10 @@ export interface AnnotateContext {
 }
 
 /** JSON values emitted by provider protocols and passed to the UI. */
-export type AIJsonValue = null | string | number | boolean | AIJsonObject | AIJsonValue[];
+export type AIJsonValue = null | string | number | boolean | AIJsonObject | ReadonlyArray<AIJsonValue>;
 
 export interface AIJsonObject {
-	[key: string]: AIJsonValue;
+	readonly [key: string]: AIJsonValue;
 }
 
 /**

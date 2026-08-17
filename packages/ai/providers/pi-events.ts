@@ -1,85 +1,107 @@
 /**
  * Pi event mapping — shared between Bun and Node.js Pi providers.
  *
- * Pure function, no runtime-specific dependencies.
+ * Pure function, no runtime-specific dependencies beyond the protocol schema.
  */
 
+import { Option, Schema } from "effect";
 import type { AIJsonObject, AIMessage } from "../types.ts";
 
+const ToolCallSchema = Schema.Struct({
+	id: Schema.String,
+	name: Schema.String,
+	arguments: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
+});
+
+const AssistantMessageEventSchema = Schema.Union([
+	Schema.Struct({
+		type: Schema.Literal("text_delta"),
+		delta: Schema.String,
+	}),
+	Schema.Struct({
+		type: Schema.Literal("toolcall_end"),
+		toolCall: Schema.optionalKey(ToolCallSchema),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("error"),
+		error: Schema.optionalKey(Schema.Struct({
+			errorMessage: Schema.optionalKey(Schema.String),
+		})),
+	}),
+]);
+
+const PiEventSchema = Schema.Union([
+	Schema.Struct({
+		type: Schema.Literal("message_update"),
+		assistantMessageEvent: Schema.optionalKey(AssistantMessageEventSchema),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("tool_execution_end"),
+		toolCallId: Schema.String,
+		result: Schema.optionalKey(Schema.Json),
+		isError: Schema.Boolean,
+	}),
+	Schema.Struct({ type: Schema.Literal("agent_end") }),
+	Schema.Struct({ type: Schema.Literal("process_exited") }),
+]);
+
+type PiEvent = Schema.Schema.Type<typeof PiEventSchema>;
+
 /**
- * Map a Pi AgentEvent (received as JSONL) to AIMessage[].
- *
- * Pi event hierarchy:
- *   agent_start > turn_start > message_start > message_update* > message_end
- *     > tool_execution_start > tool_execution_end > turn_end > agent_end
- *
- * We extract:
- * - text_delta from message_update.assistantMessageEvent
- * - tool_use from toolcall_end
- * - tool_result from tool_execution_end
- * - result from agent_end
+ * Map a decoded Pi AgentEvent (received as JSONL) to AIMessage[].
+ * Unknown and malformed events are ignored.
  */
-export function mapPiEvent(
-	event: Record<string, unknown>,
-	sessionId: string,
-): AIMessage[] {
-	const eventType = event.type as string;
+export function mapPiEvent(event: AIJsonObject, sessionId: string): AIMessage[] {
+	const parsed: PiEvent | undefined = Option.getOrUndefined(
+		Schema.decodeUnknownOption(PiEventSchema)(event),
+	);
+	if (!parsed) return [];
 
-	switch (eventType) {
+	switch (parsed.type) {
 		case "message_update": {
-			const ame = event.assistantMessageEvent as
-				| Record<string, unknown>
-				| undefined;
-			if (!ame) return [];
+			const assistantMessageEvent = parsed.assistantMessageEvent;
+			if (!assistantMessageEvent) return [];
 
-			const subType = ame.type as string;
-
-			switch (subType) {
+			switch (assistantMessageEvent.type) {
 				case "text_delta":
-					return [{ type: "text_delta", delta: ame.delta as string }];
+					return [{ type: "text_delta", delta: assistantMessageEvent.delta }];
 
 				case "toolcall_end": {
-					const tc = ame.toolCall as Record<string, unknown>;
-					if (!tc) return [];
+					const toolCall = assistantMessageEvent.toolCall;
+					if (!toolCall) return [];
 					return [
 						{
 							type: "tool_use",
-							toolName: tc.name as string,
-							toolInput: (tc.arguments as AIJsonObject) ?? {},
-							toolUseId: tc.id as string,
+							toolName: toolCall.name,
+							toolInput: toolCall.arguments ?? {},
+							toolUseId: toolCall.id,
 						},
 					];
 				}
 
-				case "error": {
-					const partial = ame.error as Record<string, unknown> | undefined;
-					const errorMessage =
-						(partial?.errorMessage as string) ?? "Stream error";
+				case "error":
 					return [
-						{ type: "error", error: errorMessage, code: "pi_stream_error" },
+						{
+							type: "error",
+							error: assistantMessageEvent.error?.errorMessage ?? "Stream error",
+							code: "pi_stream_error",
+						},
 					];
-				}
-
-				default:
-					return [];
 			}
 		}
 
 		case "tool_execution_end": {
-			const result = event.result;
-			const isError = event.isError as boolean;
+			const stringResult = Option.getOrUndefined(
+				Schema.decodeUnknownOption(Schema.String)(parsed.result),
+			);
 			const resultStr =
-				result == null
-					? ""
-					: typeof result === "string"
-						? result
-						: JSON.stringify(result);
+				parsed.result == null ? "" : stringResult ?? JSON.stringify(parsed.result);
 
 			return [
 				{
 					type: "tool_result",
-					toolUseId: event.toolCallId as string,
-					result: isError
+					toolUseId: parsed.toolCallId,
+					result: parsed.isError
 						? `[Error] ${resultStr || "Tool execution failed"}`
 						: resultStr,
 				},
@@ -103,8 +125,5 @@ export function mapPiEvent(
 					code: "pi_process_exit",
 				},
 			];
-
-		default:
-			return [];
 	}
 }

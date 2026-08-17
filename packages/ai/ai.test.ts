@@ -980,4 +980,52 @@ describe("mapPiEvent", () => {
       result: JSON.stringify({ files: ["a.ts", "b.ts"] }),
     }]);
   });
+
+  test("malformed known events are ignored and incomplete errors use a fallback", () => {
+    expect(mapPiEvent({ type: "message_update" }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: 42 },
+    }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "toolcall_end",
+        toolCall: { id: "tc", name: "read", arguments: "bad" },
+      },
+    }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      result: "missing required fields",
+    }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "message_update",
+      assistantMessageEvent: { type: "error" },
+    }, SESSION_ID)).toEqual([{
+      type: "error",
+      error: "Stream error",
+      code: "pi_stream_error",
+    }]);
+  });
+
+  test("tool results preserve null, arrays, and booleans", () => {
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      toolCallId: "tc-null",
+      result: null,
+      isError: false,
+    }, SESSION_ID)[0]).toMatchObject({ result: "" });
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      toolCallId: "tc-array",
+      result: ["a", 2],
+      isError: false,
+    }, SESSION_ID)[0]).toMatchObject({ result: '["a",2]' });
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      toolCallId: "tc-bool",
+      result: true,
+      isError: false,
+    }, SESSION_ID)[0]).toMatchObject({ result: "true" });
+  });
 });
