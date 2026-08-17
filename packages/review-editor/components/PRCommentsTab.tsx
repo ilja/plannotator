@@ -19,7 +19,11 @@ type TimelineEntry =
   | { kind: 'review'; data: PRReview }
   | { kind: 'thread'; data: PRReviewThread };
 
-const REVIEW_STATE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+interface ReviewStateStyleMap {
+  [key: string]: { bg: string; text: string; label: string };
+}
+
+const REVIEW_STATE_STYLES: ReviewStateStyleMap = {
   APPROVED: { bg: 'bg-success/15', text: 'text-success', label: 'Approved' },
   CHANGES_REQUESTED: { bg: 'bg-destructive/15', text: 'text-destructive', label: 'Changes Requested' },
   COMMENTED: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Commented' },
@@ -178,7 +182,7 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(({ context
       if (searchQuery) {
         setSearchQuery('');
       } else {
-        (e.target as HTMLInputElement).blur();
+        if (e.target instanceof HTMLInputElement) e.target.blur();
       }
       e.stopPropagation();
     }
@@ -339,8 +343,7 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(({ context
               );
             }
 
-            const isReview = entry.kind === 'review';
-            const review = isReview ? (entry.data as PRReview) : null;
+            const review = entry.kind === 'review' ? entry.data : null;
             const style = review && review.state !== 'COMMENTED'
               ? (REVIEW_STATE_STYLES[review.state] ?? null)
               : null;
@@ -388,7 +391,7 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(({ context
 
                 {!isCollapsed && (
                   <PRCommentLinkActions
-                    url={entry.kind === 'comment' ? (entry.data as PRComment).url : (entry.data as PRReview).url}
+                    url={entry.data.url}
                     body={entry.data.body}
                   />
                 )}

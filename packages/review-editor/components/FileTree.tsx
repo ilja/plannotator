@@ -327,7 +327,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     onSearchClear?.();
                   } else {
                     onSearchClose?.();
-                    (e.target as HTMLInputElement).blur();
+                    if (e.target instanceof HTMLInputElement) e.target.blur();
                   }
                 }
               }}

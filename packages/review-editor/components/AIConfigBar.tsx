@@ -40,7 +40,7 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
   useEffect(() => {
     if (!openMenu) return;
     const handler = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
+      if (barRef.current && e.target instanceof Node && !barRef.current.contains(e.target)) {
         setOpenMenu(null);
         setModelSearch('');
       }
