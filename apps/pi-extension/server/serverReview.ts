@@ -55,6 +55,7 @@ import {
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
 import {
+	CodeNavRequestSchema,
 	DiffSwitchRequestSchema,
 	DiffTypeSchema,
 	FeedbackRequestSchema,
@@ -89,7 +90,6 @@ import {
 	type WorkspaceDiffType,
 } from "../generated/review-workspace.js";
 import {
-	type CodeNavRequest,
 	type CodeNavRuntime,
 	resolveCodeNav,
 	validateCodeNavRequest,
@@ -1130,8 +1130,13 @@ export async function startReviewServer(options: {
 					detectedBase,
 				);
 				const defaultCwd = options.gitContext?.cwd;
+				const diffType = getCurrentVcsDiffType();
+				if (!diffType) {
+					json(res, { error: "No local diff type available" }, 400);
+					return;
+				}
 				const result = await getVcsFileContentsForDiff(
-					currentDiffType as DiffType,
+					diffType,
 					base,
 					filePath,
 					oldPath,
@@ -1173,7 +1178,13 @@ export async function startReviewServer(options: {
 				return;
 			}
 			try {
-				const body = (await parseBody(req)) as unknown as CodeNavRequest;
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(CodeNavRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
+					json(res, { error: "Invalid request body" }, 400);
+					return;
+				}
 				const error = validateCodeNavRequest(body);
 				if (error) {
 					json(res, { error }, 400);
@@ -1233,16 +1244,21 @@ export async function startReviewServer(options: {
 					return;
 				}
 
-				const stageCwd = resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd);
-				if (isPRMode || !(await canStageFiles(currentDiffType as DiffType, stageCwd))) {
+				const diffType = getCurrentVcsDiffType();
+				if (!diffType) {
+					json(res, { error: "Staging not available" }, 400);
+					return;
+				}
+				const stageCwd = resolveVcsCwd(diffType, options.gitContext?.cwd);
+				if (isPRMode || !(await canStageFiles(diffType, stageCwd))) {
 					json(res, { error: "Staging not available" }, 400);
 					return;
 				}
 
 				if (undo) {
-					await unstageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+					await unstageFile(diffType, body.filePath, stageCwd);
 				} else {
-					await stageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+					await stageFile(diffType, body.filePath, stageCwd);
 				}
 
 				json(res, { ok: true });

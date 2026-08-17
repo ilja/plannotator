@@ -75,6 +75,16 @@ export const FeedbackRequestSchema = Schema.Struct({
 	draftGeneration: Schema.optionalKey(Schema.Natural),
 });
 
+/** Code navigation request. */
+export const CodeNavRequestSchema = Schema.Struct({
+	symbol: Schema.String,
+	filePath: Schema.String,
+	line: Schema.Number,
+	charStart: Schema.Number,
+	side: Schema.Literals(["old", "new"]),
+	language: Schema.optionalKey(Schema.String),
+});
+
 /** Viewed-file synchronization request. */
 export const PrViewedRequestSchema = Schema.Struct({
 	filePaths: Schema.Array(Schema.String),

@@ -24,7 +24,7 @@ import {
 // Embed the built HTML at compile time
 // @ts-ignore - Bun import attribute for text
 import indexHtml from "../dist/index.html" with { type: "text" };
-const htmlContent = indexHtml as unknown as string;
+const htmlContent: string = indexHtml;
 
 // Parse CLI arguments
 const args = process.argv.slice(2);

@@ -651,6 +651,13 @@ describe("pi review server", () => {
       );
       expect(diffPayload.repoInfo?.display).toBeTruthy();
 
+      const malformedCodeNavResponse = await fetch(`${server.url}/api/code-nav/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: 42, filePath: "tracked.txt", side: "new" }),
+      });
+      expect(malformedCodeNavResponse.status).toBe(400);
+
       const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
       const fileContent: {
         oldContent: string | null;
