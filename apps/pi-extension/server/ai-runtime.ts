@@ -89,7 +89,7 @@ export async function handlePiAIRequest(
 
 	if (!runtime) {
 		if (url.pathname === "/api/ai/capabilities" && req.method === "GET") {
-			json(res, { available: false, providers: [] });
+			json(res, { available: false, providers: [], defaultProvider: null });
 			return true;
 		}
 		json(res, { error: "AI backend not available" }, 503);

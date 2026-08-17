@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -17,7 +18,7 @@ import {
   startReviewServer,
   unstageFile,
 } from "./server";
-import { createPiAIRuntime } from "./server/ai-runtime.js";
+import { createPiAIRuntime, handlePiAIRequest } from "./server/ai-runtime.js";
 import { loadConfig } from "./generated/config.js";
 import { WorkspaceReviewSession } from "./generated/review-workspace.js";
 
@@ -254,6 +255,35 @@ setInterval(() => {}, 1000);
       expect(body.providers[0].models?.map((model) => model.id)).toEqual(["fake/pi-model"]);
     } finally {
       runtime?.dispose();
+    }
+  });
+});
+
+describe("unavailable pi AI endpoint", () => {
+  test("returns a schema-compatible capabilities response", async () => {
+    const server = createHttpServer((req, res) => {
+      void handlePiAIRequest(req, res, new URL(req.url ?? "/", "http://localhost"), null);
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+
+    try {
+      const address = server.address();
+      if (!address || !("port" in address)) throw new Error("Failed to start test server");
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/ai/capabilities`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(JSON.stringify({
+        available: false,
+        providers: [],
+        defaultProvider: null,
+      }));
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
     }
   });
 });

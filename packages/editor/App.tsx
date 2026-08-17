@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
-import { Schema } from 'effect';
 import { toast, Toaster } from 'sonner';
-import { AICapabilitiesResponseSchema } from '@plannotator/ai/endpoints';
 import { type Origin, getAgentName } from '@plannotator/shared/agents';
 import { annotateFileFeedback, annotateMessageFeedback } from '@plannotator/shared/feedback-templates';
 import { parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, exportCodeFileAnnotations, exportMessageAnnotations, extractFrontmatter, wrapFeedbackForAgent, Frontmatter, type LinkedDocAnnotationEntry, type MessageAnnotationEntry } from '@plannotator/ui/utils/parser';
@@ -79,6 +77,12 @@ import {
 import type { BearConfig, ObsidianConfig, OctarineConfig } from '@plannotator/shared/integrations-common';
 import type { AgentTerminalCapability } from '@plannotator/shared/agent-terminal';
 import { DEMO_PLAN_CONTENT } from './demoPlan';
+import {
+  parseAICapabilitiesResponse,
+  parsePlanResponse,
+  parseSaveNotesResponse,
+  parseShareHtmlResponse,
+} from './app-boundaries';
 import { canUseAnnotateWideMode, resolveWideModeExitLayout, type WideModeLayoutSnapshot, type WideModeType } from './wideMode';
 import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
 import { AppHeader } from './components/AppHeader';
@@ -128,105 +132,6 @@ type AnnotationTypographyStyle = React.CSSProperties & {
   '--annotation-code-font-family'?: string;
   '--annotation-code-font-size'?: string;
 };
-
-const OriginSchema = Schema.Literals([
-  'claude-code', 'amp', 'droid', 'kiro-cli', 'opencode', 'copilot-cli', 'pi', 'codex', 'gemini-cli',
-]);
-
-const SourceSaveCapabilitySchema = Schema.Union([
-  Schema.Struct({
-    enabled: Schema.Literal(true),
-    kind: Schema.Literal('local-text-file'),
-    scope: Schema.Literals(['single-file', 'folder-file']),
-    path: Schema.String,
-    basename: Schema.String,
-    language: Schema.Literals(['markdown', 'mdx', 'text']),
-    hash: Schema.String,
-    mtimeMs: Schema.Number,
-    size: Schema.Number,
-    eol: Schema.Literals(['lf', 'crlf', 'mixed', 'none']),
-  }),
-  Schema.Struct({
-    enabled: Schema.Literal(false),
-    reason: Schema.Literals([
-      'not-annotate-mode', 'not-local-file', 'unsupported-extension', 'converted-source',
-      'html-render', 'folder-mode', 'message-mode', 'shared-session', 'missing-file', 'unreadable-file',
-    ]),
-  }),
-]);
-
-const AgentTerminalCapabilitySchema = Schema.Union([
-  Schema.Struct({
-    enabled: Schema.Literal(true),
-    cwd: Schema.String,
-    wsPath: Schema.String,
-    agents: Schema.Array(Schema.Struct({
-      id: Schema.String,
-      name: Schema.String,
-      available: Schema.Boolean,
-    })),
-  }),
-  Schema.Struct({
-    enabled: Schema.Literal(false),
-    reason: Schema.Literals([
-      'not-annotate-mode', 'remote-disabled', 'runtime-unavailable', 'webtui-unavailable',
-      'pty-unavailable', 'unsupported-runtime',
-    ]),
-    message: Schema.optionalKey(Schema.String),
-  }),
-]);
-
-const PickerMessageSchema = Schema.Struct({
-  messageId: Schema.String,
-  text: Schema.String,
-  timestamp: Schema.optionalKey(Schema.String),
-});
-
-const PlanResponseSchema = Schema.Struct({
-  plan: Schema.Union([Schema.String, Schema.Null]),
-  origin: Schema.optionalKey(OriginSchema),
-  mode: Schema.optionalKey(Schema.Literals(['annotate', 'annotate-last', 'annotate-folder'])),
-  filePath: Schema.optionalKey(Schema.String),
-  sourceInfo: Schema.optionalKey(Schema.String),
-  sourceConverted: Schema.optionalKey(Schema.Boolean),
-  sourceSave: Schema.optionalKey(SourceSaveCapabilitySchema),
-  gate: Schema.optionalKey(Schema.Boolean),
-  renderAs: Schema.optionalKey(Schema.Literals(['html', 'markdown'])),
-  rawHtml: Schema.optionalKey(Schema.String),
-  shareHtml: Schema.optionalKey(Schema.String),
-  convertHtml: Schema.optionalKey(Schema.Boolean),
-  sharingEnabled: Schema.optionalKey(Schema.Boolean),
-  shareBaseUrl: Schema.optionalKey(Schema.String),
-  pasteApiUrl: Schema.optionalKey(Schema.String),
-  repoInfo: Schema.optionalKey(Schema.Struct({
-    display: Schema.String,
-    branch: Schema.optionalKey(Schema.String),
-    host: Schema.optionalKey(Schema.String),
-  })),
-  projectRoot: Schema.optionalKey(Schema.String),
-  serverConfig: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
-  recentMessages: Schema.optionalKey(Schema.Array(PickerMessageSchema)),
-  agentTerminal: Schema.optionalKey(AgentTerminalCapabilitySchema),
-});
-
-const ShareHtmlResponseSchema = Schema.Struct({
-  shareHtml: Schema.optionalKey(Schema.String),
-  error: Schema.optionalKey(Schema.String),
-});
-
-const IntegrationResultSchema = Schema.Struct({
-  success: Schema.Boolean,
-  error: Schema.optionalKey(Schema.String),
-  path: Schema.optionalKey(Schema.String),
-});
-
-const SaveNotesResponseSchema = Schema.Struct({
-  results: Schema.optionalKey(Schema.Struct({
-    obsidian: Schema.optionalKey(IntegrationResultSchema),
-    bear: Schema.optionalKey(IntegrationResultSchema),
-    octarine: Schema.optionalKey(IntegrationResultSchema),
-  })),
-});
 
 type SaveNotesRequest = {
   obsidian?: ObsidianConfig;
@@ -1345,8 +1250,8 @@ const App: React.FC = () => {
     if (activePath) params.set('path', activePath);
     const query = params.toString();
     const res = await fetch(`/api/share-html${query ? `?${query}` : ''}`);
-    const data = Schema.decodeUnknownSync(ShareHtmlResponseSchema)(await res.json().catch(() => ({})));
-    if (!res.ok || data.error || !data.shareHtml) {
+    const data = parseShareHtmlResponse(await res.json().catch(() => ({})));
+    if (!res.ok || data.error || data.shareHtml === undefined) {
       throw new Error(data.error || 'Failed to prepare HTML for sharing');
     }
     setShareHtml(data.shareHtml);
@@ -2190,7 +2095,7 @@ const App: React.FC = () => {
     fetch('/api/plan')
       .then(res => {
         if (!res.ok) throw new Error('Not in API mode');
-        return res.json().then(body => Schema.decodeUnknownSync(PlanResponseSchema)(body));
+        return res.json().then(body => parsePlanResponse(body));
       })
       .then((data) => {
         // Initialize config store with server-provided values (config file > cookie > default)
@@ -2209,7 +2114,7 @@ const App: React.FC = () => {
         } else if (data.mode === 'annotate-folder') {
           // Folder annotation mode: clear demo content, let user pick a file
           setMarkdown('');
-        } else if (data.plan !== null) {
+        } else if (data.plan !== null && data.plan !== undefined) {
           // CM6 joins lines with \n; CRLF input would make an untouched
           // edit round-trip fabricate a whole-document diff. Normalize once.
           const normalizedPlan = data.plan.replace(/\r\n?/g, '\n');
@@ -2292,7 +2197,7 @@ const App: React.FC = () => {
     let cancelled = false;
     fetch('/api/ai/capabilities')
       .then(res => res.ok
-        ? res.json().then(body => Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(body))
+        ? res.json().then(body => parseAICapabilitiesResponse(body))
         : null)
       .then(data => {
         if (cancelled) return;
@@ -2396,7 +2301,7 @@ const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-      .then(res => res.json().then(data => Schema.decodeUnknownSync(SaveNotesResponseSchema)(data)))
+      .then(res => res.json().then(data => parseSaveNotesResponse(data)))
       .then(data => {
         const results: NoteAutoSaveResults = {};
         if (body.obsidian) results.obsidian = Boolean(data.results?.obsidian?.success);
@@ -3159,7 +3064,7 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = Schema.decodeUnknownSync(SaveNotesResponseSchema)(await res.json());
+      const data = parseSaveNotesResponse(await res.json());
       const result = data.results?.[target];
       if (result?.success) {
         toast.success(`Saved to ${targetName}`);

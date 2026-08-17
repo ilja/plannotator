@@ -26,6 +26,7 @@ import {
 	PiCommandSchema,
 	PiJsonObjectSchema,
 	PiModelsResponseSchema,
+	PiResponseEnvelopeSchema,
 	PiResponseSchema,
 	PiSDKConfigSchema,
 	PiStateResponseSchema,
@@ -148,6 +149,17 @@ class PiProcess {
 				} else {
 					pending.resolve(response.data ?? {});
 				}
+				return;
+			}
+		}
+		const responseEnvelope = Option.getOrUndefined(
+			Schema.decodeUnknownOption(PiResponseEnvelopeSchema)(msg),
+		);
+		if (responseEnvelope) {
+			const pending = this.pendingRequests.get(responseEnvelope.id);
+			if (pending) {
+				this.pendingRequests.delete(responseEnvelope.id);
+				pending.reject(new Error("Malformed RPC response"));
 				return;
 			}
 		}

@@ -34,6 +34,11 @@ export const PiCommandSchema = Schema.Union([
 ]);
 export type PiCommand = Schema.Schema.Type<typeof PiCommandSchema>;
 
+export const PiResponseEnvelopeSchema = Schema.Struct({
+	type: Schema.Literal("response"),
+	id: Schema.String,
+});
+
 export const PiResponseSchema = Schema.Struct({
 	type: Schema.Literal("response"),
 	id: Schema.String,
