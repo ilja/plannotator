@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { Schema } from 'effect';
 import { toast, Toaster } from 'sonner';
+import { AICapabilitiesResponseSchema } from '@plannotator/ai/endpoints';
 import { type Origin, getAgentName } from '@plannotator/shared/agents';
 import { annotateFileFeedback, annotateMessageFeedback } from '@plannotator/shared/feedback-templates';
 import { parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, exportCodeFileAnnotations, exportMessageAnnotations, extractFrontmatter, wrapFeedbackForAgent, Frontmatter, type LinkedDocAnnotationEntry, type MessageAnnotationEntry } from '@plannotator/ui/utils/parser';
@@ -74,6 +76,7 @@ import type { CommentAskAIContext } from '@plannotator/ui/components/CommentPopo
 import {
   type SourceSaveCapability,
 } from '@plannotator/shared/source-save';
+import type { BearConfig, ObsidianConfig, OctarineConfig } from '@plannotator/shared/integrations-common';
 import type { AgentTerminalCapability } from '@plannotator/shared/agent-terminal';
 import { DEMO_PLAN_CONTENT } from './demoPlan';
 import { canUseAnnotateWideMode, resolveWideModeExitLayout, type WideModeLayoutSnapshot, type WideModeType } from './wideMode';
@@ -118,6 +121,131 @@ type NoteAutoSaveResults = {
   bear?: boolean;
   octarine?: boolean;
 };
+
+type AnnotationTypographyStyle = React.CSSProperties & {
+  '--annotation-prose-font-family'?: string;
+  '--annotation-prose-font-size'?: string;
+  '--annotation-code-font-family'?: string;
+  '--annotation-code-font-size'?: string;
+};
+
+const OriginSchema = Schema.Literals([
+  'claude-code', 'amp', 'droid', 'kiro-cli', 'opencode', 'copilot-cli', 'pi', 'codex', 'gemini-cli',
+]);
+
+const SourceSaveCapabilitySchema = Schema.Union([
+  Schema.Struct({
+    enabled: Schema.Literal(true),
+    kind: Schema.Literal('local-text-file'),
+    scope: Schema.Literals(['single-file', 'folder-file']),
+    path: Schema.String,
+    basename: Schema.String,
+    language: Schema.Literals(['markdown', 'mdx', 'text']),
+    hash: Schema.String,
+    mtimeMs: Schema.Number,
+    size: Schema.Number,
+    eol: Schema.Literals(['lf', 'crlf', 'mixed', 'none']),
+  }),
+  Schema.Struct({
+    enabled: Schema.Literal(false),
+    reason: Schema.Literals([
+      'not-annotate-mode', 'not-local-file', 'unsupported-extension', 'converted-source',
+      'html-render', 'folder-mode', 'message-mode', 'shared-session', 'missing-file', 'unreadable-file',
+    ]),
+  }),
+]);
+
+const AgentTerminalCapabilitySchema = Schema.Union([
+  Schema.Struct({
+    enabled: Schema.Literal(true),
+    cwd: Schema.String,
+    wsPath: Schema.String,
+    agents: Schema.Array(Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      available: Schema.Boolean,
+    })),
+  }),
+  Schema.Struct({
+    enabled: Schema.Literal(false),
+    reason: Schema.Literals([
+      'not-annotate-mode', 'remote-disabled', 'runtime-unavailable', 'webtui-unavailable',
+      'pty-unavailable', 'unsupported-runtime',
+    ]),
+    message: Schema.optionalKey(Schema.String),
+  }),
+]);
+
+const PickerMessageSchema = Schema.Struct({
+  messageId: Schema.String,
+  text: Schema.String,
+  timestamp: Schema.optionalKey(Schema.String),
+});
+
+const PlanResponseSchema = Schema.Struct({
+  plan: Schema.Union([Schema.String, Schema.Null]),
+  origin: Schema.optionalKey(OriginSchema),
+  mode: Schema.optionalKey(Schema.Literals(['annotate', 'annotate-last', 'annotate-folder'])),
+  filePath: Schema.optionalKey(Schema.String),
+  sourceInfo: Schema.optionalKey(Schema.String),
+  sourceConverted: Schema.optionalKey(Schema.Boolean),
+  sourceSave: Schema.optionalKey(SourceSaveCapabilitySchema),
+  gate: Schema.optionalKey(Schema.Boolean),
+  renderAs: Schema.optionalKey(Schema.Literals(['html', 'markdown'])),
+  rawHtml: Schema.optionalKey(Schema.String),
+  shareHtml: Schema.optionalKey(Schema.String),
+  convertHtml: Schema.optionalKey(Schema.Boolean),
+  sharingEnabled: Schema.optionalKey(Schema.Boolean),
+  shareBaseUrl: Schema.optionalKey(Schema.String),
+  pasteApiUrl: Schema.optionalKey(Schema.String),
+  repoInfo: Schema.optionalKey(Schema.Struct({
+    display: Schema.String,
+    branch: Schema.optionalKey(Schema.String),
+    host: Schema.optionalKey(Schema.String),
+  })),
+  projectRoot: Schema.optionalKey(Schema.String),
+  serverConfig: Schema.optionalKey(Schema.Record(Schema.String, Schema.Json)),
+  recentMessages: Schema.optionalKey(Schema.Array(PickerMessageSchema)),
+  agentTerminal: Schema.optionalKey(AgentTerminalCapabilitySchema),
+});
+
+const ShareHtmlResponseSchema = Schema.Struct({
+  shareHtml: Schema.optionalKey(Schema.String),
+  error: Schema.optionalKey(Schema.String),
+});
+
+const IntegrationResultSchema = Schema.Struct({
+  success: Schema.Boolean,
+  error: Schema.optionalKey(Schema.String),
+  path: Schema.optionalKey(Schema.String),
+});
+
+const SaveNotesResponseSchema = Schema.Struct({
+  results: Schema.optionalKey(Schema.Struct({
+    obsidian: Schema.optionalKey(IntegrationResultSchema),
+    bear: Schema.optionalKey(IntegrationResultSchema),
+    octarine: Schema.optionalKey(IntegrationResultSchema),
+  })),
+});
+
+type SaveNotesRequest = {
+  obsidian?: ObsidianConfig;
+  bear?: BearConfig;
+  octarine?: OctarineConfig;
+};
+
+type EditorFeedbackRequest = {
+  draftGeneration: number;
+  feedback: string;
+  annotations: Annotation[];
+  codeAnnotations: CodeAnnotation[];
+  selectedMessageId?: string;
+  feedbackScope?: 'messages';
+};
+
+function getHTMLElementTarget(target: EventTarget | null): HTMLElement | null {
+  return target instanceof HTMLElement ? target : null;
+}
 
 type MessageAnnotationState = {
   messageId: string;
@@ -277,20 +405,22 @@ const App: React.FC = () => {
   const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
   const annotationProseFontFamily = useConfigValue('annotationProseFontFamily');
   const annotationProseFontSize = useConfigValue('annotationProseFontSize');
-  const annotationTypographyStyle = useMemo<React.CSSProperties>(() => ({
-    ...(annotationProseFontFamily && {
-      ['--annotation-prose-font-family' as string]: `'${annotationProseFontFamily}', var(--font-sans)`,
-    }),
-    ...(annotationProseFontSize && {
-      ['--annotation-prose-font-size' as string]: annotationProseFontSize,
-    }),
-    ...(annotationCodeFontFamily && {
-      ['--annotation-code-font-family' as string]: `'${annotationCodeFontFamily}', var(--font-mono)`,
-    }),
-    ...(annotationCodeFontSize && {
-      ['--annotation-code-font-size' as string]: annotationCodeFontSize,
-    }),
-  }), [annotationCodeFontFamily, annotationCodeFontSize, annotationProseFontFamily, annotationProseFontSize]);
+  const annotationTypographyStyle = useMemo<AnnotationTypographyStyle>(() => {
+    const style: AnnotationTypographyStyle = {};
+    if (annotationProseFontFamily) {
+      style['--annotation-prose-font-family'] = `'${annotationProseFontFamily}', var(--font-sans)`;
+    }
+    if (annotationProseFontSize) {
+      style['--annotation-prose-font-size'] = annotationProseFontSize;
+    }
+    if (annotationCodeFontFamily) {
+      style['--annotation-code-font-family'] = `'${annotationCodeFontFamily}', var(--font-mono)`;
+    }
+    if (annotationCodeFontSize) {
+      style['--annotation-code-font-size'] = annotationCodeFontSize;
+    }
+    return style;
+  }, [annotationCodeFontFamily, annotationCodeFontSize, annotationProseFontFamily, annotationProseFontSize]);
   useEffect(() => {
     if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
   }, [annotationCodeFontFamily]);
@@ -394,13 +524,14 @@ const App: React.FC = () => {
   const [aiSessionEnabled, setAISessionEnabled] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiProviders, setAiProviders] = useState<Array<{ id: string; name: string; capabilities?: Record<string, boolean>; models?: Array<{ id: string; label: string; default?: boolean }> }>>([]);
-  const [aiConfig, setAIConfig] = useState(() => {
+  type EditorAIConfig = { providerId: string | null; model: string | null; reasoningEffort: string | null };
+  const [aiConfig, setAIConfig] = useState<EditorAIConfig>(() => {
     const saved = getAIProviderSettings();
     const providerId = saved.providerId;
     return {
       providerId,
       model: providerId ? (saved.preferredModels[providerId] ?? null) : null,
-      reasoningEffort: null as string | null,
+      reasoningEffort: null,
     };
   });
   const [showLookAndFeelAnnouncement, setShowLookAndFeelAnnouncement] = useState(needsLookAndFeelAnnouncement);
@@ -1214,8 +1345,8 @@ const App: React.FC = () => {
     if (activePath) params.set('path', activePath);
     const query = params.toString();
     const res = await fetch(`/api/share-html${query ? `?${query}` : ''}`);
-    const data = (await res.json().catch(() => ({}))) as { shareHtml?: unknown; error?: string };
-    if (!res.ok || data.error || typeof data.shareHtml !== 'string') {
+    const data = Schema.decodeUnknownSync(ShareHtmlResponseSchema)(await res.json().catch(() => ({})));
+    if (!res.ok || data.error || !data.shareHtml) {
       throw new Error(data.error || 'Failed to prepare HTML for sharing');
     }
     setShareHtml(data.shareHtml);
@@ -2059,11 +2190,11 @@ const App: React.FC = () => {
     fetch('/api/plan')
       .then(res => {
         if (!res.ok) throw new Error('Not in API mode');
-        return res.json();
+        return res.json().then(body => Schema.decodeUnknownSync(PlanResponseSchema)(body));
       })
-      .then((data: { plan: string; origin?: Origin; mode?: 'annotate' | 'annotate-last' | 'annotate-folder'; filePath?: string; sourceInfo?: string; sourceConverted?: boolean; sourceSave?: SourceSaveCapability; gate?: boolean; renderAs?: 'html' | 'markdown'; rawHtml?: string; shareHtml?: string; convertHtml?: boolean; sharingEnabled?: boolean; shareBaseUrl?: string; pasteApiUrl?: string; repoInfo?: { display: string; branch?: string; host?: string }; projectRoot?: string; serverConfig?: { displayName?: string; gitUser?: string }; recentMessages?: PickerMessage[]; agentTerminal?: AgentTerminalCapability }) => {
+      .then((data) => {
         // Initialize config store with server-provided values (config file > cookie > default)
-        configStore.init(data.serverConfig);
+        configStore.init(data.serverConfig ? { ...data.serverConfig } : undefined);
         // Session-level force-markdown preference (--markdown); threaded into folder/linked
         // /api/doc requests so on-demand HTML files convert too.
         setConvertHtml(data.convertHtml ?? false);
@@ -2078,7 +2209,7 @@ const App: React.FC = () => {
         } else if (data.mode === 'annotate-folder') {
           // Folder annotation mode: clear demo content, let user pick a file
           setMarkdown('');
-        } else if (typeof data.plan === 'string') {
+        } else if (data.plan !== null) {
           // CM6 joins lines with \n; CRLF input would make an untouched
           // edit round-trip fabricate a whole-document diff. Normalize once.
           const normalizedPlan = data.plan.replace(/\r\n?/g, '\n');
@@ -2160,12 +2291,14 @@ const App: React.FC = () => {
 
     let cancelled = false;
     fetch('/api/ai/capabilities')
-      .then(res => res.ok ? res.json() : null)
+      .then(res => res.ok
+        ? res.json().then(body => Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(body))
+        : null)
       .then(data => {
         if (cancelled) return;
         if (data?.available) {
           const providers = (data.providers ?? []).filter(isPiProvider);
-          const defaultProvider = typeof data.defaultProvider === 'string' &&
+          const defaultProvider = data.defaultProvider !== null &&
             providers.some(provider => provider.id === data.defaultProvider)
             ? data.defaultProvider
             : null;
@@ -2217,7 +2350,7 @@ const App: React.FC = () => {
     if (!isApiMode || !markdown || isSharedSession || annotateMode || false) return;
     if (autoSaveAttempted.current) return;
 
-    const body: { obsidian?: object; bear?: object; octarine?: object } = {};
+    const body: SaveNotesRequest = {};
     const targets: string[] = [];
 
     const obsSettings = getObsidianSettings();
@@ -2263,16 +2396,20 @@ const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-      .then(res => res.json())
+      .then(res => res.json().then(data => Schema.decodeUnknownSync(SaveNotesResponseSchema)(data)))
       .then(data => {
-        const results: NoteAutoSaveResults = {
-          ...(body.obsidian ? { obsidian: Boolean(data.results?.obsidian?.success) } : {}),
-          ...(body.bear ? { bear: Boolean(data.results?.bear?.success) } : {}),
-          ...(body.octarine ? { octarine: Boolean(data.results?.octarine?.success) } : {}),
-        };
+        const results: NoteAutoSaveResults = {};
+        if (body.obsidian) results.obsidian = Boolean(data.results?.obsidian?.success);
+        if (body.bear) results.bear = Boolean(data.results?.bear?.success);
+        if (body.octarine) results.octarine = Boolean(data.results?.octarine?.success);
         autoSaveResultsRef.current = results;
 
-        const failed = targets.filter(t => !data.results?.[t.toLowerCase()]?.success);
+        const didSave = (target: string): boolean => {
+          if (target === 'Obsidian') return data.results?.obsidian?.success === true;
+          if (target === 'Bear') return data.results?.bear?.success === true;
+          return data.results?.octarine?.success === true;
+        };
+        const failed = targets.filter(target => !didSave(target));
         if (failed.length === 0) {
           toast.success(`Auto-saved to ${targets.join(' & ')}`);
         } else {
@@ -2459,17 +2596,20 @@ const App: React.FC = () => {
       const scopedSelectedMessageId = messageMultiSelectMode
         ? annotatedMessageIds.length === 1 ? annotatedMessageIds[0] : undefined
         : selectedMessageId ?? undefined;
+      const feedbackRequest: EditorFeedbackRequest = {
+        draftGeneration: getDraftGeneration(),
+        feedback,
+        annotations: allAnnotations,
+        codeAnnotations,
+      };
+      if (scopedSelectedMessageId) feedbackRequest.selectedMessageId = scopedSelectedMessageId;
+      if (messageMultiSelectMode && annotatedMessageIds.length > 1) {
+        feedbackRequest.feedbackScope = 'messages';
+      }
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftGeneration: getDraftGeneration(),
-          feedback,
-          annotations: allAnnotations,
-          codeAnnotations,
-          ...(scopedSelectedMessageId ? { selectedMessageId: scopedSelectedMessageId } : {}),
-          ...(messageMultiSelectMode && annotatedMessageIds.length > 1 ? { feedbackScope: 'messages' } : {}),
-        }),
+        body: JSON.stringify(feedbackRequest),
       });
       if (!res.ok) throw new Error('Failed to send feedback');
       dismissDraft();
@@ -2542,7 +2682,7 @@ const App: React.FC = () => {
       // Only handle Cmd/Ctrl+Enter
       if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
 
-      const target = e.target as HTMLElement | null;
+      const target = getHTMLElementTarget(e.target);
       const tag = target?.tagName;
       const isTextField = tag === 'INPUT' || tag === 'TEXTAREA' || Boolean(target?.isContentEditable);
 
@@ -2976,7 +3116,7 @@ const App: React.FC = () => {
   };
 
   const handleQuickSaveToNotes = async (target: 'obsidian' | 'bear' | 'octarine') => {
-    const body: { obsidian?: object; bear?: object; octarine?: object } = {};
+    const body: SaveNotesRequest = {};
     // Mid-edit saves describe the live buffer, matching handleApprove.
     const quickSaveMarkdown = isEditingMarkdown
       ? markdownEditorHandleRef.current?.getMarkdown() ?? displayedMarkdown
@@ -3019,7 +3159,7 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = Schema.decodeUnknownSync(SaveNotesResponseSchema)(await res.json());
       const result = data.results?.[target];
       if (result?.success) {
         toast.success(`Saved to ${targetName}`);
@@ -3174,7 +3314,7 @@ const App: React.FC = () => {
     const handleSaveShortcut = (e: KeyboardEvent) => {
       if (e.key !== 's' || !(e.metaKey || e.ctrlKey)) return;
 
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = getHTMLElementTarget(e.target)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
       if (showExport || showFeedbackPrompt ||
@@ -3223,7 +3363,7 @@ const App: React.FC = () => {
     const handlePrintShortcut = (e: KeyboardEvent) => {
       if (e.key !== 'p' || !(e.metaKey || e.ctrlKey)) return;
 
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = getHTMLElementTarget(e.target)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
       if (showExport || showFeedbackPrompt ||
@@ -3303,8 +3443,8 @@ const App: React.FC = () => {
   const handleSaveToBear = useCallback(() => headerHandlersRef.current.handleQuickSaveToNotes('bear'), []);
 
   const planMaxWidth = useMemo(() => {
-    const widths: Record<PlanWidth, number> = { compact: 832, default: 1040, wide: 1280 };
-    return widths[uiPrefs.planWidth] ?? 832;
+    const widths = { compact: 832, default: 1040, wide: 1280 } as const satisfies Record<PlanWidth, number>;
+    return widths[uiPrefs.planWidth];
   }, [uiPrefs.planWidth]);
   const annotateReaderMaxWidth = canUseWideMode && wideModeType === 'wide' ? null : planMaxWidth;
   const selectedAIProvider = aiProviders.find(provider => provider.id === aiConfig.providerId) ?? null;
@@ -3380,7 +3520,7 @@ const App: React.FC = () => {
           onSaveToObsidian={handleSaveToObsidian}
           onSaveToBear={handleSaveToBear}
           onSaveToOctarine={handleSaveToOctarine}
-          appVersion={typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'}
+          appVersion={__APP_VERSION__}
           agentInstructionsEnabled={false}
           obsidianConfigured={isObsidianConfigured()}
           bearConfigured={getBearSettings().enabled}

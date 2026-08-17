@@ -15,6 +15,7 @@
     "@plannotator/ui": "workspace:*",
     "@plannotator/webtui": "0.1.0",
     "diff": "^8.0.3",
+    "effect": "4.0.0-rc.109",
     "lucide-react": "^1.14.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
