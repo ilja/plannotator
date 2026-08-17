@@ -23,6 +23,7 @@ import {
   resolveAIModelForProvider,
   resolveAIProviderSelection,
   saveAIProviderSelection,
+  type AIProviderOption,
 } from '@plannotator/ui/utils/aiProvider';
 import { DiffTypeSetupDialog } from '@plannotator/ui/components/DiffTypeSetupDialog';
 import { needsDiffTypeSetup } from '@plannotator/ui/utils/diffTypeSetup';
@@ -89,6 +90,13 @@ import type { PRDiffScope, PRDiffScopeOption, PRStackInfo, PRStackTree } from '@
 import { altKey } from '@plannotator/ui/utils/platform';
 
 declare const __APP_VERSION__: string;
+
+/** The capabilities advertised by the review server's /api/ai/capabilities endpoint. */
+interface AiCapabilitiesResponse {
+  available?: boolean;
+  providers?: AIProviderOption[];
+  defaultProvider?: string | null;
+}
 
 interface DiffData {
   files: DiffFile[];
@@ -251,7 +259,7 @@ const ReviewApp: React.FC = () => {
   const mrLabel = prMetadata ? getMRLabel(prMetadata) : 'PR';
   const mrNumberLabel = prMetadata ? getMRNumberLabel(prMetadata) : '';
   const displayRepo = prMetadata ? getDisplayRepo(prMetadata) : '';
-  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+  const appVersion = __APP_VERSION__;
 
   const identity = useConfigValue('displayName');
 
@@ -413,14 +421,21 @@ const ReviewApp: React.FC = () => {
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiProviders, setAiProviders] = useState<Array<{ id: string; name: string; capabilities: Record<string, boolean>; models?: Array<{ id: string; label: string; default?: boolean }> }>>([]);
   const [aiDefaultProvider, setAiDefaultProvider] = useState<string | null>(null);
-  const [aiConfig, setAiConfig] = useState(() => {
+interface AiConfigState {
+  providerId: string | null;
+  model: string | null;
+  reasoningEffort: string | null;
+}
+
+const [aiConfig, setAiConfig] = useState(() => {
     const saved = getAIProviderSettings();
     const pid = saved.providerId;
-    return {
+    const config: AiConfigState = {
       providerId: pid,
       model: pid ? (saved.preferredModels[pid] ?? null) : null,
-      reasoningEffort: null as string | null,
+      reasoningEffort: null,
     };
+    return config;
   });
   const [showDiffTypeSetup, setShowDiffTypeSetup] = useState(false);
   const [diffTypeSetupPending, setDiffTypeSetupPending] = useState(false);
@@ -485,11 +500,11 @@ const ReviewApp: React.FC = () => {
   useEffect(() => {
     fetch('/api/ai/capabilities')
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
+      .then((data: AiCapabilitiesResponse | null) => {
         if (data?.available) {
           const providers = (data.providers ?? []).filter(isPiProvider);
           setAiAvailable(providers.length > 0);
-          const defaultProvider = typeof data.defaultProvider === 'string' &&
+          const defaultProvider = data.defaultProvider !== undefined &&
             providers.some(provider => provider.id === data.defaultProvider)
             ? data.defaultProvider
             : null;
@@ -1222,7 +1237,7 @@ const ReviewApp: React.FC = () => {
 
       if (!res.ok) throw new Error('Failed to switch diff');
 
-      const data = await res.json() as {
+      const data: {
         rawPatch: string;
         gitRef: string;
         diffType: string;
@@ -1231,7 +1246,7 @@ const ReviewApp: React.FC = () => {
         diffOptions?: DiffOption[];
         error?: string;
         semanticDiff?: SemanticDiffAdvert;
-      };
+      } = await res.json();
 
       const nextFiles = parseDiffToFiles(data.rawPatch);
       applySemanticDiffAdvert(data.semanticDiff);
@@ -1724,7 +1739,7 @@ const ReviewApp: React.FC = () => {
                 targetPrUrl: target.prUrl || undefined,
               }),
             });
-            const prData = await prRes.json() as { ok?: boolean; prUrl?: string; error?: string };
+            const prData: { ok?: boolean; prUrl?: string; error?: string } = await prRes.json();
             if (!prRes.ok || prData.error) {
               return { ...target, status: 'failed', error: prData.error ?? 'Failed to submit' };
             }
@@ -1794,7 +1809,7 @@ const ReviewApp: React.FC = () => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Alt' || e.repeat) return;
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = e.target instanceof HTMLElement ? e.target.tagName : undefined;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     };
 
@@ -1839,7 +1854,7 @@ const ReviewApp: React.FC = () => {
         return;
       }
 
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = e.target instanceof HTMLElement ? e.target.tagName : undefined;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning) return;
       if (submitted || isSendingFeedback || isApproving || isExiting || isPlatformActioning) return;
