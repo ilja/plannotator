@@ -3380,6 +3380,21 @@ const App: React.FC = () => {
     );
   }
 
+  // SAFETY: sonner style tokens are custom CSS properties (--normal-bg & friends)
+  // that React.CSSProperties deliberately excludes via closed typing; the keys are
+  // all valid custom properties and the values are var()/oklch() references.
+  const toastStyle = {
+    '--normal-bg': 'var(--card)',
+    '--normal-border': 'var(--border)',
+    '--normal-text': 'var(--foreground)',
+    '--success-bg': 'oklch(from var(--success) l c h / 0.15)',
+    '--success-border': 'oklch(from var(--success) l c h / 0.3)',
+    '--success-text': 'var(--success)',
+    '--error-bg': 'oklch(from var(--destructive) l c h / 0.15)',
+    '--error-border': 'oklch(from var(--destructive) l c h / 0.3)',
+    '--error-text': 'var(--destructive)',
+  } as React.CSSProperties;
+
   return (
     <ThemeProvider defaultTheme="dark">
       <TooltipProvider delayDuration={900} skipDelayDuration={200} disableHoverableContent>
@@ -4080,19 +4095,7 @@ const App: React.FC = () => {
         <Toaster
           position="top-right"
           offset={64}
-          toastOptions={{
-            style: {
-              '--normal-bg': 'var(--card)',
-              '--normal-border': 'var(--border)',
-              '--normal-text': 'var(--foreground)',
-              '--success-bg': 'oklch(from var(--success) l c h / 0.15)',
-              '--success-border': 'oklch(from var(--success) l c h / 0.3)',
-              '--success-text': 'var(--success)',
-              '--error-bg': 'oklch(from var(--destructive) l c h / 0.15)',
-              '--error-border': 'oklch(from var(--destructive) l c h / 0.3)',
-              '--error-text': 'var(--destructive)',
-            } as React.CSSProperties,
-          }}
+          toastOptions={{ style: toastStyle }}
         />
 
         {/* Completion overlay - shown after approve/deny */}

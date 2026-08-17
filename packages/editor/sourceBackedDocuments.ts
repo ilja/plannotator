@@ -541,6 +541,9 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
   const reconcileDiskSnapshot = useCallback((input: SourceBackedDocumentDiskSnapshotInput): SourceBackedDocumentDiskSnapshotReconcileResult => {
     const result = reconcileSourceBackedDocumentDiskSnapshot(docsRef.current.get(input.key), input);
     if (result.type !== 'missing' && result.type !== 'unchanged') bump();
+    // SAFETY: result is one of the four record-bearing variants (the missing
+    // arm is returned above); spreading preserves the variant's own keys and
+    // only replaces record with a same-typed clone, so the shape is unchanged.
     return result.type === 'missing'
       ? result
       : { ...result, record: cloneRecord(result.record) } as SourceBackedDocumentDiskSnapshotReconcileResult;
@@ -635,7 +638,7 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
             afterHash: doc.savedChange.afterHash,
           }
         : undefined;
-      docsRef.current.set(doc.key, {
+      const restored: SourceBackedDocumentRecord = {
         key: doc.key,
         path: doc.sourceSave.path,
         basename: doc.sourceSave.basename,
@@ -648,9 +651,10 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
         saveStatus: doc.missingOnDisk ? 'missing' : currentText === diskBaseline ? 'clean' : 'dirty',
         lastKnownHash: doc.sourceSave.hash,
         lastKnownMtimeMs: doc.sourceSave.mtimeMs,
-        ...(doc.missingOnDisk ? { missingOnDisk: true } : {}),
         savedChange,
-      });
+      };
+      if (doc.missingOnDisk) restored.missingOnDisk = true;
+      docsRef.current.set(doc.key, restored);
       restoredKeys.push(doc.key);
     }
 
@@ -901,15 +905,18 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
       .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability } =>
         record.sourceSave?.enabled === true && recordIsDirty(record)
       )
-      .map((record) => ({
-        key: record.key,
-        sourceSave: record.sourceSave,
-        sessionOpenText: record.sessionOpenText,
-        diskBaseline: record.diskBaseline,
-        currentText: record.currentText,
-        ...(record.missingOnDisk ? { missingOnDisk: true } : {}),
-        savedChange: record.savedChange ? { ...record.savedChange, sourceSave: record.sourceSave } : undefined,
-      }));
+      .map((record) => {
+        const draft: SourceBackedDocumentDraftData = {
+          key: record.key,
+          sourceSave: record.sourceSave,
+          sessionOpenText: record.sessionOpenText,
+          diskBaseline: record.diskBaseline,
+          currentText: record.currentText,
+          savedChange: record.savedChange ? { ...record.savedChange, sourceSave: record.sourceSave } : undefined,
+        };
+        if (record.missingOnDisk) draft.missingOnDisk = true;
+        return draft;
+      });
   }, []);
 
   const getSourceBackedDraftSavedFileChanges = useCallback((): SourceBackedSavedFileChangeDraftData[] => {
@@ -939,7 +946,10 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
       .filter((record): record is SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability } =>
         record.sourceSave?.enabled === true
       )
-      .map((record) => cloneRecord(record) as SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability });
+      .map((record) => ({
+        ...cloneRecord(record),
+        sourceSave: record.sourceSave,
+      }));
   }, []);
 
   const getFileEditStatuses = useCallback((): Map<string, SourceBackedDocumentStatus> => {
