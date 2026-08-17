@@ -478,7 +478,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     const tryScroll = () => {
       if (cancelled) return;
       const target = getSearchRoots(container)
-        .map((root) => (root as ParentNode).querySelector?.('[data-selected-line]') ?? null)
+        .map((root) => root.querySelector?.('[data-selected-line]') ?? null)
         .find((el): el is Element => el != null);
       if (target) {
         const targetRect = target.getBoundingClientRect();
@@ -511,23 +511,29 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       }));
   }, [annotations]);
 
-  // Derive AI markers for the current file's lines
+  interface AiLineAnnotation {
+  side: 'additions' | 'deletions';
+  lineNumber: number;
+  metadata: DiffAnnotationMetadata;
+}
+
+// Derive AI markers for the current file's lines
   const aiLineAnnotations = useMemo(() => {
     if (!aiMessages.length) return [];
     return aiMessages
       .filter(m => m.question.lineStart != null && m.question.lineEnd != null)
-      .map(({ question, response }) => ({
-        side: question.side === 'new' ? 'additions' as const : 'deletions' as const,
+      .map(({ question, response }): AiLineAnnotation => ({
+        side: question.side === 'new' ? 'additions' : 'deletions',
         lineNumber: question.lineEnd!,
         metadata: {
           annotationId: question.id,
-          type: 'comment' as CodeAnnotationType,
-          kind: 'ai-marker' as const,
+          type: 'comment',
+          kind: 'ai-marker',
           questionId: question.id,
           promptPreview: question.prompt.slice(0, 40) + (question.prompt.length > 40 ? '...' : ''),
           hasResponse: !!response.text && !response.error,
           isStreaming: response.isStreaming,
-        } as DiffAnnotationMetadata,
+        },
       }));
   }, [aiMessages]);
 
@@ -628,12 +634,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     props.tokenElement.classList.remove('pn-token-nav');
   }, []);
 
-  const splitGridStyle = useMemo(() => {
+  const splitGridStyle = useMemo((): React.CSSProperties | undefined => {
     if (!isSplitLayout || diffOverflow === 'wrap') return undefined;
     return {
       '--split-left': `${splitRatio}fr`,
       '--split-right': `${1 - splitRatio}fr`,
-    } as React.CSSProperties;
+    };
   }, [diffOverflow, isSplitLayout, splitRatio]);
 
   // File-scoped comments render below the path, above the hunks (full text, no
