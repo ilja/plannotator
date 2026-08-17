@@ -113,6 +113,10 @@ function getImageContentType(filePath: string): string {
 	);
 }
 
+function isUploadFile(file: FormDataEntryValue | null): file is File {
+	return file !== null && "arrayBuffer" in Object(file) && "name" in Object(file);
+}
+
 export function handleImageRequest(res: Res, url: URL): void {
 	const imagePath = url.searchParams.get("path");
 	if (!imagePath) {
@@ -165,7 +169,7 @@ export async function handleUploadRequest(
 		const request = toWebRequest(req);
 		const formData = await request.formData();
 		const file = formData.get("file");
-		if (!(file instanceof File)) {
+		if (!isUploadFile(file)) {
 			json(res, { error: "No file provided" }, 400);
 			return;
 		}

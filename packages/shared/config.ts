@@ -184,6 +184,9 @@ export const ConfigPatch = Schema.Struct({
       fontSize: Schema.optionalKey(Schema.String),
       tabSize: Schema.optionalKey(Schema.Number),
       hideWhitespace: Schema.optionalKey(Schema.Boolean),
+      expandUnchanged: Schema.optionalKey(Schema.Boolean),
+      defaultDiffType: Schema.optionalKey(Schema.Literals(["uncommitted", "unstaged", "staged", "merge-base", "all"])),
+      lineBgIntensity: Schema.optionalKey(Schema.Literals(["subtle", "normal", "strong"])),
     }),
   ),
 });

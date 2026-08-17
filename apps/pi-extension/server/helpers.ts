@@ -5,7 +5,7 @@
 
 import type { IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 /**
  * Parsed JSON request body before endpoint-level schema decoding.
@@ -15,17 +15,22 @@ import { Schema } from "effect";
 const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
 export type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
 
+/** Parse a JSON request body and normalize non-object payloads to an empty object. */
+export function parseRequestBody(rawBody: string): ParsedRequestBody {
+	try {
+		return Option.getOrUndefined(
+			Schema.decodeUnknownOption(ParsedRequestBodySchema)(JSON.parse(rawBody)),
+		) ?? {};
+	} catch {
+		return {};
+	}
+}
+
 export function parseBody(req: IncomingMessage): Promise<ParsedRequestBody> {
 	return new Promise((resolve) => {
 		let data = "";
 		req.on("data", (chunk: string) => (data += chunk));
-		req.on("end", () => {
-			try {
-				resolve(JSON.parse(data));
-			} catch {
-				resolve({});
-			}
-		});
+		req.on("end", () => resolve(parseRequestBody(data)));
 	});
 }
 

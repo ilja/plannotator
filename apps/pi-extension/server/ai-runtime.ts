@@ -48,13 +48,10 @@ export async function createPiAIRuntime(options: CreatePiAIRuntimeOptions = {}):
 					piExecutablePath: piPath,
 				};
 				const provider = await ai.createProvider(providerConfig);
-				if (provider && "fetchModels" in provider) {
-					// SAFETY: the pi-sdk provider exposes fetchModels when this property exists.
-					const providerWithModelDiscovery = provider as {
-						fetchModels: () => Promise<void>;
-					};
+				if (provider && "fetchModels" in provider && provider.fetchModels instanceof Function) {
+					const fetchModels = provider.fetchModels;
 					modelDiscovery.push(
-						providerWithModelDiscovery.fetchModels().catch(() => {}),
+						Promise.resolve(fetchModels.call(provider)).then(() => undefined).catch(() => {}),
 					);
 				}
 				registry.register(provider);

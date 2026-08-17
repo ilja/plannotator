@@ -18,12 +18,14 @@ export const DiffTypeSchema = Schema.Union([
 ]);
 
 /** Diff switch request — DiffType plus the workspace-mode variants. */
+export const WorkspaceDiffTypeSchema = Schema.Literals([
+	"workspace-current", "workspace-staged", "workspace-unstaged", "workspace-last",
+]);
+
 export const DiffSwitchRequestSchema = Schema.Struct({
 	diffType: Schema.Union([
 		DiffTypeSchema,
-		Schema.Literals([
-			"workspace-current", "workspace-staged", "workspace-unstaged", "workspace-last",
-		]),
+		WorkspaceDiffTypeSchema,
 	]),
 	hideWhitespace: Schema.optionalKey(Schema.Boolean),
 	base: Schema.optionalKey(Schema.String),
@@ -71,4 +73,16 @@ export const FeedbackRequestSchema = Schema.Struct({
 	selectedMessageId: Schema.optionalKey(Schema.String),
 	feedbackScope: Schema.optionalKey(Schema.Literals(["message", "messages"])),
 	draftGeneration: Schema.optionalKey(Schema.Natural),
+});
+
+/** Viewed-file synchronization request. */
+export const PrViewedRequestSchema = Schema.Struct({
+	filePaths: Schema.Array(Schema.String),
+	viewed: Schema.Boolean,
+});
+
+/** Git staging request. */
+export const GitAddRequestSchema = Schema.Struct({
+	filePath: Schema.NonEmptyString,
+	undo: Schema.optionalKey(Schema.Boolean),
 });

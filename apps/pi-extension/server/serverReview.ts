@@ -5,7 +5,7 @@ import os from "node:os";
 import { basename, resolve as resolvePath } from "node:path";
 
 import { contentHash, deleteDraft } from "../generated/draft.js";
-import { loadConfig, saveConfig, detectGitUser, getServerConfig, resolveSharingEnabled } from "../generated/config.js";
+import { ConfigPatch, loadConfig, saveConfig, detectGitUser, getServerConfig, resolveSharingEnabled } from "../generated/config.js";
 
 export type {
 	DiffOption,
@@ -56,11 +56,15 @@ import {
 import { html, json, parseBody, requestUrl } from "./helpers.js";
 import {
 	DiffSwitchRequestSchema,
+	DiffTypeSchema,
 	FeedbackRequestSchema,
+	GitAddRequestSchema,
 	OpenInRequestSchema,
 	PrActionRequestSchema,
 	PrDiffScopeRequestSchema,
 	PrSwitchRequestSchema,
+	PrViewedRequestSchema,
+	WorkspaceDiffTypeSchema,
 } from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
@@ -619,13 +623,22 @@ export async function startReviewServer(options: {
 					json(res, { error: "Missing diffType" }, 400);
 					return;
 				}
-				const newType = body.diffType;
+				const workspaceDiffType = Option.getOrUndefined(
+					Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(body.diffType),
+				);
+				const vcsDiffType = Option.getOrUndefined(
+					Schema.decodeUnknownOption(DiffTypeSchema)(body.diffType),
+				);
 				if (body.hideWhitespace !== undefined) {
 					currentHideWhitespace = body.hideWhitespace;
 				}
 				if (workspace) {
+					if (!workspaceDiffType) {
+						json(res, { error: "Invalid workspace diff type" }, 400);
+						return;
+					}
 					const snapshot = await workspace.rebuild({
-						diffType: newType,
+						diffType: workspaceDiffType,
 						hideWhitespace: currentHideWhitespace,
 					});
 					currentPatch = snapshot.rawPatch;
@@ -647,16 +660,19 @@ export async function startReviewServer(options: {
 					json(res, workspaceResponse);
 					return;
 				}
+				if (!vcsDiffType) {
+					json(res, { error: "Invalid diff type" }, 400);
+					return;
+				}
 				const detectedBase = detectedCompareTarget();
 				const base = resolveBaseBranch(body.base, detectedBase);
 				const defaultCwd = options.gitContext?.cwd;
-				// SAFETY: the workspace branch returned above, so this is a local DiffType.
-				const result = await runVcsDiff(newType as DiffType, base, defaultCwd, {
+				const result = await runVcsDiff(vcsDiffType, base, defaultCwd, {
 					hideWhitespace: currentHideWhitespace,
 				});
 				currentPatch = result.patch;
 				currentGitRef = result.label;
-				currentDiffType = newType;
+				currentDiffType = vcsDiffType;
 				currentBase = base;
 				baseEverSwitched = true;
 				currentError = result.error;
@@ -668,8 +684,7 @@ export async function startReviewServer(options: {
 				let updatedContext: GitContext | undefined;
 				if (options.gitContext) {
 					try {
-						// SAFETY: the workspace branch returned above, so this is a local DiffType.
-						const effectiveCwd = resolveVcsCwd(newType as DiffType, options.gitContext.cwd);
+						const effectiveCwd = resolveVcsCwd(vcsDiffType, options.gitContext.cwd);
 						updatedContext = await getVcsContext(effectiveCwd, sessionVcsType);
 					} catch {
 						/* best-effort */
@@ -1008,12 +1023,18 @@ export async function startReviewServer(options: {
 				return;
 			}
 			try {
-				const body = await parseBody(req);
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(PrViewedRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
+					json(res, { error: "Invalid viewed request" }, 400);
+					return;
+				}
 				await markPRFilesViewed(
 					prRef,
 					prNodeId,
-					body.filePaths as string[],
-					body.viewed as boolean,
+					[...body.filePaths],
+					body.viewed,
 				);
 				json(res, { ok: true });
 			} catch (err) {
@@ -1173,11 +1194,14 @@ export async function startReviewServer(options: {
 			}
 		} else if (url.pathname === "/api/git-add" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { filePath?: unknown; undo?: boolean };
-				if (typeof body.filePath !== "string" || !body.filePath) {
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(GitAddRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
 					json(res, { error: "Missing filePath" }, 400);
 					return;
 				}
+				const undo = body.undo === true;
 				try { validateFilePath(body.filePath); } catch {
 					json(res, { error: "Invalid path" }, 400);
 					return;
@@ -1185,7 +1209,7 @@ export async function startReviewServer(options: {
 
 				if (workspace) {
 					try {
-						await workspace.stageFile(body.filePath, body.undo);
+						await workspace.stageFile(body.filePath, undo);
 						json(res, { ok: true });
 					} catch (error) {
 						json(res, { error: error instanceof Error ? error.message : "Failed to stage file" }, 400);
@@ -1199,7 +1223,7 @@ export async function startReviewServer(options: {
 					return;
 				}
 
-				if (body.undo) {
+				if (undo) {
 					await unstageFile(currentDiffType as DiffType, body.filePath, stageCwd);
 				} else {
 					await stageFile(currentDiffType as DiffType, body.filePath, stageCwd);
@@ -1211,12 +1235,8 @@ export async function startReviewServer(options: {
 			}
 		} else if (url.pathname === "/api/config" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean };
-				const toSave: Record<string, unknown> = {};
-				if (body.displayName !== undefined) toSave.displayName = body.displayName;
-				if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
-				if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
-				if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
+				const body = Schema.decodeUnknownSync(ConfigPatch)(await parseBody(req));
+				if (Object.keys(body).length > 0) saveConfig(body);
 				json(res, { ok: true });
 			} catch {
 				json(res, { error: "Invalid request" }, 400);
