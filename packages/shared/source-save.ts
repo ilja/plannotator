@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 export type SourceSaveLanguage = "markdown" | "mdx" | "text";
 
 export type SourceSaveDisabledReason =
@@ -76,6 +78,66 @@ export type SourceSaveResponse =
 	  };
 
 export type SourceSaveConflictResponse = Extract<SourceSaveResponse, { ok: false; code: "conflict" }>;
+
+export const SourceFileEolSchema = Schema.Literals(["lf", "crlf", "mixed", "none"]);
+
+export const SourceSaveCapabilitySchema = Schema.Union([
+	Schema.Struct({
+		enabled: Schema.Literal(true),
+		kind: Schema.Literal("local-text-file"),
+		scope: Schema.Literals(["single-file", "folder-file"]),
+		path: Schema.String,
+		basename: Schema.String,
+		language: Schema.Literals(["markdown", "mdx", "text"]),
+		hash: Schema.String,
+		mtimeMs: Schema.Number,
+		size: Schema.Number,
+		eol: SourceFileEolSchema,
+	}),
+	Schema.Struct({
+		enabled: Schema.Literal(false),
+		reason: Schema.Literals([
+			"not-annotate-mode",
+			"not-local-file",
+			"unsupported-extension",
+			"converted-source",
+			"html-render",
+			"folder-mode",
+			"message-mode",
+			"shared-session",
+			"missing-file",
+			"unreadable-file",
+		]),
+	}),
+]);
+
+// The conflict variant keeps the current* disk-fields optional: the source
+// document client preserves its "conflict-incomplete" outcome when a conflict
+// payload omits the disk snapshot fields.
+export const SourceSaveResponseSchema = Schema.Union([
+	Schema.Struct({
+		ok: Schema.Literal(true),
+		hash: Schema.String,
+		mtimeMs: Schema.Number,
+		size: Schema.Number,
+		eol: SourceFileEolSchema,
+	}),
+	Schema.Struct({
+		ok: Schema.Literal(false),
+		code: Schema.Literal("conflict"),
+		message: Schema.String,
+		currentText: Schema.optionalKey(Schema.String),
+		currentHash: Schema.optionalKey(Schema.String),
+		currentMtimeMs: Schema.optionalKey(Schema.Number),
+		currentSize: Schema.optionalKey(Schema.Number),
+		currentEol: Schema.optionalKey(SourceFileEolSchema),
+	}),
+	Schema.Struct({
+		ok: Schema.Literal(false),
+		code: Schema.Literals(["not-writable", "write-failed", "invalid-request"]),
+		message: Schema.String,
+	}),
+]);
 
 export function isSourceFileEol(value: unknown): value is SourceFileEol {
 	return value === "lf" || value === "crlf" || value === "mixed" || value === "none";
