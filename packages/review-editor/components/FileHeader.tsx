@@ -30,7 +30,12 @@ interface FileHeaderProps {
   onCollapseToggle?: () => void;
 }
 
-function splitFilePath(filePath: string): { directory: string; name: string } {
+interface SplitFilePath {
+  directory: string;
+  name: string;
+}
+
+function splitFilePath(filePath: string): SplitFilePath {
   const lastSlash = filePath.lastIndexOf('/');
   if (lastSlash === -1) {
     return { directory: '', name: filePath };
@@ -52,7 +57,7 @@ function frontEllipsize(text: string, visibleChars: number): string {
  * tree): A added · D deleted · R renamed, colored so the critical changes pop.
  * Modified is bare — the +/- counts already say it changed within the file.
  */
-const STATUS_LETTER: Record<DiffFileStatus, { letter: string; className: string; title: string }> = {
+const STATUS_LETTER = {
   added: { letter: 'A', className: 'text-success', title: 'Added file' },
   modified: { letter: 'M', className: 'text-muted-foreground', title: 'Modified file' },
   deleted: { letter: 'D', className: 'text-destructive', title: 'Deleted file' },
@@ -77,7 +82,12 @@ const FileStatusLetter: React.FC<{ status: DiffFileStatus; oldPath?: string }> =
 };
 
 /** Count +/- lines in a unified patch (ignores the +++/--- file headers). */
-function countChanges(patch: string): { additions: number; deletions: number } {
+interface ChangeCounts {
+  additions: number;
+  deletions: number;
+}
+
+function countChanges(patch: string): ChangeCounts {
   let additions = 0;
   let deletions = 0;
   for (const line of patch.split('\n')) {
@@ -121,7 +131,7 @@ export const FileHeader: React.FC<FileHeaderProps> = ({
     : name;
 
   useEffect(() => {
-    if (!headerRef.current || typeof ResizeObserver === 'undefined') return;
+    if (!headerRef.current || globalThis.ResizeObserver === undefined) return;
 
     const node = headerRef.current;
     const observer = new ResizeObserver(([entry]) => {

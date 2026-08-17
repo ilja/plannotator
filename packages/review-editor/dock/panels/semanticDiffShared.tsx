@@ -7,7 +7,11 @@ import type {
 
 // `renamed`/`moved` are handled by the early return in getChangeSymbol, so they
 // intentionally have no entry here.
-const changeSymbols: Record<string, string> = {
+interface ChangeSymbolMap {
+  [change: string]: string;
+}
+
+const changeSymbols: ChangeSymbolMap = {
   added: '⊕',
   deleted: '⊖',
   modified: '∆',

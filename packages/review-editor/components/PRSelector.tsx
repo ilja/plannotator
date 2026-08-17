@@ -6,13 +6,13 @@ import type { PRListItem } from '@plannotator/shared/pr-types';
 
 type PRItem = PRListItem;
 
-const stateColors: Record<PRItem['state'], string> = {
+const stateColors = {
   open: 'text-success',
   merged: 'text-annotation-comment',
   closed: 'text-muted-foreground/60',
 };
 
-const stateLabels: Record<PRItem['state'], string> = {
+const stateLabels = {
   open: 'Open',
   merged: 'Merged',
   closed: 'Closed',

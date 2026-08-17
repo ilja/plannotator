@@ -68,7 +68,7 @@ function buildAnnotationFileComments(
       if (ann.suggestedCode) {
         body += `\n\n\`\`\`suggestion\n${ann.suggestedCode}\n\`\`\``;
       }
-      const side = (ann.side === 'old' ? 'LEFT' : 'RIGHT') as 'LEFT' | 'RIGHT';
+      const side: 'LEFT' | 'RIGHT' = ann.side === 'old' ? 'LEFT' : 'RIGHT';
       const isMultiLine = ann.lineStart != null && ann.lineEnd != null && ann.lineStart !== ann.lineEnd;
       return {
         path: ann.filePath,

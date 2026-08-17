@@ -5,13 +5,27 @@ interface PRChecksTabProps {
   context: PRContext;
 }
 
-const DECISION_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+interface DecisionStyle {
+  bg: string;
+  text: string;
+  label: string;
+}
+
+interface DecisionStyleMap {
+  [key: string]: DecisionStyle;
+}
+
+const DECISION_STYLES: DecisionStyleMap = {
   APPROVED: { bg: 'bg-success/15', text: 'text-success', label: 'Approved' },
   CHANGES_REQUESTED: { bg: 'bg-destructive/15', text: 'text-destructive', label: 'Changes Requested' },
   REVIEW_REQUIRED: { bg: 'bg-yellow-500/15', text: 'text-yellow-500', label: 'Review Required' },
 };
 
-const MERGE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+interface MergeStatusStyleMap {
+  [key: string]: DecisionStyle;
+}
+
+const MERGE_STATUS_STYLES: MergeStatusStyleMap = {
   CLEAN: { bg: 'bg-success/15', text: 'text-success', label: 'Ready to merge' },
   BLOCKED: { bg: 'bg-yellow-500/15', text: 'text-yellow-500', label: 'Blocked' },
   BEHIND: { bg: 'bg-yellow-500/15', text: 'text-yellow-500', label: 'Behind base branch' },
@@ -90,7 +104,7 @@ export const PRChecksTab: React.FC<PRChecksTabProps> = ({ context }) => {
     ? { bg: 'bg-violet-500/15', text: 'text-violet-400', label: 'Merged' }
     : isClosed
       ? { bg: 'bg-destructive/15', text: 'text-destructive', label: 'Closed' }
-      : MERGE_STATUS_STYLES[context.mergeStateStatus] ?? MERGE_STATUS_STYLES.UNKNOWN;
+      : MERGE_STATUS_STYLES[context.mergeStateStatus] ?? MERGE_STATUS_STYLES['UNKNOWN'];
   const mergeableConflict = !isMerged && !isClosed && context.mergeable === 'CONFLICTING';
 
   return (
