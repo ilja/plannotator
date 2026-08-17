@@ -61,7 +61,8 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
       {blocks.map((block) => {
         switch (block.type) {
           case 'heading': {
-            const Tag = `h${Math.min(block.level ?? 1, 6)}` as keyof JSX.IntrinsicElements;
+            // SAFETY: level is clamped to 1..6, so the template literal is always a valid heading tag.
+            const Tag = `h${Math.min(Math.max(block.level ?? 1, 1), 6)}` as keyof JSX.IntrinsicElements;
             interface HeadingSizeMap {
   [level: number]: string;
 }

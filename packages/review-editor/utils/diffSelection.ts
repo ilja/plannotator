@@ -33,7 +33,7 @@ export function getDiffSelection(root: HTMLElement | null): Selection | null {
   for (const container of containers) {
     const sr = container.shadowRoot;
     if (!sr) continue;
-    const sel = (sr as ShadowRoot & { getSelection?: () => Selection | null }).getSelection?.();
+    const sel = sr.getSelection?.();
     if (sel && !sel.isCollapsed) return sel;
   }
   return window.getSelection();

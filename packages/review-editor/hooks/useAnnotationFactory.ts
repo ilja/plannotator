@@ -5,15 +5,16 @@ import type { PRDiffScope } from '@plannotator/shared/pr-stack';
 import type { CodeAnnotation } from '@plannotator/ui/types';
 
 export function useAnnotationFactory(prMetadata: PRMetadata | null, diffScope?: PRDiffScope) {
-  const prContext = useMemo(() => ({
-    ...(prMetadata ? {
+  const prContext = useMemo(() => {
+    if (!prMetadata) return {};
+    const base = {
       prUrl: prMetadata.url,
       prNumber: prMetadata.platform === 'github' ? prMetadata.number : prMetadata.iid,
       prTitle: prMetadata.title,
       prRepo: getDisplayRepo(prMetadata),
-      ...(diffScope ? { diffScope } : {}),
-    } : {}),
-  }), [prMetadata, diffScope]);
+    };
+    return diffScope ? { ...base, diffScope } : base;
+  }, [prMetadata, diffScope]);
 
   const withPRContext = useCallback(
     (annotation: CodeAnnotation): CodeAnnotation => ({ ...annotation, ...prContext }),

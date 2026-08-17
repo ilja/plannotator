@@ -171,7 +171,7 @@ export function useAnnotationToolbar({ patch, filePath, isFocused, onLineSelecti
     const side = range.side === 'additions' ? 'new' : 'old';
     const start = Math.min(range.start, range.end);
     const end = Math.max(range.start, range.end);
-    setSelectedOriginalCode(extractLinesFromPatch(patch, start, end, side as 'old' | 'new'));
+    setSelectedOriginalCode(extractLinesFromPatch(patch, start, end, side));
 
     onLineSelection(range);
   }, [patch, filePath, onLineSelection, saveDraft]);
@@ -303,7 +303,7 @@ export function useAnnotationToolbar({ patch, filePath, isFocused, onLineSelecti
       const side = draft.range.side === 'additions' ? 'new' : 'old';
       const start = Math.min(draft.range.start, draft.range.end);
       const end = Math.max(draft.range.start, draft.range.end);
-      setSelectedOriginalCode(extractLinesFromPatch(patch, start, end, side as 'old' | 'new'));
+      setSelectedOriginalCode(extractLinesFromPatch(patch, start, end, side));
       onLineSelection(draft.range);
     }
   }, [filePath, isFocused, onLineSelection, patch]);

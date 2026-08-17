@@ -9,7 +9,7 @@ export function useTabIndent(setValue: (updater: (prev: string) => string) => vo
     if (e.key !== 'Tab') return;
 
     e.preventDefault();
-    const target = e.target as HTMLTextAreaElement;
+    const target = e.currentTarget;
     const start = target.selectionStart;
     const end = target.selectionEnd;
 

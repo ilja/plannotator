@@ -13,9 +13,8 @@ function escapeRegExp(value: string): string {
 
 export function getSearchRoots(root: ParentNode): ParentNode[] {
   const roots: ParentNode[] = [root];
-  const elementRoot = root as Element;
-  const walker = document.createTreeWalker(elementRoot, NodeFilter.SHOW_ELEMENT);
-  let current = walker.currentNode as Element | null;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  let current = walker.currentNode;
 
   while (current) {
     if (current instanceof HTMLElement && current.shadowRoot) {
@@ -24,7 +23,7 @@ export function getSearchRoots(root: ParentNode): ParentNode[] {
       // double all clear/apply work over its subtree).
       roots.push(...getSearchRoots(current.shadowRoot));
     }
-    current = walker.nextNode() as Element | null;
+    current = walker.nextNode();
   }
 
   return roots;
@@ -119,7 +118,7 @@ export function applySearchHighlights(
       },
     });
 
-    let textNode = textWalker.nextNode() as Text | null;
+    let textNode = textWalker.nextNode();
     let matchIndex = 0;
 
     while (textNode) {
@@ -128,7 +127,7 @@ export function applySearchHighlights(
       const matchesInNode = Array.from(value.matchAll(regex));
 
       if (matchesInNode.length === 0) {
-        textNode = textWalker.nextNode() as Text | null;
+        textNode = textWalker.nextNode();
         continue;
       }
 
@@ -156,7 +155,7 @@ export function applySearchHighlights(
         fragment.appendChild(document.createTextNode(value.slice(cursor)));
       }
 
-      const nextNode = textWalker.nextNode() as Text | null;
+      const nextNode = textWalker.nextNode();
       textNode.parentNode?.replaceChild(fragment, textNode);
       textNode = nextNode;
     }
@@ -224,7 +223,7 @@ export function swapActiveSearchHighlight(
 ): void {
   const roots = getSearchRoots(container);
   for (const root of roots) {
-    const prev = root.querySelector('mark[data-review-search-active]') as HTMLElement | null;
+    const prev = root.querySelector<HTMLElement>('mark[data-review-search-active]');
     if (prev) {
       decorateSearchMatch(prev, false);
     }
@@ -232,7 +231,7 @@ export function swapActiveSearchHighlight(
       // Match ids embed file paths — CSS.escape so a path character that is
       // special inside an attribute selector can't throw from querySelector
       // and silently abort the active-match swap.
-      const next = root.querySelector(`mark[data-review-search-match="${CSS.escape(newActiveId)}"]`) as HTMLElement | null;
+      const next = root.querySelector<HTMLElement>(`mark[data-review-search-match="${CSS.escape(newActiveId)}"]`);
       if (next) {
         decorateSearchMatch(next, true);
       }
@@ -274,10 +273,10 @@ export function scrollToSearchMatch(
   root: ParentNode,
   match: ReviewSearchMatch,
 ): boolean {
-  const lineEl = root.querySelector(getLineSelector(match)) as HTMLElement | null;
+  const lineEl = root.querySelector<HTMLElement>(getLineSelector(match));
   if (!lineEl) return false;
 
-  const mark = root.querySelector(`mark[data-review-search-match="${CSS.escape(match.id)}"]`) as HTMLElement | null;
+  const mark = root.querySelector<HTMLElement>(`mark[data-review-search-match="${CSS.escape(match.id)}"]`);
   scrollSearchTargetIntoContainer(scrollContainer, mark ?? lineEl);
   mark?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   return true;

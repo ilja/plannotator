@@ -29,7 +29,8 @@ const FAILURE_RETRY_COOLDOWN_MS = 60_000;
 async function fetchSemanticDiff(): Promise<SemanticDiffResponse> {
   const res = await fetch('/api/semantic-diff');
   if (!res.ok) throw new Error('Semantic diff failed');
-  return res.json() as Promise<SemanticDiffResponse>;
+  const data: SemanticDiffResponse = await res.json();
+  return data;
 }
 
 function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {

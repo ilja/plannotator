@@ -68,11 +68,11 @@ export function useDiffFreshness({
       try {
         const res = await fetch('/api/diff/fresh');
         if (!cancelled && res.ok) {
-          const data = (await res.json()) as {
+          const data: {
             fresh: boolean;
             fingerprint?: string;
             agentCwd?: string | null;
-          };
+          } = await res.json();
           // Keep polling even while stale: a reverted edit flips back to
           // fresh, and a FURTHER change updates the fingerprint so a
           // dismissed notice can reappear.

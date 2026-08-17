@@ -6,7 +6,16 @@ import { useConfigValue } from '@plannotator/ui/config';
 import { resolveAppliedThemeMode } from '@plannotator/ui/utils/themeRegistry';
 import { FRAMER_LIGHT_SYNTAX_THEME_NAME } from '../themes/framerLightSyntax';
 
-export const SHIKI_THEME_MAP: Record<string, { dark: string | null; light: string | null }> = {
+interface ShikiThemeEntry {
+  dark: string | null;
+  light: string | null;
+}
+
+interface ShikiThemeMap {
+  [theme: string]: ShikiThemeEntry;
+}
+
+export const SHIKI_THEME_MAP: ShikiThemeMap = {
   'andromeeda': { dark: 'andromeeda', light: null },
   'aurora-x': { dark: 'aurora-x', light: null },
   'ayu-dark': { dark: 'ayu-dark', light: null },
@@ -96,10 +105,10 @@ interface IntensityConfig {
   hoverMixDark: number;
 }
 
-const INTENSITY_CONFIG: Record<Exclude<DiffLineBgIntensity, 'subtle'>, IntensityConfig> = {
+const INTENSITY_CONFIG = {
   normal: { restMixLight: 55, restMixDark: 45, hoverMixLight: 45, hoverMixDark: 35 },
   strong: { restMixLight: 35, restMixDark: 25, hoverMixLight: 25, hoverMixDark: 15 },
-};
+} satisfies Record<Exclude<DiffLineBgIntensity, 'subtle'>, IntensityConfig>;
 
 /**
  * The word-level chip is derived from the *actual computed line bg* (not from
