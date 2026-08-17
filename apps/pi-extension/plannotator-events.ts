@@ -58,7 +58,7 @@ export interface PlannotatorCodeReviewPayload {
 export interface PlannotatorCodeReviewResult {
 	approved: boolean;
 	feedback?: string;
-	annotations?: unknown[];
+	annotations?: readonly unknown[];
 }
 
 export interface PlannotatorAnnotatePayload {

@@ -152,7 +152,7 @@ export function shouldUseLocalPrCheckout(options: { useLocal?: boolean }): boole
 export async function openCodeReview(
 	ctx: ExtensionContext,
 	options: { cwd?: string; defaultBranch?: string; diffType?: DiffType; prUrl?: string; vcsType?: VcsSelection; useLocal?: boolean } = {},
-): Promise<{ approved: boolean; feedback?: string; annotations?: unknown[]; exit?: boolean }> {
+): Promise<{ approved: boolean; feedback?: string; annotations?: readonly unknown[]; exit?: boolean }> {
 	const session = await startCodeReviewBrowserSession(ctx, options);
 	return session.waitForDecision();
 }
@@ -164,7 +164,7 @@ export async function startCodeReviewBrowserSession(
 	BrowserDecisionSession<{
 		approved: boolean;
 		feedback?: string;
-		annotations?: unknown[];
+		annotations?: readonly unknown[];
 		exit?: boolean;
 	}>
 > {

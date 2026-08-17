@@ -13,14 +13,12 @@ import { FAVICON_SVG } from "../generated/favicon.js";
 
 import { json, parseBody, send, toWebRequest } from "./helpers";
 import {
-	type BearConfig,
 	type IntegrationResult,
-	type ObsidianConfig,
-	type OctarineConfig,
 	saveToBear,
 	saveToObsidian,
 	saveToOctarine,
 } from "./integrations.js";
+import { Schema } from "effect";
 
 type Res = import("node:http").ServerResponse;
 
@@ -38,7 +36,11 @@ const ALLOWED_IMAGE_EXTENSIONS = new Set([
 	"avif",
 ]);
 
-const IMAGE_CONTENT_TYPES: Record<string, string> = {
+interface ImageContentTypeMap {
+	[ext: string]: string;
+}
+
+const IMAGE_CONTENT_TYPES: ImageContentTypeMap = {
 	png: "image/png",
 	jpg: "image/jpeg",
 	jpeg: "image/jpeg",
@@ -60,11 +62,24 @@ function getExtension(filePath: string): string {
 	return filePath.slice(lastDot + 1).toLowerCase();
 }
 
-function validateImagePath(rawPath: string): {
+interface ImagePathValidation {
 	valid: boolean;
 	resolved: string;
 	error?: string;
-} {
+}
+
+interface DraftNotFoundResponse {
+	found: false;
+	draftGeneration?: number;
+}
+
+interface UploadExtensionValidation {
+	valid: boolean;
+	ext: string;
+	error?: string;
+}
+
+function validateImagePath(rawPath: string): ImagePathValidation {
 	const resolved = resolvePath(rawPath);
 	const ext = getExtension(resolved);
 
@@ -79,11 +94,7 @@ function validateImagePath(rawPath: string): {
 	return { valid: true, resolved };
 }
 
-function validateUploadExtension(fileName: string): {
-	valid: boolean;
-	ext: string;
-	error?: string;
-} {
+function validateUploadExtension(fileName: string): UploadExtensionValidation {
 	const ext = getExtension(fileName) || "png";
 	if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
 		return {
@@ -154,18 +165,12 @@ export async function handleUploadRequest(
 		const request = toWebRequest(req);
 		const formData = await request.formData();
 		const file = formData.get("file");
-		if (
-			!file ||
-			typeof file !== "object" ||
-			!("arrayBuffer" in file) ||
-			!("name" in file)
-		) {
+		if (!(file instanceof File)) {
 			json(res, { error: "No file provided" }, 400);
 			return;
 		}
 
-		const upload = file as File;
-		const extResult = validateUploadExtension(upload.name);
+		const extResult = validateUploadExtension(file.name);
 		if (!extResult.valid) {
 			json(res, { error: extResult.error }, 400);
 			return;
@@ -173,9 +178,9 @@ export async function handleUploadRequest(
 
 		mkdirSync(UPLOAD_DIR, { recursive: true });
 		const tempPath = join(UPLOAD_DIR, `${randomUUID()}.${extResult.ext}`);
-		const bytes = Buffer.from(await upload.arrayBuffer());
+		const bytes = Buffer.from(await file.arrayBuffer());
 		writeFileSync(tempPath, bytes);
-		json(res, { path: tempPath, originalName: upload.name });
+		json(res, { path: tempPath, originalName: file.name });
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "Upload failed";
 		json(res, { error: message }, 500);
@@ -193,7 +198,7 @@ export function handleDraftRequest(
 				saveDraft(draftKey, body);
 				json(res, { ok: true });
 			})
-			.catch((err: unknown) => {
+			.catch((err: Error) => {
 				const message = err instanceof Error ? err.message : "Failed to save draft";
 				console.error(`[draft] save failed: ${message}`);
 				json(res, { error: message }, 500);
@@ -205,7 +210,9 @@ export function handleDraftRequest(
 		const draft = loadDraft(draftKey);
 		if (!draft) {
 			const draftGeneration = getDraftGeneration(draftKey);
-			json(res, { found: false, ...(draftGeneration !== null ? { draftGeneration } : {}) }, 404);
+			const notFoundResponse: DraftNotFoundResponse = { found: false };
+			if (draftGeneration !== null) notFoundResponse.draftGeneration = draftGeneration;
+			json(res, notFoundResponse, 404);
 			return;
 		}
 		json(res, draft);
@@ -220,12 +227,6 @@ function readDraftGenerationFromUrl(req: IncomingMessage): number | undefined {
 	return Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
-export function readDraftGenerationFromBody(body: unknown): number | undefined {
-	if (!body || typeof body !== "object") return undefined;
-	const value = (body as { draftGeneration?: unknown }).draftGeneration;
-	return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
-}
-
 export { readDraftGenerationFromUrl };
 
 export function handleFavicon(res: Res): void {
@@ -236,21 +237,49 @@ export function handleFavicon(res: Res): void {
 }
 
 /** Save to external note apps (Obsidian, Bear, Octarine). Used by plan + annotate servers. */
+interface SaveNotesResults {
+	obsidian?: IntegrationResult;
+	bear?: IntegrationResult;
+	octarine?: IntegrationResult;
+}
+
+const ObsidianConfigSchema = Schema.Struct({
+	vaultPath: Schema.String,
+	folder: Schema.String,
+	plan: Schema.String,
+	filenameFormat: Schema.optionalKey(Schema.String),
+	filenameSeparator: Schema.optionalKey(Schema.Literals(["space", "dash", "underscore"])),
+});
+
+const BearConfigSchema = Schema.Struct({
+	plan: Schema.String,
+	customTags: Schema.optionalKey(Schema.String),
+	tagPosition: Schema.optionalKey(Schema.Literals(["prepend", "append"])),
+});
+
+const OctarineConfigSchema = Schema.Struct({
+	plan: Schema.String,
+	workspace: Schema.String,
+	folder: Schema.String,
+});
+
+const NoteSaveRequestSchema = Schema.Struct({
+	obsidian: Schema.optionalKey(ObsidianConfigSchema),
+	bear: Schema.optionalKey(BearConfigSchema),
+	octarine: Schema.optionalKey(OctarineConfigSchema),
+});
+
 export async function handleSaveNotesRequest(
 	req: IncomingMessage,
 	res: Res,
 ): Promise<void> {
-	const results: {
-		obsidian?: IntegrationResult;
-		bear?: IntegrationResult;
-		octarine?: IntegrationResult;
-	} = {};
+	const results: SaveNotesResults = {};
 	try {
-		const body = await parseBody(req);
+		const body = Schema.decodeUnknownSync(NoteSaveRequestSchema)(await parseBody(req));
 		const promises: Promise<void>[] = [];
-		const obsConfig = body.obsidian as ObsidianConfig | undefined;
-		const bearConfig = body.bear as BearConfig | undefined;
-		const octConfig = body.octarine as OctarineConfig | undefined;
+		const obsConfig = body.obsidian;
+		const bearConfig = body.bear;
+		const octConfig = body.octarine;
 		if (obsConfig?.vaultPath && obsConfig?.plan) {
 			promises.push(
 				saveToObsidian(obsConfig).then((r) => {

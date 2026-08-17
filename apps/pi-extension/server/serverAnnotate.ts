@@ -16,16 +16,17 @@ import {
 	saveSourceFileAtomic,
 } from "../generated/source-save-node.js";
 
+import { Schema } from "effect";
 import {
 	handleDraftRequest,
 	handleFavicon,
 	handleImageRequest,
-	readDraftGenerationFromBody,
 	readDraftGenerationFromUrl,
 	handleSaveNotesRequest,
 	handleUploadRequest,
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
+import { FeedbackRequestSchema } from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -61,7 +62,7 @@ export interface AnnotateServerResult {
 	port: number;
 	portSource: "env" | "remote-default" | "random";
 	url: string;
-	waitForDecision: () => Promise<{ feedback: string; annotations: unknown[]; exit?: boolean; approved?: boolean; selectedMessageId?: string; feedbackScope?: "message" | "messages" }>;
+	waitForDecision: () => Promise<{ feedback: string; annotations: readonly unknown[]; exit?: boolean; approved?: boolean; selectedMessageId?: string; feedbackScope?: "message" | "messages" }>;
 	stop: () => void;
 }
 
@@ -188,7 +189,7 @@ export async function startAnnotateServer(options: {
 
 	let resolveDecision!: (result: {
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 		approved?: boolean;
 		selectedMessageId?: string;
@@ -196,7 +197,7 @@ export async function startAnnotateServer(options: {
 	}) => void;
 	const decisionPromise = new Promise<{
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 		approved?: boolean;
 		selectedMessageId?: string;
@@ -519,13 +520,13 @@ export async function startAnnotateServer(options: {
 			json(res, { ok: true });
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
 			try {
-				const body = await parseBody(req);
-				deleteDraft(draftKey, readDraftGenerationFromBody(body));
+				const request = Schema.decodeUnknownSync(FeedbackRequestSchema)(await parseBody(req));
+				deleteDraft(draftKey, request.draftGeneration);
 				resolveDecision({
-					feedback: (body.feedback as string) || "",
-					annotations: (body.annotations as unknown[]) || [],
-					selectedMessageId: typeof body.selectedMessageId === "string" ? body.selectedMessageId : undefined,
-					feedbackScope: body.feedbackScope === "messages" ? "messages" : body.feedbackScope === "message" ? "message" : undefined,
+					feedback: request.feedback ?? "",
+					annotations: request.annotations ?? [],
+					selectedMessageId: request.selectedMessageId,
+					feedbackScope: request.feedbackScope,
 				});
 				json(res, { ok: true });
 			} catch (err) {

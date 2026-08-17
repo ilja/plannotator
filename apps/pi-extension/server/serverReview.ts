@@ -45,16 +45,17 @@ import {
 import type { WorktreePool } from "../generated/worktree-pool.js";
 
 import { createEditorAnnotationHandler } from "./annotations.js";
+import { Schema } from "effect";
 import { createExternalAnnotationHandler } from "./external-annotations.js";
 import {
 	handleDraftRequest,
 	handleFavicon,
 	handleImageRequest,
-	readDraftGenerationFromBody,
 	readDraftGenerationFromUrl,
 	handleUploadRequest,
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
+import { FeedbackRequestSchema } from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -159,7 +160,7 @@ export interface ReviewServerResult {
 	waitForDecision: () => Promise<{
 		approved: boolean;
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 	}>;
 	stop: () => void;
@@ -280,13 +281,13 @@ export async function startReviewServer(options: {
 	let resolveDecision!: (result: {
 		approved: boolean;
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 	}) => void;
 	const decisionPromise = new Promise<{
 		approved: boolean;
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 	}>((resolve) => {
 		resolveDecision = resolve;
@@ -1217,12 +1218,12 @@ export async function startReviewServer(options: {
 			json(res, { ok: true });
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
 			try {
-				const body = await parseBody(req);
-				deleteDraft(draftKey, readDraftGenerationFromBody(body));
+				const request = Schema.decodeUnknownSync(FeedbackRequestSchema)(await parseBody(req));
+				deleteDraft(draftKey, request.draftGeneration);
 				resolveDecision({
-					approved: (body.approved as boolean) ?? false,
-					feedback: (body.feedback as string) || "",
-					annotations: (body.annotations as unknown[]) || [],
+					approved: request.approved ?? false,
+					feedback: request.feedback ?? "",
+					annotations: request.annotations ?? [],
 				});
 				json(res, { ok: true });
 			} catch (err) {
