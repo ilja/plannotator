@@ -68,6 +68,7 @@ export type {
   CodeReviewContext,
   AnnotateContext,
   ParentSession,
+  AIJsonObject,
   CreateSessionOptions,
   PiSDKConfig,
 } from "./types.ts";

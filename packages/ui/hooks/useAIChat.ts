@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AIContext } from '@plannotator/ai';
+import type { AIContext, AIJsonObject } from '@plannotator/ai';
 import type { AIQuestion, AIResponse } from '../types';
 import { generateId } from '../utils/generateId';
 
@@ -11,7 +11,7 @@ export interface AIChatEntry {
 export interface PendingPermission {
   requestId: string;
   toolName: string;
-  toolInput: Record<string, unknown>;
+  toolInput: AIJsonObject;
   title?: string;
   displayName?: string;
   description?: string;
