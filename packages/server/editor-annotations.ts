@@ -27,13 +27,13 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
       // POST /api/editor-annotation — add one
       if (url.pathname === "/api/editor-annotation" && req.method === "POST") {
         try {
-          const body = (await req.json()) as {
+          const body: {
             filePath?: string;
             selectedText?: string;
             lineStart?: number;
             lineEnd?: number;
             comment?: string;
-          };
+          } = await req.json();
 
           if (!body.filePath || !body.selectedText || !body.lineStart || !body.lineEnd) {
             return Response.json({ error: "Missing required fields" }, { status: 400 });

@@ -16,6 +16,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
+import { Schema } from "effect";
 import {
   OPEN_IN_APPS,
   getOpenInApp,
@@ -29,6 +30,13 @@ import { resolveOpenInTarget } from "@plannotator/shared/html-assets-node";
 import { isRemoteSession } from "./remote";
 
 export type OpenInLaunchResult = { ok: true } | { ok: false; error: string };
+
+const OpenInRequestSchema = Schema.Struct({
+  filePath: Schema.optionalKey(Schema.String),
+  base: Schema.optionalKey(Schema.String),
+  appId: Schema.optionalKey(Schema.String),
+});
+type OpenInRequest = Schema.Schema.Type<typeof OpenInRequestSchema>;
 
 function currentPlatform(): OpenInPlatform {
   switch (process.platform) {
@@ -331,19 +339,19 @@ export async function handleOpenIn(
     );
   }
 
-  let body: { filePath?: unknown; base?: unknown; appId?: unknown };
+  let body: OpenInRequest;
   try {
-    body = (await req.json()) as typeof body;
+    body = Schema.decodeUnknownSync(OpenInRequestSchema)(await req.json());
   } catch {
     return Response.json({ ok: false, error: "Invalid request" }, { status: 400 });
   }
 
-  const filePath = typeof body.filePath === "string" ? body.filePath : "";
+  const filePath = body.filePath ?? "";
   if (!filePath) {
     return Response.json({ ok: false, error: "Missing filePath" }, { status: 400 });
   }
-  const base = typeof body.base === "string" ? body.base : null;
-  const appId = typeof body.appId === "string" ? body.appId : undefined;
+  const base = body.base ?? null;
+  const appId = body.appId;
 
   const abs = resolveOpenInTarget(filePath, base, options.resolveRoot);
   if (abs == null) {

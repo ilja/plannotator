@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveOpenInTarget } from "@plannotator/shared/html-assets-node";
+import { handleOpenIn } from "./open-in";
 
 // resolveOpenInTarget is the security boundary for POST /api/open-in: it decides
 // which absolute file a launch is allowed to touch. Real temp dirs/files are
@@ -25,6 +26,17 @@ afterAll(() => {
 });
 
 describe("resolveOpenInTarget — /api/open-in containment", () => {
+  test("rejects non-string request fields at the /api/open-in boundary", async () => {
+    const response = await handleOpenIn(new Request("http://localhost/api/open-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filePath: 123 }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, error: "Invalid request" });
+  });
+
   test("a server root scopes opens: a file inside the root is allowed", () => {
     const root = makeDir();
     writeFileSync(join(root, "notes.md"), "x");

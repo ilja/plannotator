@@ -48,7 +48,7 @@ export async function handleCodeNavResolve(
   changedFiles: string[],
 ): Promise<Response> {
   try {
-    const body = (await req.json()) as CodeNavRequest;
+    const body: CodeNavRequest = await req.json();
     const error = validateCodeNavRequest(body);
     if (error) {
       return Response.json({ error }, { status: 400 });
