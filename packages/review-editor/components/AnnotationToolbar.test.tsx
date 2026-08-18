@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { AnnotationToolbar } from './AnnotationToolbar';
 import type { ToolbarState } from '../hooks/useAnnotationToolbar';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 
 type Props = React.ComponentProps<typeof AnnotationToolbar>;
 
@@ -141,7 +141,8 @@ describe('AnnotationToolbar', () => {
       onSubmit: () => { submitted += 1; },
     });
 
-    const textarea = session.body.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = session.body.querySelector<HTMLTextAreaElement>('textarea');
+    if (!textarea) throw new Error('expected comment textarea');
     await act(async () => changeText(textarea, 'Ready now'));
     expect(changes).toEqual(['Ready now']);
 
@@ -154,10 +155,10 @@ describe('AnnotationToolbar', () => {
     });
     expect(submitted).toBe(1);
 
-    const addButton = Array.from(session.body.querySelectorAll('button')).find((button) =>
+    const addButton = Array.from(session.body.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
       button.textContent?.includes('Add Comment'),
-    ) as HTMLButtonElement;
-    await act(async () => addButton.click());
+    );
+    await act(async () => addButton?.click());
     expect(submitted).toBe(2);
 
     await session.unmount();

@@ -9,7 +9,7 @@ import {
 } from './ReviewGutterActions';
 import type { SelectedLineRange } from '@plannotator/ui/types';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 
 type Props = React.ComponentProps<typeof ReviewGutterActions>;
 
@@ -32,7 +32,7 @@ async function mountActions(overrides: Partial<Props> = {}) {
 
   return {
     host,
-    buttons: () => Array.from(host.querySelectorAll('button')) as HTMLButtonElement[],
+    buttons: () => Array.from(host.querySelectorAll<HTMLButtonElement>('button')),
     rerender: async (nextOverrides: Partial<Props> = {}) => {
       Object.assign(props, nextOverrides);
       await act(async () => root.render(<ReviewGutterActions {...props} />));
@@ -111,7 +111,7 @@ describe('ReviewGutterActions', () => {
       );
     });
 
-    const buttons = Array.from(wrapper.querySelectorAll('button')) as HTMLButtonElement[];
+    const buttons = Array.from(wrapper.querySelectorAll<HTMLButtonElement>('button'));
     await act(async () => buttons[0]!.click());
     await act(async () => buttons[1]!.click());
     expect(parentClicks).toBe(0);
@@ -123,20 +123,20 @@ describe('ReviewGutterActions', () => {
   test.skipIf(!hasDom)('hides sparkle when AI is unavailable and keeps same-size buttons', async () => {
     const session = await mountActions({ aiAvailable: true });
     const [comment, ai] = session.buttons();
-    const wrapper = session.host.querySelector('[data-testid="review-gutter-actions"]') as HTMLElement;
+    const wrapper = session.host.querySelector<HTMLElement>('[data-testid="review-gutter-actions"]');
 
     expect(comment!.getAttribute('data-gutter-size')).toBe('1lh');
     expect(ai!.getAttribute('data-gutter-size')).toBe('1lh');
-    expect(wrapper.style.width).toBe('calc(2lh + 2px)');
-    expect(wrapper.style.marginLeft).toBe('calc(-1lh - 2px)');
+    expect(wrapper?.style.width).toBe('calc(2lh + 2px)');
+    expect(wrapper?.style.marginLeft).toBe('calc(-1lh - 2px)');
 
     await session.rerender({ aiAvailable: false });
-    const compactWrapper = session.host.querySelector('[data-testid="review-gutter-actions"]') as HTMLElement;
+    const compactWrapper = session.host.querySelector<HTMLElement>('[data-testid="review-gutter-actions"]');
     expect(session.buttons()).toHaveLength(1);
     expect(session.buttons()[0]!.textContent).toBe('+');
     expect(session.buttons()[0]!.getAttribute('data-gutter-size')).toBe('1lh');
-    expect(compactWrapper.style.width).toBe('calc(1lh)');
-    expect(compactWrapper.style.marginLeft).toBe('calc(0px)');
+    expect(compactWrapper?.style.width).toBe('calc(1lh)');
+    expect(compactWrapper?.style.marginLeft).toBe('calc(0px)');
 
     await session.unmount();
   });
@@ -192,7 +192,7 @@ describe('ReviewGutterActions', () => {
       );
     });
 
-    const buttons = Array.from(wrapper.querySelectorAll('button')) as HTMLButtonElement[];
+    const buttons = Array.from(wrapper.querySelectorAll<HTMLButtonElement>('button'));
     await act(async () => buttons[0]!.click());
     expect(comments).toEqual([{ start: 8, end: 8, side: 'additions' }]);
     expect(aiLines).toEqual([]);
@@ -221,7 +221,7 @@ describe('ReviewGutterActions', () => {
     expect(element.style.width).toBe('calc(2lh + 2px)');
     expect(element.style.marginLeft).toBe('calc(-1lh - 2px)');
 
-    const buttons = Array.from(element.querySelectorAll('button')) as HTMLButtonElement[];
+    const buttons = Array.from(element.querySelectorAll<HTMLButtonElement>('button'));
     expect(buttons).toHaveLength(2);
     expect(buttons[0]!.dataset.gutterSize).toBe('1lh');
     expect(buttons[1]!.getAttribute('aria-label')).toBe('Attach line to AI chat');

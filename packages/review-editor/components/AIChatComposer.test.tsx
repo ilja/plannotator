@@ -5,7 +5,7 @@ import { act } from 'react';
 import { AIChatComposer } from './AIChatComposer';
 import type { PendingAIContext } from '../utils/pendingAIContext';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 
 const context: PendingAIContext = {
   filePath: 'src/example.ts',
@@ -75,8 +75,8 @@ describe('AIChatComposer', () => {
     expect(session.host.textContent).toContain('Line 3');
     expect(session.host.textContent).not.toContain('const next = true;');
 
-    const remove = session.host.querySelector('button[aria-label="Remove AI context"]') as HTMLButtonElement;
-    await act(async () => remove.click());
+    const remove = session.host.querySelector<HTMLButtonElement>('button[aria-label="Remove AI context"]');
+    await act(async () => remove?.click());
     expect(removed).toBe(true);
 
     await session.unmount();
@@ -123,8 +123,8 @@ describe('AIChatComposer', () => {
     const session = await mountComposer({ value: 'Question', disabled: true });
 
     expect(session.textarea.disabled).toBe(true);
-    const send = session.host.querySelector('button[title^="Send"]') as HTMLButtonElement;
-    expect(send.disabled).toBe(true);
+    const send = session.host.querySelector<HTMLButtonElement>('button[title^="Send"]');
+    expect(send?.disabled).toBe(true);
 
     await session.unmount();
   });
@@ -161,8 +161,8 @@ describe('AIChatComposer', () => {
       onSubmit: () => submissions.push('submit'),
     });
 
-    const send = session.host.querySelector('button[title^="Send"]') as HTMLButtonElement;
-    await act(async () => send.click());
+    const send = session.host.querySelector<HTMLButtonElement>('button[title^="Send"]');
+    await act(async () => send?.click());
     expect(submissions).toEqual(['submit']);
 
     await session.rerender({ pendingContext: null, value: 'General?' });
