@@ -1857,7 +1857,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     () => ({
       themeType: pierreTheme.type,
       unsafeCSS: pierreTheme.css,
-      ...(pierreTheme.syntaxTheme && { theme: pierreTheme.syntaxTheme }),
+      theme: pierreTheme.syntaxTheme,
       diffStyle,
       overflow: diffOverflow,
       diffIndicators,

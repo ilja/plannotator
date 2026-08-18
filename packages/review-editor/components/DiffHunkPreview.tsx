@@ -5,7 +5,8 @@ import type { DiffLineBgIntensity } from '@plannotator/shared/config';
 import { useTheme } from '@plannotator/ui/components/ThemeProvider';
 import { useConfigValue } from '@plannotator/ui/config';
 import { useReviewState } from '../dock/ReviewStateContext';
-import { resolveSyntaxTheme, buildLineBgOverrides } from '../hooks/usePierreTheme';
+import { buildLineBgOverrides, resolvePierreThemeSelection } from '../hooks/usePierreTheme';
+import { useWorkerPoolThemeSync } from '../workerPool';
 
 interface DiffHunkPreviewProps {
   /** Raw diff hunk string (unified diff format). */
@@ -71,6 +72,7 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
   const { resolvedMode, colorTheme } = useTheme();
   const state = useReviewState();
   const lineBgIntensity = useConfigValue('diffLineBgIntensity');
+  const selection = resolvePierreThemeSelection(colorTheme, resolvedMode);
   const [expanded, setExpanded] = useState(false);
 
   const fileDiff = useMemo(() => {
@@ -93,23 +95,19 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
 
   // Initialize synchronously so the very first render (inside a tooltip) is already themed.
   // The lazy initializer reads computed CSS variables from the document root.
-  const [pierreTheme, setPierreTheme] = useState<{ type: 'dark' | 'light'; css: string }>(() => ({
-    type: resolvedMode ?? 'dark',
-    css: buildPierreCSS(resolvedMode ?? 'dark', state.fontFamily, state.fontSize, lineBgIntensity),
-  }));
+  const [css, setCss] = useState(() => (
+    buildPierreCSS(selection.type, state.fontFamily, state.fontSize, lineBgIntensity)
+  ));
 
   // Re-compute on theme / font / intensity changes
   useEffect(() => {
     const rafId = requestAnimationFrame(() => {
-      setPierreTheme({
-        type: resolvedMode ?? 'dark',
-        css: buildPierreCSS(resolvedMode ?? 'dark', state.fontFamily, state.fontSize, lineBgIntensity),
-      });
+      setCss(buildPierreCSS(selection.type, state.fontFamily, state.fontSize, lineBgIntensity));
     });
     return () => cancelAnimationFrame(rafId);
-  }, [resolvedMode, colorTheme, state.fontFamily, state.fontSize, lineBgIntensity]);
+  }, [selection.type, colorTheme, state.fontFamily, state.fontSize, lineBgIntensity]);
 
-  const syntaxTheme = resolveSyntaxTheme(colorTheme, resolvedMode ?? 'dark');
+  useWorkerPoolThemeSync(selection.syntaxTheme);
 
   if (!fileDiff) {
     return (
@@ -128,9 +126,9 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
         <FileDiff
           fileDiff={fileDiff}
           options={{
-            themeType: pierreTheme.type,
-            unsafeCSS: pierreTheme.css,
-            ...(syntaxTheme && { theme: syntaxTheme }),
+            themeType: selection.type,
+            unsafeCSS: css,
+            theme: selection.syntaxTheme,
             diffStyle: 'unified',
             disableLineNumbers: true,
             overflow: 'wrap',

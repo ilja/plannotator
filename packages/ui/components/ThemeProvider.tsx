@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { storage } from '../utils/storage';
-import { BUILT_IN_THEMES, type ThemeInfo } from '../utils/themeRegistry';
+import { BUILT_IN_THEMES, resolveAppliedThemeMode, type ThemeInfo } from '../utils/themeRegistry';
 
 export type Mode = 'dark' | 'light' | 'system';
 
@@ -29,15 +29,9 @@ const ThemeProviderContext = createContext<ThemeProviderState>({
 });
 
 /** Resolve the class string for a theme + mode combination */
-function resolveThemeClasses(themeId: string, effectiveMode: 'dark' | 'light'): string {
-  const themeInfo = BUILT_IN_THEMES.find(t => t.id === themeId);
-  const modeSupport = themeInfo?.modeSupport ?? 'both';
-
-  let applyLight = effectiveMode === 'light';
-  if (modeSupport === 'dark-only') applyLight = false;
-  if (modeSupport === 'light-only') applyLight = true;
-
-  return `theme-${themeId}${applyLight ? ' light' : ''}`;
+function resolveThemeClasses(themeId: string, resolvedMode: 'dark' | 'light'): string {
+  const appliedMode = resolveAppliedThemeMode(themeId, resolvedMode);
+  return `theme-${themeId}${appliedMode === 'light' ? ' light' : ''}`;
 }
 
 /** Sync theme classes on <html> without stripping non-theme classes (e.g. transitions-ready). */

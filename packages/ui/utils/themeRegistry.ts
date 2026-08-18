@@ -576,3 +576,13 @@ export const BUILT_IN_THEMES: ThemeInfo[] = [
     },
   },
 ];
+
+export function resolveAppliedThemeMode(
+  themeId: string,
+  requestedMode: 'dark' | 'light',
+): 'dark' | 'light' {
+  const modeSupport = BUILT_IN_THEMES.find(({ id }) => id === themeId)?.modeSupport;
+  if (modeSupport === 'dark-only') return 'dark';
+  if (modeSupport === 'light-only') return 'light';
+  return requestedMode;
+}

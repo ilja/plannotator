@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { DiffLineBgIntensity } from '@plannotator/shared/config';
 import { useTheme } from '@plannotator/ui/components/ThemeProvider';
 import { useConfigValue } from '@plannotator/ui/config';
+import { resolveAppliedThemeMode } from '@plannotator/ui/utils/themeRegistry';
 import { FRAMER_LIGHT_SYNTAX_THEME_NAME } from '../themes/framerLightSyntax';
 
 export const SHIKI_THEME_MAP: Record<string, { dark: string | null; light: string | null }> = {
@@ -43,16 +45,35 @@ export const SHIKI_THEME_MAP: Record<string, { dark: string | null; light: strin
   'vitesse-black': { dark: 'vitesse-black', light: null },
 };
 
-export function resolveSyntaxTheme(colorTheme: string, mode: 'dark' | 'light'): { dark: string; light: string } | undefined {
-  const map = SHIKI_THEME_MAP[colorTheme];
-  if (!map || !map[mode]) return undefined;
-  return { dark: map.dark || 'pierre-dark', light: map.light || 'pierre-light' };
+export interface PierreSyntaxTheme {
+  dark: string;
+  light: string;
 }
 
-export interface PierreTheme {
+export interface PierreThemeSelection {
   type: 'dark' | 'light';
+  syntaxTheme: PierreSyntaxTheme;
+}
+
+export function resolveSyntaxTheme(colorTheme: string, mode: 'dark' | 'light'): PierreSyntaxTheme {
+  const map = SHIKI_THEME_MAP[colorTheme];
+  if (!map?.[mode]) return DEFAULT_THEMES;
+  return {
+    dark: map.dark ?? DEFAULT_THEMES.dark,
+    light: map.light ?? DEFAULT_THEMES.light,
+  };
+}
+
+export function resolvePierreThemeSelection(
+  colorTheme: string,
+  resolvedMode: 'dark' | 'light',
+): PierreThemeSelection {
+  const type = resolveAppliedThemeMode(colorTheme, resolvedMode);
+  return { type, syntaxTheme: resolveSyntaxTheme(colorTheme, type) };
+}
+
+export interface PierreTheme extends PierreThemeSelection {
   css: string;
-  syntaxTheme?: { dark: string; light: string };
 }
 
 /**
@@ -157,13 +178,17 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
   const fontSize = options?.fontSize;
   const showFileHeader = options?.showFileHeader ?? false;
   const lineBgIntensity = useConfigValue('diffLineBgIntensity');
+  const selection = useMemo(
+    () => resolvePierreThemeSelection(colorTheme, resolvedMode),
+    [colorTheme, resolvedMode],
+  );
 
-  const [pierreTheme, setPierreTheme] = useState<PierreTheme>(() => {
+  const [css, setCss] = useState(() => {
     const styles = getComputedStyle(document.documentElement);
     const bg = styles.getPropertyValue('--background').trim();
     const fg = styles.getPropertyValue('--foreground').trim();
-    if (!bg || !fg) return { type: resolvedMode ?? 'dark', css: '', syntaxTheme: resolveSyntaxTheme(colorTheme, resolvedMode ?? 'dark') };
-    return { type: resolvedMode ?? 'dark', syntaxTheme: resolveSyntaxTheme(colorTheme, resolvedMode ?? 'dark'), css: `
+    if (!bg || !fg) return '';
+    return `
       :host, [data-diff], [data-file], [data-diffs-header], [data-error-wrapper], [data-virtualizer-buffer] {
         --diffs-bg: ${bg} !important; --diffs-fg: ${fg} !important;
         --diffs-dark-bg: ${bg}; --diffs-light-bg: ${bg}; --diffs-dark: ${fg}; --diffs-light: ${fg};
@@ -172,8 +197,8 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
       :host { --diffs-bg-separator-override: color-mix(in srgb, ${fg} 8%, ${bg}); }
       [data-separator='line-info'], [data-separator='line-info-basic'] { height: 24px !important; }
       [data-separator='line-info'] { margin-block: 4px !important; }
-      ${buildLineBgOverrides(lineBgIntensity, resolvedMode ?? 'dark')}
-    `};
+      ${buildLineBgOverrides(lineBgIntensity, selection.type)}
+    `;
   });
 
   useEffect(() => {
@@ -193,10 +218,7 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
             ${fontSize ? `font-size: ${fontSize} !important; line-height: 1.5 !important;` : ''}
           }` : '';
 
-      setPierreTheme({
-        type: resolvedMode,
-        syntaxTheme: resolveSyntaxTheme(colorTheme, resolvedMode),
-        css: `
+      setCss(`
           :host, [data-diff], [data-file], [data-diffs-header], [data-error-wrapper], [data-virtualizer-buffer] {
             --diffs-bg: ${bg} !important;
             --diffs-fg: ${fg} !important;
@@ -278,11 +300,10 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
 
           ${fontCSS}
 
-          ${buildLineBgOverrides(lineBgIntensity, resolvedMode)}
-        `,
-      });
+          ${buildLineBgOverrides(lineBgIntensity, selection.type)}
+        `);
     });
-  }, [resolvedMode, colorTheme, fontFamily, fontSize, showFileHeader, lineBgIntensity]);
+  }, [selection.type, colorTheme, fontFamily, fontSize, showFileHeader, lineBgIntensity]);
 
-  return pierreTheme;
+  return { ...selection, css };
 }

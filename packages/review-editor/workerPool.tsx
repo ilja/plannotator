@@ -93,10 +93,10 @@ let lastSyncedTheme = '';
  * Keeps the worker pool's theme pair in step with the UI theme (diffshub's
  * useWorkerDiffTheme). Component options alone don't reach the workers.
  */
-export function useWorkerPoolThemeSync(theme: { dark: string; light: string } | undefined): void {
+export function useWorkerPoolThemeSync(theme: { dark: string; light: string }): void {
   const workerPool = useWorkerPool();
   useEffect(() => {
-    if (workerPool == null || theme == null) return;
+    if (workerPool == null) return;
     const key = `${theme.dark}\0${theme.light}`;
     if (key === lastSyncedTheme) return;
     lastSyncedTheme = key;
@@ -106,5 +106,5 @@ export function useWorkerPoolThemeSync(theme: { dark: string; light: string } | 
       if (lastSyncedTheme === key) lastSyncedTheme = '';
       console.warn('Plannotator: failed to sync highlight theme to worker pool', err);
     });
-  }, [workerPool, theme?.dark, theme?.light]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workerPool, theme.dark, theme.light]); // eslint-disable-line react-hooks/exhaustive-deps
 }
