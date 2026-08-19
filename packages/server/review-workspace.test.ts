@@ -140,20 +140,18 @@ describe("review-workspace", () => {
       });
 
       try {
-        const diffPayload = await fetch(`${server.url}/api/diff`).then((response) => response.json()) as {
-          semanticDiff?: { available: boolean; semVersion?: string; semSource?: string };
-        };
+        const diffPayload: { semanticDiff?: { available: boolean; semVersion?: string; semSource?: string } } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
         expect(diffPayload.semanticDiff).toMatchObject({
           available: true,
           semVersion: "0.8.0",
           semSource: "env",
         });
 
-        const semanticPayload = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json()) as {
+        const semanticPayload: {
           status: string;
           summary?: { added: number; fileCount: number };
           changes?: Array<{ entityType: string; entityName: string; filePath: string }>;
-        };
+        } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json());
         expect(semanticPayload).toMatchObject({
           status: "ok",
           summary: { added: 1, fileCount: 1 },
@@ -184,9 +182,7 @@ describe("review-workspace", () => {
       });
 
       try {
-        const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
-          status: string;
-        };
+        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(agentCwd));
       } finally {
@@ -212,9 +208,7 @@ describe("review-workspace", () => {
       });
 
       try {
-        const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
-          status: string;
-        };
+        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(repoDir));
       } finally {
@@ -255,15 +249,10 @@ describe("review-workspace", () => {
       });
 
       try {
-        const diffPayload = await fetch(`${server.url}/api/diff`).then((response) => response.json()) as {
-          semanticDiff?: { available: boolean };
-        };
+        const diffPayload: { semanticDiff?: { available: boolean } } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
         expect(diffPayload.semanticDiff).toEqual({ available: false });
 
-        const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
-          status: string;
-          reason?: string;
-        };
+        const semanticPayload: { status: string; reason?: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
         expect(semanticPayload).toMatchObject({
           status: "unavailable",
           reason: "sem-path-missing",
@@ -491,10 +480,10 @@ describe("review-workspace", () => {
 
   describe("resolveWorkspaceFilePath", () => {
     it("resolves the longest matching repo label first", () => {
-      const repos = [
+      const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "apps", cwd: "/tmp/apps", selected: true, rawPatch: "", gitRef: "" },
         { id: "2", label: "apps/api", cwd: "/tmp/apps-api", selected: true, rawPatch: "", gitRef: "" },
-      ] as WorkspaceRepoRuntimeState[];
+      ];
 
       const resolved = resolveWorkspaceFilePath(repos, "apps/api/src/index.ts");
 
@@ -503,9 +492,9 @@ describe("review-workspace", () => {
     });
 
     it("returns null when no repo matches", () => {
-      const repos = [
+      const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "frontend", cwd: "/tmp/frontend", selected: true, rawPatch: "", gitRef: "" },
-      ] as WorkspaceRepoRuntimeState[];
+      ];
 
       const resolved = resolveWorkspaceFilePath(repos, "backend/src/index.ts");
 
@@ -513,9 +502,9 @@ describe("review-workspace", () => {
     });
 
     it("handles exact label matches", () => {
-      const repos = [
+      const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "repo-a", cwd: "/tmp/repo-a", selected: true, rawPatch: "", gitRef: "" },
-      ] as WorkspaceRepoRuntimeState[];
+      ];
 
       const resolved = resolveWorkspaceFilePath(repos, "repo-a/file.ts");
 
@@ -524,9 +513,9 @@ describe("review-workspace", () => {
     });
 
     it("rejects bare repo labels", () => {
-      const repos = [
+      const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "repo-a", cwd: "/tmp/repo-a", selected: true, rawPatch: "", gitRef: "" },
-      ] as WorkspaceRepoRuntimeState[];
+      ];
 
       const resolved = resolveWorkspaceFilePath(repos, "repo-a");
 
@@ -534,9 +523,9 @@ describe("review-workspace", () => {
     });
 
     it("validates file paths for directory traversal attacks", () => {
-      const repos = [
+      const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "repo", cwd: "/tmp/repo", selected: true, rawPatch: "", gitRef: "" },
-      ] as WorkspaceRepoRuntimeState[];
+      ];
 
       expect(() => resolveWorkspaceFilePath(repos, "repo/../../../etc/passwd")).toThrow();
     });
@@ -685,10 +674,10 @@ describe("review-workspace", () => {
       // This is tested indirectly through the full workspace flow
       // The label building logic is internal, but we verify it works
       // through resolveWorkspaceFilePath tests with realistic labels
-      const repos = [
+      const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "packages/frontend", cwd: "/tmp/packages/frontend", selected: true, rawPatch: "", gitRef: "" },
         { id: "2", label: "packages/backend", cwd: "/tmp/packages/backend", selected: true, rawPatch: "", gitRef: "" },
-      ] as WorkspaceRepoRuntimeState[];
+      ];
 
       const resolved1 = resolveWorkspaceFilePath(repos, "packages/frontend/src/index.ts");
       const resolved2 = resolveWorkspaceFilePath(repos, "packages/backend/api.ts");
@@ -700,10 +689,10 @@ describe("review-workspace", () => {
     it("handles duplicate basename fallback", () => {
       // When two repos have the same basename but different paths,
       // the second should get a numbered suffix
-      const repos = [
+      const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "api", cwd: "/tmp/apps/api", selected: true, rawPatch: "", gitRef: "" },
         { id: "2", label: "api-2", cwd: "/tmp/services/api", selected: true, rawPatch: "", gitRef: "" },
-      ] as WorkspaceRepoRuntimeState[];
+      ];
 
       const resolved = resolveWorkspaceFilePath(repos, "api-2/src/index.ts");
 
@@ -946,14 +935,14 @@ describe("review-workspace", () => {
       try {
         const diffResponse = await fetch(`${server.url}/api/diff`);
         expect(diffResponse.status).toBe(200);
-        const diffPayload = await diffResponse.json() as {
+        const diffPayload: {
           mode?: string;
           rawPatch: string;
           diffType?: string;
           diffOptions?: Array<{ id: string }>;
           agentCwd?: string;
           semanticDiff?: { available: boolean };
-        };
+        } = await diffResponse.json();
         expect(diffPayload.mode).toBe("workspace");
         expect(diffPayload.diffType).toBe("workspace-current");
         expect(diffPayload.diffOptions?.map((option) => option.id)).toEqual([
@@ -968,9 +957,7 @@ describe("review-workspace", () => {
         expect(diffPayload.rawPatch).toContain("diff --git a/api/tracked.txt b/api/tracked.txt");
         expect(diffPayload.rawPatch).toContain("diff --git a/web/new.txt b/web/new.txt");
 
-        const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
-          status: string;
-        };
+        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(root));
         const semInput = readFileSync(inputLogPath, "utf-8");
@@ -983,12 +970,12 @@ describe("review-workspace", () => {
           body: JSON.stringify({ diffType: "workspace-last", hideWhitespace: true }),
         });
         expect(lastResponse.status).toBe(200);
-        const lastPayload = await lastResponse.json() as {
+        const lastPayload: {
           diffType?: string;
           rawPatch: string;
           diffOptions?: Array<{ id: string }>;
           semanticDiff?: { available: boolean };
-        };
+        } = await lastResponse.json();
         expect(lastPayload.diffType).toBe("workspace-last");
         expect(lastPayload.diffOptions?.map((option) => option.id)).toContain("workspace-current");
         expect(lastPayload.semanticDiff).toEqual(expect.objectContaining({ available: true }));
@@ -1003,10 +990,10 @@ describe("review-workspace", () => {
 
         const fileContentResponse = await fetch(`${server.url}/api/file-content?path=api/tracked.txt`);
         expect(fileContentResponse.status).toBe(200);
-        const fileContent = await fileContentResponse.json() as {
+        const fileContent: {
           oldContent: string | null;
           newContent: string | null;
-        };
+        } = await fileContentResponse.json();
         expect(fileContent.oldContent).toBe("before\n");
         expect(fileContent.newContent).toBe("after\n");
 
