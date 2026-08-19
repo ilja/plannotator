@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { BearConfig, ObsidianConfig, OctarineConfig } from "@plannotator/shared/integrations-common";
+
+interface StderrCapture {
+  writes: string[];
+  restore: () => void;
+}
 import {
   handleSaveNotes,
   handleServerReady,
@@ -9,12 +15,36 @@ import {
   writeServerReadyMetadata,
 } from "./shared-handlers";
 
-function saveNotesRequest(body: unknown): Request {
+interface SaveNotesRequestBody {
+  obsidian?: ObsidianConfig;
+  bear?: BearConfig;
+  octarine?: OctarineConfig;
+}
+
+function saveNotesRequest(body: SaveNotesRequestBody): Request {
   return new Request("http://localhost/api/save-notes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+type StderrChunk = string | Uint8Array;
+
+function captureStderrWrites(): StderrCapture {
+  const writes: string[] = [];
+  const original = process.stderr.write;
+  const writeMock: typeof process.stderr.write = (chunk: StderrChunk) => {
+    writes.push(String(chunk));
+    return true;
+  };
+  process.stderr.write = writeMock;
+  return {
+    writes,
+    restore: () => {
+      process.stderr.write = original;
+    },
+  };
 }
 
 describe("handleSaveNotes", () => {
@@ -141,32 +171,22 @@ describe("handleServerReady", () => {
   // regardless of URL sharing — otherwise a sharing-disabled remote user is left
   // with no URL and the agent hangs waiting on the review.
   test("prints the reachable URL to stderr for a remote session", async () => {
-    const writes: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
+    const { writes, restore } = captureStderrWrites();
     try {
       await handleServerReady("http://localhost:19432", true, 19432, {
         skipBrowserOpen: true,
       });
     } finally {
-      (process.stderr as { write: unknown }).write = original;
+      restore();
     }
     expect(writes.join("")).toContain("http://localhost:19432");
   });
 
   test("does not print the URL for a local session when the browser opens", async () => {
-    const writes: string[] = [];
-    let opened = "";
-    const original = process.stderr.write.bind(process.stderr);
     const originalBundleIdentifier = process.env.__CFBundleIdentifier;
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
     process.env.__CFBundleIdentifier = "com.apple.Terminal";
+    const { writes, restore } = captureStderrWrites();
+    let opened = "";
     try {
       await handleServerReady("http://localhost:3000", false, 3000, {
         openBrowser: async (u: string) => {
@@ -175,7 +195,7 @@ describe("handleServerReady", () => {
         },
       });
     } finally {
-      (process.stderr as { write: unknown }).write = original;
+      restore();
       if (originalBundleIdentifier === undefined) {
         delete process.env.__CFBundleIdentifier;
       } else {
@@ -187,20 +207,15 @@ describe("handleServerReady", () => {
   });
 
   test("prints the URL for a local Codex Desktop session even when the browser opens", async () => {
-    const writes: string[] = [];
-    const originalWrite = process.stderr.write.bind(process.stderr);
     const originalBundleIdentifier = process.env.__CFBundleIdentifier;
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
     process.env.__CFBundleIdentifier = "com.openai.codex";
+    const { writes, restore } = captureStderrWrites();
     try {
       await handleServerReady("http://localhost:3000", false, 3000, {
         openBrowser: async () => true,
       });
     } finally {
-      (process.stderr as { write: unknown }).write = originalWrite;
+      restore();
       if (originalBundleIdentifier === undefined) {
         delete process.env.__CFBundleIdentifier;
       } else {
@@ -214,18 +229,13 @@ describe("handleServerReady", () => {
   // devcontainer with no display) must still surface the URL, or the agent
   // hangs at waitForDecision with the user having no link to visit.
   test("prints the URL for a local session when the browser fails to open", async () => {
-    const writes: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
+    const { writes, restore } = captureStderrWrites();
     try {
       await handleServerReady("http://localhost:4000", false, 4000, {
         openBrowser: async () => false,
       });
     } finally {
-      (process.stderr as { write: unknown }).write = original;
+      restore();
     }
     expect(writes.join("")).toContain("http://localhost:4000");
   });
