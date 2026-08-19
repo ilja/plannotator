@@ -9,6 +9,21 @@ import type { WorkspaceStatusPayload } from "@plannotator/shared/workspace-statu
 
 const tempDirs: string[] = [];
 
+interface DocExistsTestRequest {
+	paths: string[];
+	base?: string;
+}
+
+interface DocExistsTestResponse {
+	results: Record<
+		string,
+		| { status: "found"; resolved: string }
+		| { status: "ambiguous"; matches: string[] }
+		| { status: "missing" }
+		| { status: "unavailable" }
+	>;
+}
+
 function makeTempDir(prefix: string): string {
 	const dir = mkdtempSync(join(tmpdir(), prefix));
 	tempDirs.push(dir);
@@ -38,7 +53,7 @@ function flattenTree(nodes: VaultNode[]): string[] {
 	return paths;
 }
 
-async function postDocExists(body: unknown, options: { rootPath?: string; rootPaths?: string[] }) {
+async function postDocExists(body: DocExistsTestRequest, options: { rootPath?: string; rootPaths?: string[] }) {
 	const res = await handleDocExists(
 		new Request("http://localhost/api/doc/exists", {
 			method: "POST",
@@ -46,9 +61,8 @@ async function postDocExists(body: unknown, options: { rootPath?: string; rootPa
 		}),
 		options,
 	);
-	return res.json() as Promise<{
-		results: Record<string, { status: "found"; resolved: string } | { status: "missing" }>;
-	}>;
+	const data: DocExistsTestResponse = await res.json();
+	return data;
 }
 
 async function getDoc(path: string, options: { base?: string; rootPaths?: string[]; sourceSaveFilePath?: string }) {
@@ -68,6 +82,27 @@ afterEach(() => {
 });
 
 describe("handleDocExists", () => {
+	test("rejects malformed request bodies", async () => {
+		const malformedBodies = [
+			null,
+			{ paths: ["valid", 42] },
+			{ paths: ["valid"], base: 123 },
+		];
+
+		for (const body of malformedBodies) {
+			const response = await handleDocExists(
+				new Request("http://localhost/api/doc/exists", {
+					method: "POST",
+					body: JSON.stringify(body),
+				}),
+				{ rootPath: makeTempDir("plannotator-doc-exists-invalid-") },
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({ error: "Expected { paths: string[] }" });
+		}
+	});
+
 	test("does not reveal absolute files outside the allowed root", async () => {
 		const root = makeTempDir("plannotator-doc-exists-root-");
 		const outside = makeTempDir("plannotator-doc-exists-outside-");
@@ -140,7 +175,7 @@ describe("handleDocExists", () => {
 			rootPaths: [root],
 			sourceSaveFilePath: source,
 		});
-		const data = await res.json() as { markdown?: string; sourceSave?: { enabled: boolean; scope?: string; path?: string; hash?: string } };
+		const data: { markdown?: string; sourceSave?: { enabled: boolean; scope?: string; path?: string; hash?: string } } = await res.json();
 
 		expect(res.status).toBe(200);
 		expect(data.markdown).toBe("source\n");
@@ -159,7 +194,7 @@ describe("handleDocExists", () => {
 			rootPaths: [root],
 			sourceSaveFilePath: source,
 		});
-		const data = await res.json() as { markdown?: string; sourceSave?: unknown };
+		const data: { markdown?: string; sourceSave?: unknown } = await res.json();
 
 		expect(res.status).toBe(200);
 		expect(data.markdown).toBe("linked\n");
@@ -185,7 +220,7 @@ describe("handleFileBrowserFiles", () => {
 		const url = new URL("http://localhost/api/reference/files");
 		url.searchParams.set("dirPath", join(root, "docs"));
 		const res = await handleFileBrowserFiles(new Request(url.toString()));
-		const data = await res.json() as { tree: VaultNode[]; workspaceStatus: WorkspaceStatusPayload };
+		const data: { tree: VaultNode[]; workspaceStatus: WorkspaceStatusPayload } = await res.json();
 		const realDocs = realpathSync(join(root, "docs"));
 
 		expect(res.status).toBe(200);
@@ -212,7 +247,7 @@ describe("handleFileBrowserFiles", () => {
 		const url = new URL("http://localhost/api/reference/files");
 		url.searchParams.set("dirPath", root);
 		const res = await handleFileBrowserFiles(new Request(url.toString()));
-		const data = await res.json() as { tree: VaultNode[]; workspaceStatus: WorkspaceStatusPayload };
+		const data: { tree: VaultNode[]; workspaceStatus: WorkspaceStatusPayload } = await res.json();
 
 		expect(res.status).toBe(200);
 		expect(flattenTree(data.tree).sort()).toEqual(["docs/visible.md"]);
