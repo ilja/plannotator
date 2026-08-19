@@ -124,6 +124,15 @@ export interface ReviewServerResult {
   stop: () => void;
 }
 
+function isWorkspaceDiffType(
+  diffType: DiffType | WorkspaceDiffType,
+): diffType is WorkspaceDiffType {
+  return diffType === "workspace-current"
+    || diffType === "workspace-staged"
+    || diffType === "workspace-unstaged"
+    || diffType === "workspace-last";
+}
+
 // --- Server Implementation ---
 
 const MAX_RETRIES = 5;
@@ -272,8 +281,8 @@ export async function startReviewServer(
         if (!prMetadata) return null;
         return await getPRFullStackFingerprint(gitRuntime, prMetadata, fullStackCwd);
       }
-      if (!hasLocalAccess) return null;
-      return await getVcsDiffFingerprint(currentDiffType as DiffType, currentBase, gitContext?.cwd, {
+      if (!hasLocalAccess || isWorkspaceDiffType(currentDiffType)) return null;
+      return await getVcsDiffFingerprint(currentDiffType, currentBase, gitContext?.cwd, {
         hideWhitespace: currentHideWhitespace,
       });
     } catch {
@@ -313,10 +322,10 @@ export async function startReviewServer(
     if (workspace) return workspace.root;
     if (options.worktreePool && prMetadata) {
       return resolvePRLocalCwd()
-        ?? resolveVcsCwd(currentDiffType as DiffType, gitContext?.cwd)
+        ?? resolveVcsCwd(currentDiffType, gitContext?.cwd)
         ?? process.cwd();
     }
-    return options.agentCwd ?? resolveVcsCwd(currentDiffType as DiffType, gitContext?.cwd) ?? process.cwd();
+    return options.agentCwd ?? resolveVcsCwd(currentDiffType, gitContext?.cwd) ?? process.cwd();
   };
   // Strict launch root for /api/open-in: in PR pool mode only the PR's own
   // checkout is acceptable — never the launch-repo fallback resolveAgentCwd
@@ -326,7 +335,7 @@ export async function startReviewServer(
   const resolveOpenInRoot = (): string | string[] => {
     if (workspace) return workspace.root;
     if (options.worktreePool && prMetadata) return resolvePRLocalCwd() ?? [];
-    return options.agentCwd ?? resolveVcsCwd(currentDiffType as DiffType, gitContext?.cwd) ?? process.cwd();
+    return options.agentCwd ?? resolveVcsCwd(currentDiffType, gitContext?.cwd) ?? process.cwd();
   };
   // Async sibling of resolveAgentCwd: waits for the current PR's checkout
   // warmup instead of falling back while it is still being created.
