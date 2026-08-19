@@ -5,17 +5,35 @@
  * can open the review in their local browser without port forwarding.
  */
 
+import { Option, Schema } from "effect";
 import { compress } from "@plannotator/shared/compress";
 import { encrypt } from "@plannotator/shared/crypto";
 
 const DEFAULT_SHARE_BASE = "https://share.plannotator.ai";
 const DEFAULT_PASTE_API = "https://plannotator-paste.plannotator.workers.dev";
 
+export type RemoteShareFetch = typeof fetch;
+
 export interface RemoteShareOptions {
   rawHtml?: string;
   pasteApiUrl?: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: RemoteShareFetch;
 }
+
+interface RemotePasteHtmlPayload {
+  p: string;
+  a: unknown[];
+  h: string;
+  r: "html";
+}
+
+const PasteSuccessResponseSchema = Schema.Struct({
+  id: Schema.optionalKey(Schema.String),
+});
+
+const PasteErrorResponseSchema = Schema.Struct({
+  error: Schema.optionalKey(Schema.String),
+});
 
 /**
  * Generate a share URL from plan markdown content.
@@ -44,10 +62,10 @@ export async function generateRemoteShareUrl(
 }
 
 async function generateRemotePasteShareUrl(
-  payload: unknown,
+  payload: RemotePasteHtmlPayload,
   shareBaseUrl: string,
   pasteApiUrl = DEFAULT_PASTE_API,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: RemoteShareFetch = fetch,
 ): Promise<string> {
   const compressed = await compress(payload);
   const { ciphertext, key } = await encrypt(compressed);
@@ -63,8 +81,12 @@ async function generateRemotePasteShareUrl(
     throw new Error(await readPasteError(response, `Paste service returned ${response.status}`));
   }
 
-  const result = (await response.json()) as { id?: unknown };
-  if (typeof result.id !== "string" || !result.id) {
+  const rawResult = await response.json();
+  const decodedResult = Option.getOrUndefined(
+    Schema.decodeUnknownOption(PasteSuccessResponseSchema)(rawResult),
+  );
+  const resultId = decodedResult?.id;
+  if (!resultId) {
     throw new Error("Paste service response missing id");
   }
 
@@ -72,7 +94,7 @@ async function generateRemotePasteShareUrl(
     pasteApiUrl !== DEFAULT_PASTE_API
       ? `&paste=${base64UrlEncode(pasteApiUrl)}`
       : "";
-  return `${shareBaseUrl}/p/${result.id}#key=${key}${pasteParam}`;
+  return `${shareBaseUrl}/p/${resultId}#key=${key}${pasteParam}`;
 }
 
 function base64UrlEncode(value: string): string {
@@ -81,8 +103,12 @@ function base64UrlEncode(value: string): string {
 
 async function readPasteError(response: Response, fallback: string): Promise<string> {
   try {
-    const body = (await response.json()) as { error?: unknown };
-    return typeof body.error === "string" && body.error.trim() ? body.error : fallback;
+    const rawBody = await response.json();
+    const decoded = Option.getOrUndefined(
+      Schema.decodeUnknownOption(PasteErrorResponseSchema)(rawBody),
+    );
+    const errorMessage = decoded?.error;
+    return errorMessage?.trim() ? errorMessage : fallback;
   } catch {
     return fallback;
   }
