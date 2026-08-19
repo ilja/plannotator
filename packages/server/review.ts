@@ -9,6 +9,7 @@
  *   PLANNOTATOR_PORT   - Fixed port to use (default: random locally, 19432 for remote)
  */
 
+import { Option, Schema } from "effect";
 import { isRemoteSession, getServerHostname, getServerPort } from "./remote";
 import type { Origin } from "@plannotator/shared/agents";
 import { type DiffType, type GitContext, runVcsDiff, getVcsFileContentsForDiff, getVcsDiffFingerprint, canStageFiles, stageFile, unstageFile, resolveVcsCwd, validateFilePath, getVcsContext, detectRemoteDefaultCompareTarget, gitRuntime } from "./vcs";
@@ -41,7 +42,7 @@ import { handleImage, handleUpload, handleServerReady, handleDraftSave, handleDr
 import { contentHash, deleteDraft } from "./draft";
 import { createEditorAnnotationHandler } from "./editor-annotations";
 import { createExternalAnnotationHandler } from "./external-annotations";
-import { loadConfig, saveConfig, detectGitUser, getServerConfig } from "./config";
+import { loadConfig, saveConfig, ConfigPatch, detectGitUser, getServerConfig } from "./config";
 import { type PRMetadata, type PRReviewFileComment, type PRStackTree, type PRListItem, fetchPR, fetchPRFileContent, fetchPRContext, submitPRReview, fetchPRViewedFiles, markPRFilesViewed, fetchPRStack, fetchPRList, getPRUser, parsePRUrl, prRefFromMetadata, isSameProject, getDisplayRepo, getMRLabel, getMRNumberLabel } from "./pr";
 import { AI_QUERY_ENDPOINT, createAIRuntime } from "./ai-runtime";
 import type { AIEndpoints } from "@plannotator/ai";
@@ -49,6 +50,15 @@ import { isWSL } from "./browser";
 import { handleOpenInApps, handleOpenIn } from "./open-in";
 import type { LocalWorkspaceReview, WorkspaceDiffType } from "./review-workspace";
 import { handleCodeNavResolve, extractChangedFiles } from "./code-nav";
+import {
+  DiffSwitchRequestSchema,
+  FeedbackRequestSchema,
+  GitAddRequestSchema,
+  PrActionRequestSchema,
+  PrDiffScopeRequestSchema,
+  PrSwitchRequestSchema,
+  PrViewedRequestSchema,
+} from "./review-request-schemas";
 
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
@@ -131,6 +141,12 @@ function isWorkspaceDiffType(
     || diffType === "workspace-staged"
     || diffType === "workspace-unstaged"
     || diffType === "workspace-last";
+}
+
+interface FreshPayload {
+  fresh: boolean;
+  fingerprint?: string;
+  agentCwd?: string | null;
 }
 
 // --- Server Implementation ---
@@ -358,7 +374,7 @@ export async function startReviewServer(
     }
     if (options.agentCwd) return options.agentCwd;
     if (gitContext) {
-      const vcsCwd = resolveVcsCwd(currentDiffType as DiffType, gitContext.cwd);
+      const vcsCwd = resolveVcsCwd(currentDiffType, gitContext.cwd);
       if (vcsCwd) return vcsCwd;
       if (gitContext.cwd) return gitContext.cwd;
     }
@@ -588,7 +604,12 @@ export async function startReviewServer(
             const fresh = probe == null || probe === baseline;
             // The probe fingerprint lets the client distinguish "still the
             // same staleness I dismissed" from "ANOTHER change landed since".
-            return Response.json({ fresh, ...(fresh ? {} : { fingerprint: probe }), ...prCwdAdvert });
+            const freshPayload: FreshPayload = {
+              fresh,
+              ...prCwdAdvert,
+            };
+            if (!fresh && probe !== null) freshPayload.fingerprint = probe;
+            return Response.json(freshPayload);
           }
 
           // API: Get semantic diff content
@@ -605,17 +626,16 @@ export async function startReviewServer(
               );
             }
             try {
-              const body = (await req.json()) as { diffType: DiffType | WorkspaceDiffType; base?: string; hideWhitespace?: boolean };
-              let newDiffType = body.diffType;
-
-              if (!newDiffType) {
-                return Response.json(
-                  { error: "Missing diffType" },
-                  { status: 400 }
-                );
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(DiffSwitchRequestSchema)(rawBody),
+              );
+              if (!body) {
+                return Response.json({ error: "Missing diffType" }, { status: 400 });
               }
+              const newDiffType = body.diffType;
 
-              if (typeof body.hideWhitespace === "boolean") {
+              if (body.hideWhitespace !== undefined) {
                 currentHideWhitespace = body.hideWhitespace;
               }
 
@@ -642,15 +662,16 @@ export async function startReviewServer(
                 });
               }
 
-              // Guard against non-string payloads — resolveBaseBranch calls
-              // string methods and would throw a TypeError otherwise. Mirrors
-              // Pi's guard so both runtimes validate identically.
-              const requestedBase = typeof body.base === "string" ? body.base : undefined;
+              if (isWorkspaceDiffType(newDiffType)) {
+                return Response.json({ error: "Missing diffType" }, { status: 400 });
+              }
+
+              const requestedBase = body.base;
               const base = resolveReviewBase(requestedBase);
               const defaultCwd = gitContext?.cwd;
 
               // Run the new diff
-              const result = await runVcsDiff(newDiffType as DiffType, base, defaultCwd, {
+              const result = await runVcsDiff(newDiffType, base, defaultCwd, {
                 hideWhitespace: currentHideWhitespace,
               });
 
@@ -671,7 +692,7 @@ export async function startReviewServer(
               let updatedContext: GitContext | undefined;
               if (gitContext) {
                 try {
-                  const effectiveCwd = resolveVcsCwd(newDiffType as DiffType, gitContext.cwd);
+                  const effectiveCwd = resolveVcsCwd(newDiffType, gitContext.cwd);
                   updatedContext = await getVcsContext(effectiveCwd, sessionVcsType);
                 } catch {
                   /* best-effort */
@@ -706,8 +727,11 @@ export async function startReviewServer(
             }
 
             try {
-              const body = (await req.json()) as { scope?: PRDiffScope };
-              if (body.scope !== "layer" && body.scope !== "full-stack") {
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(PrDiffScopeRequestSchema)(rawBody),
+              );
+              if (!body) {
                 return Response.json({ error: "Invalid PR diff scope" }, { status: 400 });
               }
 
@@ -845,8 +869,11 @@ export async function startReviewServer(
             }
 
             try {
-              const body = (await req.json()) as { url?: string };
-              if (!body.url) {
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(PrSwitchRequestSchema)(rawBody),
+              );
+              if (!body) {
                 return Response.json({ error: "Missing PR URL" }, { status: 400 });
               }
 
@@ -930,7 +957,7 @@ export async function startReviewServer(
                 branch: `${getMRLabel(pr.metadata)} ${getMRNumberLabel(pr.metadata)}`,
               };
 
-              return Response.json({
+              const basePrSwitchPayload = {
                 rawPatch: currentPatch,
                 gitRef: currentGitRef,
                 prMetadata: pr.metadata,
@@ -944,9 +971,12 @@ export async function startReviewServer(
                 ...(layerPatchIncomplete && { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable }),
                 repoInfo,
                 ...(switchedViewedFiles.length > 0 && { viewedFiles: switchedViewedFiles }),
-                ...(currentError ? { error: currentError } : {}),
                 semanticDiff: await getSemanticDiffAdvert(),
-              });
+              };
+              if (currentError) {
+                return Response.json({ ...basePrSwitchPayload, error: currentError });
+              }
+              return Response.json(basePrSwitchPayload);
             } catch (err) {
               const message = err instanceof Error ? err.message : "Failed to switch PR";
               return Response.json({ error: message }, { status: 500 });
@@ -1030,11 +1060,14 @@ export async function startReviewServer(
 
             // Local review: read file contents from local git
             if (hasLocalAccess) {
+              if (isWorkspaceDiffType(currentDiffType)) {
+                return Response.json({ error: "No file access available" }, { status: 400 });
+              }
               const requestedBase = url.searchParams.get("base") ?? undefined;
               const base = resolveReviewBase(requestedBase);
               const defaultCwd = gitContext?.cwd;
               const result = await getVcsFileContentsForDiff(
-                currentDiffType as DiffType,
+                currentDiffType,
                 base,
                 filePath,
                 oldPath,
@@ -1109,8 +1142,11 @@ export async function startReviewServer(
           // API: Stage / unstage a file (disabled when VCS doesn't support it)
           if (url.pathname === "/api/git-add" && req.method === "POST") {
             try {
-              const body = (await req.json()) as { filePath?: unknown; undo?: boolean };
-              if (typeof body.filePath !== "string" || !body.filePath) {
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(GitAddRequestSchema)(rawBody),
+              );
+              if (!body) {
                 return Response.json({ error: "Missing filePath" }, { status: 400 });
               }
               try { validateFilePath(body.filePath); } catch {
@@ -1129,8 +1165,8 @@ export async function startReviewServer(
                 }
               }
 
-              const stageCwd = resolveVcsCwd(currentDiffType as DiffType, gitContext?.cwd);
-              if (isPRMode || !(await canStageFiles(currentDiffType as DiffType, stageCwd))) {
+              const stageCwd = resolveVcsCwd(currentDiffType, gitContext?.cwd);
+              if (isPRMode || !(await canStageFiles(currentDiffType, stageCwd))) {
                 return Response.json(
                   { error: "Staging not available" },
                   { status: 400 },
@@ -1138,9 +1174,9 @@ export async function startReviewServer(
               }
 
               if (body.undo) {
-                await unstageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+                await unstageFile(currentDiffType, body.filePath, stageCwd);
               } else {
-                await stageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+                await stageFile(currentDiffType, body.filePath, stageCwd);
               }
 
               return Response.json({ ok: true });
@@ -1153,20 +1189,8 @@ export async function startReviewServer(
           // API: Update user config (write-back to ~/.plannotator/config.json)
           if (url.pathname === "/api/config" && req.method === "POST") {
             try {
-              const body = (await req.json()) as {
-                displayName?: string;
-                diffOptions?: Record<string, unknown>;
-                annotationOptions?: Record<string, unknown>;
-                conventionalComments?: boolean;
-                conventionalLabels?: unknown[] | null;
-              };
-              const toSave: Record<string, unknown> = {};
-              if (body.displayName !== undefined) toSave.displayName = body.displayName;
-              if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
-              if (body.annotationOptions !== undefined) toSave.annotationOptions = body.annotationOptions;
-              if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
-              if (body.conventionalLabels !== undefined) toSave.conventionalLabels = body.conventionalLabels;
-              if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
+              const body = Schema.decodeUnknownSync(ConfigPatch)(await req.json());
+              if (Object.keys(body).length > 0) saveConfig(body);
               return Response.json({ ok: true });
             } catch {
               return Response.json({ error: "Invalid request" }, { status: 400 });
@@ -1210,18 +1234,19 @@ export async function startReviewServer(
           // API: Submit review feedback
           if (url.pathname === "/api/feedback" && req.method === "POST") {
             try {
-              const body = (await req.json()) as {
-                approved?: boolean;
-                feedback: string;
-                annotations: unknown[];
-                draftGeneration?: number;
-              };
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
+              );
+              if (!body) {
+                return Response.json({ error: "Invalid request" }, { status: 400 });
+              }
 
               deleteDraft(draftKey, readDraftGenerationFromBody(body));
               resolveDecision({
                 approved: body.approved ?? false,
                 feedback: body.feedback || "",
-                annotations: body.annotations || [],
+                annotations: body.annotations ? [...body.annotations] : [],
               });
 
               return Response.json({ ok: true });
@@ -1238,12 +1263,13 @@ export async function startReviewServer(
               return Response.json({ error: "Not in PR mode" }, { status: 400 });
             }
             try {
-              const body = (await req.json()) as {
-                action: "approve" | "comment";
-                body: string;
-                fileComments: PRReviewFileComment[];
-                targetPrUrl?: string;
-              };
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(PrActionRequestSchema)(rawBody),
+              );
+              if (!body) {
+                return Response.json({ error: "Invalid request" }, { status: 400 });
+              }
 
               // Resolve target PR — either explicit target or current.
               // When targetPrUrl is provided, the client has already filtered
@@ -1274,7 +1300,7 @@ export async function startReviewServer(
                 targetHeadSha,
                 body.action,
                 body.body,
-                body.fileComments,
+                [...body.fileComments],
               );
 
               console.error(`[pr-action] Success`);
@@ -1300,11 +1326,14 @@ export async function startReviewServer(
               return Response.json({ error: "PR node ID not available" }, { status: 400 });
             }
             try {
-              const body = (await req.json()) as {
-                filePaths: string[];
-                viewed: boolean;
-              };
-              await markPRFilesViewed(prRef!, prNodeId, body.filePaths, body.viewed);
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(PrViewedRequestSchema)(rawBody),
+              );
+              if (!body) {
+                return Response.json({ error: "Invalid request" }, { status: 400 });
+              }
+              await markPRFilesViewed(prRef!, prNodeId, [...body.filePaths], body.viewed);
               return Response.json({ ok: true });
             } catch (err) {
               const message =
@@ -1316,6 +1345,7 @@ export async function startReviewServer(
 
           // AI endpoints
           if (url.pathname.startsWith("/api/ai/")) {
+            // SAFETY: `aiRuntime.endpoints` is a closed map keyed by AI endpoint path literals; indexing with the dynamic URL segment only broadens to `keyof AIEndpoints` whose semantics are identical. Unknown prefixed paths are handled by the falsy-handler 404 branch below.
             const handler = aiRuntime.endpoints[url.pathname as keyof AIEndpoints];
             if (handler) {
               // AI sessions pin their cwd at creation — wait out the PR

@@ -1015,5 +1015,83 @@ describe("review-workspace", () => {
         server.stop();
       }
     }, 15_000);
+
+    it("rejects malformed review request bodies before mutating state", async () => {
+      const root = makeTempDir("plannotator-workspace-malformed-");
+      const api = join(root, "api");
+      mkdirSync(api, { recursive: true });
+      initRepo(api);
+      writeFileSync(join(api, "tracked.txt"), "before\n", "utf-8");
+      git(api, ["add", "tracked.txt"]);
+      git(api, ["commit", "-m", "add tracked"]);
+      writeFileSync(join(api, "tracked.txt"), "after\n", "utf-8");
+
+      const workspace = await buildLocalWorkspaceReview(root);
+      const server = await startReviewServer({
+        rawPatch: workspace.rawPatch,
+        gitRef: workspace.gitRef,
+        origin: "claude-code",
+        workspace,
+        agentCwd: workspace.root,
+        htmlContent: "<!doctype html><html><body>review</body></html>",
+      });
+
+      try {
+        const diffSwitchMalformed = await fetch(`${server.url}/api/diff/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ diffType: 123 }),
+        });
+        expect(diffSwitchMalformed.status).toBe(400);
+        const diffSwitchBody: { error?: string } = await diffSwitchMalformed.json();
+        expect(diffSwitchBody.error).toBe("Missing diffType");
+
+        const diffSwitchEmpty = await fetch(`${server.url}/api/diff/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        expect(diffSwitchEmpty.status).toBe(400);
+
+        const gitAddMalformed = await fetch(`${server.url}/api/git-add`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath: 123 }),
+        });
+        expect(gitAddMalformed.status).toBe(400);
+        const gitAddBody: { error?: string } = await gitAddMalformed.json();
+        expect(gitAddBody.error).toBe("Missing filePath");
+
+        const configMalformed = await fetch(`${server.url}/api/config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName: 123 }),
+        });
+        expect(configMalformed.status).toBe(400);
+        const configBody: { error?: string } = await configMalformed.json();
+        expect(configBody.error).toBe("Invalid request");
+
+        const feedbackMalformed = await fetch(`${server.url}/api/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ feedback: 123 }),
+        });
+        expect(feedbackMalformed.status).toBe(400);
+        const feedbackBody: { error?: string } = await feedbackMalformed.json();
+        expect(feedbackBody.error).toBe("Invalid request");
+
+        // Valid git-add still works after malformed requests (state not corrupted)
+        const validGitAdd = await fetch(`${server.url}/api/git-add`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath: "api/tracked.txt" }),
+        });
+        // api/tracked.txt is modified but not yet staged; staging should succeed
+        // (workspace mode stages via workspace.stageFile)
+        expect(validGitAdd.status).toBe(200);
+      } finally {
+        server.stop();
+      }
+    }, 15_000);
   });
 });
