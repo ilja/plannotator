@@ -262,7 +262,7 @@ async function fetchViaJina(url: string): Promise<string> {
   const cleanUrl = url.split("#")[0];
   const jinaUrl = `https://r.jina.ai/${cleanUrl}`;
   interface JinaHeaders {
-    readonly [key: string]: string;
+    [key: string]: string;
   }
 
   const headers: JinaHeaders = {

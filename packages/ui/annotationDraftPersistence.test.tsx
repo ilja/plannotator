@@ -24,7 +24,7 @@ import type { SourceBackedDocumentDraftData, SourceBackedSavedFileChangeDraftDat
 import { AnnotationType, type Annotation } from './types';
 import { saveDraft, loadDraft, deleteDraft, contentHash, getDraftGeneration } from '../shared/draft';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -128,8 +128,9 @@ let dataDir = '';
 let prevDataDirEnv: string | undefined;
 
 function installFetchShim() {
+  // SAFETY: test shim implements fetch for draft API; mock returns compatible Response
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString();
+    const url = input instanceof Request || input instanceof URL ? input.toString() : String(input);
     if (url.startsWith('/api/draft')) {
       const parsedUrl = new URL(url, 'http://localhost');
       const method = init?.method ?? 'GET';
@@ -138,10 +139,12 @@ function installFetchShim() {
         return data
           ? new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } })
           : new Response(
-              JSON.stringify({
-                found: false,
-                ...(getDraftGeneration(DRAFT_KEY) !== null ? { draftGeneration: getDraftGeneration(DRAFT_KEY) } : {}),
-              }),
+              JSON.stringify((() => {
+                const body: any = { found: false };
+                const draftGeneration = getDraftGeneration(DRAFT_KEY);
+                if (draftGeneration !== null) body.draftGeneration = draftGeneration;
+                return body;
+              })()),
               { status: 404, headers: { 'Content-Type': 'application/json' } },
             );
       }
@@ -197,7 +200,19 @@ const options = (over: Partial<HookOptions> = {}): HookOptions => ({
   ...over,
 });
 
-function Harness({ opts, resultRef }: { opts: HookOptions; resultRef: { current: HookResult | null } }) {
+interface ResultRef {
+  current: HookResult | null;
+}
+
+interface EditsBox {
+  value: string | null;
+}
+
+interface SavedBox {
+  value: SourceBackedSavedFileChangeDraftData[];
+}
+
+function Harness({ opts, resultRef }: { opts: HookOptions; resultRef: ResultRef }) {
   resultRef.current = useAnnotationDraft(opts);
   return null;
 }
@@ -214,7 +229,7 @@ const tick = (ms: number) => act(async () => new Promise((r) => setTimeout(r, ms
 async function mountSession(opts: HookOptions): Promise<Session> {
   const host = document.createElement('div');
   document.body.appendChild(host);
-  const resultRef: { current: HookResult | null } = { current: null };
+  const resultRef: ResultRef = { current: null };
   let root: Root;
   await act(async () => {
     root = createRoot(host);
@@ -253,11 +268,12 @@ describe('direct-edit draft persistence', () => {
     await s1.unmount();
 
     // The bytes on disk are the contract between sessions.
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk).not.toBeNull();
     expect(onDisk!.annotations).toEqual([ANNOTATION]);
     expect(onDisk!.editedMarkdown).toBe(EDITED);
-    expect(typeof onDisk!.ts).toBe('number');
+    expect(onDisk!.ts).toBeTypeOf('number');
 
     // Session 2: fresh page — no in-memory state, only the draft on disk.
     const s2 = await mountSession(options());
@@ -283,7 +299,8 @@ describe('direct-edit draft persistence', () => {
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
 
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk).not.toBeNull();
     expect(onDisk!.annotations).toEqual([CHOICE_ANNOTATION]);
 
@@ -314,7 +331,8 @@ describe('direct-edit draft persistence', () => {
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
 
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk).not.toBeNull();
     expect(onDisk!.annotations).toEqual([]);
     expect(onDisk!.editedMarkdown).toBe(EDITED);
@@ -342,7 +360,8 @@ describe('direct-edit draft persistence', () => {
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
 
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk).not.toBeNull();
     expect(onDisk!.savedFileChanges).toEqual([SAVED_FILE_CHANGE]);
     expect(onDisk!.editedDocuments).toBeUndefined();
@@ -407,7 +426,8 @@ describe('direct-edit draft persistence', () => {
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
 
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk?.editedDocuments).toEqual([missingDraft]);
 
     const s2 = await mountSession(options());
@@ -490,7 +510,7 @@ describe('direct-edit draft persistence', () => {
   test.skipIf(!hasDom)('discarding everything deletes the draft from disk', async () => {
     // The user committed edits, then discarded them (no annotations either).
     // A stale draft must not resurrect the discarded content on refresh.
-    const edits: { value: string | null } = { value: EDITED };
+    const edits: EditsBox = { value: EDITED };
     const session = await mountSession(options({ getEditedMarkdown: () => edits.value }));
     act(() => session.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
@@ -508,7 +528,7 @@ describe('direct-edit draft persistence', () => {
   });
 
   test.skipIf(!hasDom)('clearing saved file changes deletes an edits-only draft', async () => {
-    const saved: { value: SourceBackedSavedFileChangeDraftData[] } = { value: [SAVED_FILE_CHANGE] };
+    const saved: SavedBox = { value: [SAVED_FILE_CHANGE] };
     const session = await mountSession(options({ getSavedFileChanges: () => saved.value }));
     act(() => session.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
@@ -555,7 +575,8 @@ describe('direct-edit draft persistence', () => {
       window.dispatchEvent(new Event('pagehide'));
     });
     await tick(0); // immediate — far inside the 500ms window
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk).not.toBeNull();
     expect(onDisk!.editedMarkdown).toBe(EDITED);
     await session.unmount();
