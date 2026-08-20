@@ -29,7 +29,8 @@ export const PopoutDialog: React.FC<PopoutDialogProps> = ({
 }) => {
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
-      if (e.target instanceof Element && ANNOTATION_SELECTORS.some((sel) => e.target.closest(sel))) return;
+      const target = e.target;
+      if (target instanceof Element && ANNOTATION_SELECTORS.some((sel) => target.closest(sel))) return;
       onClose();
     },
     [onClose],
