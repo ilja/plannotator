@@ -119,11 +119,16 @@ export function useHtmlAnnotation({
   useEffect(() => {
     function handler(e: MessageEvent<BridgeMessage>) {
       if (!e.data || Object.prototype.toString.call(e.data.type) !== "[object String]" || !e.data.type.startsWith(PREFIX)) return;
+      if (e.source !== iframeRef.current?.contentWindow) return;
 
       const type = e.data.type;
 
       if (type === `${PREFIX}selection`) {
         if (!("text" in e.data) || !("rect" in e.data)) return;
+        const rawSel: any = e.data;
+        if (Object.prototype.toString.call(rawSel.text) !== "[object String]") return;
+        const rawRect: any = rawSel.rect;
+        if (rawRect == null || !Number.isFinite(rawRect.top) || !Number.isFinite(rawRect.left) || !Number.isFinite(rawRect.width) || !Number.isFinite(rawRect.height)) return;
         // SAFETY: e.data is BridgeSelectionMessage when type is plannotator-bridge-selection and required fields present — producer is bridge-script.ts
         const msg = e.data as BridgeSelectionMessage;
         pendingTextRef.current = msg.text;
@@ -189,6 +194,7 @@ export function useHtmlAnnotation({
         if (!("rect" in e.data)) return;
         // SAFETY: e.data is rect message when type is selection-rect and rect present — bridge-script sends rect on scroll
         const r = (e.data as { rect: { top: number; left: number; width: number; height: number } }).rect;
+        if (r == null || !Number.isFinite(r.top) || !Number.isFinite(r.left) || !Number.isFinite(r.width) || !Number.isFinite(r.height)) return;
         const iframeRect = iframe.getBoundingClientRect();
         anchor.style.top = `${iframeRect.top + r.top}px`;
         anchor.style.left = `${iframeRect.left + r.left + r.width / 2}px`;
@@ -203,6 +209,7 @@ export function useHtmlAnnotation({
         if (!("key" in e.data)) return;
         // SAFETY: e.data is keytype message when type is keytype and key present — bridge-script sends key on type-to-comment
         const key = (e.data as { key?: string }).key;
+        if (key != null && Object.prototype.toString.call(key) !== "[object String]") return;
         const text = pendingTextRef.current;
         if (!key || !text) return;
         const anchor = anchorRef.current ?? getOrCreateAnchor();
@@ -217,6 +224,7 @@ export function useHtmlAnnotation({
         if (!("id" in e.data)) return;
         // SAFETY: e.data is BridgeMarkClickMessage when type is mark-click and id present — bridge-script sends id on mark click
         const msg = e.data as BridgeMarkClickMessage;
+        if (Object.prototype.toString.call(msg.id) !== "[object String]") return;
         onSelectRef.current?.(msg.id);
       }
 
@@ -224,6 +232,7 @@ export function useHtmlAnnotation({
         if (!("height" in e.data)) return;
         // SAFETY: e.data is BridgeResizeMessage when type is resize and height present — bridge-script sends height on resize
         const msg = e.data as BridgeResizeMessage;
+        if (!Number.isFinite(msg.height)) return;
         onResize?.(msg.height);
       }
     }
