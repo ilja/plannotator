@@ -5,7 +5,11 @@
  * selects a custom diff font. Each font is loaded at most once.
  */
 
-const FONT_URLS: Record<string, string> = {
+interface FontUrls {
+  [key: string]: string;
+}
+
+const FONT_URLS: FontUrls = {
   'Red Hat Mono': 'https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@300..700&display=swap',
   'Fira Code': 'https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap',
   'Atkinson Hyperlegible Mono': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@200..700&display=swap',

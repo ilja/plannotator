@@ -53,6 +53,7 @@ export function getObsidianSettings(): ObsidianSettings {
     folder: storage.getItem(STORAGE_KEY_FOLDER) || DEFAULT_FOLDER,
     customPath: storage.getItem(STORAGE_KEY_CUSTOM_PATH) || undefined,
     filenameFormat: storage.getItem(STORAGE_KEY_FILENAME_FORMAT) || undefined,
+    // SAFETY: storage value is FilenameSeparator string — cast to FilenameSeparator
     filenameSeparator: (storage.getItem(STORAGE_KEY_FILENAME_SEPARATOR) as FilenameSeparator) || 'space',
     autoSave: storage.getItem(STORAGE_KEY_AUTOSAVE) === 'true',
     vaultBrowserEnabled: storage.getItem(STORAGE_KEY_VAULT_BROWSER) === 'true',

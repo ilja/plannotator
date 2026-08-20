@@ -12,6 +12,7 @@ const STORAGE_KEY = 'plannotator-default-notes-app';
 export type DefaultNotesApp = 'obsidian' | 'bear' | 'octarine' | 'download' | 'ask';
 
 export function getDefaultNotesApp(): DefaultNotesApp {
+  // SAFETY: storage value is DefaultNotesApp string — cast to DefaultNotesApp
   return (storage.getItem(STORAGE_KEY) as DefaultNotesApp) || 'ask';
 }
 

@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 export function renderChatMarkdown(text: string): ReactNode {
+  // SAFETY: marked.parse with async:false returns string — cast to string
   const html = marked.parse(text, { async: false, breaks: true }) as string;
   const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [

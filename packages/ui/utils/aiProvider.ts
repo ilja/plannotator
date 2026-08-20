@@ -75,10 +75,11 @@ export function getAIProviderSettings(): AIProviderSettings {
     const raw = storage.getItem(PROVIDER_BY_ORIGIN_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
+      if (parsed && parsed instanceof Object) {
         for (const [origin, value] of Object.entries(parsed)) {
-          if (origin in AGENT_CONFIG && typeof value === 'string') {
-            providerByOrigin[origin as Origin] = value;
+          if (origin in AGENT_CONFIG && Object.prototype.toString.call(value) === "[object String]") {
+            // SAFETY: origin is key from Object.entries of parsed — cast to Origin
+            providerByOrigin[origin as Origin] = value as string;
           }
         }
       }

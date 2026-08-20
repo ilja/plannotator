@@ -31,6 +31,7 @@ export function getBearSettings(): BearSettings {
   return {
     enabled: storage.getItem(STORAGE_KEY_ENABLED) === 'true',
     customTags: storage.getItem(STORAGE_KEY_CUSTOM_TAGS) ?? '',
+    // SAFETY: storage value is TagPosition string — cast to TagPosition
     tagPosition: (storage.getItem(STORAGE_KEY_TAG_POSITION) as TagPosition) || 'append',
     autoSave: storage.getItem(STORAGE_KEY_AUTOSAVE) === 'true',
   };

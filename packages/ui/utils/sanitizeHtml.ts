@@ -24,6 +24,7 @@ const ALLOWED_ATTR = [
  * styles, no scripts.
  */
 export function sanitizeBlockHtml(html: string): string {
+  // SAFETY: marked.parse with async:false returns string — cast to string
   const rendered = marked.parse(html, { async: false, gfm: true, breaks: false }) as string;
   return DOMPurify.sanitize(rendered, { ALLOWED_TAGS, ALLOWED_ATTR });
 }

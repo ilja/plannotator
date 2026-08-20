@@ -18,7 +18,11 @@ export interface QuickLabel {
 }
 
 /** Inline styles for label colors (avoids Tailwind dynamic class purging) */
-export const LABEL_COLOR_MAP: Record<string, { bg: string; text: string; darkText: string }> = {
+interface LabelColorMap {
+  [key: string]: { bg: string; text: string; darkText: string };
+}
+
+export const LABEL_COLOR_MAP: LabelColorMap = {
   blue:   { bg: 'rgba(59,130,246,0.15)',  text: '#2563eb', darkText: '#60a5fa' },
   red:    { bg: 'rgba(239,68,68,0.15)',   text: '#dc2626', darkText: '#f87171' },
   orange: { bg: 'rgba(249,115,22,0.15)',  text: '#ea580c', darkText: '#fb923c' },
@@ -48,6 +52,7 @@ export function getQuickLabels(): QuickLabel[] {
   const raw = storage.getItem(STORAGE_KEY);
   if (!raw) return DEFAULT_QUICK_LABELS;
   try {
+    // SAFETY: raw is JSON string from storage — parsed is QuickLabel[]
     const parsed = JSON.parse(raw) as QuickLabel[];
     return parsed.length > 0 ? parsed : DEFAULT_QUICK_LABELS;
   } catch {
@@ -69,7 +74,12 @@ export function findLabelByText(annotationText: string): QuickLabel | undefined 
 }
 
 /** Get color styles for a label, respecting dark mode */
-export function getLabelColors(color: string): { bg: string; text: string } {
+interface LabelColors {
+  bg: string;
+  text: string;
+}
+
+export function getLabelColors(color: string): LabelColors {
   const colors = LABEL_COLOR_MAP[color];
   if (!colors) return { bg: 'rgba(128,128,128,0.15)', text: '#666' };
   const isDark = document.documentElement.classList.contains('dark');
