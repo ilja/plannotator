@@ -23,6 +23,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
     if (!isOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
+      // SAFETY: event.target is a DOM Node when pointer events fire on document
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }

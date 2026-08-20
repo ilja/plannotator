@@ -14,7 +14,11 @@ interface AlertBlockProps {
   onNavigateAnchor?: (hash: string) => void;
 }
 
-const TITLE: Record<AlertKind, string> = {
+interface AlertTitleMap {
+  [key: string]: string;
+}
+
+const TITLE: AlertTitleMap = {
   note: 'Note',
   tip: 'Tip',
   warning: 'Warning',
