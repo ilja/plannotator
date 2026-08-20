@@ -613,7 +613,8 @@ describe('direct-edit draft persistence', () => {
     act(() => session.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
 
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk).not.toBeNull();
     expect(onDisk!.draftGeneration).toBeGreaterThan(2);
     expect(onDisk!.annotations).toEqual([ANNOTATION]);
@@ -644,7 +645,8 @@ describe('direct-edit draft persistence', () => {
     act(() => session.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
 
-    const onDisk = loadDraft(DRAFT_KEY) as Record<string, unknown> | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
+    const onDisk: any = loadDraft(DRAFT_KEY);
     expect(onDisk).not.toBeNull();
     expect(onDisk!.draftGeneration).toBeGreaterThan(3);
     expect(onDisk!.annotations).toEqual([updated]);
