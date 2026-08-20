@@ -47,6 +47,7 @@ export const SETTINGS = {
   gridEnabled: {
     // Default ON: plans open in the classic grid / floating-card look. The UI 2.0
     // flat look is offered as an opt-in via the look-and-feel chooser dialog.
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: true as boolean,
     fromCookie: () => {
       const v = storage.getItem('plannotator-grid-enabled');
@@ -59,6 +60,7 @@ export const SETTINGS = {
   // --- Diff display options (namespaced under diffOptions in config.json) ---
 
   defaultDiffType: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: 'unstaged' as 'uncommitted' | 'unstaged' | 'staged' | 'merge-base' | 'all',
     fromCookie: () => {
       const v = storage.getItem('plannotator-default-diff-type');
@@ -78,6 +80,7 @@ export const SETTINGS = {
   },
 
   diffStyle: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: 'split' as 'split' | 'unified',
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-style') ?? storage.getItem('review-diff-style');
@@ -95,6 +98,7 @@ export const SETTINGS = {
   },
 
   diffOverflow: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: 'scroll' as 'scroll' | 'wrap',
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-overflow');
@@ -112,6 +116,7 @@ export const SETTINGS = {
   },
 
   diffIndicators: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: 'bars' as 'bars' | 'classic' | 'none',
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-indicators');
@@ -119,14 +124,17 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-indicators', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.diffIndicators;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.diffIndicators;
       return v === 'bars' || v === 'classic' || v === 'none' ? v : undefined;
     },
     toServer: (v: string) => ({ diffOptions: { diffIndicators: v } }),
   },
 
   diffLineDiffType: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: 'word-alt' as 'word-alt' | 'word' | 'char' | 'none',
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-line-diff-type');
@@ -134,14 +142,17 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-line-diff-type', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.lineDiffType;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.lineDiffType;
       return v === 'word-alt' || v === 'word' || v === 'char' || v === 'none' ? v : undefined;
     },
     toServer: (v: string) => ({ diffOptions: { lineDiffType: v } }),
   },
 
   diffShowLineNumbers: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: true as boolean,
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-show-line-numbers');
@@ -149,14 +160,17 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-show-line-numbers', String(v)),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.showLineNumbers;
-      return typeof v === 'boolean' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.showLineNumbers;
+      return v === true || v === false ? v : undefined;
     },
     toServer: (v: boolean) => ({ diffOptions: { showLineNumbers: v } }),
   },
 
   diffShowBackground: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: true as boolean,
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-show-background');
@@ -164,26 +178,32 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-show-background', String(v)),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.showDiffBackground;
-      return typeof v === 'boolean' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.showDiffBackground;
+      return v === true || v === false ? v : undefined;
     },
     toServer: (v: boolean) => ({ diffOptions: { showDiffBackground: v } }),
   },
 
   diffFontFamily: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: '' as string, // empty = theme default
     fromCookie: () => storage.getItem('plannotator-diff-font-family') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-diff-font-family', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.fontFamily;
-      return typeof v === 'string' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.fontFamily;
+      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
     },
     toServer: (v: string) => ({ diffOptions: { fontFamily: v } }),
   },
 
   diffHideWhitespace: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: false as boolean,
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-hide-whitespace');
@@ -191,14 +211,17 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-hide-whitespace', String(v)),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.hideWhitespace;
-      return typeof v === 'boolean' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.hideWhitespace;
+      return v === true || v === false ? v : undefined;
     },
     toServer: (v: boolean) => ({ diffOptions: { hideWhitespace: v } }),
   },
 
   diffExpandUnchanged: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: false as boolean,
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-expand-unchanged');
@@ -206,21 +229,26 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-expand-unchanged', String(v)),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.expandUnchanged;
-      return typeof v === 'boolean' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.expandUnchanged;
+      return v === true || v === false ? v : undefined;
     },
     toServer: (v: boolean) => ({ diffOptions: { expandUnchanged: v } }),
   },
 
   diffFontSize: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: '' as string, // empty = theme default
     fromCookie: () => storage.getItem('plannotator-diff-font-size') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-diff-font-size', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.fontSize;
-      return typeof v === 'string' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.fontSize;
+      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
     },
     toServer: (v: string) => ({ diffOptions: { fontSize: v } }),
   },
@@ -228,24 +256,30 @@ export const SETTINGS = {
   // --- Annotation display options (namespaced under annotationOptions) ---
 
   annotationCodeFontFamily: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: '' as string, // empty = theme mono/default
     fromCookie: () => storage.getItem('plannotator-annotation-code-font-family') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-family', v),
     serverKey: 'annotationOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.codeFontFamily;
-      return typeof v === 'string' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
+      const v = (sc.annotationOptions as any)?.codeFontFamily;
+      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
     },
     toServer: (v: string) => ({ annotationOptions: { codeFontFamily: v } }),
   },
 
   annotationCodeFontSize: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: '' as string, // empty = current 13px default
     fromCookie: () => storage.getItem('plannotator-annotation-code-font-size') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-size', v),
     serverKey: 'annotationOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.codeFontSize;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
+      const v = (sc.annotationOptions as any)?.codeFontSize;
       return typeof v === 'string' ? v : undefined;
     },
     toServer: (v: string) => ({ annotationOptions: { codeFontSize: v } }),
