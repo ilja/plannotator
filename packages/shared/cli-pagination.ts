@@ -44,11 +44,13 @@ export function parsePaginatedArray<T>(stdout: string): T[] {
   }
 
   if (slices.length === 0) {
+    // SAFETY: single-page output is a JSON array of T per gh/glab paginated API contract; caller supplies T.
     return JSON.parse(trimmed) as T[];
   }
 
   const merged: T[] = [];
   for (const slice of slices) {
+    // SAFETY: each slice was extracted as a top-level JSON array; validated with Array.isArray before spreading.
     const page = JSON.parse(slice) as T[];
     if (Array.isArray(page)) merged.push(...page);
   }

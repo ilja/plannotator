@@ -33,19 +33,26 @@ export type Origin = keyof typeof AGENT_CONFIG;
 
 /** Resolve an origin to a human-readable agent name. */
 export function getAgentName(origin: Origin | null | undefined): string {
-  if (origin && origin in AGENT_CONFIG) return AGENT_CONFIG[origin as Origin].name;
+  if (origin && origin in AGENT_CONFIG) {
+    // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
+    return AGENT_CONFIG[origin as Origin].name;
+  }
   return 'Coding Agent';
 }
 
 /** Resolve an origin to Tailwind badge classes. */
 export function getAgentBadge(origin: Origin | null | undefined): string {
-  if (origin && origin in AGENT_CONFIG) return AGENT_CONFIG[origin as Origin].badge;
+  if (origin && origin in AGENT_CONFIG) {
+    // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
+    return AGENT_CONFIG[origin as Origin].badge;
+  }
   return 'bg-zinc-500/20 text-zinc-400';
 }
 
 /** Resolve an origin to matching AI provider types, in preference order. */
 export function getAgentAIProviderTypes(origin: Origin | null | undefined): readonly string[] {
   if (origin && origin in AGENT_CONFIG) {
+    // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
     const config = AGENT_CONFIG[origin as Origin];
     return 'aiProviderTypes' in config ? config.aiProviderTypes : [];
   }
