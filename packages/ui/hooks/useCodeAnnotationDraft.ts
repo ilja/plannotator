@@ -22,8 +22,9 @@ interface MissingDraftData {
   draftGeneration?: number;
 }
 
-function readDraftGeneration(value: unknown): number | null {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+// SAFETY: value is untrusted draft payload — any is intentional
+function readDraftGeneration(value: any): number | null {
+  return Object.prototype.toString.call(value) === "[object Number]" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function formatTimeAgo(ts: number): string {
@@ -74,8 +75,10 @@ export function useCodeAnnotationDraft({
 
     fetch('/api/draft')
       .then(async res => {
+        // SAFETY: res.json() is untyped JSON — cast to draft union
         const data = await res.json().catch(() => null) as DraftData | MissingDraftData | null;
         if (!res.ok) {
+          // SAFETY: data is draft union — cast to read MissingDraftData generation field
           const generation = readDraftGeneration((data as MissingDraftData | null)?.draftGeneration);
           if (generation !== null) {
             draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);

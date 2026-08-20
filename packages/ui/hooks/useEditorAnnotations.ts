@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EditorAnnotation } from '../types';
 
 const POLL_INTERVAL = 500;
-const IS_VSCODE = typeof window !== 'undefined' && (window as any).__PLANNOTATOR_VSCODE === true;
+// SAFETY: VSCode webview injects __PLANNOTATOR_VSCODE — cast to access flag
+const IS_VSCODE = globalThis.window !== undefined && (globalThis.window as any).__PLANNOTATOR_VSCODE === true;
 
 interface UseEditorAnnotationsReturn {
   editorAnnotations: EditorAnnotation[];

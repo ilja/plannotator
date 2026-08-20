@@ -76,6 +76,7 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
       // Only primary button (left click / single touch)
       if (e.button !== 0) return;
       // Don't drag if clicking on an interactive element inside the handle
+      // SAFETY: pointerdown target is HTMLElement — cast to check closest
       const target = e.target as HTMLElement;
       if (target.closest('button, a, input, textarea, select')) return;
 
