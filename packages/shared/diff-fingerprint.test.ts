@@ -124,6 +124,7 @@ describe("getGitDiffFingerprint", () => {
   });
 
   test("unknown diff type returns null (treated as always-fresh)", async () => {
+    // SAFETY: testing runtime fallback for unknown diff type; string literal is intentionally outside DiffType union.
     const result = await getGitDiffFingerprint(runtime, "p4-default" as never, "main", repo);
     expect(result).toBeNull();
   });

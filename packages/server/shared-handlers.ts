@@ -8,6 +8,7 @@
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { Option, Schema } from "effect";
 import { openBrowser as openBrowserImpl } from "./browser";
 import { validateImagePath, validateUploadExtension, UPLOAD_DIR } from "./image";
 import { saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "./draft";
@@ -15,9 +16,14 @@ import { FAVICON_SVG } from "@plannotator/shared/favicon";
 import { saveToObsidian, saveToBear, saveToOctarine } from "./integrations";
 import type { ObsidianConfig, BearConfig, OctarineConfig, IntegrationResult } from "./integrations";
 
-function normalizeDraftGeneration(value: unknown): number | undefined {
-  if (typeof value !== "number") return undefined;
+const DraftGenerationSchema = Schema.Natural;
+
+function normalizeDraftGeneration(value: number): number | undefined {
   return Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+interface DraftBodyCarrier {
+  readonly draftGeneration?: unknown;
 }
 
 export function readDraftGenerationFromUrl(req: Request): number | undefined {
@@ -25,12 +31,14 @@ export function readDraftGenerationFromUrl(req: Request): number | undefined {
   const raw = url.searchParams.get("generation") ?? url.searchParams.get("draftGeneration");
   if (raw === null) return undefined;
   const value = Number(raw);
+  if (Number.isNaN(value)) return undefined;
   return normalizeDraftGeneration(value);
 }
 
-export function readDraftGenerationFromBody(body: unknown): number | undefined {
-  if (!body || typeof body !== "object") return undefined;
-  return normalizeDraftGeneration((body as { draftGeneration?: unknown }).draftGeneration);
+export function readDraftGenerationFromBody(body: DraftBodyCarrier): number | undefined {
+  return Option.getOrUndefined(
+    Schema.decodeUnknownOption(DraftGenerationSchema)(body.draftGeneration),
+  );
 }
 
 /** Serve images from local paths or temp uploads. Used by all 3 servers. */
@@ -72,6 +80,7 @@ export async function handleImage(req: Request): Promise<Response> {
 export async function handleUpload(req: Request): Promise<Response> {
   try {
     const formData = await req.formData();
+    // SAFETY: form field "file" is written by our own upload form as a File; non-File values are treated as missing.
     const file = formData.get("file") as File;
     if (!file) {
       return new Response("No file provided", { status: 400 });
@@ -92,10 +101,12 @@ export async function handleUpload(req: Request): Promise<Response> {
   }
 }
 
-/** OpenCode agent client interface (subset of OpenCode SDK) */
+interface AgentListOptions {}
+
+ /** OpenCode agent client interface (subset of OpenCode SDK) */
 export interface OpencodeClient {
   app: {
-    agents: (options?: object) => Promise<{
+    agents: (options?: AgentListOptions) => Promise<{
       data?: Array<{ name: string; description?: string; mode: string; hidden?: boolean }>;
     }>;
   };
@@ -132,15 +143,19 @@ export async function handleDraftSave(req: Request, contentKey: string): Promise
   }
 }
 
+interface DraftNotFoundBody {
+  readonly found: false;
+  draftGeneration?: number;
+}
+
 /** Load annotation draft. Used by all 3 servers. */
 export function handleDraftLoad(contentKey: string): Response {
   const draft = loadDraft(contentKey);
   if (!draft) {
     const draftGeneration = getDraftGeneration(contentKey);
-    return Response.json(
-      { found: false, ...(draftGeneration !== null ? { draftGeneration } : {}) },
-      { status: 404 },
-    );
+    const notFoundBody: DraftNotFoundBody = { found: false };
+    if (draftGeneration !== null) notFoundBody.draftGeneration = draftGeneration;
+    return Response.json(notFoundBody, { status: 404 });
   }
   return Response.json(draft);
 }
@@ -225,26 +240,34 @@ export async function handleServerReady(
   }
 }
 
+interface SaveNotesResults {
+  obsidian?: IntegrationResult;
+  bear?: IntegrationResult;
+  octarine?: IntegrationResult;
+}
+
+interface SaveNotesRequest {
+  readonly obsidian?: ObsidianConfig;
+  readonly bear?: BearConfig;
+  readonly octarine?: OctarineConfig;
+}
+
 /** Save to external note apps (Obsidian, Bear, Octarine). Used by plan + annotate servers. */
 export async function handleSaveNotes(req: Request): Promise<Response> {
-  const results: { obsidian?: IntegrationResult; bear?: IntegrationResult; octarine?: IntegrationResult } = {};
+  const results: SaveNotesResults = {};
 
   try {
-    const body = (await req.json()) as {
-      obsidian?: ObsidianConfig;
-      bear?: BearConfig;
-      octarine?: OctarineConfig;
-    };
+    const rawBody: SaveNotesRequest = await req.json();
 
     const promises: Promise<void>[] = [];
-    if (body.obsidian?.vaultPath && body.obsidian?.plan) {
-      promises.push(saveToObsidian(body.obsidian).then(r => { results.obsidian = r; }));
+    if (rawBody.obsidian?.vaultPath && rawBody.obsidian?.plan) {
+      promises.push(saveToObsidian(rawBody.obsidian).then(r => { results.obsidian = r; }));
     }
-    if (body.bear?.plan) {
-      promises.push(saveToBear(body.bear).then(r => { results.bear = r; }));
+    if (rawBody.bear?.plan) {
+      promises.push(saveToBear(rawBody.bear).then(r => { results.bear = r; }));
     }
-    if (body.octarine?.plan && body.octarine?.workspace) {
-      promises.push(saveToOctarine(body.octarine).then(r => { results.octarine = r; }));
+    if (rawBody.octarine?.plan && rawBody.octarine?.workspace) {
+      promises.push(saveToOctarine(rawBody.octarine).then(r => { results.octarine = r; }));
     }
     await Promise.allSettled(promises);
 

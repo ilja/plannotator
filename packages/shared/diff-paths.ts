@@ -6,6 +6,7 @@ export interface DiffPathPair {
 export function unquoteGitPath(value: string): string {
   if (!value.startsWith('"') || !value.endsWith('"')) return value;
   try {
+    // SAFETY: value is a quoted git path string like "\"a/b\""; JSON.parse decodes the quoted string.
     return JSON.parse(value) as string;
   } catch {
     return value.slice(1, -1)
