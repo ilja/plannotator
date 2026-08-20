@@ -4,19 +4,28 @@ import { createRoot, type Root } from 'react-dom/client';
 import { useExternalAnnotations } from './useExternalAnnotations';
 import { AnnotationType, type Annotation } from '../types';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 const realFetch = globalThis.fetch;
 const realEventSource = globalThis.EventSource;
 
 class MockEventSource {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
   static instances: MockEventSource[] = [];
   onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  onopen: ((event: Event) => void) | null = null;
+  readyState = 0;
+  withCredentials = false;
 
   constructor(public readonly url: string) {
     MockEventSource.instances.push(this);
   }
 
-  emit(data: unknown): void {
+  // SAFETY: data is untrusted external event — any is intentional
+  emit(data: any): void {
+    // SAFETY: constructing MessageEvent from trusted JSON — cast to MessageEvent
     this.onmessage?.({ data: JSON.stringify(data) } as MessageEvent);
   }
 
@@ -61,7 +70,10 @@ async function mountExternalAnnotations(): Promise<{
 afterEach(async () => {
   globalThis.fetch = realFetch;
   if (realEventSource) globalThis.EventSource = realEventSource;
-  else delete (globalThis as Record<string, unknown>).EventSource;
+  else {
+    // SAFETY: globalThis is untyped in test — any is intentional
+    delete (globalThis as any).EventSource;
+  }
   MockEventSource.instances = [];
   for (const root of roots.splice(0)) await act(async () => root.unmount());
   for (const container of containers.splice(0)) container.remove();
@@ -70,12 +82,15 @@ afterEach(async () => {
 describe('useExternalAnnotations', () => {
   test.skipIf(!hasDom)('deletes an external choice when the UI clears or replaces it', async () => {
     MockEventSource.instances = [];
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // SAFETY: MockEventSource matches EventSource shape — cast to typeof EventSource
+    // @ts-expect-error — MockEventSource is incomplete, intentionally suppressed
+    globalThis.EventSource = MockEventSource as typeof EventSource;
     const calls: Array<{ url: string; method: string }> = [];
+    // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
     globalThis.fetch = (async (input, init) => {
       calls.push({ url: String(input), method: init?.method ?? 'GET' });
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
-    }) as unknown as typeof fetch;
+    }) as typeof fetch;
 
     const session = await mountExternalAnnotations();
     const choice: Annotation = {

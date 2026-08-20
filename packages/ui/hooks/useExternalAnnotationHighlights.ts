@@ -24,13 +24,17 @@ import type { ViewerHandle } from '../components/Viewer';
  *   any SSE removals that arrive while hidden are correctly reconciled when the
  *   hook re-enables.
  */
+interface UseExternalAnnotationHighlightsResult {
+  reset: () => void;
+}
+
 export function useExternalAnnotationHighlights(params: {
   viewerRef: React.RefObject<ViewerHandle | null>;
   externalAnnotations: Annotation[];
   enabled: boolean;
   /** Bump to force a full re-apply (e.g. plan markdown changed and blocks re-rendered). */
   planKey: string;
-}): { reset: () => void } {
+}): UseExternalAnnotationHighlightsResult {
   const { viewerRef, externalAnnotations, enabled, planKey } = params;
 
   // Tracks annotation IDs currently materialized as DOM highlights, along

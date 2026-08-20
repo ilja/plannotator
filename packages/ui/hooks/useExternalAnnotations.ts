@@ -70,8 +70,9 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
             );
             break;
           case 'update':
+            // SAFETY: parsed.annotation is typed as T via generic hook — cast to T
             setAnnotations((prev) =>
-              prev.map((a) => a.id === parsed.id ? (parsed.annotation as T) : a),
+              prev.map((a) => (a.id === parsed.id ? (parsed.annotation as T) : a)),
             );
             break;
         }
@@ -119,7 +120,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
         if (Array.isArray(data.annotations)) {
           setAnnotations(data.annotations);
         }
-        if (typeof data.version === 'number') {
+        if (Object.prototype.toString.call(data.version) === "[object Number]") {
           versionRef.current = data.version;
         }
       } catch {
