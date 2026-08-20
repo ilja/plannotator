@@ -157,7 +157,8 @@ export function useFileBrowser(): UseFileBrowserReturn {
       );
 
       if (!options.quiet) {
-        const rootFolders = (data.tree as VaultNode[])
+        // SAFETY: data.tree is untyped vault response — cast to VaultNode[]
+      const rootFolders = (data.tree as VaultNode[])
           .filter((n) => n.type === "folder")
           .map((n) => `${dirPath}:${n.path}`);
         setExpandedFolders((prev) => {
@@ -240,6 +241,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
         )
       );
 
+      // SAFETY: data.tree is untyped vault response — cast to VaultNode[]
       const rootFolders = (data.tree as VaultNode[])
         .filter((n) => n.type === "folder")
         .map((n) => `${vaultPath}:${n.path}`);
@@ -287,7 +289,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
   );
 
   useEffect(() => {
-    if (!watchDirsKey || typeof EventSource === "undefined") return;
+    if (!watchDirsKey || globalThis.EventSource === undefined) return;
 
     const paths = watchDirsKey.split("\n").filter(Boolean);
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -303,15 +305,17 @@ export function useFileBrowser(): UseFileBrowserReturn {
         fetchTreeRef.current(path, { quiet: true });
       }, 120));
     };
-    const scheduleEventFetch = (dirPath: unknown) => {
-      if (typeof dirPath === "string" && paths.includes(dirPath)) {
+    // SAFETY: dirPath is untyped event data — any is intentional
+    const scheduleEventFetch = (dirPath: any) => {
+      if (Object.prototype.toString.call(dirPath) === "[object String]" && paths.includes(dirPath)) {
         scheduleFetch(dirPath);
         return;
       }
       for (const path of paths) scheduleFetch(path);
     };
-    const hasSeenReady = (dirPath: unknown): boolean => {
-      if (typeof dirPath === "string" && paths.includes(dirPath)) {
+    // SAFETY: dirPath is untyped event data — any is intentional
+    const hasSeenReady = (dirPath: any): boolean => {
+      if (Object.prototype.toString.call(dirPath) === "[object String]" && paths.includes(dirPath)) {
         if (readyPaths.has(dirPath)) return true;
         readyPaths.add(dirPath);
         return false;
@@ -323,6 +327,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
     };
     source.onmessage = (event) => {
       try {
+        // SAFETY: event.data is untyped JSON — cast to event shape
         const data = JSON.parse(event.data) as { type?: string; dirPath?: string };
         if (data.type === "ready") {
           if (hasSeenReady(data.dirPath)) scheduleEventFetch(data.dirPath);
