@@ -84,7 +84,7 @@ function createThread(title = 'Chat'): AIChatThread {
 }
 
 function createAbortError(message: string): Error {
-  if (typeof DOMException !== 'undefined') {
+  if (globalThis.DOMException !== undefined) {
     return new DOMException(message, 'AbortError');
   }
   const err = new Error(message);
@@ -148,7 +148,7 @@ export function useAIChat({
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
-      const data = await res.json() as { sessionId: string };
+      const data: { sessionId: string } = await res.json();
       if (signal.aborted || epoch !== sessionEpochRef.current) {
         fetch('/api/ai/abort', {
           method: 'POST',

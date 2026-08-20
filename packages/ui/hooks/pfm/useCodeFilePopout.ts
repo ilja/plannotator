@@ -50,7 +50,7 @@ export function useCodeFilePopout(
       const parsed = parseCodePath(codePath);
       try {
         const res = await fetch(buildUrl(codePath));
-        const data = (await res.json()) as {
+        const data: {
           codeFile?: boolean;
           contents?: string;
           filepath?: string;
@@ -58,8 +58,8 @@ export function useCodeFilePopout(
           error?: string;
           line?: number;
           lineEnd?: number;
-        };
-        if (!res.ok || data.error || !data.codeFile || typeof data.contents !== 'string' || !data.filepath) {
+        } = await res.json();
+        if (!res.ok || data.error || !data.codeFile || Object.prototype.toString.call(data.contents) !== "[object String]" || !data.filepath) {
           setState({
             filepath: codePath,
             contents: "",
