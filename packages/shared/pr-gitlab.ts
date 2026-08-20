@@ -7,11 +7,15 @@
 
 import { join } from "path";
 import { mkdirSync, writeFileSync } from "fs";
+import { Option, Schema } from "effect";
 import type { PRRuntime, PRMetadata, PRContext, PRReviewFileComment, CommandResult } from "./pr-types";
 import { encodeApiFilePath } from "./pr-types";
 import { getPlannotatorDataDir } from "./data-dir";
 
 // GitLab-specific MRRef shape (used internally)
+const RawGlRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+type RawGlRecord = Schema.Schema.Type<typeof RawGlRecordSchema>;
+
 interface GlMRRef {
   platform: "gitlab";
   host: string;
@@ -107,7 +111,7 @@ export async function getGlUser(runtime: PRRuntime, host: string): Promise<strin
   try {
     const result = await runtime.runCommand("glab", apiArgs(host, "/user"));
     if (result.exitCode === 0 && result.stdout.trim()) {
-      const user = JSON.parse(result.stdout) as { username?: string };
+      const user: { username?: string } = JSON.parse(result.stdout);
       return user.username ?? null;
     }
     return null;
@@ -195,28 +199,30 @@ export async function fetchGlMR(
     }
   }
 
-  const raw = JSON.parse(viewResult.stdout) as {
-    title: string;
-    author: { username: string };
-    source_branch: string;
-    target_branch: string;
-    target_project_id?: number;
-    diff_refs: { base_sha: string; head_sha: string; start_sha: string } | null;
-    web_url: string;
-  };
+  interface RawGlView {
+    readonly title: string;
+    readonly author: { readonly username: string };
+    readonly source_branch: string;
+    readonly target_branch: string;
+    readonly target_project_id?: number;
+    readonly diff_refs: { readonly base_sha: string; readonly head_sha: string; readonly start_sha: string } | null;
+    readonly web_url: string;
+  }
+
+  const raw: RawGlView = JSON.parse(viewResult.stdout);
 
   if (!raw.diff_refs) {
     throw new Error("MR has no diff refs — it may have been merged or the source branch deleted.");
   }
 
   let defaultBranch: string | undefined;
-  const projectEndpoint = typeof raw.target_project_id === "number"
+  const projectEndpoint = raw.target_project_id !== undefined
     ? `projects/${raw.target_project_id}`
     : `projects/${encoded}`;
   try {
     const projectResult = await runtime.runCommand("glab", apiArgs(ref.host, projectEndpoint));
     if (projectResult.exitCode === 0 && projectResult.stdout.trim()) {
-      const project = JSON.parse(projectResult.stdout) as { default_branch?: string };
+      const project: { default_branch?: string } = JSON.parse(projectResult.stdout);
       defaultBranch = project.default_branch;
     }
   } catch { /* default branch is best-effort metadata */ }
@@ -257,11 +263,11 @@ export async function fetchGlMRContext(
     runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/closes_issues`)),
   ]);
 
-  const str = (v: unknown): string => (typeof v === "string" ? v : "");
-  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const str = (value: any): string => Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(value)) ?? "";
+  const arr = (value: any): unknown[] => (Array.isArray(value) ? value : []);
 
   // --- MR details ---
-  let mr: Record<string, unknown> = {};
+  let mr: RawGlRecord = {};
   if (mrResult.exitCode === 0) {
     try { mr = JSON.parse(mrResult.stdout); } catch { /* non-JSON response */ }
   }
@@ -270,11 +276,12 @@ export async function fetchGlMRContext(
   const glState = str(mr.state);
   const state = glState === "opened" ? "OPEN" : glState.toUpperCase();
 
-  const isDraft = mr.draft === true
-    || (typeof mr.title === "string" && /^(Draft:|WIP:)/i.test(mr.title));
+  const titleString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(mr.title));
+  const isDraft = mr.draft === true || (titleString !== undefined && /^(Draft:|WIP:)/i.test(titleString));
 
   const labels = arr(mr.labels).map((l: any) => {
-    if (typeof l === "string") return { name: l, color: "" };
+    const lString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(l));
+    if (lString !== undefined) return { name: lString, color: "" };
     return { name: str(l?.name), color: str(l?.color) };
   });
 
@@ -287,7 +294,11 @@ export async function fetchGlMRContext(
     : mergeStatus.toUpperCase();
 
   // Map GitLab detailed_merge_status to GitHub-compatible merge state enums
-  const mergeStateMap: Record<string, string> = {
+  interface MergeStateMap {
+    readonly [key: string]: string;
+  }
+
+  const mergeStateMap: MergeStateMap = {
     mergeable: "CLEAN",
     broken_status: "DIRTY",
     checking: "UNKNOWN",
@@ -311,7 +322,7 @@ export async function fetchGlMRContext(
   const notes: PRContext["comments"] = [];
   if (notesResult.exitCode === 0) {
     try {
-      const rawNotes = JSON.parse(notesResult.stdout) as any[];
+      const rawNotes: any[] = JSON.parse(notesResult.stdout);
       for (const n of rawNotes) {
         if (n.system) continue;
         notes.push({
@@ -330,12 +341,13 @@ export async function fetchGlMRContext(
   const reviews: PRContext["reviews"] = [];
   if (approvalsResult.exitCode === 0) {
     try {
-      const approvals = JSON.parse(approvalsResult.stdout) as Record<string, unknown>;
+      const approvals: RawGlRecord = JSON.parse(approvalsResult.stdout);
       const approvedBy = arr(approvals.approved_by);
       const approved = approvals.approved === true || approvedBy.length > 0;
       reviewDecision = approved ? "APPROVED" : "";
 
       for (const a of approvedBy) {
+        // SAFETY: a is an element of approvedBy array from GitLab approvals API, which contains user objects
         const user = (a as any)?.user;
         if (!user) continue;
         reviews.push({

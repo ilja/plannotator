@@ -105,10 +105,15 @@ const DIFF_ENTRIES_JSON = JSON.stringify([
   },
 ]);
 
+interface GitlabRuntimeResult {
+  readonly runtime: PRRuntime;
+  readonly calls: string[];
+}
+
 function gitlabRuntime(opts: {
   rawDiffs: { stdout?: string; stderr?: string; exitCode: number };
   diffs?: { stdout?: string; stderr?: string; exitCode: number };
-}): { runtime: PRRuntime; calls: string[] } {
+}): GitlabRuntimeResult {
   const calls: string[] = [];
   const metadata = JSON.stringify({
     title: "T",
