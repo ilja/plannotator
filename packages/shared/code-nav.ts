@@ -5,6 +5,8 @@
  * CodeNavRuntime implementation to run subprocess commands.
  */
 
+import { Option, Schema } from "effect";
+
 function validateFilePath(filePath: string): void {
   if (filePath.includes("..") || filePath.startsWith("/")) {
     throw new Error("Invalid file path");
@@ -70,7 +72,11 @@ const CODE_NAV_IGNORED_GLOBS = [
   ".pytest_cache",
 ];
 
-const RG_TYPE_MAP: Record<string, string> = {
+interface RgTypeMap {
+  readonly [language: string]: string;
+}
+
+const RG_TYPE_MAP: RgTypeMap = {
   typescript: "ts",
   javascript: "js",
   python: "py",
@@ -276,6 +282,12 @@ export function classifyMatch(
 // Ranking
 // ---------------------------------------------------------------------------
 
+interface RankedCodeNavResult {
+  readonly definitions: CodeNavLocation[];
+  readonly references: CodeNavLocation[];
+  readonly capped: boolean;
+}
+
 export function rankLocations(
   locations: CodeNavLocation[],
   context: {
@@ -284,7 +296,7 @@ export function rankLocations(
     isTestFile: boolean;
   },
   cap = 50,
-): { definitions: CodeNavLocation[]; references: CodeNavLocation[]; capped: boolean } {
+): RankedCodeNavResult {
   const capped = locations.length > cap;
   const changedSet = new Set(context.changedFiles);
 
@@ -333,24 +345,33 @@ export function extractChangedFiles(patch: string | null): string[] {
 // Validation
 // ---------------------------------------------------------------------------
 
-export function validateCodeNavRequest(
-  body: unknown,
-): string | null {
-  if (!body || typeof body !== "object") return "Invalid request body";
-  const b = body as Record<string, unknown>;
+interface CodeNavValidateBody {
+  readonly symbol?: unknown;
+  readonly filePath?: unknown;
+  readonly side?: unknown;
+}
 
-  if (typeof b.symbol !== "string" || !b.symbol.trim()) {
+export function validateCodeNavRequest(
+  body: CodeNavValidateBody | null,
+): string | null {
+  if (!body) return "Invalid request body";
+  const symbol = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(body.symbol));
+  if (!symbol || !symbol.trim()) {
     return "Missing or empty symbol";
   }
-  if (typeof b.filePath !== "string" || !b.filePath.trim()) {
+  const filePath = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(body.filePath));
+  if (!filePath || !filePath.trim()) {
     return "Missing filePath";
   }
   try {
-    validateFilePath(b.filePath as string);
+    validateFilePath(filePath);
   } catch {
     return "Invalid filePath";
   }
-  if (b.side !== "old" && b.side !== "new") {
+  const side = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.Literals(["old", "new"]))(body.side),
+  );
+  if (!side) {
     return "side must be 'old' or 'new'";
   }
 

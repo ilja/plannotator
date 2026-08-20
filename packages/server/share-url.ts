@@ -6,7 +6,7 @@
  */
 
 import { Option, Schema } from "effect";
-import { compress } from "@plannotator/shared/compress";
+import { compress, type JsonValue } from "@plannotator/shared/compress";
 import { encrypt } from "@plannotator/shared/crypto";
 
 const DEFAULT_SHARE_BASE = "https://share.plannotator.ai";
@@ -22,7 +22,7 @@ export interface RemoteShareOptions {
 
 interface RemotePasteHtmlPayload {
   p: string;
-  a: unknown[];
+  a: JsonValue[];
   h: string;
   r: "html";
 }
