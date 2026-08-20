@@ -4,9 +4,24 @@
  * All functions use the `gh` CLI via the PRRuntime abstraction.
  */
 
+import { Option, Schema } from "effect";
 import type { PRRuntime, PRMetadata, PRContext, PRReviewThread, PRThreadComment, PRReviewFileComment, CommandResult, PRStackTree, PRStackNode, PRListItem } from "./pr-types";
 import { encodeApiFilePath } from "./pr-types";
 import { parsePaginatedArray } from "./cli-pagination";
+
+interface RawGhPRView {
+  readonly id: string;
+  readonly title: string;
+  readonly author: { readonly login: string };
+  readonly baseRefName: string;
+  readonly headRefName: string;
+  readonly baseRefOid: string;
+  readonly headRefOid: string;
+  readonly url: string;
+}
+
+const RawGhPRContextSchema = Schema.Record(Schema.String, Schema.Unknown);
+type RawGhPRContext = Schema.Schema.Type<typeof RawGhPRContextSchema>;
 
 // GitHub-specific PRRef shape (used internally)
 interface GhPRRef {
@@ -209,8 +224,9 @@ export async function fetchGhPR(
     }
     // The files API silently caps at 3000 files — never present a truncated
     // review as complete.
-    const expectedFiles = (JSON.parse(viewResult.stdout) as { changedFiles?: number }).changedFiles;
-    if (typeof expectedFiles === "number" && fileEntries.length < expectedFiles) {
+    const viewMeta: { changedFiles?: number } = JSON.parse(viewResult.stdout);
+    const expectedFiles = viewMeta.changedFiles;
+    if (expectedFiles !== undefined && fileEntries.length < expectedFiles) {
       console.error(
         `Warning: PR reports ${expectedFiles} changed files but the GitHub files API returned ${fileEntries.length} (the API caps at 3000). The review is missing the remainder.`,
       );
@@ -225,16 +241,7 @@ export async function fetchGhPR(
     }
   }
 
-  const raw = JSON.parse(viewResult.stdout) as {
-    id: string;
-    title: string;
-    author: { login: string };
-    baseRefName: string;
-    headRefName: string;
-    baseRefOid: string;
-    headRefOid: string;
-    url: string;
-  };
+  const raw: RawGhPRView = JSON.parse(viewResult.stdout);
 
   // Fetch the merge-base SHA — the common ancestor commit GitHub uses to compute the PR diff.
   // baseSha (baseRefOid) is the tip of the base branch, which may have moved since the branch point.
@@ -283,55 +290,94 @@ const GH_CONTEXT_FIELDS = [
   "statusCheckRollup", "closingIssuesReferences",
 ].join(",");
 
-function parseGhPRContext(raw: Record<string, unknown>): PRContext {
-  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  const str = (v: unknown): string => (typeof v === "string" ? v : "");
-  const login = (v: unknown): string =>
-    typeof v === "object" && v !== null && "login" in v
-      ? String((v as { login: unknown }).login || "")
-      : "";
+interface GhReviewBase {
+  readonly id: string;
+  readonly author: string;
+  readonly state: string;
+  readonly body: string;
+  readonly submittedAt: string;
+  url?: string;
+}
 
+function parseGhPRContext(raw: RawGhPRContext): PRContext {
   return {
-    body: str(raw.body),
-    state: str(raw.state),
+    body: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.body)) ?? "",
+    state: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.state)) ?? "",
     isDraft: raw.isDraft === true,
-    labels: arr(raw.labels).map((l: any) => ({
-      name: str(l?.name),
-      color: str(l?.color),
-    })),
-    reviewDecision: str(raw.reviewDecision),
-    mergeable: str(raw.mergeable),
-    mergeStateStatus: str(raw.mergeStateStatus),
-    comments: arr(raw.comments).map((c: any) => ({
-      id: str(c?.id),
-      author: login(c?.author),
-      body: str(c?.body),
-      createdAt: str(c?.createdAt),
-      url: str(c?.url),
-    })),
-    reviews: arr(raw.reviews).map((r: any) => ({
-      id: str(r?.id),
-      author: login(r?.author),
-      state: str(r?.state),
-      body: str(r?.body),
-      submittedAt: str(r?.submittedAt),
-      ...(r?.url ? { url: str(r.url) } : {}),
-    })),
-    reviewThreads: [],  // populated via GraphQL after initial fetch
-    checks: arr(raw.statusCheckRollup).map((c: any) => ({
-      name: str(c?.name),
-      status: str(c?.status),
-      conclusion: typeof c?.conclusion === "string" ? c.conclusion : null,
-      workflowName: str(c?.workflowName),
-      detailsUrl: str(c?.detailsUrl),
-    })),
-    linkedIssues: arr(raw.closingIssuesReferences).map((i: any) => ({
-      number: typeof i?.number === "number" ? i.number : 0,
-      url: str(i?.url),
-      repo: i?.repository
-        ? `${login(i.repository.owner)}/${str(i.repository.name)}`
-        : "",
-    })),
+    labels: (Array.isArray(raw.labels) ? raw.labels : []).map((l) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(l),
+      );
+      return {
+        name: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.name)) ?? "",
+        color: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.color)) ?? "",
+      };
+    }),
+    reviewDecision: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.reviewDecision)) ?? "",
+    mergeable: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.mergeable)) ?? "",
+    mergeStateStatus: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.mergeStateStatus)) ?? "",
+    comments: (Array.isArray(raw.comments) ? raw.comments : []).map((c) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(c),
+      );
+      const authorRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(rec?.author),
+      );
+      return {
+        id: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.id)) ?? "",
+        author: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(authorRec?.login)) ?? "",
+        body: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.body)) ?? "",
+        createdAt: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.createdAt)) ?? "",
+        url: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url)) ?? "",
+      };
+    }),
+    reviews: (Array.isArray(raw.reviews) ? raw.reviews : []).map((r) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(r),
+      );
+      const authorRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(rec?.author),
+      );
+      const base: GhReviewBase = {
+        id: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.id)) ?? "",
+        author: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(authorRec?.login)) ?? "",
+        state: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.state)) ?? "",
+        body: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.body)) ?? "",
+        submittedAt: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.submittedAt)) ?? "",
+      };
+      const urlVal = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url));
+      if (urlVal) base.url = urlVal;
+      return base;
+    }),
+    reviewThreads: [], // populated via GraphQL after initial fetch
+    checks: (Array.isArray(raw.statusCheckRollup) ? raw.statusCheckRollup : []).map((c) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(c),
+      );
+      return {
+        name: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.name)) ?? "",
+        status: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.status)) ?? "",
+        conclusion: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.conclusion)) ?? null,
+        workflowName: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.workflowName)) ?? "",
+        detailsUrl: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.detailsUrl)) ?? "",
+      };
+    }),
+    linkedIssues: (Array.isArray(raw.closingIssuesReferences) ? raw.closingIssuesReferences : []).map((i) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(i),
+      );
+      const repoRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(rec?.repository),
+      );
+      const ownerRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(repoRec?.owner),
+      );
+      return {
+        number: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(rec?.number)) ?? 0,
+        url: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url)) ?? "",
+        repo: repoRec ? `${Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(ownerRec?.login)) ?? ""}/${Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(repoRec?.name)) ?? ""}` : "",
+      };
+    }),
   };
 }
 
@@ -353,7 +399,7 @@ export async function fetchGhPRContext(
     );
   }
 
-  const raw = JSON.parse(result.stdout) as Record<string, unknown>;
+  const raw: RawGhPRContext = JSON.parse(result.stdout);
   const context = parseGhPRContext(raw);
 
   // Fetch inline review threads via GraphQL (parallel-safe, non-blocking failure)
@@ -416,25 +462,34 @@ async function fetchGhReviewThreads(
   const threads = data?.data?.repository?.pullRequest?.reviewThreads?.nodes;
   if (!Array.isArray(threads)) return [];
 
-  return threads.map((t: any): PRReviewThread => ({
-    id: String(t.id ?? ''),
-    isResolved: t.isResolved === true,
-    isOutdated: t.isOutdated === true,
-    path: String(t.path ?? ''),
-    line: typeof t.line === 'number' ? t.line : null,
-    startLine: typeof t.startLine === 'number' ? t.startLine : null,
-    diffSide: t.diffSide === 'LEFT' || t.diffSide === 'RIGHT' ? t.diffSide : null,
-    comments: Array.isArray(t.comments?.nodes)
-      ? t.comments.nodes.map((c: any): PRThreadComment => ({
-          id: String(c.id ?? ''),
-          author: c.author?.login ? String(c.author.login) : '',
-          body: String(c.body ?? ''),
-          createdAt: String(c.createdAt ?? ''),
-          url: String(c.url ?? ''),
-          ...(c.diffHunk ? { diffHunk: String(c.diffHunk) } : {}),
-        }))
-      : [],
-  }));
+  return threads.map((t: any): PRReviewThread => {
+    const thread: PRReviewThread = {
+      id: String(t.id ?? ""),
+      isResolved: t.isResolved === true,
+      isOutdated: t.isOutdated === true,
+      path: String(t.path ?? ""),
+      line: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(t.line)) ?? null,
+      startLine: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(t.startLine)) ?? null,
+      diffSide: t.diffSide === "LEFT" || t.diffSide === "RIGHT" ? t.diffSide : null,
+      comments: Array.isArray(t.comments?.nodes)
+        ? t.comments.nodes.map((c: any): PRThreadComment => {
+            const comment: PRThreadComment = {
+              id: String(c.id ?? ""),
+              author: c.author?.login ? String(c.author.login) : "",
+              body: String(c.body ?? ""),
+              createdAt: String(c.createdAt ?? ""),
+              url: String(c.url ?? ""),
+            };
+            const diffHunkDecoded = Option.getOrUndefined(
+              Schema.decodeUnknownOption(Schema.String)(c.diffHunk),
+            );
+            if (diffHunkDecoded) comment.diffHunk = diffHunkDecoded;
+            return comment;
+          })
+        : [],
+    };
+    return thread;
+  });
 }
 
 // --- File Content ---
@@ -519,7 +574,7 @@ export async function fetchGhPRViewedFiles(
       );
     }
 
-    const data = JSON.parse(res.stdout) as {
+    const data: {
       data?: {
         repository?: {
           pullRequest?: {
@@ -531,7 +586,7 @@ export async function fetchGhPRViewedFiles(
         };
       };
       errors?: Array<{ message: string }>;
-    };
+    } = JSON.parse(res.stdout);
 
     if (data.errors?.length) {
       throw new Error(`GraphQL error: ${data.errors[0].message}`);
@@ -710,6 +765,7 @@ export async function fetchGhPRStack(
     }
 
     const pr = prs[0];
+    // SAFETY: pr.state is MERGED/CLOSED/OPEN from GitHub GraphQL; mapping to PRStackNode state is exhaustive
     ancestors.push({
       branch: pr.headRefName,
       number: pr.number,
@@ -717,7 +773,7 @@ export async function fetchGhPRStack(
       url: pr.url,
       isCurrent: false,
       isDefaultBranch: false,
-      state: (pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : 'open') as PRStackNode['state'],
+      state: (pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open") as PRStackNode["state"],
     });
     nextHead = pr.baseRefName;
   }
@@ -731,6 +787,7 @@ export async function fetchGhPRStack(
     if (prs.length === 0) break;
 
     const pr = prs[0];
+    // SAFETY: pr.state is MERGED/CLOSED/OPEN from GitHub GraphQL; mapping to PRStackNode state is exhaustive
     descendants.push({
       branch: pr.headRefName,
       number: pr.number,
@@ -738,7 +795,7 @@ export async function fetchGhPRStack(
       url: pr.url,
       isCurrent: false,
       isDefaultBranch: false,
-      state: (pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : 'open') as PRStackNode['state'],
+      state: (pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open") as PRStackNode["state"],
     });
     nextBase = pr.headRefName;
   }
@@ -770,14 +827,14 @@ export async function fetchGhPRList(
 
   if (result.exitCode !== 0) return [];
 
-  const raw = JSON.parse(result.stdout) as Array<{
+  const raw: Array<{
     number: number;
     title: string;
     author: { login: string };
     url: string;
     baseRefName: string;
     state: string;
-  }>;
+  }> = JSON.parse(result.stdout);
 
   return raw.map((pr) => ({
     id: String(pr.number),
@@ -786,6 +843,7 @@ export async function fetchGhPRList(
     author: pr.author.login,
     url: pr.url,
     baseBranch: pr.baseRefName,
+    // SAFETY: pr.state is OPEN/MERGED/CLOSED from GitHub API; mapping to PRListItem state is exhaustive
     state: (pr.state === "OPEN" ? "open" : pr.state === "MERGED" ? "merged" : "closed") as PRListItem["state"],
   }));
 }
