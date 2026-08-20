@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect";
 import { loadConfig, type PlannotatorConfig, type PromptRuntime } from "./config";
 import { appendFeedbackDiscussionInstruction } from "./feedback-templates";
 
@@ -51,8 +52,8 @@ interface PromptLookupOptions {
   runtimeFallbacks?: Partial<Record<PromptRuntime, string>>;
 }
 
-function normalizePrompt(prompt: unknown): string | undefined {
-  if (typeof prompt !== "string") return undefined;
+function normalizePrompt(prompt: string | undefined): string | undefined {
+  if (prompt === undefined) return undefined;
   return prompt.trim() ? prompt : undefined;
 }
 
@@ -60,9 +61,9 @@ export function getConfiguredPrompt(options: PromptLookupOptions): string {
   const resolvedConfig = options.config ?? loadConfig();
   const section = resolvedConfig.prompts?.[options.section];
   const runtimePrompt = options.runtime
-    ? normalizePrompt(section?.runtimes?.[options.runtime]?.[options.key])
+    ? normalizePrompt(Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(section?.runtimes?.[options.runtime]?.[options.key])))
     : undefined;
-  const genericPrompt = normalizePrompt(section?.[options.key]);
+  const genericPrompt = normalizePrompt(Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(section?.[options.key])));
   const runtimeFallback = options.runtime
     ? options.runtimeFallbacks?.[options.runtime]
     : undefined;

@@ -110,6 +110,7 @@ const WORKSPACE_DIFF_TYPES = new Set<WorkspaceDiffType>([
 ]);
 
 function isWorkspaceDiffType(value: string | undefined): value is WorkspaceDiffType {
+  // SAFETY: value is string checked via !!value; Set has membership test is safe even if value not in union
   return !!value && WORKSPACE_DIFF_TYPES.has(value as WorkspaceDiffType);
 }
 
@@ -330,7 +331,7 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
       throw new Error(`Workspace diff mode is not available: ${requestedMode}`);
     }
 
-    if (typeof options.hideWhitespace === "boolean") {
+    if (options.hideWhitespace !== undefined) {
       this.hideWhitespace = options.hideWhitespace;
     }
 

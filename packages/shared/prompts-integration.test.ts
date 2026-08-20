@@ -7,6 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
+import { Schema } from "effect";
 import { tmpdir } from "os";
 import { join } from "path";
 import { FEEDBACK_DISCUSSION_INSTRUCTION } from "./feedback-templates";
@@ -16,7 +17,10 @@ const CONFIG_DIR = join(TEST_HOME, ".plannotator");
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 const PROJECT_ROOT = join(import.meta.dir, "../..");
 
-function writeConfig(config: Record<string, unknown>) {
+const WriteConfigSchema = Schema.Record(Schema.String, Schema.Unknown);
+type WriteConfig = Schema.Schema.Type<typeof WriteConfigSchema>;
+
+function writeConfig(config: WriteConfig) {
   mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }

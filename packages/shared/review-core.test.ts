@@ -278,6 +278,7 @@ describe("review-core", () => {
       "merge-base",
     ] as const;
     for (const sub of subTypes) {
+      // SAFETY: composite is a valid worktree DiffType built from known sub-type template
       const composite = `worktree:/tmp/my-worktree:${sub}` as DiffType;
       const parsed = parseWorktreeDiffType(composite);
       expect(parsed).toEqual({ path: "/tmp/my-worktree", subType: sub });
