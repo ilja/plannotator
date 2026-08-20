@@ -126,6 +126,7 @@ export function useAnnotationHighlighter({
         let endOffset = 0;
         let node: Text | null;
 
+        // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
         while ((node = walker.nextNode() as Text | null)) {
           const nodeLength = node.textContent?.length || 0;
 
@@ -153,7 +154,8 @@ export function useAnnotationHighlighter({
         return null;
       };
 
-      const normalizeWithMap = (text: string): { text: string; map: number[] } => {
+      interface NormalizedTextMap { text: string; map: number[]; }
+      const normalizeWithMap = (text: string): NormalizedTextMap => {
         let normalized = '';
         const map: number[] = [];
         let inWhitespace = false;
@@ -191,6 +193,7 @@ export function useAnnotationHighlighter({
       );
 
       let node: Text | null;
+      // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
       while ((node = walker.nextNode() as Text | null)) {
         const text = node.textContent || '';
         const index = text.indexOf(needle);
@@ -264,6 +267,7 @@ export function useAnnotationHighlighter({
     if (target.dataset.choiceHighlightBound !== 'true') {
       target.dataset.choiceHighlightBound = 'true';
       target.addEventListener('click', (event) => {
+        // SAFETY: click listener bound to HTMLElement — currentTarget is HTMLElement
         const annotationId = (event.currentTarget as HTMLElement).dataset.choiceAnnotationId;
         if (annotationId) onSelectAnnotationRef.current?.(annotationId);
       });
@@ -296,6 +300,7 @@ export function useAnnotationHighlighter({
     let startOffset = 0;
 
     if (doms?.length > 0) {
+      // SAFETY: getDoms returns HTMLElements for this highlighter — cast to HTMLElement
       const el = doms[0] as HTMLElement;
       let parent = el.parentElement;
       while (parent && !parent.dataset.blockId) {
@@ -322,9 +327,9 @@ export function useAnnotationHighlighter({
       startMeta: source.startMeta,
       endMeta: source.endMeta,
       images,
-      ...(isQuickLabel ? { isQuickLabel: true } : {}),
-      ...(quickLabelTip ? { quickLabelTip } : {}),
     };
+    if (isQuickLabel) newAnnotation.isQuickLabel = true;
+    if (quickLabelTip) newAnnotation.quickLabelTip = quickLabelTip;
 
     if (type === AnnotationType.DELETION) {
       highlighter.addClass('deletion', source.id);
@@ -392,6 +397,7 @@ export function useAnnotationHighlighter({
         let node: Text | null;
         let inRange = false;
 
+        // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
         while ((node = walker.nextNode() as Text | null)) {
           if (node === range.startContainer) {
             inRange = true;
@@ -529,6 +535,7 @@ export function useAnnotationHighlighter({
             window.getSelection()?.removeAllRanges();
           } else if (modeRef.current === 'comment') {
             pendingSourceRef.current = source;
+            // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
             setCommentPopover({
               anchorEl: doms[0] as HTMLElement,
               contextText: source.text.slice(0, 80),
@@ -537,6 +544,7 @@ export function useAnnotationHighlighter({
             });
           } else if (modeRef.current === 'quickLabel') {
             pendingSourceRef.current = source;
+            // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
             setQuickLabelPicker({
               anchorEl: doms[0] as HTMLElement,
               cursorHint: lastMousePosRef.current,
@@ -545,6 +553,7 @@ export function useAnnotationHighlighter({
           } else {
             // Selection mode — show toolbar
             pendingSourceRef.current = source;
+            // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
             setToolbarState({
               element: doms[0] as HTMLElement,
               source,
