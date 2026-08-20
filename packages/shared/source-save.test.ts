@@ -24,6 +24,7 @@ describe("source-save response guards", () => {
 	});
 
 	test("rejects conflict responses without usable snapshot metadata", () => {
+		// SAFETY: test constructs SourceSaveResponse shape for conflict snapshot guard
 		const response = {
 			ok: false,
 			code: "conflict",
@@ -33,7 +34,7 @@ describe("source-save response guards", () => {
 			currentMtimeMs: 1000,
 			currentSize: 5,
 			currentEol: "unknown",
-		} as unknown as SourceSaveResponse;
+		} as SourceSaveResponse;
 
 		expect(hasSourceSaveConflictSnapshot(response)).toBe(false);
 	});

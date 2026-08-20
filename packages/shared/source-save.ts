@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 export type SourceSaveLanguage = "markdown" | "mdx" | "text";
 
@@ -149,18 +149,19 @@ export const SourceSaveResponseSchema = Schema.Union([
 	}),
 ]);
 
-export function isSourceFileEol(value: unknown): value is SourceFileEol {
-	return value === "lf" || value === "crlf" || value === "mixed" || value === "none";
+export function isSourceFileEol(value: any): value is SourceFileEol {
+	return Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Literals(["lf", "crlf", "mixed", "none"]))(value)) !== undefined;
 }
 
 export function hasSourceSaveConflictSnapshot(response: SourceSaveResponse): response is SourceSaveConflictResponse {
 	if (!("code" in response) || response.code !== "conflict") return false;
+	// SAFETY: guarded by response.code === "conflict" above
 	const conflict = response as SourceSaveConflictResponse;
 	return (
-		typeof conflict.currentText === "string" &&
-		typeof conflict.currentHash === "string" &&
-		typeof conflict.currentMtimeMs === "number" &&
-		typeof conflict.currentSize === "number" &&
+		Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(conflict.currentText)) !== undefined &&
+		Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(conflict.currentHash)) !== undefined &&
+		Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(conflict.currentMtimeMs)) !== undefined &&
+		Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(conflict.currentSize)) !== undefined &&
 		isSourceFileEol(conflict.currentEol)
 	);
 }

@@ -28,11 +28,11 @@ export function hashSourceBytes(bytes: Uint8Array): string {
 	return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-function isFileExistsError(error: unknown): boolean {
+function isFileExistsError(error: any): boolean {
 	return (
-		typeof error === "object" &&
-		error !== null &&
+		error instanceof Object &&
 		"code" in error &&
+		// SAFETY: NodeJS.ErrnoException has optional code; guard checks instanceof Object and "code" in error
 		(error as { code?: unknown }).code === "EEXIST"
 	);
 }

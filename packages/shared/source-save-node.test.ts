@@ -111,7 +111,7 @@ describe("source-save node helpers", () => {
 			if (result.code !== "conflict") throw new Error("expected conflict");
 			expect(result.currentText).toBe("External change\n");
 			expect(result.currentHash).toMatch(/^sha256:/);
-			expect(typeof result.currentMtimeMs).toBe("number");
+			expect(result.currentMtimeMs).toBeTypeOf("number");
 			expect(result.currentSize).toBe("External change\n".length);
 			expect(result.currentEol).toBe("lf");
 		}
