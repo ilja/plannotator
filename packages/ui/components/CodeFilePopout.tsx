@@ -61,7 +61,12 @@ const gutterButtonStyle: React.CSSProperties = {
   marginRight: 'calc(1ch - 1lh)',
 };
 
-function getThemeColors(): { bg: string; fg: string } {
+interface ThemeColors {
+  bg: string;
+  fg: string;
+}
+
+function getThemeColors(): ThemeColors {
   try {
     const styles = getComputedStyle(document.documentElement);
     return {
@@ -127,6 +132,7 @@ function getLineNumberFromSelectionNode(node: Node | null): number | null {
 
 function getPierreSelection(root: HTMLElement | null): Selection | null {
   const shadowRoot = root?.querySelector('diffs-container')?.shadowRoot;
+  // SAFETY: shadowRoot may expose getSelection in Pierre's shadow DOM
   const shadowSelection = (shadowRoot as (ShadowRoot & { getSelection?: () => Selection | null }) | null)
     ?.getSelection?.();
   return shadowSelection && !shadowSelection.isCollapsed
@@ -302,6 +308,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   const mode = resolvedMode ?? 'dark';
   const colors = getThemeColors();
   const [pierreTheme, setPierreTheme] = useState(() => ({
+    // SAFETY: resolvedMode is 'dark' | 'light' from theme provider
     type: mode as 'dark' | 'light',
     css: buildPierreCSS(mode, colors.bg, colors.fg),
   }));
@@ -558,12 +565,15 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
           selectedLines={selectedLines}
           renderAnnotation={renderAnnotation}
           renderGutterUtility={renderGutterUtility}
-          style={{
+          style={
+            // SAFETY: CSS variable map matches CSSProperties; React typing is closed
+            {
             '--diffs-dark-bg': colors.bg,
             '--diffs-light-bg': colors.bg,
             '--diffs-dark': colors.fg,
             '--diffs-light': colors.fg,
-          } as React.CSSProperties}
+          } as React.CSSProperties
+          }
           options={{
             themeType: pierreTheme.type,
             unsafeCSS: pierreTheme.css,

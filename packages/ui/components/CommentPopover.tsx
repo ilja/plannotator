@@ -66,7 +66,14 @@ function useCommentDraftSync(draftKey: string | undefined, text: string, images:
   }, [draftKey, text, images]);
 }
 
-function computePosition(anchorRect: DOMRect): { top: number; left: number; flipAbove: boolean; width: number } {
+interface PopoverPosition {
+  top: number;
+  left: number;
+  flipAbove: boolean;
+  width: number;
+}
+
+function computePosition(anchorRect: DOMRect): PopoverPosition {
   const spaceBelow = window.innerHeight - anchorRect.bottom;
   const flipAbove = spaceBelow < 280;
   const width = Math.min(MAX_POPOVER_WIDTH, window.innerWidth - 32);
@@ -184,10 +191,12 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
     if (mode !== 'popover') return;
 
     const handlePointerDown = (e: PointerEvent) => {
+      // SAFETY: pointer event target is a DOM Node when dispatched on document
       const target = e.target as Node | null;
       if (!target) return;
       if (popoverRef.current?.contains(target)) return;
       // Don't close if clicking inside a child portal (AttachmentsButton, ImageAnnotator, etc.)
+      // SAFETY: target is a Node that contains Element in DOM; checked via closest check below
       const el = target as HTMLElement;
       if (el.closest?.('[data-popover-layer]')) return;
       if (hasUnsavedContentRef.current) return;
@@ -313,7 +322,10 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={isGlobal ? 'Add a global comment...' : 'Add a comment...'}
               className="w-full bg-transparent text-sm placeholder:text-muted-foreground resize-none focus:outline-none min-h-48 max-h-96 px-1 py-0.5"
-              style={{ fieldSizing: 'content' } as React.CSSProperties}
+              style={
+                // SAFETY: fieldSizing is valid CSSProperties; React typing is closed
+                { fieldSizing: 'content' } as React.CSSProperties
+              }
             />
           </div>
 
@@ -384,7 +396,7 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
             top: position.top,
             left: position.left,
             width: position.width,
-            ...(position.flipAbove ? { transform: 'translateY(-100%)' } : {}),
+            transform: position.flipAbove ? 'translateY(-100%)' : undefined,
             animation: position.flipAbove
               ? 'comment-popover-in-above 0.15s ease-out'
               : 'comment-popover-in 0.15s ease-out',
@@ -435,7 +447,10 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
           onKeyDown={handleKeyDown}
           placeholder={isGlobal ? 'Add a global comment...' : 'Add a comment...'}
           className="w-full bg-transparent text-sm placeholder:text-muted-foreground resize-none focus:outline-none max-h-64 min-h-[4.5rem] px-1 py-0.5"
-          style={{ fieldSizing: 'content' } as React.CSSProperties}
+          style={
+            // SAFETY: fieldSizing is valid CSSProperties; React typing is closed
+            { fieldSizing: 'content' } as React.CSSProperties
+          }
         />
       </div>
 
