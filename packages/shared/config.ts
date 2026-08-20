@@ -88,7 +88,7 @@ export function mergePromptConfig(
 ): PromptConfig | undefined {
   if (!current && !partial) return undefined;
 
-  const result: Record<string, any> = { ...current, ...partial };
+  const result: PromptConfig = { ...current, ...partial };
 
   for (const section of PROMPT_SECTIONS) {
     const cur = current?.[section];
@@ -104,7 +104,7 @@ export function mergePromptConfig(
     }
   }
 
-  return result as PromptConfig;
+  return result;
 }
 
 export interface PlannotatorConfig {
@@ -156,8 +156,12 @@ export function loadConfig(): PlannotatorConfig {
   try {
     if (!existsSync(CONFIG_PATH)) return {};
     const raw = readFileSync(CONFIG_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null ? parsed : {};
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed !== null && parsed instanceof Object && !Array.isArray(parsed)) {
+      // SAFETY: JSON-parsed config is a record of optional PlannotatorConfig fields; caller uses optional chaining.
+      return parsed as PlannotatorConfig;
+    }
+    return {};
   } catch (e) {
     process.stderr.write(`[plannotator] Warning: failed to read config.json: ${e}\n`);
     return {};
@@ -256,18 +260,20 @@ export function detectGitUser(): string | null {
   }
 }
 
+interface ServerConfigPayload {
+  readonly displayName?: string;
+  readonly diffOptions?: DiffOptions;
+  readonly annotationOptions?: AnnotationOptions;
+  readonly gitUser?: string;
+  readonly conventionalComments?: boolean;
+  readonly conventionalLabels?: CCLabelConfig[] | null;
+}
+
 /**
  * Build the serverConfig payload for API responses.
  * Reads config.json fresh each call so the response reflects the latest file on disk.
  */
-export function getServerConfig(gitUser: string | null): {
-  displayName?: string;
-  diffOptions?: DiffOptions;
-  annotationOptions?: AnnotationOptions;
-  gitUser?: string;
-  conventionalComments?: boolean;
-  conventionalLabels?: CCLabelConfig[] | null;
-} {
+export function getServerConfig(gitUser: string | null): ServerConfigPayload {
   const cfg = loadConfig();
   return {
     displayName: cfg.displayName,
@@ -283,7 +289,7 @@ export function getServerConfig(gitUser: string | null): {
  * Read the user's preferred default diff type from config, falling back to 'unstaged'.
  */
 export function resolveDefaultDiffType(cfg?: PlannotatorConfig): DefaultDiffType {
-  const v = cfg?.diffOptions?.defaultDiffType as string | undefined;
+  const v: string | undefined = cfg?.diffOptions?.defaultDiffType;
   if (v === 'branch') return 'merge-base';
   return v === 'uncommitted' || v === 'unstaged' || v === 'staged' || v === 'merge-base' || v === 'all' ? v : 'unstaged';
 }

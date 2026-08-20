@@ -11,8 +11,18 @@
 import { join } from "path";
 import { mkdirSync, writeFileSync, readFileSync, renameSync, unlinkSync, existsSync } from "fs";
 import { createHash } from "crypto";
+import { Option, Schema } from "effect";
 import { getPlannotatorDataDir } from "./data-dir";
 import type { SourceSaveCapability } from "./source-save";
+
+type DraftJsonValue = string | number | boolean | null | DraftJsonValue[] | { [key: string]: DraftJsonValue };
+
+interface DraftFileData {
+  readonly draftGeneration?: DraftJsonValue;
+  readonly [key: string]: DraftJsonValue | undefined;
+}
+
+const DraftGenerationSchema = Schema.Natural;
 
 export type SourceBackedDraftSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
 
@@ -62,18 +72,16 @@ function tombstonePath(key: string): string {
   return join(getDraftDir(), `${key}.deleted.json`);
 }
 
-function readGeneration(value: unknown): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0
-    ? value
-    : null;
+function readGeneration(value: DraftJsonValue | undefined): number | null {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(DraftGenerationSchema)(value)) ?? null;
 }
 
 function readTombstoneGeneration(key: string): number | null {
   const filePath = tombstonePath(key);
   try {
     if (!existsSync(filePath)) return null;
-    const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
-    return readGeneration((parsed as { draftGeneration?: unknown }).draftGeneration);
+    const parsed: DraftFileData = JSON.parse(readFileSync(filePath, "utf-8"));
+    return readGeneration(parsed.draftGeneration);
   } catch {
     return null;
   }
@@ -83,8 +91,8 @@ function readStoredDraftGeneration(key: string): number | null {
   const filePath = draftPath(key);
   try {
     if (!existsSync(filePath)) return null;
-    const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
-    return readGeneration((parsed as { draftGeneration?: unknown }).draftGeneration);
+    const parsed: DraftFileData = JSON.parse(readFileSync(filePath, "utf-8"));
+    return readGeneration(parsed.draftGeneration);
   } catch {
     return null;
   }
@@ -112,11 +120,18 @@ function clearTombstone(key: string): void {
   }
 }
 
+interface DraftCarrier {
+  readonly draftGeneration?: unknown;
+}
+
 /**
  * Save a draft to disk.
  */
-export function saveDraft(key: string, data: object): boolean {
-  const draftGeneration = readGeneration((data as { draftGeneration?: unknown }).draftGeneration);
+export function saveDraft<T>(key: string, data: T): boolean {
+  // SAFETY: draft payloads are JSON objects with optional draftGeneration; extra fields are the caller's draft content.
+  const draftGeneration = Option.getOrUndefined(
+    Schema.decodeUnknownOption(DraftGenerationSchema)((data as DraftCarrier).draftGeneration),
+  ) ?? null;
   const deletedGeneration = readTombstoneGeneration(key);
   if (draftGeneration !== null && deletedGeneration !== null && draftGeneration <= deletedGeneration) {
     return false;
@@ -142,12 +157,15 @@ export function saveDraft(key: string, data: object): boolean {
 /**
  * Load a draft from disk. Returns null if not found.
  */
-export function loadDraft(key: string): object | null {
+export function loadDraft<T = DraftFileData>(key: string): T | null {
   const filePath = draftPath(key);
   try {
     if (!existsSync(filePath)) return null;
-    const draft = JSON.parse(readFileSync(filePath, "utf-8"));
-    const draftGeneration = readGeneration((draft as { draftGeneration?: unknown }).draftGeneration);
+    const draft: T = JSON.parse(readFileSync(filePath, "utf-8"));
+    // SAFETY: draft file is a JSON object with optional draftGeneration; other fields are the persisted draft.
+    const draftGeneration = Option.getOrUndefined(
+      Schema.decodeUnknownOption(DraftGenerationSchema)((draft as DraftCarrier).draftGeneration),
+    ) ?? null;
     const deletedGeneration = readTombstoneGeneration(key);
     if (draftGeneration !== null && deletedGeneration !== null && draftGeneration <= deletedGeneration) {
       return null;
