@@ -548,10 +548,13 @@ function parseCCLabels(json: string | null): CCLabelConfig[] {
     if (!Array.isArray(parsed)) return DEFAULT_CC_LABELS;
     // SAFETY: l is JSON-parsed label config — any is intentional for untyped payload
     return parsed.map((l: any) => ({
-      // SAFETY: label is string in validated CCLabelConfig — fallback to 'custom' if missing
-      label: (l.label as string) || 'custom',
-      // SAFETY: display and label are strings in validated config
-      display: (l.display as string) || (l.label as string) || 'custom',
+      label: Object.prototype.toString.call(l.label) === "[object String]" && l.label.trim() ? l.label : 'custom',
+      display:
+        Object.prototype.toString.call(l.display) === "[object String]" && l.display.trim()
+          ? l.display
+          : Object.prototype.toString.call(l.label) === "[object String]" && l.label.trim()
+            ? l.label
+            : 'custom',
       blocking: l.blocking === true || l.blocking === 'true',
     }));
   } catch {
