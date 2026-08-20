@@ -3,7 +3,12 @@ import { getCallbackConfig, executeCallback, CallbackAction } from "./callback";
 
 // --- getCallbackConfig ---
 
-function loc(url: string): { search: string; hash: string } {
+interface Loc {
+  search: string;
+  hash: string;
+}
+
+function loc(url: string): Loc {
   const parsed = new URL(url);
   return { search: parsed.search, hash: parsed.hash };
 }
@@ -98,6 +103,7 @@ afterEach(() => { globalThis.fetch = originalFetch; });
 
 describe("executeCallback", () => {
   test("approve: 200 response returns success toast", async () => {
+    // SAFETY: mock fetch is untyped test double — cast to any
     globalThis.fetch = mock(async () => new Response("{}", { status: 200 })) as any;
     const result = await executeCallback(CallbackAction.Approve, mockConfig, mockAnnotatedUrl);
     expect(result?.type).toBe("success");
@@ -105,6 +111,7 @@ describe("executeCallback", () => {
   });
 
   test("feedback: 200 response returns success toast", async () => {
+    // SAFETY: mock fetch is untyped test double — cast to any
     globalThis.fetch = mock(async () => new Response("{}", { status: 200 })) as any;
     const result = await executeCallback(CallbackAction.Feedback, mockConfig, mockAnnotatedUrl);
     expect(result?.type).toBe("success");
@@ -112,6 +119,7 @@ describe("executeCallback", () => {
   });
 
   test("401 response returns expiry message", async () => {
+    // SAFETY: mock fetch is untyped test double — cast to any
     globalThis.fetch = mock(async () => new Response("{}", { status: 401 })) as any;
     const result = await executeCallback(CallbackAction.Approve, mockConfig, mockAnnotatedUrl);
     expect(result?.type).toBe("error");
@@ -119,6 +127,7 @@ describe("executeCallback", () => {
   });
 
   test("500 response returns generic failure message", async () => {
+    // SAFETY: mock fetch is untyped test double — cast to any
     globalThis.fetch = mock(async () => new Response("{}", { status: 500 })) as any;
     const result = await executeCallback(CallbackAction.Approve, mockConfig, mockAnnotatedUrl);
     expect(result?.type).toBe("error");
@@ -126,6 +135,7 @@ describe("executeCallback", () => {
   });
 
   test("network failure returns error toast", async () => {
+    // SAFETY: mock fetch is untyped test double — cast to any
     globalThis.fetch = mock(async () => { throw new Error("Network error"); }) as any;
     const result = await executeCallback(CallbackAction.Approve, mockConfig, mockAnnotatedUrl);
     expect(result?.type).toBe("error");
@@ -134,7 +144,9 @@ describe("executeCallback", () => {
 
   test("POSTs correct JSON body for approve", async () => {
     let capturedBody: string | null = null;
+    // SAFETY: mock fetch is untyped test double — cast to any
     globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+      // SAFETY: init.body is string from fetch init — cast to string
       capturedBody = init.body as string;
       return new Response("{}", { status: 200 });
     }) as any;
@@ -147,7 +159,9 @@ describe("executeCallback", () => {
 
   test("POSTs correct JSON body for feedback", async () => {
     let capturedBody: string | null = null;
+    // SAFETY: mock fetch is untyped test double — cast to any
     globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+      // SAFETY: init.body is string from fetch init — cast to string
       capturedBody = init.body as string;
       return new Response("{}", { status: 200 });
     }) as any;

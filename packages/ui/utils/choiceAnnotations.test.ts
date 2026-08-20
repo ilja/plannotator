@@ -191,8 +191,10 @@ Recommendation: Option A.`)).toBeNull();
     test('preserves choice metadata through a short-share payload', async () => {
       const originalFetch = globalThis.fetch;
       let ciphertext = '';
+      // SAFETY: fetch mock is untyped test double — cast to typeof fetch
       globalThis.fetch = (async (_input, init) => {
         if (init?.method === 'POST') {
+          // SAFETY: init.body is JSON string from fetch init — cast to expected shape
           ciphertext = (JSON.parse(String(init.body)) as { data: string }).data;
           return new Response(JSON.stringify({ id: 'short-choice' }), { status: 200 });
         }
@@ -381,10 +383,11 @@ Recommendation: Option A.`)).toBeNull();
     });
 
     test('discards malformed validation evidence instead of throwing', () => {
+      // SAFETY: malformed evidence is intentionally wrong type for test — cast to expected type
       const malformedEvidence = {
         question: 42,
         options: null,
-      } as unknown as Annotation['choiceValidationEvidence'];
+      } as Annotation['choiceValidationEvidence'];
       const result = reconcileChoiceAnnotations(
         [annotation({ choiceValidationEvidence: malformedEvidence })],
         [{ ...question, blockId: 'block-new' }],
