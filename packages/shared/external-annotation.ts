@@ -10,6 +10,8 @@
  * input transformers handle validation and field assignment.
  */
 
+import { Option, Schema } from "effect";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -47,6 +49,9 @@ export interface ParseError {
   error: string;
 }
 
+const ExternalFieldsSchema = Schema.Record(Schema.String, Schema.Unknown);
+export type ExternalFields = Schema.Schema.Type<typeof ExternalFieldsSchema>;
+
 /**
  * Unwrap a POST body into an array of raw input objects.
  *
@@ -54,43 +59,47 @@ export interface ParseError {
  *   - A single annotation object: `{ source: "...", ... }`
  *   - A batch wrapper: `{ annotations: [{ source: "...", ... }, ...] }`
  */
-function unwrapBody(body: unknown): Record<string, unknown>[] | ParseError {
-  if (!body || typeof body !== "object") {
-    return { error: "Request body must be a JSON object" };
-  }
-
-  const obj = body as Record<string, unknown>;
+function unwrapBody(body: ExternalFields): ExternalFields[] | ParseError {
+  const annotationsCandidate = body.annotations;
 
   // Batch format: { annotations: [...] }
-  if (Array.isArray(obj.annotations)) {
-    if (obj.annotations.length === 0) {
+  if (Array.isArray(annotationsCandidate)) {
+    if (annotationsCandidate.length === 0) {
       return { error: "annotations array must not be empty" };
     }
-    const items: Record<string, unknown>[] = [];
-    for (let i = 0; i < obj.annotations.length; i++) {
-      const item = obj.annotations[i];
-      if (!item || typeof item !== "object") {
+    const items: ExternalFields[] = [];
+    for (let i = 0; i < annotationsCandidate.length; i++) {
+      const item = annotationsCandidate[i];
+      const decoded = Option.getOrUndefined(
+        Schema.decodeUnknownOption(ExternalFieldsSchema)(item),
+      );
+      if (!decoded) {
         return { error: `annotations[${i}] must be an object` };
       }
-      items.push(item as Record<string, unknown>);
+      items.push(decoded);
     }
     return items;
   }
 
   // Single format: { source: "...", ... }
-  if (typeof obj.source === "string") {
-    return [obj as Record<string, unknown>];
+  const sourceCandidate = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.String)(body.source),
+  );
+  if (sourceCandidate) {
+    return [body];
   }
 
   return { error: 'Missing required "source" field or "annotations" array' };
 }
 
-function requireString(obj: Record<string, unknown>, field: string, index: number): string | ParseError {
-  const val = obj[field];
-  if (typeof val !== "string" || val.length === 0) {
+function requireString(obj: ExternalFields, field: string, index: number): string | ParseError {
+  const decoded = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.String)(obj[field]),
+  );
+  if (!decoded || decoded.length === 0) {
     return { error: `annotations[${index}] missing required "${field}" field` };
   }
-  return val;
+  return decoded;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,33 +123,44 @@ interface PlanAnnotation {
 const VALID_PLAN_TYPES = ["DELETION", "COMMENT", "GLOBAL_COMMENT"];
 
 export function transformPlanInput(
-  body: unknown,
+  body: ExternalFields,
 ): { annotations: PlanAnnotation[] } | ParseError {
   const items = unwrapBody(body);
-  if ("error" in items) return items;
+  if (!Array.isArray(items)) return items;
 
   const annotations: PlanAnnotation[] = [];
   for (let i = 0; i < items.length; i++) {
     const obj = items[i];
 
     const source = requireString(obj, "source", i);
-    if (typeof source !== "string") return source;
+    if (source instanceof Object) return source;
 
     // Must have text content
-    if (typeof obj.text !== "string" || obj.text.length === 0) {
+    const textCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.text),
+    );
+    if (!textCandidate || textCandidate.length === 0) {
       return { error: `annotations[${i}] missing required "text" field` };
     }
 
     // Validate type if provided, default to GLOBAL_COMMENT
-    const type = typeof obj.type === "string" ? obj.type : "GLOBAL_COMMENT";
-    if (!VALID_PLAN_TYPES.includes(type)) {
+    const typeCandidate =
+      Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(obj.type)) ??
+      "GLOBAL_COMMENT";
+    if (!VALID_PLAN_TYPES.includes(typeCandidate)) {
       return {
-        error: `annotations[${i}] invalid type "${type}". Must be one of: ${VALID_PLAN_TYPES.join(", ")}`,
+        error: `annotations[${i}] invalid type "${typeCandidate}". Must be one of: ${VALID_PLAN_TYPES.join(", ")}`,
       };
     }
 
     // DELETION requires originalText (the text to remove)
-    if (type === "DELETION" && (typeof obj.originalText !== "string" || obj.originalText.length === 0)) {
+    const originalTextCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.originalText),
+    );
+    if (
+      typeCandidate === "DELETION" &&
+      (!originalTextCandidate || originalTextCandidate.length === 0)
+    ) {
       return { error: `annotations[${i}] DELETION type requires non-empty "originalText" field` };
     }
 
@@ -148,22 +168,29 @@ export function transformPlanInput(
     // External agents that want sidebar-only feedback should use GLOBAL_COMMENT
     // instead — without a phrase to anchor to, a COMMENT renders as an empty
     // quote bubble in the sidebar and exports as `Feedback on: ""`.
-    if (type === "COMMENT" && (typeof obj.originalText !== "string" || obj.originalText.length === 0)) {
+    if (
+      typeCandidate === "COMMENT" &&
+      (!originalTextCandidate || originalTextCandidate.length === 0)
+    ) {
       return {
         error: `annotations[${i}] COMMENT requires non-empty "originalText" field. Use GLOBAL_COMMENT for sidebar-only feedback.`,
       };
     }
+
+    const authorCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.author),
+    );
 
     annotations.push({
       id: crypto.randomUUID(),
       blockId: "external",
       startOffset: 0,
       endOffset: 0,
-      type,
-      text: String(obj.text),
-      originalText: typeof obj.originalText === "string" ? obj.originalText : "",
+      type: typeCandidate,
+      text: textCandidate,
+      originalText: originalTextCandidate ?? "",
       createdA: Date.now(),
-      author: typeof obj.author === "string" ? obj.author : undefined,
+      author: authorCandidate,
       source,
     });
   }
@@ -223,13 +250,13 @@ export function classifyFindingPlacement(
   lineEnd: number | null | undefined,
 ): FindingPlacement {
   const hasFile = filePath.length > 0;
-  const hasLine = typeof lineStart === "number";
+  const hasLine = lineStart !== null && lineStart !== undefined;
   if (hasFile && hasLine) {
     return {
       scope: "line",
       filePath,
       lineStart,
-      lineEnd: typeof lineEnd === "number" ? lineEnd : lineStart,
+      lineEnd: lineEnd !== null && lineEnd !== undefined ? lineEnd : lineStart,
     };
   }
   if (hasFile) {
@@ -239,23 +266,24 @@ export function classifyFindingPlacement(
 }
 
 export function transformReviewInput(
-  body: unknown,
+  body: ExternalFields,
 ): { annotations: ReviewAnnotation[] } | ParseError {
   const items = unwrapBody(body);
-  if ("error" in items) return items;
+  if (!Array.isArray(items)) return items;
 
   const annotations: ReviewAnnotation[] = [];
   for (let i = 0; i < items.length; i++) {
     const obj = items[i];
 
     const source = requireString(obj, "source", i);
-    if (typeof source !== "string") return source;
+    if (source instanceof Object) return source;
 
     // scope: optional, defaults to "line"
-    const scope = typeof obj.scope === "string" ? obj.scope : "line";
-    if (!VALID_SCOPES.includes(scope)) {
+    const scopeCandidate =
+      Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(obj.scope)) ?? "line";
+    if (!VALID_SCOPES.includes(scopeCandidate)) {
       return {
-        error: `annotations[${i}] invalid scope "${scope}". Must be one of: ${VALID_SCOPES.join(", ")}`,
+        error: `annotations[${i}] invalid scope "${scopeCandidate}". Must be one of: ${VALID_SCOPES.join(", ")}`,
       };
     }
 
@@ -268,67 +296,99 @@ export function transformReviewInput(
     let filePath = "";
     let lineStart = 0;
     let lineEnd = 0;
-    if (scope !== "general") {
+    if (scopeCandidate !== "general") {
       const fp = requireString(obj, "filePath", i);
-      if (typeof fp !== "string") return fp;
+      if (fp instanceof Object) return fp;
       filePath = fp;
-      if (scope === "line") {
-        if (typeof obj.lineStart !== "number") {
+      if (scopeCandidate === "line") {
+        const lineStartCandidate = Option.getOrUndefined(
+          Schema.decodeUnknownOption(Schema.Number)(obj.lineStart),
+        );
+        if (lineStartCandidate === undefined) {
           return { error: `annotations[${i}] missing required "lineStart" field` };
         }
-        if (typeof obj.lineEnd !== "number") {
+        const lineEndCandidate = Option.getOrUndefined(
+          Schema.decodeUnknownOption(Schema.Number)(obj.lineEnd),
+        );
+        if (lineEndCandidate === undefined) {
           return { error: `annotations[${i}] missing required "lineEnd" field` };
         }
-        lineStart = obj.lineStart;
-        lineEnd = obj.lineEnd;
+        lineStart = lineStartCandidate;
+        lineEnd = lineEndCandidate;
       } else {
-        lineStart = typeof obj.lineStart === "number" ? obj.lineStart : 0;
-        lineEnd = typeof obj.lineEnd === "number" ? obj.lineEnd : 0;
+        lineStart =
+          Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineStart)) ?? 0;
+        lineEnd =
+          Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineEnd)) ?? 0;
       }
     }
 
     // side: optional, defaults to "new"
-    const side = typeof obj.side === "string" ? obj.side : "new";
-    if (!VALID_SIDES.includes(side)) {
+    const sideCandidate =
+      Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(obj.side)) ?? "new";
+    if (!VALID_SIDES.includes(sideCandidate)) {
       return {
-        error: `annotations[${i}] invalid side "${side}". Must be one of: ${VALID_SIDES.join(", ")}`,
+        error: `annotations[${i}] invalid side "${sideCandidate}". Must be one of: ${VALID_SIDES.join(", ")}`,
       };
     }
 
     // type: optional, defaults to "comment"
-    const type = typeof obj.type === "string" ? obj.type : "comment";
-    if (!VALID_REVIEW_TYPES.includes(type)) {
+    const typeCandidate =
+      Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(obj.type)) ?? "comment";
+    if (!VALID_REVIEW_TYPES.includes(typeCandidate)) {
       return {
-        error: `annotations[${i}] invalid type "${type}". Must be one of: ${VALID_REVIEW_TYPES.join(", ")}`,
+        error: `annotations[${i}] invalid type "${typeCandidate}". Must be one of: ${VALID_REVIEW_TYPES.join(", ")}`,
       };
     }
 
     // Must have at least text or suggestedCode
-    if (typeof obj.text !== "string" && typeof obj.suggestedCode !== "string") {
+    const textCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.text),
+    );
+    const suggestedCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.suggestedCode),
+    );
+    if (!textCandidate && !suggestedCandidate) {
       return {
         error: `annotations[${i}] must have at least one of: text, suggestedCode`,
       };
     }
 
-    annotations.push({
+    const originalCodeCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.originalCode),
+    );
+    const authorCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.author),
+    );
+    const severityCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.severity),
+    );
+    const reasoningCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.reasoning),
+    );
+    const reviewProfileLabelCandidate = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.String)(obj.reviewProfileLabel),
+    );
+
+    const annotation: ReviewAnnotation = {
       id: crypto.randomUUID(),
-      type,
-      scope,
+      type: typeCandidate,
+      scope: scopeCandidate,
       filePath,
       lineStart,
       lineEnd,
-      side,
-      text: typeof obj.text === "string" ? obj.text : undefined,
-      suggestedCode: typeof obj.suggestedCode === "string" ? obj.suggestedCode : undefined,
-      originalCode: typeof obj.originalCode === "string" ? obj.originalCode : undefined,
+      side: sideCandidate,
+      text: textCandidate,
+      suggestedCode: suggestedCandidate,
+      originalCode: originalCodeCandidate,
       createdAt: Date.now(),
-      author: typeof obj.author === "string" ? obj.author : undefined,
+      author: authorCandidate,
       source,
-      // Agent review metadata (optional — only set by agent review findings)
-      ...(typeof obj.severity === "string" && { severity: obj.severity }),
-      ...(typeof obj.reasoning === "string" && { reasoning: obj.reasoning }),
-      ...(typeof obj.reviewProfileLabel === "string" && { reviewProfileLabel: obj.reviewProfileLabel }),
-    });
+    };
+    if (severityCandidate) annotation.severity = severityCandidate;
+    if (reasoningCandidate) annotation.reasoning = reasoningCandidate;
+    if (reviewProfileLabelCandidate) annotation.reviewProfileLabel = reviewProfileLabelCandidate;
+    annotations.push(annotation);
   }
 
   return { annotations };
@@ -405,6 +465,7 @@ export function createAnnotationStore<T extends StorableAnnotation>(): Annotatio
     update(id, fields) {
       const idx = annotations.findIndex((a) => a.id === id);
       if (idx === -1) return null;
+      // SAFETY: store holds T; merging Partial<T> + { id } preserves T's shape and id's type.
       const merged = { ...annotations[idx], ...fields, id } as T;
       annotations[idx] = merged;
       version++;

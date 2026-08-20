@@ -4,9 +4,9 @@
  * finding submits cleanly while a broken line finding is still rejected.
  */
 import { describe, expect, test } from "bun:test";
-import { transformReviewInput } from "./external-annotation";
+import { transformReviewInput, type ExternalFields } from "./external-annotation";
 
-function ok(body: unknown) {
+function ok(body: ExternalFields) {
   const r = transformReviewInput(body);
   if ("error" in r) throw new Error(`expected ok, got error: ${r.error}`);
   return r.annotations;

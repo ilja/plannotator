@@ -3,7 +3,11 @@ import * as parse5 from "parse5";
 
 export const HTML_ASSET_ROUTE_PREFIX = "/api/html-assets";
 
-const CONTENT_TYPES_BY_EXT: Record<string, string> = {
+interface ContentTypeMap {
+  readonly [ext: string]: string;
+}
+
+const CONTENT_TYPES_BY_EXT: ContentTypeMap = {
   ".apng": "image/apng",
   ".avif": "image/avif",
   ".css": "text/css; charset=utf-8",
@@ -65,7 +69,11 @@ export function rewriteHtmlAssetReferences(
   const tree = looksLikeFullDocument(html)
     ? parse5.parse(html)
     : parse5.parseFragment(html);
-  visit(tree as unknown as HtmlNode, (node) => rewriteNodeAssetReferences(node, assetUrlFor));
+  // SAFETY: parse5's Document/DocumentFragment is a superset of HtmlNode's
+  // tagName/attrs/childNodes/value subset used by rewriteNodeAssetReferences.
+  visit(tree as HtmlNode, (node) => rewriteNodeAssetReferences(node, assetUrlFor));
+  // SAFETY: parse5.serialize is typed for Document; our HtmlNode walk preserves the
+  // valid Document shape, so the serialize call is sound.
   return parse5.serialize(tree as never);
 }
 
