@@ -546,8 +546,11 @@ function parseCCLabels(json: string | null): CCLabelConfig[] {
   try {
     const parsed = JSON.parse(json);
     if (!Array.isArray(parsed)) return DEFAULT_CC_LABELS;
-    return parsed.map((l: Record<string, unknown>) => ({
+    // SAFETY: l is JSON-parsed label config — any is intentional for untyped payload
+    return parsed.map((l: any) => ({
+      // SAFETY: label is string in validated CCLabelConfig — fallback to 'custom' if missing
       label: (l.label as string) || 'custom',
+      // SAFETY: display and label are strings in validated config
       display: (l.display as string) || (l.label as string) || 'custom',
       blocking: l.blocking === true || l.blocking === 'true',
     }));
@@ -783,6 +786,7 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
     return t;
   }, [mode, piAIProviders.length]);
 
+  // SAFETY: obsidian/bear/octarine are valid SettingsTab literals per SettingsTab union
   const integrationTabs: { id: SettingsTab; label: string }[] = [
     { id: 'files', label: 'Files' },
     ...(mode === 'plan'
@@ -1043,8 +1047,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                           onBlur={(e) => handleIdentitySave(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                              handleIdentitySave((e.target as HTMLInputElement).value);
-                              (e.target as HTMLInputElement).blur();
+                              handleIdentitySave(e.currentTarget.value);
+                              e.currentTarget.blur();
                             }
                           }}
                           className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono truncate border border-transparent focus:border-primary/50 focus:outline-none transition-colors"
@@ -1079,7 +1083,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                       <select
                         value={autoCloseDelay}
                         onChange={(e) => {
-                          const next = e.target.value as AutoCloseDelay;
+                          // SAFETY: e.currentTarget.value is AutoCloseDelay per AUTO_CLOSE_OPTIONS
+                          const next = e.currentTarget.value as AutoCloseDelay;
                           setAutoCloseDelayState(next);
                           setAutoCloseDelay(next);
                         }}
@@ -1210,7 +1215,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                         // Exaggerated proportions so the width difference is visually obvious in the small preview
                         const sidebarPct = 14;
                         const panelPct = 14;
-                        const cardPctMap: Record<PlanWidth, number> = { compact: 48, default: 70, wide: 94 };
+                        interface CardPctMap { compact: number; default: number; wide: number; }
+                        const cardPctMap: CardPctMap = { compact: 48, default: 70, wide: 94 };
                         const cardPct = cardPctMap[active.id];
                         return (
                           <div className="space-y-2">
@@ -1298,7 +1304,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                       </div>
                       <select
                         value={defaultNotesApp}
-                        onChange={(e) => handleDefaultNotesAppChange(e.target.value as DefaultNotesApp)}
+                        // SAFETY: e.currentTarget.value is DefaultNotesApp per select options
+                        onChange={(e) => handleDefaultNotesAppChange(e.currentTarget.value as DefaultNotesApp)}
                         className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
                       >
                         <option value="ask">Ask each time</option>
