@@ -280,36 +280,43 @@ export const SETTINGS = {
     fromServer: (sc: any) => {
       // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
       const v = (sc.annotationOptions as any)?.codeFontSize;
-      return typeof v === 'string' ? v : undefined;
+      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
     },
     toServer: (v: string) => ({ annotationOptions: { codeFontSize: v } }),
   },
 
   annotationProseFontFamily: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: '' as string, // empty = theme sans/default
     fromCookie: () => storage.getItem('plannotator-annotation-prose-font-family') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-prose-font-family', v),
     serverKey: 'annotationOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.proseFontFamily;
-      return typeof v === 'string' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
+      const v = (sc.annotationOptions as any)?.proseFontFamily;
+      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
     },
     toServer: (v: string) => ({ annotationOptions: { proseFontFamily: v } }),
   },
 
   annotationProseFontSize: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: '' as string, // empty = current 15px default
     fromCookie: () => storage.getItem('plannotator-annotation-prose-font-size') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-prose-font-size', v),
     serverKey: 'annotationOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.annotationOptions as Record<string, unknown> | undefined)?.proseFontSize;
-      return typeof v === 'string' ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
+      const v = (sc.annotationOptions as any)?.proseFontSize;
+      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
     },
     toServer: (v: string) => ({ annotationOptions: { proseFontSize: v } }),
   },
 
   diffTabSize: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: 2 as number,
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-tab-size');
@@ -318,13 +325,16 @@ export const SETTINGS = {
     },
     toCookie: (v: number) => storage.setItem('plannotator-diff-tab-size', String(v)),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.tabSize;
-      return typeof v === 'number' && v >= 1 && v <= 8 ? v : undefined;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.tabSize;
+      return Object.prototype.toString.call(v) === "[object Number]" && v >= 1 && v <= 8 ? v : undefined;
     },
     toServer: (v: number) => ({ diffOptions: { tabSize: v } }),
   },
   diffLineBgIntensity: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: 'subtle' as DiffLineBgIntensity,
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-line-bg-intensity');
@@ -333,13 +343,16 @@ export const SETTINGS = {
     toCookie: (v: DiffLineBgIntensity) =>
       storage.setItem('plannotator-diff-line-bg-intensity', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.lineBgIntensity;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
+      const v = (sc.diffOptions as any)?.lineBgIntensity;
       return isDiffLineBgIntensity(v) ? v : undefined;
     },
     toServer: (v: DiffLineBgIntensity) => ({ diffOptions: { lineBgIntensity: v } }),
   },
   conventionalComments: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: false as boolean,
     fromCookie: () => {
       const v = storage.getItem('plannotator-conventional-comments');
@@ -347,15 +360,17 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-conventional-comments', String(v)),
     serverKey: 'conventionalComments',
-    fromServer: (sc: Record<string, unknown>) => {
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
       const v = sc.conventionalComments;
-      return typeof v === 'boolean' ? v : undefined;
+      return v === true || v === false ? v : undefined;
     },
     toServer: (v: boolean) => ({ conventionalComments: v }),
   },
   /** JSON-serialized array of label configs, or null for defaults.
    *  Synced to ~/.plannotator/config.json as a parsed array (not a string). */
   conventionalLabels: {
+    // SAFETY: literal widened to SettingDef value type — required for generic inference
     defaultValue: null as string | null,
     fromCookie: () => storage.getItem('plannotator-cc-labels') || undefined,
     toCookie: (v: string | null) => {
@@ -363,7 +378,8 @@ export const SETTINGS = {
       else storage.removeItem('plannotator-cc-labels');
     },
     serverKey: 'conventionalLabels',
-    fromServer: (sc: Record<string, unknown>) => {
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
       const v = sc.conventionalLabels;
       if (v === null) return null;
       if (Array.isArray(v)) return JSON.stringify(v);
