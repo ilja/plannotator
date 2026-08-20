@@ -46,6 +46,7 @@ function provider(
       return ownedTypes.includes(diffType);
     },
     async getContext() {
+      // SAFETY: test constructs fake provider id "git"/"jj" etc; cast to GitContext vcsType for provider identity
       return context({ vcsType: id as GitContext["vcsType"], ...contextOverrides });
     },
     async runDiff(diffType: DiffType, defaultBranch: string): Promise<DiffResult> {

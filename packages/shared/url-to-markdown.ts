@@ -261,7 +261,11 @@ async function fetchViaJina(url: string): Promise<string> {
   // Strip fragment (never sent to server) and encode for Jina's path-based API
   const cleanUrl = url.split("#")[0];
   const jinaUrl = `https://r.jina.ai/${cleanUrl}`;
-  const headers: Record<string, string> = {
+  interface JinaHeaders {
+    readonly [key: string]: string;
+  }
+
+  const headers: JinaHeaders = {
     Accept: "text/plain",
   };
 
