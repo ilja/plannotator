@@ -337,9 +337,9 @@ function changeFromJson(value: any): SemanticDiffChange | null {
   };
 }
 
-function binaryChangeFromJson(value: unknown): SemanticDiffBinaryChange | null {
-  if (!value || typeof value !== "object") return null;
-  const change = value as Record<string, unknown>;
+function binaryChangeFromJson(value: any): SemanticDiffBinaryChange | null {
+  if (!(value instanceof Object)) return null;
+  const change: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
   const filePath = valueAsString(change.filePath);
   if (!filePath) return null;
   return {
@@ -364,7 +364,7 @@ export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): Semanti
     };
   }
 
-  if (!parsed || typeof parsed !== "object") {
+  if (!(parsed instanceof Object)) {
     return {
       status: "error",
       reason: "invalid-json-shape",
@@ -374,7 +374,7 @@ export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): Semanti
     };
   }
 
-  const payload = parsed as Record<string, unknown>;
+  const payload: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(parsed)) ?? {};
   const changes = Array.isArray(payload.changes)
     ? payload.changes.map(changeFromJson).filter((change): change is SemanticDiffChange => !!change)
     : [];
@@ -445,7 +445,7 @@ export class SemanticDiffResponseCache {
 
     if (!this.cache.has(cacheKey) && this.cache.size >= this.maxEntries) {
       const oldestKey = this.cache.keys().next().value;
-      if (typeof oldestKey === "string") {
+      if (oldestKey !== undefined) {
         this.cache.delete(oldestKey);
       }
     }
