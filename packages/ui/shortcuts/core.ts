@@ -334,7 +334,7 @@ export function formatShortcutBindingsText(
 }
 
 function getDigitCode(event: KeyboardEvent): string | null {
-  const code = typeof event.code === 'string' ? event.code : '';
+  const code = Object.prototype.toString.call(event.code) === "[object String]" ? event.code : "";
   const match = code.match(/^Digit([0-9])$/);
   return match ? match[1] : null;
 }
