@@ -59,7 +59,11 @@ export function detectObsidianVaults(): string[] {
 		const configContent = readFileSync(configPath, "utf-8");
 		const config = JSON.parse(configContent);
 
-		if (!config.vaults || typeof config.vaults !== "object") {
+		if (
+			!config.vaults ||
+			!(config.vaults instanceof Object) ||
+			Array.isArray(config.vaults)
+		) {
 			return [];
 		}
 
@@ -163,7 +167,11 @@ export function generateFilename(
 	const hour12 = hour24 % 12 || 12;
 	const ampm = hour24 >= 12 ? "pm" : "am";
 
-	const vars: Record<string, string> = {
+	interface FilenameVars {
+		readonly [key: string]: string;
+	}
+
+	const vars: FilenameVars = {
 		title,
 		YYYY: String(now.getFullYear()),
 		MM: String(now.getMonth() + 1).padStart(2, "0"),

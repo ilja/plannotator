@@ -20,11 +20,16 @@ const VIEW_JSON = JSON.stringify({
  * Mock gh runtime. Routes by subcommand; records every invocation so tests can
  * assert on exactly which commands ran (and which didn't).
  */
+interface GithubRuntimeResult {
+  readonly runtime: PRRuntime;
+  readonly calls: string[];
+}
+
 function githubRuntime(opts: {
   prDiff: { stdout?: string; stderr?: string; exitCode: number };
   files?: { stdout?: string; stderr?: string; exitCode: number };
   view?: { stdout?: string; stderr?: string; exitCode: number };
-}): { runtime: PRRuntime; calls: string[] } {
+}): GithubRuntimeResult {
   const calls: string[] = [];
   const runtime: PRRuntime = {
     async runCommand(command, args) {

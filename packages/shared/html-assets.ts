@@ -187,7 +187,7 @@ function rewriteStyleAttr(node: HtmlNode, assetUrlFor: HtmlAssetUrlMapper): void
 
 function rewriteStyleContent(node: HtmlNode, assetUrlFor: HtmlAssetUrlMapper): void {
   for (const child of node.childNodes ?? []) {
-    if (typeof child.value === "string") {
+    if (child.value !== undefined) {
       child.value = rewriteCssAssetReferences(child.value, assetUrlFor);
     }
   }
@@ -269,7 +269,12 @@ function shouldSkipUrl(value: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(value);
 }
 
-function splitPathSuffix(value: string): { path: string; suffix: string } {
+interface PathSuffix {
+  readonly path: string;
+  readonly suffix: string;
+}
+
+function splitPathSuffix(value: string): PathSuffix {
   const queryIndex = value.indexOf("?");
   const hashIndex = value.indexOf("#");
   let splitAt = -1;
