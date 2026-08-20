@@ -43,12 +43,11 @@ interface TypeMap {
 export function parseShareableImages(raw: ShareableImage[] | undefined): ImageAttachment[] | undefined {
   if (!raw?.length) return undefined;
   return raw.map(img => {
-    if (Object.prototype.toString.call(img) === "[object String]") {
-      // Old format: plain path string — derive name from filename
-      const name = img.split('/').pop()?.replace(/\.[^.]+$/, '') || 'image';
-      return { path: img, name };
+    if (Array.isArray(img)) {
+      return { path: img[0], name: img[1] };
     }
-    return { path: img[0], name: img[1] };
+    const name = img.split('/').pop()?.replace(/\.[^.]+$/, '') || 'image';
+    return { path: img, name };
   });
 }
 

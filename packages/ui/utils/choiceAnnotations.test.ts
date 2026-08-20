@@ -384,6 +384,7 @@ Recommendation: Option A.`)).toBeNull();
 
     test('discards malformed validation evidence instead of throwing', () => {
       // SAFETY: malformed evidence is intentionally wrong type for test — cast to expected type
+      // @ts-expect-error — intentionally wrong type for test
       const malformedEvidence = {
         question: 42,
         options: null,

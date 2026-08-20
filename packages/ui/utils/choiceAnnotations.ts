@@ -66,12 +66,15 @@ const isChoiceQuestionIdentity = (value: any): value is ChoiceQuestionIdentity =
 );
 
 // SAFETY: value is untrusted choice payload — any is intentional
-const isParsedChoiceQuestion = (value: any): value is ChoiceQuestion & { blockId: string } => (
-  isChoiceQuestionIdentity(value) &&
-  Object.prototype.toString.call(value.blockId) === "[object String]" &&
-  Object.prototype.toString.call(value.sourceText) === "[object String]" &&
-  Object.prototype.toString.call(value.sourceLineCount) === "[object Number]"
-);
+const isParsedChoiceQuestion = (value: any): value is ChoiceQuestion & { blockId: string } => {
+  if (!isChoiceQuestionIdentity(value)) return false;
+  const w: any = value;
+  return (
+    Object.prototype.toString.call(w.blockId) === "[object String]" &&
+    Object.prototype.toString.call(w.sourceText) === "[object String]" &&
+    Object.prototype.toString.call(w.sourceLineCount) === "[object Number]"
+  );
+};
 
 // SAFETY: value is untrusted choice payload — any is intentional
 const isChoiceValidationEvidence = (value: any): value is ChoiceValidationEvidence => (
