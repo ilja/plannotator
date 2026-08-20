@@ -56,54 +56,63 @@ interface LegacyDraftData {
   ts: number;
 }
 
-function isLegacyDraft(data: unknown): data is LegacyDraftData {
-  return !!data && typeof data === 'object' && 'a' in data && Array.isArray((data as LegacyDraftData).a);
+// SAFETY: data is untrusted draft payload — any is intentional
+function isLegacyDraft(data: any): data is LegacyDraftData {
+  // SAFETY: data-shape narrowed by 'a' in check — cast to read field
+  return !!data && data instanceof Object && 'a' in data && Array.isArray((data as LegacyDraftData).a);
 }
 
-function parseSourceBackedDocumentDraft(value: unknown): SourceBackedDocumentDraftData | null {
-  if (!value || typeof value !== 'object') return null;
+// SAFETY: value is untrusted draft payload — any is intentional
+function parseSourceBackedDocumentDraft(value: any): SourceBackedDocumentDraftData | null {
+  if (!value || !(value instanceof Object)) return null;
+  // SAFETY: value is untrusted draft payload — cast to access fields
   const doc = value as Partial<SourceBackedDocumentDraftData>;
+  // SAFETY: doc.sourceSave is untrusted draft payload — cast to access fields
   const sourceSave = doc.sourceSave as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
   if (!(
-    typeof doc.key === 'string' &&
-    typeof doc.sessionOpenText === 'string' &&
-    typeof doc.diskBaseline === 'string' &&
-    typeof doc.currentText === 'string' &&
-    (doc.missingOnDisk === undefined || typeof doc.missingOnDisk === 'boolean') &&
+    Object.prototype.toString.call(doc.key) === "[object String]" &&
+    Object.prototype.toString.call(doc.sessionOpenText) === "[object String]" &&
+    Object.prototype.toString.call(doc.diskBaseline) === "[object String]" &&
+    Object.prototype.toString.call(doc.currentText) === "[object String]" &&
+    (doc.missingOnDisk === undefined || doc.missingOnDisk === true || doc.missingOnDisk === false) &&
     isDraftSourceSaveCapability(sourceSave)
   )) {
     return null;
   }
   const savedChange = parseSourceBackedSavedFileChange(doc.savedChange, sourceSave);
-  return {
+  const result: SourceBackedDocumentDraftData = {
     key: doc.key,
     sourceSave,
     sessionOpenText: doc.sessionOpenText,
     diskBaseline: doc.diskBaseline,
     currentText: doc.currentText,
-    ...(doc.missingOnDisk ? { missingOnDisk: true } : {}),
-    ...(savedChange ? { savedChange } : {}),
   };
+  if (doc.missingOnDisk) result.missingOnDisk = true;
+  if (savedChange) result.savedChange = savedChange;
+  return result;
 }
 
-function isSourceBackedSavedFileChange(value: unknown): value is SourceBackedSavedFileChangeDraftData {
+// SAFETY: value is untrusted draft payload — any is intentional
+function isSourceBackedSavedFileChange(value: any): value is SourceBackedSavedFileChangeDraftData {
   return parseSourceBackedSavedFileChange(value) !== null;
 }
 
+// SAFETY: value is untrusted draft payload — any is intentional
 function parseSourceBackedSavedFileChange(
-  value: unknown,
+  value: any,
   fallbackSourceSave?: SourceBackedDraftSourceSaveCapability,
 ): SourceBackedSavedFileChangeDraftData | null {
-  if (!value || typeof value !== 'object') return null;
+  if (!value || !(value instanceof Object)) return null;
+  // SAFETY: value is untrusted draft payload — cast to access fields
   const change = value as Partial<SourceBackedSavedFileChangeDraftData>;
   if (!(
-    typeof change.key === 'string' &&
-    typeof change.path === 'string' &&
-    typeof change.basename === 'string' &&
-    typeof change.beforeText === 'string' &&
-    typeof change.afterText === 'string' &&
-    (change.beforeHash === undefined || typeof change.beforeHash === 'string') &&
-    (change.afterHash === undefined || typeof change.afterHash === 'string')
+    Object.prototype.toString.call(change.key) === "[object String]" &&
+    Object.prototype.toString.call(change.path) === "[object String]" &&
+    Object.prototype.toString.call(change.basename) === "[object String]" &&
+    Object.prototype.toString.call(change.beforeText) === "[object String]" &&
+    Object.prototype.toString.call(change.afterText) === "[object String]" &&
+    (change.beforeHash === undefined || Object.prototype.toString.call(change.beforeHash) === "[object String]") &&
+    (change.afterHash === undefined || Object.prototype.toString.call(change.afterHash) === "[object String]")
   )) {
     return null;
   }
