@@ -25,6 +25,10 @@ import {
   saveOctarineSettings,
   type OctarineSettings,
 } from '../utils/octarine';
+interface FilenameVars {
+  [key: string]: string;
+}
+
 import {
   getUIPreferences,
   saveUIPreferences,
@@ -1774,7 +1778,7 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                                 const now = new Date();
                                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                                 const h24 = now.getHours(); const h12 = h24 % 12 || 12;
-                                const vars: Record<string, string> = {
+                                const vars: FilenameVars = {
                                   title: 'My Plan Title', YYYY: String(now.getFullYear()),
                                   MM: String(now.getMonth()+1).padStart(2,'0'), DD: String(now.getDate()).padStart(2,'0'),
                                   Mon: months[now.getMonth()], D: String(now.getDate()),
@@ -1794,7 +1798,11 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                             <label className="text-xs text-muted-foreground">Filename Separator</label>
                             <select
                               value={obsidian.filenameSeparator || 'space'}
-                              onChange={(e) => handleObsidianChange({ filenameSeparator: e.target.value as 'space' | 'dash' | 'underscore' })}
+                              onChange={(e) => {
+                                // SAFETY: e.currentTarget.value is FilenameSeparator per select options
+                                const v = e.currentTarget.value as 'space' | 'dash' | 'underscore';
+                                handleObsidianChange({ filenameSeparator: v });
+                              }}
                               className="w-full px-3 py-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
                             >
                               <option value="space">Spaces (default)</option>
@@ -1917,7 +1925,11 @@ tags: [plan, ...]
                           <label className="text-xs text-muted-foreground">Tag Position</label>
                           <select
                             value={bear.tagPosition}
-                            onChange={(e) => handleBearChange({ tagPosition: e.target.value as 'prepend' | 'append' })}
+                            onChange={(e) => {
+                              // SAFETY: e.currentTarget.value is TagPosition per select options
+                              const v = e.currentTarget.value as 'prepend' | 'append';
+                              handleBearChange({ tagPosition: v });
+                            }}
                             className="w-full px-3 py-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
                           >
                             <option value="append">Append (end of note)</option>

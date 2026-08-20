@@ -16,6 +16,7 @@ function TextShimmerComponent({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) {
+  // SAFETY: Component is React.ElementType from TextShimmerProps — motion.create expects IntrinsicElements key
   const MotionComponent = motion.create(
     Component as keyof JSX.IntrinsicElements
   );
@@ -43,6 +44,7 @@ function TextShimmerComponent({
         ease: 'linear',
       }}
       style={
+        // SAFETY: style is React.CSSProperties with CSS variable --spread
         {
           '--spread': `${dynamicSpread}px`,
           backgroundImage: `var(--bg), linear-gradient(var(--base-color), var(--base-color))`,

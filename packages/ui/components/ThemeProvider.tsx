@@ -53,7 +53,7 @@ function applyThemeClasses(themeId: string, effectiveMode: 'dark' | 'light'): vo
 
 /** Read system preference synchronously */
 function getSystemIsLight(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches;
+  return globalThis.window !== undefined && globalThis.matchMedia('(prefers-color-scheme: light)').matches;
 }
 
 interface ThemeProviderProps {
@@ -71,9 +71,11 @@ export function ThemeProvider({
   storageKey = 'plannotator-theme',
   colorThemeStorageKey = 'plannotator-color-theme',
 }: ThemeProviderProps) {
-  const [mode, setModeState] = useState<Mode>(
-    () => (storage.getItem(storageKey) as Mode) || defaultTheme
-  );
+  const [mode, setModeState] = useState<Mode>(() => {
+    // SAFETY: storage value is Mode per SETTINGS — fallback to defaultTheme if null
+    const stored = storage.getItem(storageKey) as Mode | null;
+    return stored ?? defaultTheme;
+  });
 
   const [colorTheme, setColorThemeState] = useState<string>(
     () => storage.getItem(colorThemeStorageKey) || defaultColorTheme
@@ -87,7 +89,7 @@ export function ThemeProvider({
   // [P3 fix] Apply theme class synchronously during initialization to prevent
   // flash of unstyled content. CSS tokens live under .theme-* selectors, so
   // without this the first frame has no valid --background/--foreground.
-  if (typeof window !== 'undefined') {
+  if (globalThis.window !== undefined) {
     applyThemeClasses(colorTheme, resolvedMode);
   }
 
