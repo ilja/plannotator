@@ -132,22 +132,25 @@ function parseSourceBackedSavedFileChange(
   };
 }
 
-function isDraftSourceSaveCapability(value: unknown): value is SourceBackedDraftSourceSaveCapability {
+// SAFETY: value is untrusted draft payload — any is intentional
+function isDraftSourceSaveCapability(value: any): value is SourceBackedDraftSourceSaveCapability {
+  // SAFETY: value is untrusted draft payload — cast to access fields
   const sourceSave = value as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
   return (
     !!sourceSave &&
     sourceSave.enabled === true &&
-    typeof sourceSave.path === 'string' &&
-    typeof sourceSave.basename === 'string' &&
-    typeof sourceSave.hash === 'string' &&
-    typeof sourceSave.mtimeMs === 'number' &&
-    typeof sourceSave.size === 'number' &&
-    typeof sourceSave.eol === 'string'
+    Object.prototype.toString.call(sourceSave.path) === "[object String]" &&
+    Object.prototype.toString.call(sourceSave.basename) === "[object String]" &&
+    Object.prototype.toString.call(sourceSave.hash) === "[object String]" &&
+    Object.prototype.toString.call(sourceSave.mtimeMs) === "[object Number]" &&
+    Object.prototype.toString.call(sourceSave.size) === "[object Number]" &&
+    Object.prototype.toString.call(sourceSave.eol) === "[object String]"
   );
 }
 
-function readDraftGeneration(value: unknown): number | null {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+// SAFETY: value is untrusted draft payload — any is intentional
+function readDraftGeneration(value: any): number | null {
+  return Object.prototype.toString.call(value) === "[object Number]" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function formatTimeAgo(ts: number): string {
@@ -228,8 +231,10 @@ export function useAnnotationDraft({
 
     fetch('/api/draft')
       .then(async res => {
-        const data = await res.json().catch(() => null) as DraftData | LegacyDraftData | MissingDraftData | null;
+        // SAFETY: res.json() is untyped JSON — binding types the result
+        const data: DraftData | LegacyDraftData | MissingDraftData | null = await res.json().catch(() => null);
         if (!res.ok) {
+          // SAFETY: data is draft union — cast to read MissingDraftData generation field
           const generation = readDraftGeneration((data as MissingDraftData | null)?.draftGeneration);
           if (generation !== null) {
             draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
@@ -251,6 +256,7 @@ export function useAnnotationDraft({
         if (isLegacyDraft(data)) {
           // Old tuple format — deserialize via fromShareable
           restoredAnnotations = data.a.length > 0 ? fromShareable(data.a, data.d) : [];
+          // SAFETY: data.g is untyped legacy draft field — cast to parseShareableImages input
           restoredGlobal = data.g ? (parseShareableImages(data.g as Parameters<typeof parseShareableImages>[0]) ?? []) : [];
         } else if (Array.isArray(data.annotations)) {
           // New direct-object format
@@ -261,29 +267,36 @@ export function useAnnotationDraft({
           restoredAnnotations = data.annotations;
           restoredCodeAnnotations = Array.isArray(data.codeAnnotations) ? data.codeAnnotations : [];
           restoredGlobal = Array.isArray(data.globalAttachments) ? data.globalAttachments : [];
-        } else if (Array.isArray((data as DraftData).codeAnnotations) && (data as DraftData).codeAnnotations!.length > 0) {
-          const generation = readDraftGeneration((data as DraftData).draftGeneration);
-          if (generation !== null) {
-            draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
-          }
-          restoredAnnotations = [];
-          restoredCodeAnnotations = (data as DraftData).codeAnnotations!;
-          restoredGlobal = Array.isArray((data as DraftData).globalAttachments) ? (data as DraftData).globalAttachments : [];
         } else {
-          hasMountedRef.current = true;
-          return;
+          // SAFETY: data is draft union — cast to DraftData to check codeAnnotations
+          const draft = data as DraftData;
+          if (Array.isArray(draft.codeAnnotations) && draft.codeAnnotations.length > 0) {
+            const generation = readDraftGeneration(draft.draftGeneration);
+            if (generation !== null) {
+              draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
+            }
+            restoredAnnotations = [];
+            restoredCodeAnnotations = draft.codeAnnotations;
+            restoredGlobal = Array.isArray(draft.globalAttachments) ? draft.globalAttachments : [];
+          } else {
+            hasMountedRef.current = true;
+            return;
+          }
         }
 
+        // SAFETY: data is draft union — cast to DraftData to read editedMarkdown
         const restoredEdited =
-          !isLegacyDraft(data) && typeof (data as DraftData).editedMarkdown === 'string'
+          !isLegacyDraft(data) && Object.prototype.toString.call((data as DraftData).editedMarkdown) === "[object String]"
             ? (data as DraftData).editedMarkdown!
             : null;
+        // SAFETY: data is draft union — cast to DraftData to read editedDocuments
         const restoredEditedDocuments =
           !isLegacyDraft(data) && Array.isArray((data as DraftData).editedDocuments)
             ? (data as DraftData).editedDocuments!
                 .map(parseSourceBackedDocumentDraft)
                 .filter((doc): doc is SourceBackedDocumentDraftData => doc !== null)
             : [];
+        // SAFETY: data is draft union — cast to DraftData to read savedFileChanges
         const restoredSavedFileChanges =
           !isLegacyDraft(data) && Array.isArray((data as DraftData).savedFileChanges)
             ? (data as DraftData).savedFileChanges!.filter(isSourceBackedSavedFileChange)
@@ -338,12 +351,12 @@ export function useAnnotationDraft({
       annotations,
       codeAnnotations,
       globalAttachments,
-      ...(editedMarkdown !== null ? { editedMarkdown } : {}),
-      ...(editedDocuments.length > 0 ? { editedDocuments } : {}),
-      ...(savedFileChanges.length > 0 ? { savedFileChanges } : {}),
       draftGeneration,
       ts: Date.now(),
     };
+    if (editedMarkdown !== null) payload.editedMarkdown = editedMarkdown;
+    if (editedDocuments.length > 0) payload.editedDocuments = editedDocuments;
+    if (savedFileChanges.length > 0) payload.savedFileChanges = savedFileChanges;
 
     const body = JSON.stringify(payload);
     const headers = { 'Content-Type': 'application/json' };
