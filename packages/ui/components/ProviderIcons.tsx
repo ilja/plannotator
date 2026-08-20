@@ -16,8 +16,10 @@ const GenericProviderIcon: React.FC<{ className?: string }> = ({ className = 'w-
   </svg>
 );
 
+interface ProviderMeta { [key: string]: { label: string; icon: React.FC<{ className?: string }> }; }
+
 /** Provider metadata: maps provider type name to display label and icon component. */
-export const PROVIDER_META: Record<string, { label: string; icon: React.FC<{ className?: string }> }> = {
+export const PROVIDER_META: ProviderMeta = {
   'pi-sdk': { label: 'Pi', icon: PiIcon },
 };
 

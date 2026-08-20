@@ -142,9 +142,7 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath, base: base ?? null, appId }),
       });
-      const data = (await res.json().catch(() => null)) as
-        | { ok: boolean; error?: string }
-        | null;
+      const data: { ok: boolean; error?: string } | null = await res.json().catch(() => null);
       if (!res.ok || !data || data.ok === false) {
         flashError(data?.error || 'Failed to open');
       }

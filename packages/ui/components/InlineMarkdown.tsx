@@ -31,18 +31,20 @@ function gateCodePath(
   // extractor intentionally excluded it (e.g., inside an HTML comment or
   // fenced code block). Demote rather than optimistically linking.
   if (!entry) return { render: 'plain' };
-  switch ((entry as ValidationEntry).status) {
-    case 'found':       return { render: 'link', resolved: (entry as Extract<ValidationEntry, { status: 'found' }>).resolved };
-    case 'ambiguous':   return { render: 'ambiguous-link', matches: (entry as Extract<ValidationEntry, { status: 'ambiguous' }>).matches };
+  switch (entry.status) {
+    case 'found':       return { render: 'link', resolved: entry.resolved };
+    case 'ambiguous':   return { render: 'ambiguous-link', matches: entry.matches };
     case 'unavailable': return { render: 'link' };
     case 'missing':     return { render: 'plain' };
     default:            return { render: 'link' }; // unknown status — degrade to optimistic
   }
 }
 
+interface LanguageMap { [key: string]: string; }
+
 function extToLanguage(filepath: string): string | undefined {
   const ext = filepath.split('.').pop()?.toLowerCase();
-  const map: Record<string, string> = {
+  const map: LanguageMap = {
     ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
     py: 'python', rb: 'ruby', rs: 'rust', go: 'go', java: 'java',
     css: 'css', scss: 'scss', json: 'json', yml: 'yaml', yaml: 'yaml',
@@ -220,8 +222,8 @@ const CodeFileLink: React.FC<{
       >
         {display}
         <CodeFileIcon />
-        {isAmbiguous && (
-          <sup className="text-[0.6rem] opacity-70 -ml-0.5">{(gate as { matches: string[] }).matches.length}</sup>
+        {gate.render === 'ambiguous-link' && (
+          <sup className="text-[0.6rem] opacity-70 -ml-0.5">{gate.matches.length}</sup>
         )}
       </code>
       {hoverPreview && hasLineRef && (
@@ -235,10 +237,10 @@ const CodeFileLink: React.FC<{
           onMouseLeave={handlePreviewLeave}
         />
       )}
-      {pickerOpen && isAmbiguous && (
+      {pickerOpen && gate.render === 'ambiguous-link' && (
         <CodeFilePicker
           anchorEl={anchorRef.current}
-          matches={(gate as { matches: string[] }).matches}
+          matches={gate.matches}
           onPick={(path) => { setPickerOpen(false); onOpenCodeFile(path + lineSuffix); }}
           onDismiss={() => setPickerOpen(false)}
         />
