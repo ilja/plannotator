@@ -6,7 +6,7 @@ import { AnnotationType, type Annotation, type ImageAttachment } from '../types'
 import type { ViewerHandle } from '../components/Viewer';
 import { useLinkedDoc } from './useLinkedDoc';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 const unsupportedSourceSave = disabledSourceSave('unsupported-extension');
 
 const annotation = (id: string, originalText: string): Annotation => ({

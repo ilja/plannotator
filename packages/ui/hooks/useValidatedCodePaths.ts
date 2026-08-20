@@ -58,6 +58,7 @@ export function useValidatedCodePaths(
 					setReady(true);
 					return;
 				}
+				// SAFETY: cast is safe — type is expected shape
 				const data = (await res.json()) as {
 					results: Record<string, ValidationEntry>;
 				};

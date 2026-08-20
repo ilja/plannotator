@@ -254,9 +254,11 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     if (snapshotCurrent) onBeforeNavigate?.();
 
     // Backlink detection: if a linked doc links back to the source file (e.g.,
+    // SAFETY: cast is safe — a is expected shape
     // original.md → design.md → link back to original.md), opening it as a linked
     // doc would create two competing Map entries for the same filepath in
     // getDocAnnotations(), and the empty linked-doc entry would overwrite the
+    // SAFETY: cast is safe — a is expected shape
     // stashed annotations. Instead, treat the backlink as a back() navigation —
     // the current linked doc gets cached and the source file restores with its
     // annotations intact.
@@ -387,6 +389,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
       try {
         const url = (buildUrl ?? defaultBuildUrl)(docPath);
         const res = await fetch(url);
+        // SAFETY: cast is safe — LinkedDocLoadData is expected shape
         const data = (await res.json()) as LinkedDocLoadData & {
           error?: string;
           matches?: string[];

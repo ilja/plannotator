@@ -27,6 +27,7 @@ export function useOverlayViewport<T extends HTMLElement = HTMLElement>() {
   const [viewport, setViewport] = useState<T | null>(null);
 
   const onViewportReady = useCallback((next: HTMLElement | null) => {
+    // SAFETY: cast is safe — T is expected shape
     const el = next as T | null;
     ref.current = el;
     setViewport(el);

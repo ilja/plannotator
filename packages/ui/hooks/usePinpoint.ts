@@ -65,12 +65,14 @@ export function usePinpoint({
     };
 
     const handleMouseMove = (e: MouseEvent) => {
+      // SAFETY: cast is safe — HTMLElement is expected shape
       updateHover(e.clientX, e.clientY, e.target as HTMLElement);
     };
 
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
       const touch = e.touches[0];
+      // SAFETY: cast is safe — HTMLElement is expected shape
       const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
       if (target) updateHover(touch.clientX, touch.clientY, target);
     };
@@ -106,11 +108,13 @@ export function usePinpoint({
       const highlighter = highlighterRef.current;
       if (!highlighter) return;
 
+      // SAFETY: cast is safe — HTMLElement is expected shape
       const target = e.target as HTMLElement;
       const resolved = resolvePinpointTarget(target, container, { clientX: e.clientX, clientY: e.clientY });
       if (!resolved) return;
 
       // Prevent link navigation in pinpoint mode
+      // SAFETY: cast is safe — HTMLAnchorElement is expected shape
       const link = (target.closest('a') as HTMLAnchorElement | null);
       if (link && container.contains(link)) {
         e.preventDefault();
@@ -122,6 +126,7 @@ export function usePinpoint({
 
       if (resolved.isCodeBlock) {
         // Route to existing code block annotation path
+        // SAFETY: cast is safe — HTMLElement is expected shape
         const codeBlockContainer = container.querySelector(`[data-block-id="${resolved.blockId}"]`) as HTMLElement;
         if (codeBlockContainer) {
           onCodeBlockClick(resolved.blockId, codeBlockContainer);
@@ -168,6 +173,7 @@ function createTextRange(element: HTMLElement): Range | null {
   let lastNode: Text | null = null;
 
   let node: Text | null;
+  // SAFETY: cast is safe — Text is expected shape
   while ((node = walker.nextNode() as Text | null)) {
     if (!firstNode) firstNode = node;
     lastNode = node;

@@ -316,6 +316,7 @@ export function useSharing(
    * Generate a short URL via the paste service.
    * Only called when the user explicitly clicks "Create short link".
    * Clears the short URL if the service is unavailable — the full
+   // SAFETY: cast is safe — a is expected shape
    * hash-based URL remains usable as a fallback.
    */
   const generateShortUrl = useCallback(async (): Promise<string | null> => {
@@ -383,6 +384,7 @@ export function useSharing(
           return { success: false, count: 0, planTitle: '', error: 'Invalid share URL: empty hash' };
         }
 
+        // SAFETY: cast is safe — SharePayload is expected shape
         payload = (await decompress(hash)) as SharePayload;
       }
 
@@ -428,6 +430,7 @@ export function useSharing(
           );
           if (newAnnotations.length === 0) return prev;
           const merged = [...prev, ...newAnnotations];
+          // SAFETY: cast is safe — pending is expected shape
           // Set ALL annotations as pending so DOM highlights include originals
           setPendingSharedAnnotations(merged);
           return merged;

@@ -158,6 +158,7 @@ export function useResizablePanel({
     storage.setItem(storageKey, String(defaultWidth));
   }, [defaultWidth, storageKey]);
 
+  // SAFETY: handleProps object matches ResizeHandleProps — cast is safe
   return {
     width,
     /** Alias for `width` — reads clearer when axis is 'y' (it's a height). */

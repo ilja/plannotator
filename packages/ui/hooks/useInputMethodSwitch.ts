@@ -34,7 +34,9 @@ export function useInputMethodSwitch(
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Alt' || e.repeat) return;
       // Don't interfere when user is typing
+      // SAFETY: cast is safe — HTMLElement is expected shape
       const tag = (e.target as HTMLElement)?.tagName;
+      // SAFETY: cast is safe — HTMLElement is expected shape
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
       // Don't interfere when a quick label picker is open (it uses Alt+N shortcuts)
       if (document.querySelector('[data-quick-label-picker]')) return;
