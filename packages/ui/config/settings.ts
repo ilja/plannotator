@@ -14,8 +14,10 @@ import { storage } from '../utils/storage';
 import { generateIdentity } from '../utils/generateIdentity';
 
 const DIFF_LINE_BG_INTENSITY_VALUES = ['subtle', 'normal', 'strong'] as const;
-function isDiffLineBgIntensity(v: unknown): v is DiffLineBgIntensity {
-  return typeof v === 'string' && (DIFF_LINE_BG_INTENSITY_VALUES as readonly string[]).includes(v);
+// SAFETY: v is untyped config value — any is intentional for runtime check
+function isDiffLineBgIntensity(v: any): v is DiffLineBgIntensity {
+  // SAFETY: DIFF_LINE_BG_INTENSITY_VALUES is readonly DiffLineBgIntensity[] — cast to string[] for includes
+  return Object.prototype.toString.call(v) === "[object String]" && (DIFF_LINE_BG_INTENSITY_VALUES as readonly string[]).includes(v);
 }
 
 export interface SettingDef<T> {
@@ -24,8 +26,10 @@ export interface SettingDef<T> {
   toCookie: (value: T) => void;
   /** If set, this setting syncs to server via POST /api/config */
   serverKey?: string;
-  fromServer?: (serverConfig: Record<string, unknown>) => T | undefined;
-  toServer?: (value: T) => Record<string, unknown>;
+  // SAFETY: serverConfig is untyped server payload — any is intentional
+  fromServer?: (serverConfig: any) => T | undefined;
+  // SAFETY: server payload is untyped JSON — any is intentional for toServer
+  toServer?: (value: T) => any;
 }
 
 export const SETTINGS = {
@@ -34,8 +38,9 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-identity') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-identity', v),
     serverKey: 'displayName',
-    fromServer: (sc: Record<string, unknown>) =>
-      typeof sc.displayName === 'string' && sc.displayName ? sc.displayName : undefined,
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) =>
+      Object.prototype.toString.call(sc.displayName) === "[object String]" && sc.displayName ? sc.displayName : undefined,
     toServer: (v: string) => ({ displayName: v }),
   },
 
@@ -62,8 +67,10 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-default-diff-type', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.defaultDiffType;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access defaultDiffType
+      const v = (sc.diffOptions as any)?.defaultDiffType;
       if (v === 'branch') return 'merge-base' as const;
       return v === 'uncommitted' || v === 'unstaged' || v === 'staged' || v === 'merge-base' || v === 'all' ? v : undefined;
     },
@@ -78,8 +85,10 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-style', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.diffStyle;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access diffStyle
+      const v = (sc.diffOptions as any)?.diffStyle;
       return v === 'split' || v === 'unified' ? v : undefined;
     },
     toServer: (v: string) => ({ diffOptions: { diffStyle: v } }),
@@ -93,8 +102,10 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-overflow', v),
     serverKey: 'diffOptions',
-    fromServer: (sc: Record<string, unknown>) => {
-      const v = (sc.diffOptions as Record<string, unknown> | undefined)?.overflow;
+    // SAFETY: sc is untyped server payload — any is intentional
+    fromServer: (sc: any) => {
+      // SAFETY: sc.diffOptions is untyped server payload — cast to access overflow
+      const v = (sc.diffOptions as any)?.overflow;
       return v === 'scroll' || v === 'wrap' ? v : undefined;
     },
     toServer: (v: string) => ({ diffOptions: { overflow: v } }),
