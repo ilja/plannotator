@@ -15,10 +15,12 @@ const PICKER_WIDTH = 192;
 const GAP = 6;
 const VIEWPORT_PADDING = 12;
 
+interface QuickLabelPosition { top: number; left: number; flipAbove: boolean; }
+
 function computePosition(
   anchorEl: HTMLElement,
   cursorHint?: { x: number; y: number },
-): { top: number; left: number; flipAbove: boolean } {
+): QuickLabelPosition {
   const rect = anchorEl.getBoundingClientRect();
 
   // Vertical: use anchor rect for above/below decision + placement
@@ -91,7 +93,7 @@ export const FloatingQuickLabelPicker: React.FC<FloatingQuickLabelPickerProps> =
   // Click outside to dismiss
   useEffect(() => {
     const handlePointerDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) {
         onDismiss();
       }
     };
@@ -119,7 +121,7 @@ export const FloatingQuickLabelPicker: React.FC<FloatingQuickLabelPickerProps> =
         top: position.top,
         left: position.left,
         width: PICKER_WIDTH,
-        ...(position.flipAbove ? { transform: 'translateY(-100%)' } : {}),
+        transform: position.flipAbove ? 'translateY(-100%)' : undefined,
         animation: `${animName} 0.12s ease-out`,
       }}
       onMouseDown={(e) => e.stopPropagation()}

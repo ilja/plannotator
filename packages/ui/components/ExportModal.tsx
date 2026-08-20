@@ -122,7 +122,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setSaveStatus(prev => ({ ...prev, [target]: 'saving' }));
     setSaveErrors(prev => { const next = { ...prev }; delete next[target]; return next; });
 
-    const body: { obsidian?: object; bear?: object; octarine?: object } = {};
+    interface ExportBody { obsidian?: object; bear?: object; octarine?: object; }
+    const body: ExportBody = {};
 
     if (target === 'obsidian') {
       body.obsidian = {
@@ -262,7 +263,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                       readOnly
                       value={shortShareUrl}
                       className="w-full bg-muted rounded-lg p-3 pr-20 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/50"
-                      onClick={e => (e.target as HTMLInputElement).select()}
+                      onClick={e => e.currentTarget.select()}
                     />
                     <button
                       onClick={() => handleCopy(shortShareUrl, 'short')}
@@ -325,7 +326,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     readOnly
                     value={shareUrl}
                     className="w-full h-24 bg-muted rounded-lg p-3 pr-20 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-accent/50"
-                    onClick={e => (e.target as HTMLTextAreaElement).select()}
+                    onClick={e => e.currentTarget.select()}
                   />
                   <button
                     onClick={() => handleCopy(shareUrl, 'full')}

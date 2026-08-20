@@ -50,9 +50,16 @@ const THEME_TOKENS = [
   "--radius",
 ] as const;
 
-function readThemeTokens(): Record<string, string> {
+interface ThemeTokens { [key: string]: string; }
+interface TypographyTokens { [key: string]: string; }
+
+function isStringValue(value: any): value is string {
+  return Object.prototype.toString.call(value) === "[object String]";
+}
+
+function readThemeTokens(): ThemeTokens {
   const style = getComputedStyle(document.documentElement);
-  const tokens: Record<string, string> = {};
+  const tokens: ThemeTokens = {};
   for (const key of THEME_TOKENS) {
     const val = style.getPropertyValue(key).trim();
     if (val) tokens[key] = val;
@@ -60,10 +67,10 @@ function readThemeTokens(): Record<string, string> {
   return tokens;
 }
 
-function readTypographyTokens(typographyStyle?: React.CSSProperties): Record<string, string> {
-  const tokens: Record<string, string> = {};
+function readTypographyTokens(typographyStyle?: React.CSSProperties): TypographyTokens {
+  const tokens: TypographyTokens = {};
   for (const [key, value] of Object.entries(typographyStyle ?? {})) {
-    if (key.startsWith("--") && typeof value === "string" && value.trim()) {
+    if (key.startsWith("--") && isStringValue(value) && value.trim()) {
       tokens[key] = value;
     }
   }
