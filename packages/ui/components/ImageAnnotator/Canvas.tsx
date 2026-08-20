@@ -80,7 +80,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     isDrawing.current = true;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     onStrokeStart(getPoint(e));
   };
 

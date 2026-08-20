@@ -41,8 +41,8 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept when typing in the name input
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT') {
+      const target = e.target;
+      if (target instanceof HTMLElement && target.tagName === 'INPUT') {
         if (e.key === 'Escape') {
           // Blur and let the next Escape close
           target.blur();

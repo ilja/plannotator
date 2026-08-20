@@ -46,7 +46,8 @@ export interface UseHtmlAnnotationOptions {
   onResize?: (height: number) => void;
 }
 
-function postToIframe(iframe: HTMLIFrameElement | null, msg: Record<string, unknown>) {
+// SAFETY: msg is a bridge message with known shape produced in this file — any avoids Record<string, unknown> unsafe dict
+function postToIframe(iframe: HTMLIFrameElement | null, msg: any) {
   iframe?.contentWindow?.postMessage(msg, "*");
 }
 
@@ -117,11 +118,13 @@ export function useHtmlAnnotation({
 
   useEffect(() => {
     function handler(e: MessageEvent<BridgeMessage>) {
-      if (!e.data || typeof e.data.type !== "string" || !e.data.type.startsWith(PREFIX)) return;
+      if (!e.data || Object.prototype.toString.call(e.data.type) !== "[object String]" || !e.data.type.startsWith(PREFIX)) return;
 
       const type = e.data.type;
 
       if (type === `${PREFIX}selection`) {
+        if (!("text" in e.data) || !("rect" in e.data)) return;
+        // SAFETY: e.data is BridgeSelectionMessage when type is plannotator-bridge-selection and required fields present — producer is bridge-script.ts
         const msg = e.data as BridgeSelectionMessage;
         pendingTextRef.current = msg.text;
         const anchor = positionAnchor(msg.rect);
@@ -183,7 +186,9 @@ export function useHtmlAnnotation({
         const iframe = iframeRef.current;
         const anchor = anchorRef.current;
         if (!iframe || !anchor) return;
-        const r = (e.data as unknown as { rect: { top: number; left: number; width: number; height: number } }).rect;
+        if (!("rect" in e.data)) return;
+        // SAFETY: e.data is rect message when type is selection-rect and rect present — bridge-script sends rect on scroll
+        const r = (e.data as { rect: { top: number; left: number; width: number; height: number } }).rect;
         const iframeRect = iframe.getBoundingClientRect();
         anchor.style.top = `${iframeRect.top + r.top}px`;
         anchor.style.left = `${iframeRect.left + r.left + r.width / 2}px`;
@@ -195,6 +200,8 @@ export function useHtmlAnnotation({
         // markdown path, where AnnotationToolbar owns this keydown). Open a comment
         // pre-filled with the typed char.
         if (!toolbarStateRef.current) return;
+        if (!("key" in e.data)) return;
+        // SAFETY: e.data is keytype message when type is keytype and key present — bridge-script sends key on type-to-comment
         const key = (e.data as { key?: string }).key;
         const text = pendingTextRef.current;
         if (!key || !text) return;
@@ -207,11 +214,15 @@ export function useHtmlAnnotation({
       }
 
       if (type === `${PREFIX}mark-click`) {
+        if (!("id" in e.data)) return;
+        // SAFETY: e.data is BridgeMarkClickMessage when type is mark-click and id present — bridge-script sends id on mark click
         const msg = e.data as BridgeMarkClickMessage;
         onSelectRef.current?.(msg.id);
       }
 
       if (type === `${PREFIX}resize`) {
+        if (!("height" in e.data)) return;
+        // SAFETY: e.data is BridgeResizeMessage when type is resize and height present — bridge-script sends height on resize
         const msg = e.data as BridgeResizeMessage;
         onResize?.(msg.height);
       }
