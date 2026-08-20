@@ -33,13 +33,17 @@ export interface SharePayload {
   r?: 'html';  // render mode flag (omitted = markdown)
 }
 
+interface TypeMap {
+  [key: string]: AnnotationType;
+}
+
 /**
  * Convert ShareableImage[] to ImageAttachment[] (handles old plain-string format)
  */
 export function parseShareableImages(raw: ShareableImage[] | undefined): ImageAttachment[] | undefined {
   if (!raw?.length) return undefined;
   return raw.map(img => {
-    if (typeof img === 'string') {
+    if (Object.prototype.toString.call(img) === "[object String]") {
       // Old format: plain path string — derive name from filename
       const name = img.split('/').pop()?.replace(/\.[^.]+$/, '') || 'image';
       return { path: img, name };
@@ -69,17 +73,21 @@ export function toShareable(annotations: Annotation[]): ShareableAnnotation[] {
 
     // Handle GLOBAL_COMMENT specially - it starts with 'G' (from GLOBAL_COMMENT)
     if (ann.type === AnnotationType.GLOBAL_COMMENT) {
+      // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
       return ['G', ann.text || '', author, images] as ShareableAnnotation;
     }
 
     if (ann.type === AnnotationType.DELETION) {
+      // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
       return ['D', ann.originalText, author, images] as ShareableAnnotation;
     }
 
     // COMMENT
     if (ann.isQuickLabel) {
+      // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
       return ['C', ann.originalText, ann.text || '', author, images ?? undefined, 1] as ShareableAnnotation;
     }
+    // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
     return ['C', ann.originalText, ann.text || '', author, images] as ShareableAnnotation;
   });
 }
@@ -96,7 +104,7 @@ export function fromShareable(
   choiceValidationEvidence?: (ChoiceValidationEvidence | null)[] | null,
   choiceOptionLabels?: (string | null)[] | null,
 ): Annotation[] {
-  const typeMap: Record<string, AnnotationType> = {
+  const typeMap: TypeMap = {
     'D': AnnotationType.DELETION,
     'C': AnnotationType.COMMENT,
     'G': AnnotationType.GLOBAL_COMMENT,
@@ -107,11 +115,14 @@ export function fromShareable(
 
     // Handle global comments specially: ['G', text, author, images?]
     if (type === 'G') {
+      // SAFETY: ShareableAnnotation G payload is [string] at index 1 — cast to string
       const text = item[1] as string;
+      // SAFETY: ShareableAnnotation G payload is string | null at index 2 — cast to string | null
       const author = item[2] as string | null;
+      // SAFETY: ShareableAnnotation G payload is ShareableImage[] at index 3 — cast to ShareableImage[] | undefined
       const rawImages = item[3] as ShareableImage[] | undefined;
 
-      return {
+      const gAnnotation: Annotation = {
         id: `shared-${index}-${Date.now()}`,
         blockId: '',
         startOffset: 0,
@@ -122,15 +133,19 @@ export function fromShareable(
         createdA: Date.now() + index,
         author: author || undefined,
         images: parseShareableImages(rawImages),
-        ...(sources?.[index] ? { source: sources[index] } : {}),
       };
+      if (sources?.[index]) gAnnotation.source = sources[index]!;
+      return gAnnotation;
     }
 
     const originalText = item[1];
     // For deletion: [type, original, author, images?]
     // For others: [type, original, text, author, images?]
+    // SAFETY: ShareableAnnotation text is string at index 2 for non-D — cast to string
     const text = type === 'D' ? undefined : item[2] as string;
+    // SAFETY: ShareableAnnotation author is string | null at index 2/3 — cast to string | null
     const author = type === 'D' ? item[2] as string | null : item[3] as string | null;
+    // SAFETY: ShareableAnnotation images is ShareableImage[] at index 3/4 — cast to ShareableImage[] | undefined
     const rawImages = type === 'D' ? item[3] as ShareableImage[] | undefined : item[4] as ShareableImage[] | undefined;
     // Comment annotations may have isQuickLabel flag at index 5
     const isQuickLabel = type === 'C' && item.length > 5 && item[5] === 1 ? true : undefined;
@@ -139,7 +154,7 @@ export function fromShareable(
       ? `ann-choice-shared-${index}-${Date.now()}`
       : `shared-${index}-${Date.now()}`;
 
-    return {
+    const annotation: Annotation = {
       id: choiceAnnotationId,
       blockId: '',  // Will be populated during highlight restoration
       startOffset: 0,
@@ -150,13 +165,17 @@ export function fromShareable(
       createdA: Date.now() + index,  // Preserve order
       author: author || undefined,
       images: parseShareableImages(rawImages),
-      ...(isQuickLabel ? { isQuickLabel } : {}),
-      ...(choiceOptionLabel !== undefined ? { choiceOptionLabel } : {}),
-      ...(diffContexts?.[index] ? { diffContext: diffContexts[index] as Annotation['diffContext'] } : {}),
-      ...(sources?.[index] ? { source: sources[index] } : {}),
-      ...(choiceValidationEvidence?.[index] ? { choiceValidationEvidence: choiceValidationEvidence[index]! } : {}),
       // startMeta/endMeta will be set by web-highlighter
     };
+    if (isQuickLabel) annotation.isQuickLabel = true;
+    if (choiceOptionLabel !== undefined) annotation.choiceOptionLabel = choiceOptionLabel;
+    if (diffContexts?.[index]) {
+      // SAFETY: diffContext value is known Annotation diffContext string — cast to diffContext type
+      annotation.diffContext = diffContexts[index] as Annotation['diffContext'];
+    }
+    if (sources?.[index]) annotation.source = sources[index]!;
+    if (choiceValidationEvidence?.[index]) annotation.choiceValidationEvidence = choiceValidationEvidence[index]!;
+    return annotation;
   });
 }
 
@@ -200,11 +219,11 @@ export async function generateShareUrl(
     p: markdown,
     a: toShareable(annotations),
     g: globalAttachments?.length ? toShareableImages(globalAttachments) : undefined,
-    ...(diffContexts ? { d: diffContexts } : {}),
-    ...(sources ? { s: sources } : {}),
-    ...(choiceValidationEvidence ? { cv: choiceValidationEvidence } : {}),
-    ...(choiceOptionLabels ? { co: choiceOptionLabels } : {}),
   };
+  if (diffContexts) payload.d = diffContexts;
+  if (sources) payload.s = sources;
+  if (choiceValidationEvidence) payload.cv = choiceValidationEvidence;
+  if (choiceOptionLabels) payload.co = choiceOptionLabels;
 
   const hash = await compress(payload);
   return `${baseUrl}/#${hash}`;
@@ -223,6 +242,7 @@ export async function parseShareHash(): Promise<SharePayload | null> {
   }
 
   try {
+    // SAFETY: decompress hash is known SharePayload from compress — cast to SharePayload
     return (await decompress(hash)) as SharePayload;
   } catch (e) {
     console.warn('Failed to parse share hash:', e);
@@ -288,12 +308,15 @@ export async function createShortShareUrl(
       p: markdown,
       a: toShareable(annotations),
       g: globalAttachments?.length ? toShareableImages(globalAttachments) : undefined,
-      ...(diffContexts ? { d: diffContexts } : {}),
-      ...(sources ? { s: sources } : {}),
-      ...(choiceValidationEvidence ? { cv: choiceValidationEvidence } : {}),
-      ...(choiceOptionLabels ? { co: choiceOptionLabels } : {}),
-      ...(rawHtml ? { h: rawHtml, r: 'html' as const } : {}),
     };
+    if (diffContexts) payload.d = diffContexts;
+    if (sources) payload.s = sources;
+    if (choiceValidationEvidence) payload.cv = choiceValidationEvidence;
+    if (choiceOptionLabels) payload.co = choiceOptionLabels;
+    if (rawHtml) {
+      payload.h = rawHtml;
+      payload.r = 'html';
+    }
 
     const compressed = await compress(payload);
 
@@ -315,6 +338,7 @@ export async function createShortShareUrl(
       return null;
     }
 
+    // SAFETY: paste service returns { id: string } — cast to expected shape
     const result = (await response.json()) as { id: string };
     // Embed paste origin in fragment when non-default so the share portal can
     // fetch from the right service without a server.
@@ -337,8 +361,10 @@ export async function createShortShareUrl(
 
 async function readPasteError(response: Response, fallback: string): Promise<string> {
   try {
+    // SAFETY: error response is { error?: unknown } — cast to expected shape
     const body = (await response.json()) as { error?: unknown };
-    return typeof body.error === 'string' && body.error.trim() ? body.error : fallback;
+    // SAFETY: body.error is string after Object.prototype check — cast to string
+    return Object.prototype.toString.call(body.error) === "[object String]" && (body.error as string).trim() ? (body.error as string) : fallback;
   } catch {
     return fallback;
   }
@@ -365,15 +391,18 @@ export async function loadFromPasteId(
       return null;
     }
 
+    // SAFETY: paste service returns { data: string } — cast to expected shape
     const result = (await response.json()) as { data: string };
 
     if (encryptionKey) {
       // Encrypted path: decrypt ciphertext, then decompress
       const compressed = await decrypt(result.data, encryptionKey);
+      // SAFETY: decompressed payload is known SharePayload — cast to SharePayload
       return await decompress(compressed) as SharePayload;
     }
 
     // Legacy unencrypted path: decompress directly
+    // SAFETY: decompressed payload is known SharePayload — cast to SharePayload
     return await decompress(result.data) as SharePayload;
   } catch (e) {
     console.warn('[sharing] Failed to load from paste ID:', e);
