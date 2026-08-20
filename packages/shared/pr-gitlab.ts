@@ -365,7 +365,7 @@ export async function fetchGlMRContext(
   const checks: PRContext["checks"] = [];
   if (pipelinesResult.exitCode === 0) {
     try {
-      const pipelines = JSON.parse(pipelinesResult.stdout) as any[];
+      const pipelines: any[] = JSON.parse(pipelinesResult.stdout);
       if (pipelines.length > 0) {
         const latest = pipelines[0];
         const jobsResult = await runtime.runCommand(
@@ -374,12 +374,15 @@ export async function fetchGlMRContext(
         );
         if (jobsResult.exitCode === 0) {
           try {
-            const jobs = JSON.parse(jobsResult.stdout) as any[];
+            const jobs: any[] = JSON.parse(jobsResult.stdout);
             for (const job of jobs) {
               const jobStatus = str(job.status);
               const isComplete = ["success", "failed", "canceled", "skipped"].includes(jobStatus);
               // Map GitLab job statuses to GitHub-compatible conclusion enums
-              const conclusionMap: Record<string, string> = {
+              interface ConclusionMap {
+                readonly [key: string]: string;
+              }
+              const conclusionMap: ConclusionMap = {
                 success: "SUCCESS",
                 failed: "FAILURE",
                 canceled: "NEUTRAL",
@@ -403,10 +406,10 @@ export async function fetchGlMRContext(
   const linkedIssues: PRContext["linkedIssues"] = [];
   if (issuesResult.exitCode === 0) {
     try {
-      const issues = JSON.parse(issuesResult.stdout) as any[];
+      const issues: any[] = JSON.parse(issuesResult.stdout);
       for (const i of issues) {
         linkedIssues.push({
-          number: typeof i.iid === "number" ? i.iid : 0,
+          number: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(i.iid)) ?? 0,
           url: str(i.web_url),
           repo: ref.projectPath,
         });
@@ -500,7 +503,7 @@ export async function submitGlMRReview(
     let startSha = headSha;
     if (mrResult.exitCode === 0 && mrResult.stdout.trim()) {
       try {
-        const mrData = JSON.parse(mrResult.stdout) as { diff_refs?: { base_sha: string; start_sha: string; head_sha: string } };
+        const mrData: { diff_refs?: { base_sha: string; start_sha: string; head_sha: string } } = JSON.parse(mrResult.stdout);
         if (mrData.diff_refs) {
           baseSha = mrData.diff_refs.base_sha;
           startSha = mrData.diff_refs.start_sha;
@@ -516,7 +519,7 @@ export async function submitGlMRReview(
     const results = await Promise.allSettled(
       fileComments.map(async (comment) => {
         const isOldSide = comment.side === "LEFT";
-        const position: Record<string, unknown> = {
+        let position: RawGlRecord = {
           position_type: "text",
           base_sha: baseSha,
           head_sha: headSha,
@@ -526,23 +529,23 @@ export async function submitGlMRReview(
         };
 
         if (isOldSide) {
-          position.old_line = comment.line;
+          position = { ...position, old_line: comment.line };
         } else {
-          position.new_line = comment.line;
+          position = { ...position, new_line: comment.line };
         }
 
         // Multi-line range support
         if (comment.start_line != null && comment.start_line !== comment.line) {
           const startIsOld = (comment.start_side ?? comment.side) === "LEFT";
-          const startEntry: Record<string, unknown> = { type: startIsOld ? "old" : "new" };
-          if (startIsOld) startEntry.old_line = comment.start_line;
-          else startEntry.new_line = comment.start_line;
+          const startEntry: RawGlRecord = startIsOld
+            ? { type: "old", old_line: comment.start_line }
+            : { type: "new", new_line: comment.start_line };
 
-          const endEntry: Record<string, unknown> = { type: isOldSide ? "old" : "new" };
-          if (isOldSide) endEntry.old_line = comment.line;
-          else endEntry.new_line = comment.line;
+          const endEntry: RawGlRecord = isOldSide
+            ? { type: "old", old_line: comment.line }
+            : { type: "new", new_line: comment.line };
 
-          position.line_range = { start: startEntry, end: endEntry };
+          position = { ...position, line_range: { start: startEntry, end: endEntry } };
         }
 
         const payload = JSON.stringify({ body: comment.body, position });
