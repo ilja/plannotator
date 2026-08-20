@@ -337,7 +337,8 @@ describe("semantic diff runner", () => {
     expect(cache.get("k2", "patch-a")).toBeUndefined();
 
     // A success overwrites and outlives the failure memo.
-    const ok = { status: "ok", changes: [], binaryChanges: [] } as unknown as SemanticDiffResponse;
+    // SAFETY: test constructs minimal SemanticDiffResponse; shape matches ok variant
+    const ok = { status: "ok", changes: [], binaryChanges: [] } as SemanticDiffResponse;
     cache.setFailure("k3", "patch-a", failure, 60_000);
     cache.set("k3", "patch-a", ok);
     expect(cache.get("k3", "patch-a")).toBe(ok);
