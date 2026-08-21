@@ -738,7 +738,9 @@ const CommentsTab: React.FC = () => {
   );
 };
 
-export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mode = 'plan', onUIPreferencesChange, externalOpen, onExternalClose, aiProviders = [], gitUser }) => {
+const EMPTY_AI_PROVIDERS: SettingsProps['aiProviders'] = [];
+
+export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mode = 'plan', onUIPreferencesChange, externalOpen, onExternalClose, aiProviders = EMPTY_AI_PROVIDERS, gitUser }) => {
   const [showDialog, setShowDialog] = useState(false);
   const [themePreview, setThemePreview] = useState(false);
 
