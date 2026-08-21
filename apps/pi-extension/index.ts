@@ -8,7 +8,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import {basename} from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,

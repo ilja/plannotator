@@ -18,7 +18,6 @@ import type { PendingAIContext } from '../utils/pendingAIContext';
 
 export type ReviewSidebarTab = 'annotations' | 'ai';
 
-
 interface ReviewSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -101,23 +100,22 @@ function compareCodeAnnotations(a: CodeAnnotation, b: CodeAnnotation): number {
     : b.createdAt - a.createdAt;
 }
 
-
 export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
   isOpen,
-  onClose,
+  _onClose,
   activeTab,
   annotations,
-  files,
+  _files,
   selectedAnnotationId,
-  onSelectAnnotation,
+  _onSelectAnnotation,
   onNavigateToAnnotation,
   onDeleteAnnotation,
   feedbackMarkdown,
   width,
   editorAnnotations,
   onDeleteEditorAnnotation,
-  prMetadata,
-  aiAvailable = false,
+  _prMetadata,
+  _aiAvailable = false,
   aiMessages = [],
   isAICreatingSession = false,
   isAIStreaming = false,
@@ -134,7 +132,7 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
   aiConfig,
   onAIConfigChange,
   hasAISession,
-  onOpenPRPanel,
+  _onOpenPRPanel,
 }) => {
   const totalCount = annotations.length + (editorAnnotations?.length ?? 0);
   const [copied, setCopied] = useState(false);
@@ -390,8 +388,6 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */({
               hasAISession={hasAISession}
             />
           )}
-
-
 
         </OverlayScrollArea>
 

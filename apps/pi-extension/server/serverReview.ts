@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import os from "node:os";
-import { basename, resolve as resolvePath } from "node:path";
+import {basename} from "node:path";
 
 import { contentHash, deleteDraft } from "../generated/draft.js";
 import { ConfigPatch, loadConfig, saveConfig, detectGitUser, getServerConfig, resolveSharingEnabled } from "../generated/config.js";
@@ -21,14 +21,7 @@ import {
 	type PRMetadata,
 	prRefFromMetadata,
 } from "../generated/pr-types.js";
-import {
-	type DiffType,
-	type GitContext,
-	getFileContentsForDiff as getFileContentsForDiffCore,
-	parseWorktreeDiffType,
-	resolveBaseBranch,
-	validateFilePath,
-} from "../generated/review-core.js";
+import {type DiffType, type GitContext, getFileContentsForDiff as getFileContentsForDiffCore, resolveBaseBranch, validateFilePath} from "../generated/review-core.js";
 import {
 	checkoutPRHead,
 	getPRDiffScopeOptions,

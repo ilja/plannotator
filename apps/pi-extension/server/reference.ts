@@ -18,11 +18,7 @@ import { json, parseBody } from "./helpers";
 import type { IncomingMessage } from "node:http";
 import { Schema } from "effect";
 
-import {
-	type VaultNode,
-	buildFileTree,
-	isFileBrowserExcludedPath,
-} from "../generated/reference-common.js";
+import {buildFileTree, isFileBrowserExcludedPath} from "../generated/reference-common.js";
 import {
 	filterWorkspaceStatusForDirectory,
 	getWorkspaceStatusForDirectory,

@@ -108,7 +108,7 @@ export function extractTitle(markdown: string): string {
 		// Clean up the title for use as filename
 		return h1Match[1]
 			.trim()
-			.replace(/[<>:"/\\|?*(){}\[\]#~`]/g, "") // Remove invalid/problematic filename chars
+			.replace(/[<>:"/\\|?*(){}[\]#~`]/g, "") // Remove invalid/problematic filename chars
 			.replace(/\s+/g, " ") // Normalize whitespace
 			.trim() // Re-trim after stripping
 			.slice(0, 50); // Limit length

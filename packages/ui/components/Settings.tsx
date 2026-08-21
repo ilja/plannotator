@@ -29,13 +29,7 @@ interface FilenameVars {
   [key: string]: string;
 }
 
-import {
-  getUIPreferences,
-  saveUIPreferences,
-  PLAN_WIDTH_OPTIONS,
-  type UIPreferences,
-  type PlanWidth,
-} from '../utils/uiPreferences';
+import {getUIPreferences, saveUIPreferences, PLAN_WIDTH_OPTIONS, type UIPreferences} from '../utils/uiPreferences';
 import { getAutoCloseDelay, setAutoCloseDelay, AUTO_CLOSE_OPTIONS, type AutoCloseDelay } from '../utils/storage';
 import {
   getDefaultNotesApp,

@@ -31,7 +31,7 @@ import {
 	getCliInstallUrl,
 } from "./generated/pr-provider.js";
 import { parseRemoteUrl } from "./generated/repo.js";
-import { fetchRef, createWorktree, removeWorktree, ensureObjectAvailable } from "./generated/worktree.js";
+import {fetchRef, createWorktree, ensureObjectAvailable} from "./generated/worktree.js";
 import { loadConfig, resolveDefaultDiffType, resolveSharingEnabled } from "./generated/config.js";
 import {
 	WorkspaceReviewSession,
@@ -295,7 +295,7 @@ export async function startCodeReviewBrowserSession(
 					const prRepo = prMetadata.platform === "github"
 						? `${prMetadata.owner}/${prMetadata.repo}`
 						: prMetadata.projectPath;
-					if (/^-/.test(prRepo)) throw new Error(`Invalid repository identifier: ${prRepo}`);
+					if (prRepo.startsWith('-')) throw new Error(`Invalid repository identifier: ${prRepo}`);
 					const cli = prMetadata.platform === "github" ? "gh" : "glab";
 					const host = prMetadata.host;
 					// gh/glab repo clone doesn't accept --hostname; set GH_HOST/GITLAB_HOST env instead

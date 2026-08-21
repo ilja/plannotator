@@ -46,7 +46,7 @@ describe('buildPendingAIContext', () => {
   });
 
   test('uses the exact supplied file for added lines with duplicate line numbers', () => {
-    const firstFile = {
+    const _firstFile = {
       path: 'src/first.ts',
       patch: `diff --git a/src/first.ts b/src/first.ts
 index 1111111..2222222 100644
@@ -59,7 +59,7 @@ index 1111111..2222222 100644
  export { shared };
 `,
     };
-    const secondFile = {
+    const _secondFile = {
       path: 'src/second.ts',
       patch: `diff --git a/src/second.ts b/src/second.ts
 index 3333333..4444444 100644
@@ -73,7 +73,7 @@ index 3333333..4444444 100644
 `,
     };
 
-    expect(buildPendingAIContext(secondFile, 2, 'additions')).toEqual({
+    expect(buildPendingAIContext(_secondFile, 2, 'additions')).toEqual({
       filePath: 'src/second.ts',
       lineStart: 2,
       lineEnd: 2,
@@ -96,7 +96,7 @@ index 1111111..2222222 100644
  export { shared };
 `,
     };
-    const secondFile = {
+    const _secondFile = {
       path: 'src/second.ts',
       patch: `diff --git a/src/second.ts b/src/second.ts
 index 3333333..4444444 100644

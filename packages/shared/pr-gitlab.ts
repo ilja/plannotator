@@ -8,7 +8,7 @@
 import { join } from "path";
 import { mkdirSync, writeFileSync } from "fs";
 import { Option, Schema } from "effect";
-import type { PRRuntime, PRMetadata, PRContext, PRReviewFileComment, CommandResult } from "./pr-types";
+import type {PRRuntime, PRMetadata, PRContext, PRReviewFileComment} from "./pr-types";
 import { encodeApiFilePath } from "./pr-types";
 import { getPlannotatorDataDir } from "./data-dir";
 

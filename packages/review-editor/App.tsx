@@ -12,7 +12,6 @@ import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay'
 import { GitHubIcon } from '@plannotator/ui/components/GitHubIcon';
 import { GitLabIcon } from '@plannotator/ui/components/GitLabIcon';
 import { RepoIcon } from '@plannotator/ui/components/RepoIcon';
-import { PullRequestIcon } from '@plannotator/ui/components/PullRequestIcon';
 import { getPlatformLabel, getMRLabel, getMRNumberLabel, getDisplayRepo } from '@plannotator/shared/pr-types';
 import type { SemanticDiffAdvert } from '@plannotator/shared/semantic-diff-types';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
@@ -38,7 +37,7 @@ import { useCodeAnnotationDraft } from '@plannotator/ui/hooks/useCodeAnnotationD
 import { useGitAdd } from './hooks/useGitAdd';
 import { generateId } from './utils/generateId';
 import { useAIChat } from './hooks/useAIChat';
-import { toast, Toaster } from 'sonner';
+import {toast} from 'sonner';
 import { useCodeNav, type CodeNavRequest } from './hooks/useCodeNav';
 import { buildPendingAIContext, type PendingAIContext } from './utils/pendingAIContext';
 import { isTypingTarget, useReviewSearch, type ReviewSearchMatch } from './hooks/useReviewSearch';
@@ -84,7 +83,7 @@ import {
 } from './dock/reviewPanelTypes';
 import type { DiffFile, AnnotationScrollTarget } from './types';
 import { annotationMatchesPrScope } from './utils/annotationScope';
-import type { DiffOption, WorktreeInfo, GitContext } from '@plannotator/shared/types';
+import type {DiffOption, GitContext} from '@plannotator/shared/types';
 import type { PRMetadata } from '@plannotator/shared/pr-types';
 import type { PRDiffScope, PRDiffScopeOption, PRStackInfo, PRStackTree } from '@plannotator/shared/pr-stack';
 import { altKey } from '@plannotator/ui/utils/platform';
@@ -106,7 +105,7 @@ interface DiffData {
   diffType?: string;
   gitContext?: GitContext;
   diffOptions?: DiffOption[];
-  sharingEnabled?: boolean;
+  _sharingEnabled?: boolean;
   prStackInfo?: PRStackInfo | null;
   prDiffScope?: PRDiffScope;
   prDiffScopeOptions?: PRDiffScopeOption[];
@@ -210,7 +209,7 @@ const ReviewApp: React.FC = () => {
   const [submitted, setSubmitted] = useState<'approved' | 'feedback' | 'exited' | false>(false);
   const [showApproveWarning, setShowApproveWarning] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
-  const [sharingEnabled, setSharingEnabled] = useState(true);
+  const [_sharingEnabled, setSharingEnabled] = useState(true);
   const [repoInfo, setRepoInfo] = useState<{ display: string; branch?: string } | null>(null);
 
   useEffect(() => {
@@ -263,7 +262,7 @@ const ReviewApp: React.FC = () => {
 
   const identity = useConfigValue('displayName');
 
-  const clearPendingSelection = useCallback(() => {
+  const _clearPendingSelection = useCallback(() => {
     setPendingSelection(null);
   }, []);
 
@@ -576,7 +575,6 @@ const [aiConfig, setAiConfig] = useState(() => {
     });
   }, [openDiffFile]);
 
-
   // Click AI marker in diff → scroll sidebar to that Q&A
   const [scrollToQuestionId, setScrollToQuestionId] = useState<string | null>(null);
   const handleClickAIMarker = useCallback((questionId: string) => {
@@ -804,7 +802,6 @@ const [aiConfig, setAiConfig] = useState(() => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showExportModal, showDestinationMenu, isSearchOpen, searchQuery, searchMatches, isSearchPending, openSearch, stepSearchMatch, clearSearch, closeSearch, hasSearchableFiles, reviewSidebar.isOpen, reviewSidebar.open, reviewSidebar.close, isFileTreeOpen]);
-
 
   // Load diff content - try API first, fall back to demo
   useEffect(() => {

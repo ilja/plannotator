@@ -1,5 +1,4 @@
 import type { PasteStore } from "./storage";
-import { corsHeaders } from "./cors";
 import { Schema } from "effect";
 
 /** POST /api/paste request body contract, decoded at the HTTP boundary. */

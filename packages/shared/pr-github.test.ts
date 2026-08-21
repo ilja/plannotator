@@ -1,5 +1,5 @@
 import { describe, expect, test, spyOn } from "bun:test";
-import { fetchGhPR, reconstructGhPatch, type GitHubFileEntry } from "./pr-github";
+import {fetchGhPR, reconstructGhPatch} from "./pr-github";
 import { parseDiffGitHeader, parseDiffFilePathLines, parseDiffMetadataPathLines } from "./diff-paths";
 import type { PRRuntime } from "./pr-types";
 

@@ -8,4 +8,4 @@ export const isMac = globalThis.navigator !== undefined && /Mac|iPhone|iPad/.tes
 export const modKey = isMac ? '⌘' : 'Ctrl';
 export const altKey = isMac ? '⌥' : 'Alt';
 export const submitHint = isMac ? '⌘↵' : 'Ctrl+Enter';
-export const isWindows = globalThis.navigator !== undefined && /^Win/.test(navigator.platform);
+export const isWindows = globalThis.navigator !== undefined && navigator.platform.startsWith('Win');

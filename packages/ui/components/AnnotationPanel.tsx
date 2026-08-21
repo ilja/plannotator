@@ -86,7 +86,7 @@ interface PanelProps {
 export const AnnotationPanel: React.FC<PanelProps> = ({
   isOpen,
   annotations,
-  blocks,
+  blocks: _blocks,
   onSelect,
   onDelete,
   onEdit,

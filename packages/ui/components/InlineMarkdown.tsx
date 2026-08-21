@@ -5,7 +5,6 @@ import { isCodeFilePath, isCodeFilePathStrict, CODE_PATH_BARE_REGEX, parseCodePa
 import { transformPlainText } from "../utils/inlineTransforms";
 import { getImageSrc } from "./ImageThumbnail";
 import { useCodePathValidation, type CodePathValidationContextValue } from "./CodePathValidationContext";
-import type { ValidationEntry } from "../hooks/useValidatedCodePaths";
 import { CodeFilePicker } from "./CodeFilePicker";
 
 const inlineCodeTypographyStyle: React.CSSProperties = {
@@ -421,7 +420,7 @@ export const InlineMarkdown: React.FC<{
     }
 
     // Backslash escaping: \. \* \_ \` \[ \~ etc. — emit literal char, hide backslash
-    match = remaining.match(/^\\([\\*_`\[\]~!.()\-#>+|{}&])/);
+    match = remaining.match(/^\\([\\*_`[\]~!.()\-#>+|{}&])/);
     if (match) {
       parts.push(match[1]);
       remaining = remaining.slice(2);
@@ -982,7 +981,7 @@ export const InlineMarkdown: React.FC<{
     // `h` mid-word (e.g. ":heart:", "hello"), and splitting on it breaks
     // multi-char patterns like emoji shortcodes. Bare URLs are instead
     // detected inline via emitPlainTextWithBareUrls() below.
-    const nextSpecial = remaining.slice(1).search(/[\*_`\[!~\\<#@]/);
+    const nextSpecial = remaining.slice(1).search(/[*_`[!~\\<#@]/);
     const plainText = nextSpecial === -1 ? remaining : remaining.slice(0, nextSpecial + 1);
     emitPlainTextWithBareUrls(plainText, previousChar, parts, () => key++, onOpenCodeFile, validation, imageBaseDir);
     previousChar = plainText[plainText.length - 1] || previousChar;

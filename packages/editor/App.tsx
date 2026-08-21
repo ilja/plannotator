@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallba
 import { toast, Toaster } from 'sonner';
 import { type Origin, getAgentName } from '@plannotator/shared/agents';
 import { annotateFileFeedback, annotateMessageFeedback } from '@plannotator/shared/feedback-templates';
-import { parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, exportCodeFileAnnotations, exportMessageAnnotations, extractFrontmatter, wrapFeedbackForAgent, Frontmatter, type LinkedDocAnnotationEntry, type MessageAnnotationEntry } from '@plannotator/ui/utils/parser';
+import {parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, exportCodeFileAnnotations, exportMessageAnnotations, extractFrontmatter, wrapFeedbackForAgent, type LinkedDocAnnotationEntry, type MessageAnnotationEntry} from '@plannotator/ui/utils/parser';
 import { Viewer, ViewerHandle } from '@plannotator/ui/components/Viewer';
 import { HtmlViewer } from '@plannotator/ui/components/html-viewer';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@plannotator/ui/components/MarkdownEditor';
@@ -21,12 +21,11 @@ import { StickyHeaderLane } from '@plannotator/ui/components/StickyHeaderLane';
 import { useSharing } from '@plannotator/ui/hooks/useSharing';
 import { getCallbackConfig, CallbackAction, executeCallback } from '@plannotator/ui/utils/callback';
 import { useActiveSection } from '@plannotator/ui/hooks/useActiveSection';
-import { storage } from '@plannotator/ui/utils/storage';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
 import { loadCodeFont } from '@plannotator/ui/utils/diffFonts';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
 import { LookAndFeelAnnouncementDialog } from '@plannotator/ui/components/LookAndFeelAnnouncementDialog';
-import { getObsidianSettings, getEffectiveVaultPath, isObsidianConfigured, CUSTOM_PATH_SENTINEL } from '@plannotator/ui/utils/obsidian';
+import {getObsidianSettings, getEffectiveVaultPath, isObsidianConfigured} from '@plannotator/ui/utils/obsidian';
 import { getBearSettings } from '@plannotator/ui/utils/bear';
 import { getOctarineSettings, isOctarineConfigured } from '@plannotator/ui/utils/octarine';
 import { getDefaultNotesApp } from '@plannotator/ui/utils/defaultNotesApp';
@@ -40,7 +39,7 @@ import {
 } from '@plannotator/ui/utils/aiProvider';
 import { markLookAndFeelAnnouncementSeen, needsLookAndFeelAnnouncement } from '@plannotator/ui/utils/lookAndFeelAnnouncement';
 import { buildDefaultPrompt, useAIChat } from '@plannotator/ui/hooks/useAIChat';
-import { getUIPreferences, type UIPreferences, type PlanWidth } from '@plannotator/ui/utils/uiPreferences';
+import {getUIPreferences, type PlanWidth} from '@plannotator/ui/utils/uiPreferences';
 import { getEditorMode, saveEditorMode } from '@plannotator/ui/utils/editorMode';
 import { getInputMethod, saveInputMethod } from '@plannotator/ui/utils/inputMethod';
 import { useInputMethodSwitch } from '@plannotator/ui/hooks/useInputMethodSwitch';
@@ -107,15 +106,7 @@ import {
   computeEditStats,
   normalizeEditedMarkdown,
 } from './directEdits';
-import {
-  sourceBackedDocumentKey,
-  sourceBackedLinkedDocumentKey,
-  useSourceBackedDocuments,
-  type EnabledSourceSaveCapability,
-  type SourceBackedDocumentDraftData,
-  type SourceBackedSavedFileChangeDraftData,
-  type SourceBackedDocumentLifecycleOutcome,
-} from './sourceBackedDocuments';
+import {sourceBackedDocumentKey, sourceBackedLinkedDocumentKey, useSourceBackedDocuments, type SourceBackedDocumentDraftData, type SourceBackedSavedFileChangeDraftData, type SourceBackedDocumentLifecycleOutcome} from './sourceBackedDocuments';
 import { createSourceDocumentWatch } from './sourceDocumentWatch';
 import { dirnameBrowserPath, normalizeBrowserPath, pathIsInsideDir } from './sourceDocumentPaths';
 import { pickRestoredSingleFileDraftToDisplay } from './draftRestoreSelection';
@@ -359,7 +350,7 @@ const App: React.FC = () => {
   // the Viewer DOM, and reconciling changed blocks against the old subtree throws.
   const [editGeneration, setEditGeneration] = useState(0);
   // True while the open editor buffer differs from what it mounted with.
-  const [editorDirty, setEditorDirty] = useState(false);
+  const [_editorDirty, setEditorDirty] = useState(false);
   // True while the open editor buffer differs from the as-submitted baseline.
   const [editorDiffersFromBaseline, setEditorDiffersFromBaseline] = useState(false);
   const [agentFeedbackRevision, setAgentFeedbackRevision] = useState(0);
@@ -643,7 +634,6 @@ const App: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, hasTocEntries]);
-
 
   const linkedDocSidebar = useMemo(() => ({
     ...sidebar,
@@ -1145,7 +1135,7 @@ const App: React.FC = () => {
   }, [annotations, safeExternalAnnotations]);
 
   // Plan diff state — memoize filtered annotation lists to avoid new references per render
-  const diffAnnotations = useMemo(() => allAnnotations.filter(a => !!a.diffContext), [allAnnotations]);
+  const _diffAnnotations = useMemo(() => allAnnotations.filter(a => !!a.diffContext), [allAnnotations]);
   const viewerAnnotations = useMemo(() => allAnnotations.filter(a => !a.diffContext), [allAnnotations]);
   // Any-annotations flag used by Close/Approve/Send guards. Consolidates the
   // four-term check that was inlined across the annotate-mode header + keyboard paths.
@@ -1268,7 +1258,7 @@ const App: React.FC = () => {
     isGeneratingShortUrl,
     shortUrlError,
     pendingSharedAnnotations,
-    sharedGlobalAttachments,
+    _sharedGlobalAttachments,
     clearPendingSharedAnnotations,
     generateShortUrl,
     importFromShareUrl,
@@ -1385,7 +1375,6 @@ const App: React.FC = () => {
     submitted: !!submitted || isSubmitting,
   });
 
-
   // Apply shared annotations to DOM after they're loaded
   useEffect(() => {
     if (pendingSharedAnnotations && pendingSharedAnnotations.length > 0) {
@@ -1464,7 +1453,7 @@ const App: React.FC = () => {
       if ((blk?.id ?? '') === a.blockId) return [a];
       // Block moved: also strip startMeta/endMeta — fromStore() anchors by
       // positional parent index without validating text. Text-search is safe.
-      return [{ ...a, blockId: blk?.id ?? '', startMeta: undefined, endMeta: undefined }];
+      return [{ ...a, _blockId: blk?.id ?? '', startMeta: undefined, endMeta: undefined }];
     });
     setMarkdown(next);
     setEditGeneration((g) => g + 1);
@@ -1911,7 +1900,7 @@ const App: React.FC = () => {
   const savedFileChangesVerb = savedFileChanges.length === 1 ? 'is' : 'are';
   const savedFileChangesPronoun = savedFileChanges.length === 1 ? 'it' : 'them';
   const savedFileChangesOnDiskMessage = <>Your {savedFileChangesLabel} {savedFileChangesVerb} already on disk.</>;
-  const savedFileAwarenessOnlyMessage = <>{savedFileChangesOnDiskMessage} The agent won't be told about {savedFileChangesPronoun}.</>;
+  const _savedFileAwarenessOnlyMessage = <>{savedFileChangesOnDiskMessage} The agent won't be told about {savedFileChangesPronoun}.</>;
   const savedFileAwarenessMixedMessage = hasSavedFileChanges
     ? <> Your {savedFileChangesLabel} will stay on disk, but the agent won't be told about {savedFileChangesPronoun}.</>
     : null;
@@ -2765,8 +2754,7 @@ const App: React.FC = () => {
     setGlobalAttachments(prev => prev.filter(p => p.path !== path));
   };
 
-
-  const handleTocNavigate = (blockId: string) => {
+  const handleTocNavigate = (_blockId: string) => {
     // Navigation handled by TableOfContents component
     // This is just a placeholder for future custom logic
   };
@@ -2786,7 +2774,7 @@ const App: React.FC = () => {
   // renderAs now tracks the active file (plan, linked doc, or folder file), so the AI
   // sees the current surface's mode — raw HTML for an .html file, markdown otherwise.
   const aiRenderAs = renderAs;
-  const aiDocumentMode = annotateMode || linkedDocHook.isActive;
+  const _aiDocumentMode = annotateMode || linkedDocHook.isActive;
   const hasAIDocumentContext =
     annotateMode ||
     linkedDocHook.isActive ||
@@ -2922,7 +2910,7 @@ const App: React.FC = () => {
     setIsPanelOpen(true);
   }, [exitWideMode, wideModeType]);
 
-  const handleOpenAIAnnouncement = useCallback(() => {
+  const _handleOpenAIAnnouncement = useCallback(() => {
     dismissAIAnnouncement();
     openAIChat();
   }, [dismissAIAnnouncement, openAIChat]);
@@ -3352,7 +3340,7 @@ const App: React.FC = () => {
     return widths[uiPrefs.planWidth];
   }, [uiPrefs.planWidth]);
   const annotateReaderMaxWidth = canUseWideMode && wideModeType === 'wide' ? null : planMaxWidth;
-  const selectedAIProvider = aiProviders.find(provider => provider.id === aiConfig.providerId) ?? null;
+  const _selectedAIProvider = aiProviders.find(provider => provider.id === aiConfig.providerId) ?? null;
   const showAgentTerminalControls =
     annotateMode &&
     annotateSource !== 'message' &&
@@ -3368,9 +3356,6 @@ const App: React.FC = () => {
   const shouldShowLookAndFeelAnnouncement =
     showLookAndFeelAnnouncement &&
     !isSharedSession;
-
-
-
 
   if (isLoading && !isSharedSession) {
     return (
@@ -4058,7 +4043,6 @@ const App: React.FC = () => {
           showCancel
         />
 
-
         {/* Unsent feedback warning dialog — reused by Close and (in gate mode) Approve */}
         <ConfirmDialog
           isOpen={showExitWarning}
@@ -4081,7 +4065,6 @@ const App: React.FC = () => {
           showCancel
         />
 
-
         {/* Shared URL load failure warning */}
         <ConfirmDialog
           isOpen={!!shareLoadError && !isApiMode}
@@ -4102,6 +4085,7 @@ const App: React.FC = () => {
         <CompletionOverlay
           submitted={submitted}
           title={
+            // eslint-disable-next-line no-constant-condition -- false branch is intentional for future archive state
             false ? 'Archive Closed'
             : submitted === 'exited' ? 'Session Closed'
             : submitted === 'approved'
@@ -4117,7 +4101,6 @@ const App: React.FC = () => {
           }
           agentLabel={agentName}
         />
-
 
         <LookAndFeelAnnouncementDialog
           isOpen={shouldShowLookAndFeelAnnouncement}

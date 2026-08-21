@@ -15,7 +15,7 @@ import type { Origin } from "@plannotator/shared/agents";
 import { type DiffType, type GitContext, runVcsDiff, getVcsFileContentsForDiff, getVcsDiffFingerprint, canStageFiles, stageFile, unstageFile, resolveVcsCwd, validateFilePath, getVcsContext, detectRemoteDefaultCompareTarget, gitRuntime } from "./vcs";
 import { basename } from "node:path";
 import { existsSync } from "node:fs";
-import { parseWorktreeDiffType, resolveBaseBranch } from "@plannotator/shared/review-core";
+import {resolveBaseBranch} from "@plannotator/shared/review-core";
 import {
   createDefaultSemanticDiffRuntime,
   getSemanticDiffAvailability,
@@ -38,12 +38,12 @@ import {
   type PRDiffScope,
 } from "@plannotator/shared/pr-stack";
 import { getRepoInfo } from "./repo";
-import { handleImage, handleUpload, handleServerReady, handleDraftSave, handleDraftLoad, handleDraftDelete, handleFavicon, readDraftGenerationFromBody, readDraftGenerationFromUrl } from "./shared-handlers";
+import {handleImage, handleUpload, handleDraftSave, handleDraftLoad, handleDraftDelete, handleFavicon, readDraftGenerationFromBody, readDraftGenerationFromUrl} from "./shared-handlers";
 import { contentHash, deleteDraft } from "./draft";
 import { createEditorAnnotationHandler } from "./editor-annotations";
 import { createExternalAnnotationHandler } from "./external-annotations";
 import { loadConfig, saveConfig, ConfigPatch, detectGitUser, getServerConfig } from "./config";
-import { type PRMetadata, type PRReviewFileComment, type PRStackTree, type PRListItem, fetchPR, fetchPRFileContent, fetchPRContext, submitPRReview, fetchPRViewedFiles, markPRFilesViewed, fetchPRStack, fetchPRList, getPRUser, parsePRUrl, prRefFromMetadata, isSameProject, getDisplayRepo, getMRLabel, getMRNumberLabel } from "./pr";
+import {type PRMetadata, type PRStackTree, type PRListItem, fetchPR, fetchPRFileContent, fetchPRContext, submitPRReview, fetchPRViewedFiles, markPRFilesViewed, fetchPRStack, fetchPRList, getPRUser, parsePRUrl, prRefFromMetadata, isSameProject, getDisplayRepo, getMRLabel, getMRNumberLabel} from "./pr";
 import { AI_QUERY_ENDPOINT, createAIRuntime } from "./ai-runtime";
 import type { AIEndpoints } from "@plannotator/ai";
 import { isWSL } from "./browser";
@@ -176,7 +176,6 @@ export async function startReviewServer(
   let draftKey = contentHash(options.rawPatch);
   const editorAnnotations = createEditorAnnotationHandler();
   const externalAnnotations = createExternalAnnotationHandler("review");
-
 
   // Mutable state for diff switching
   let currentPatch = options.rawPatch;
@@ -713,9 +712,10 @@ export async function startReviewServer(
                 ...(currentError && { error: currentError }),
                 semanticDiff: await getSemanticDiffAdvert(),
               });
-            } catch (err) {
+            } catch (_e) {
+              void _e;
               const message =
-                err instanceof Error ? err.message : "Failed to switch diff";
+                _e instanceof Error ? _e.message : "Failed to switch diff";
               return Response.json({ error: message }, { status: 500 });
             }
           }
@@ -836,9 +836,10 @@ export async function startReviewServer(
                 prDiffScope: currentPRDiffScope,
                 semanticDiff: await getSemanticDiffAdvert(),
               });
-            } catch (err) {
+            } catch (_err) {
+              void _err;
               const message =
-                err instanceof Error ? err.message : "Failed to switch PR diff scope";
+                _err instanceof Error ? _err.message : "Failed to switch PR diff scope";
               return Response.json({ error: message }, { status: 500 });
             }
           }
@@ -857,7 +858,8 @@ export async function startReviewServer(
               prListCache = prs;
               prListCacheTime = now;
               return Response.json({ prs });
-            } catch (err) {
+            } catch (_err) {
+              void _err;
               return Response.json({ error: "Failed to fetch PR list" }, { status: 500 });
             }
           }

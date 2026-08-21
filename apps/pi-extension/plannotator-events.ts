@@ -9,9 +9,6 @@ import {
 	openCodeReview,
 	openLastMessageAnnotation,
 	openMarkdownAnnotation,
-	startCodeReviewBrowserSession,
-	startLastMessageAnnotationSession,
-	startMarkdownAnnotationSession,
 } from "./plannotator-browser.js";
 
 export const PLANNOTATOR_REQUEST_CHANNEL = "plannotator:request" as const;

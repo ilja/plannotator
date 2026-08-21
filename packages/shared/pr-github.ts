@@ -88,6 +88,7 @@ export interface GitHubFileEntry {
 // Pierre's filename regexes, code-nav's extractChangedFiles) expect git's
 // exact shape; over-quoting makes them misparse or silently drop files.
 function needsGitQuoting(p: string): boolean {
+  // eslint-disable-next-line no-control-regex -- intentionally checks for control characters in git paths
   return /["\\\u0000-\u001F]/.test(p);
 }
 function headerPathToken(side: "a" | "b", p: string): string {

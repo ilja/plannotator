@@ -37,7 +37,7 @@ export const parseTableContent = (content: string): TableContent => {
   const rows: string[][] = [];
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (/^[\|\-:\s]+$/.test(line)) continue; // separator row
+    if (/^[|\-:\s]+$/.test(line)) continue; // separator row
     rows.push(parseRow(line));
   }
   return { headers, rows };

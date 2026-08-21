@@ -55,7 +55,7 @@ function isLocalUrl(url: string): boolean {
       hostname === "[::1]" ||
       hostname === "0.0.0.0" ||
       hostname.endsWith(".local") ||
-      /^127\./.test(hostname) ||
+      hostname.startsWith('127.') ||
       PRIVATE_IPV4.test(hostname)
     ) {
       return true;

@@ -16,7 +16,8 @@ export function getItem(key: string): string | null {
   try {
     const match = document.cookie.match(new RegExp(`(?:^|; )${escapeRegex(key)}=([^;]*)`));
     return match ? decodeURIComponent(match[1]) : null;
-  } catch (e) {
+  } catch (_e) {
+    void _e;
     return null;
   }
 }
@@ -28,7 +29,8 @@ export function setItem(key: string, value: string): void {
   try {
     const encoded = encodeURIComponent(value);
     document.cookie = `${key}=${encoded}; path=/; max-age=${ONE_YEAR_SECONDS}; SameSite=Lax`;
-  } catch (e) {
+  } catch (_e) {
+    void _e;
     // Cookie not available
   }
 }
@@ -39,7 +41,8 @@ export function setItem(key: string, value: string): void {
 export function removeItem(key: string): void {
   try {
     document.cookie = `${key}=; path=/; max-age=0`;
-  } catch (e) {
+  } catch (_e) {
+    void _e;
     // Cookie not available
   }
 }

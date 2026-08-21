@@ -6,7 +6,6 @@
  */
 
 import {
-  type DiffOption,
   type DiffResult,
   type DiffType,
   type GitCommandResult,

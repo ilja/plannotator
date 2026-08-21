@@ -72,7 +72,7 @@ function mockProvider(name = "mock"): TestProvider {
   return {
     name,
     capabilities: { fork: true, resume: true, streaming: true, tools: false },
-    async createSession(opts) {
+    async createSession(_opts) {
       return mockSession(`session-${++sessionCounter}`, null);
     },
     async forkSession(opts) {

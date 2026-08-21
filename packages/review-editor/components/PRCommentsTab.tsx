@@ -75,7 +75,7 @@ function matchesSearch(entry: TimelineEntry, query: string): boolean {
   return author.includes(q) || body.includes(q);
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
+function _isTypingTarget(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
@@ -210,7 +210,7 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(({ context
     );
   }
 
-  const hasFilters = !!searchQuery.trim() || excludedAuthors.size > 0 || hideResolved || hideOutdated;
+  const _hasFilters = !!searchQuery.trim() || excludedAuthors.size > 0 || hideResolved || hideOutdated;
 
   return (
     <div ref={containerRef} className="h-full flex flex-col">

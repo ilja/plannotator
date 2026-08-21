@@ -11,7 +11,6 @@ import { TableToolbar } from './blocks/TableToolbar';
 import { TablePopout } from './blocks/TablePopout';
 import { CodePathValidationContext } from './CodePathValidationContext';
 import { useValidatedCodePaths } from '../hooks/useValidatedCodePaths';
-import { ListMarker } from './ListMarker';
 import { AnnotationToolbar } from './AnnotationToolbar';
 import { FloatingQuickLabelPicker } from './FloatingQuickLabelPicker';
 
@@ -34,12 +33,12 @@ class ToolbarErrorBoundary extends React.Component<
   }
 }
 
-import { CommentPopover, type CommentAskAIContext, type CommentAskAIHandler } from './CommentPopover';
+import { CommentPopover, type CommentAskAIHandler } from './CommentPopover';
 import { AttachmentsButton } from './AttachmentsButton';
 import { MessagesIcon } from './icons/MessagesIcon';
 import { GraphvizBlock } from './GraphvizBlock';
 import { MermaidBlock } from './MermaidBlock';
-import { getImageSrc } from './ImageThumbnail';
+
 import { isGraphvizLanguage, isMermaidLanguage } from './diagramLanguages';
 import { getIdentity } from '../utils/identity';
 import { type QuickLabel } from '../utils/quickLabels';

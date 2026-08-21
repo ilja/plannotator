@@ -309,6 +309,7 @@ function normalizeDecodedLocalAssetPath(value: string): string | null {
     normalized.startsWith("../") ||
     normalized.startsWith("/") ||
     normalized.includes("\0") ||
+    // eslint-disable-next-line no-control-regex -- intentionally validates that paths do not contain control characters
     /[\u0000-\u001f]/u.test(normalized)
   ) {
     return null;
