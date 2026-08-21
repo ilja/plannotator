@@ -8,30 +8,49 @@
  * Inspired by textarea.my's approach.
  */
 
+import { Option, Schema } from "effect";
 import { Annotation, AnnotationType, type ChoiceValidationEvidence, type ImageAttachment } from '../types';
 import { compress, decompress } from '@plannotator/shared/compress';
 import { encrypt, decrypt } from '@plannotator/shared/crypto';
 
 // Image in shareable format: plain string (old) or [path, name] tuple (new)
 type ShareableImage = string | [string, string];
+const ShareableImageSchema = Schema.Union([Schema.String, Schema.Tuple([Schema.String, Schema.String])]);
 
-// Minimal shareable annotation format: [type, originalText, text?, author?, images?, quickLabel?]
 export type ShareableAnnotation =
-  | ['D', string, string | null, ShareableImage[]?]                    // Deletion: type, original, author, images
-  | ['C', string, string, string | null, ShareableImage[]?, (1)?]      // Comment: type, original, comment, author, images, isQuickLabel
-  | ['G', string, string | null, ShareableImage[]?];                   // Global Comment: type, comment, author, images
+  | ['D', string, string | null, ShareableImage[]?]
+  | ['C', string, string, string | null, ShareableImage[]?, (1)?]
+  | ['G', string, string | null, ShareableImage[]?];
+
+const ShareableAnnotationSchema = Schema.Union([
+  Schema.Tuple([Schema.Literal("D"), Schema.String, Schema.NullOr(Schema.String), Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema)))]),
+  Schema.Tuple([Schema.Literal("C"), Schema.String, Schema.String, Schema.NullOr(Schema.String), Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema))), Schema.optional(Schema.Literal(1))]),
+  Schema.Tuple([Schema.Literal("G"), Schema.String, Schema.NullOr(Schema.String), Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema)))])
+]);
 
 export interface SharePayload {
-  p: string;  // plan markdown
+  p: string;
   a: ShareableAnnotation[];
-  g?: ShareableImage[];  // global attachments (path strings or [path, name] tuples)
-  d?: (string | null)[];  // diffContext per annotation, parallel to `a`
-  s?: (string | undefined)[];  // source per annotation (external tool identifier), parallel to `a`
-  cv?: (ChoiceValidationEvidence | null)[];  // choice evidence per annotation, parallel to `a`
-  co?: (string | null)[];  // selected choice label per annotation, parallel to `a`
-  h?: string;  // raw HTML content (direct HTML rendering mode)
-  r?: 'html';  // render mode flag (omitted = markdown)
+  g?: ShareableImage[];
+  d?: (string | null)[];
+  s?: (string | undefined)[];
+  cv?: (ChoiceValidationEvidence | null)[];
+  co?: (string | null)[];
+  h?: string;
+  r?: 'html';
 }
+
+const SharePayloadSchema = Schema.Struct({
+  p: Schema.String,
+  a: Schema.Array(ShareableAnnotationSchema),
+  g: Schema.optional(Schema.Array(ShareableImageSchema)),
+  d: Schema.optional(Schema.Array(Schema.NullOr(Schema.String))),
+  s: Schema.optional(Schema.Array(Schema.UndefinedOr(Schema.String))),
+  cv: Schema.optional(Schema.Array(Schema.NullOr(Schema.Unknown))),
+  co: Schema.optional(Schema.Array(Schema.NullOr(Schema.String))),
+  h: Schema.optional(Schema.String),
+  r: Schema.optional(Schema.Literal("html")),
+});
 
 interface TypeMap {
   [key: string]: AnnotationType;
@@ -72,22 +91,18 @@ export function toShareable(annotations: Annotation[]): ShareableAnnotation[] {
 
     // Handle GLOBAL_COMMENT specially - it starts with 'G' (from GLOBAL_COMMENT)
     if (ann.type === AnnotationType.GLOBAL_COMMENT) {
-      // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
-      return ['G', ann.text || '', author, images] as ShareableAnnotation;
+      return ['G', ann.text || '', author, images] satisfies ShareableAnnotation;
     }
 
     if (ann.type === AnnotationType.DELETION) {
-      // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
-      return ['D', ann.originalText, author, images] as ShareableAnnotation;
+      return ['D', ann.originalText, author, images] satisfies ShareableAnnotation;
     }
 
     // COMMENT
     if (ann.isQuickLabel) {
-      // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
-      return ['C', ann.originalText, ann.text || '', author, images ?? undefined, 1] as ShareableAnnotation;
+      return ['C', ann.originalText, ann.text || '', author, images ?? undefined, 1] satisfies ShareableAnnotation;
     }
-    // SAFETY: ShareableAnnotation is a discriminated tuple — cast to the union type
-    return ['C', ann.originalText, ann.text || '', author, images] as ShareableAnnotation;
+    return ['C', ann.originalText, ann.text || '', author, images] satisfies ShareableAnnotation;
   });
 }
 
@@ -114,12 +129,9 @@ export function fromShareable(
 
     // Handle global comments specially: ['G', text, author, images?]
     if (type === 'G') {
-      // SAFETY: ShareableAnnotation G payload is [string] at index 1 — cast to string
-      const text = item[1] as string;
-      // SAFETY: ShareableAnnotation G payload is string | null at index 2 — cast to string | null
-      const author = item[2] as string | null;
-      // SAFETY: ShareableAnnotation G payload is ShareableImage[] at index 3 — cast to ShareableImage[] | undefined
-      const rawImages = item[3] as ShareableImage[] | undefined;
+      const text = item[1];
+      const author = item[2];
+      const rawImages = item[3];
 
       const gAnnotation: Annotation = {
         id: `shared-${index}-${Date.now()}`,
@@ -140,12 +152,12 @@ export function fromShareable(
     const originalText = item[1];
     // For deletion: [type, original, author, images?]
     // For others: [type, original, text, author, images?]
-    // SAFETY: ShareableAnnotation text is string at index 2 for non-D — cast to string
-    const text = type === 'D' ? undefined : item[2] as string;
-    // SAFETY: ShareableAnnotation author is string | null at index 2/3 — cast to string | null
-    const author = type === 'D' ? item[2] as string | null : item[3] as string | null;
-    // SAFETY: ShareableAnnotation images is ShareableImage[] at index 3/4 — cast to ShareableImage[] | undefined
-    const rawImages = type === 'D' ? item[3] as ShareableImage[] | undefined : item[4] as ShareableImage[] | undefined;
+    // SAFETY: ShareableAnnotation text is string at index 2 for C/G — cast to tuple type
+    const text = type === 'D' ? undefined : (item as ['C', string, string, string | null, ShareableImage[]?, (1)?])[2];
+    // SAFETY: ShareableAnnotation author at index 2/3 — cast to tuple type
+    const author = type === 'D' ? (item as ['D', string, string | null, ShareableImage[]?])[2] : (item as ['C', string, string, string | null, ShareableImage[]?, (1)?])[3];
+    // SAFETY: ShareableAnnotation images at index 3/4 — cast to tuple type
+    const rawImages = type === 'D' ? (item as ['D', string, string | null, ShareableImage[]?])[3] : (item as ['C', string, string, string | null, ShareableImage[]?, (1)?])[4];
     // Comment annotations may have isQuickLabel flag at index 5
     const isQuickLabel = type === 'C' && item.length > 5 && item[5] === 1 ? true : undefined;
     const choiceOptionLabel = type === 'C' ? choiceOptionLabels?.[index] ?? undefined : undefined;
@@ -241,8 +253,13 @@ export async function parseShareHash(): Promise<SharePayload | null> {
   }
 
   try {
-    // SAFETY: decompress hash is known SharePayload from compress — cast to SharePayload
-    return (await decompress(hash)) as SharePayload;
+    const decompressed = await decompress(hash);
+    const decoded = Schema.decodeUnknownOption(SharePayloadSchema)(decompressed);
+    if (Option.isSome(decoded)) {
+      // SAFETY: Schema array is readonly, SharePayload expects mutable — cast to mutable
+      return decoded.value as SharePayload;
+    }
+    return null;
   } catch (e) {
     console.warn('Failed to parse share hash:', e);
     return null;
@@ -337,8 +354,10 @@ export async function createShortShareUrl(
       return null;
     }
 
-    // SAFETY: paste service returns { id: string } — cast to expected shape
-    const result = (await response.json()) as { id: string };
+    const rawResult: unknown = await response.json();
+    const decodedResult = Schema.decodeUnknownOption(Schema.Struct({ id: Schema.String }))(rawResult);
+    if (Option.isNone(decodedResult)) return null;
+    const result = decodedResult.value;
     // Embed paste origin in fragment when non-default so the share portal can
     // fetch from the right service without a server.
     const pasteParam = pasteApi !== DEFAULT_PASTE_API
@@ -360,10 +379,11 @@ export async function createShortShareUrl(
 
 async function readPasteError(response: Response, fallback: string): Promise<string> {
   try {
-    // SAFETY: error response is { error?: unknown } — cast to expected shape
-    const body = (await response.json()) as { error?: unknown };
-    // SAFETY: body.error is string after Object.prototype check — cast to string
-    return Object.prototype.toString.call(body.error) === "[object String]" && (body.error as string).trim() ? (body.error as string) : fallback;
+    const rawBody: unknown = await response.json();
+    const decodedBody = Schema.decodeUnknownOption(Schema.Struct({ error: Schema.optional(Schema.Unknown) }))(rawBody);
+    const errorValue = Option.isSome(decodedBody) ? decodedBody.value.error : undefined;
+    const errorString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(errorValue));
+    return errorString !== undefined && errorString.trim() ? errorString : fallback;
   } catch {
     return fallback;
   }
@@ -390,19 +410,31 @@ export async function loadFromPasteId(
       return null;
     }
 
-    // SAFETY: paste service returns { data: string } — cast to expected shape
-    const result = (await response.json()) as { data: string };
+    const rawResult2: unknown = await response.json();
+    const decodedResult2 = Schema.decodeUnknownOption(Schema.Struct({ data: Schema.String }))(rawResult2);
+    if (Option.isNone(decodedResult2)) return null;
+    const result = decodedResult2.value;
 
     if (encryptionKey) {
       // Encrypted path: decrypt ciphertext, then decompress
       const compressed = await decrypt(result.data, encryptionKey);
-      // SAFETY: decompressed payload is known SharePayload — cast to SharePayload
-      return await decompress(compressed) as SharePayload;
+      const decompressed2 = await decompress(compressed);
+      const decoded2 = Schema.decodeUnknownOption(SharePayloadSchema)(decompressed2);
+      if (Option.isSome(decoded2)) {
+        // SAFETY: Schema array is readonly, SharePayload expects mutable — cast to mutable
+        return decoded2.value as SharePayload;
+      }
+      return null;
     }
 
     // Legacy unencrypted path: decompress directly
-    // SAFETY: decompressed payload is known SharePayload — cast to SharePayload
-    return await decompress(result.data) as SharePayload;
+    const decompressed3 = await decompress(result.data);
+    const decoded3 = Schema.decodeUnknownOption(SharePayloadSchema)(decompressed3);
+    if (Option.isSome(decoded3)) {
+      // SAFETY: Schema array is readonly, SharePayload expects mutable — cast to mutable
+      return decoded3.value as SharePayload;
+    }
+    return null;
   } catch (e) {
     console.warn('[sharing] Failed to load from paste ID:', e);
     return null;
