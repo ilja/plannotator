@@ -13,6 +13,7 @@ import { AnnotationType } from "../../types";
 import { getIdentity } from "../../utils/identity";
 import { AnnotationToolbar } from "../AnnotationToolbar";
 import { AttachmentsButton } from "../AttachmentsButton";
+import { getFontUrl } from "../../utils/diffFonts";
 import { CommentPopover, type CommentAskAIHandler } from "../CommentPopover";
 import { FloatingQuickLabelPicker } from "../FloatingQuickLabelPicker";
 import type { ViewerHandle } from "../Viewer";
@@ -100,6 +101,12 @@ function isLightTheme(): boolean {
   return document.documentElement.classList.contains("light");
 }
 
+function extractFontFamily(cssVarValue: string | undefined): string | undefined {
+  if (!isStringValue(cssVarValue) || !cssVarValue.trim()) return undefined;
+  const m = cssVarValue.trim().match(/^'([^']+)'/);
+  return m ? m[1] : undefined;
+}
+
 export interface HtmlViewerProps {
   rawHtml: string;
   annotations: Annotation[];
@@ -162,7 +169,16 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
       themeCSS += "}\n";
       if (isLightTheme()) themeCSS += ":root { color-scheme: light; }\n:root.light, :root { }\n";
 
-      const injection = `<style>${themeCSS}${HTML_TYPOGRAPHY_CSS}${ANNOTATION_HIGHLIGHT_CSS}</style><script>${BRIDGE_SCRIPT}</script>`;
+      let fontLinks = '';
+      const proseFamily = extractFontFamily(tokens['--annotation-prose-font-family']);
+      const codeFamily = extractFontFamily(tokens['--annotation-code-font-family']);
+      for (const fam of [proseFamily, codeFamily]) {
+        if (!fam) continue;
+        const url = getFontUrl(fam);
+        if (url) fontLinks += `<link rel="stylesheet" href="${url}">`;
+      }
+
+      const injection = `${fontLinks}<style>${themeCSS}${HTML_TYPOGRAPHY_CSS}${ANNOTATION_HIGHLIGHT_CSS}</style><script>${BRIDGE_SCRIPT}</script>`;
       const headClose = rawHtml.indexOf("</head>");
       if (headClose !== -1) {
         return rawHtml.slice(0, headClose) + injection + rawHtml.slice(headClose);

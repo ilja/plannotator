@@ -21,6 +21,10 @@ const FONT_URLS: FontUrls = {
   'Hack': 'https://cdn.jsdelivr.net/npm/hack-font@3/build/web/hack.css',
 };
 
+const PROSE_FONT_URLS: FontUrls = {
+  'Atkinson Hyperlegible': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap',
+};
+
 export const CODE_FONT_OPTIONS = [
   { value: '', label: 'Theme Default' },
   { value: 'Fira Code', label: 'Fira Code' },
@@ -51,4 +55,21 @@ export function loadCodeFont(fontFamily: string, datasetKey = 'codeFont'): void 
 
 export function loadDiffFont(fontFamily: string): void {
   loadCodeFont(fontFamily, 'diffFont');
+}
+
+export function loadProseFont(fontFamily: string): void {
+  if (!fontFamily || loaded.has(fontFamily)) return;
+  const url = PROSE_FONT_URLS[fontFamily];
+  if (!url) return;
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = url;
+  link.dataset['proseFont'] = fontFamily;
+  document.head.appendChild(link);
+  loaded.add(fontFamily);
+}
+
+export function getFontUrl(fontFamily: string): string | undefined {
+  return FONT_URLS[fontFamily] ?? PROSE_FONT_URLS[fontFamily];
 }

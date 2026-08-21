@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Origin } from '@plannotator/shared/agents';
 import type { DiffLineBgIntensity } from '@plannotator/shared/config';
 import { configStore, useConfigValue } from '../config';
-import { CODE_FONT_OPTIONS, loadCodeFont, loadDiffFont } from '../utils/diffFonts';
+import { CODE_FONT_OPTIONS, loadCodeFont, loadDiffFont, loadProseFont } from '../utils/diffFonts';
 import { getIdentity, regenerateIdentity, setCustomIdentity } from '../utils/identity';
 import { GitUser } from '../icons/GitUser';
 import {
@@ -213,6 +213,10 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
   const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
 
   useEffect(() => {
+    if (annotationProseFontFamily) loadProseFont(annotationProseFontFamily);
+  }, [annotationProseFontFamily]);
+
+  useEffect(() => {
     if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
   }, [annotationCodeFontFamily]);
 
@@ -233,9 +237,17 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
           style={annotationProseFontFamily ? { fontFamily: `'${annotationProseFontFamily}', var(--font-sans)` } : undefined}
         >
           {ANNOTATION_PROSE_FONT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value} style={opt.value ? { fontFamily: `'${opt.value}', var(--font-sans)` } : undefined}>{opt.label}</option>
           ))}
         </select>
+        {annotationProseFontFamily && (
+          <div
+            className="text-xs text-muted-foreground px-1 py-1 rounded bg-muted/30"
+            style={{ fontFamily: `'${annotationProseFontFamily}', var(--font-sans)` }}
+          >
+            Preview: The quick brown fox jumps over the lazy dog.
+          </div>
+        )}
       </div>
 
       <div className="border-t border-border" />

@@ -8,7 +8,6 @@ import type { Plugin } from 'vite';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { isCodeFilePath } from '../../packages/shared/code-file';
-import { Schema } from 'effect';
 import { preloadFile } from '@pierre/diffs/ssr';
 
 // ─── Default plans (Real-time Collaboration) ─────────────────────────────
@@ -267,17 +266,13 @@ export function devMockApi(): Plugin {
         if (req.url === '/api/config' && req.method === 'POST') {
           let body = '';
           req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-          req.on('end', async () => {
-            try {
-              const { saveConfig, ConfigPatch } = await import('@plannotator/shared/config');
-              const patch = Schema.decodeUnknownSync(ConfigPatch)(JSON.parse(body));
-              if (patch.pfmReminder !== undefined) saveConfig(patch);
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: true }));
-            } catch {
-              res.statusCode = 400;
-              res.end(JSON.stringify({ error: 'Invalid request' }));
-            }
+          req.on('end', () => {
+            // Dev mock: accept any config patch, persist via cookie only.
+            // Avoid importing @plannotator/shared/config here — that file pulls in
+            // Node-only data-dir and fails to resolve under Vite's ESM loader.
+            try { JSON.parse(body); } catch {}
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true }));
           });
           return;
         }

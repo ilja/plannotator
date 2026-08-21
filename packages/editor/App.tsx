@@ -22,7 +22,7 @@ import { useSharing } from '@plannotator/ui/hooks/useSharing';
 import { getCallbackConfig, CallbackAction, executeCallback } from '@plannotator/ui/utils/callback';
 import { useActiveSection } from '@plannotator/ui/hooks/useActiveSection';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
-import { loadCodeFont } from '@plannotator/ui/utils/diffFonts';
+import { loadCodeFont, loadProseFont } from '@plannotator/ui/utils/diffFonts';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
 import { LookAndFeelAnnouncementDialog } from '@plannotator/ui/components/LookAndFeelAnnouncementDialog';
 import {getObsidianSettings, getEffectiveVaultPath, isObsidianConfigured} from '@plannotator/ui/utils/obsidian';
@@ -317,6 +317,9 @@ const App: React.FC = () => {
     }
     return style;
   }, [annotationCodeFontFamily, annotationCodeFontSize, annotationProseFontFamily, annotationProseFontSize]);
+  useEffect(() => {
+    if (annotationProseFontFamily) loadProseFont(annotationProseFontFamily);
+  }, [annotationProseFontFamily]);
   useEffect(() => {
     if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
   }, [annotationCodeFontFamily]);
