@@ -1,3 +1,5 @@
+import { Option, Schema } from "effect";
+
 import type {
   Annotation,
   ChoiceQuestionOption,
@@ -7,15 +9,63 @@ import type {
 const CHOICE_ANNOTATION_PREFIX = 'ann-choice-';
 let choiceAnnotationSequence = 0;
 
-export interface ChoiceQuestion {
-  question: string;
-  options: ChoiceQuestionOption[];
-  recommendedLabel?: string;
-  sourceText: string;
-  sourceLineCount: number;
-}
+export const ChoiceQuestionOptionSchema = Schema.Struct({
+  label: Schema.String,
+  text: Schema.String,
+});
 
-type ChoiceQuestionIdentity = Pick<ChoiceQuestion, 'question' | 'options'>;
+const hasUniqueOptionLabels = (options: readonly ChoiceQuestionOption[]): boolean => {
+  const labels = new Set(options.map(option => option.label));
+  return labels.size === options.length;
+};
+
+export const ChoiceQuestionIdentitySchema = Schema.Struct({
+  question: Schema.String,
+  options: Schema.Array(ChoiceQuestionOptionSchema),
+});
+export type ChoiceQuestionIdentity = Schema.Schema.Type<typeof ChoiceQuestionIdentitySchema>;
+
+export const ChoiceQuestionSchema = Schema.Struct({
+  question: Schema.String,
+  options: Schema.Array(ChoiceQuestionOptionSchema),
+  sourceText: Schema.String,
+  sourceLineCount: Schema.Number,
+  recommendedLabel: Schema.optional(Schema.String),
+});
+
+export const ParsedChoiceQuestionSchema = Schema.Struct({
+  question: Schema.String,
+  options: Schema.Array(ChoiceQuestionOptionSchema),
+  blockId: Schema.String,
+  sourceText: Schema.String,
+  sourceLineCount: Schema.Number,
+  recommendedLabel: Schema.optional(Schema.String),
+});
+export type ChoiceQuestion = Schema.Schema.Type<typeof ChoiceQuestionSchema>;
+
+export const ChoiceValidationEvidenceSchema = ChoiceQuestionIdentitySchema;
+
+// SAFETY: value is untrusted choice payload — any is intentional
+export const isChoiceOption = (value: any): value is ChoiceQuestionOption =>
+  Option.isSome(Schema.decodeUnknownOption(ChoiceQuestionOptionSchema)(value));
+
+// SAFETY: value is untrusted choice payload — any is intentional
+export const isChoiceQuestionIdentity = (value: any): value is ChoiceQuestionIdentity => {
+  const decoded = Schema.decodeUnknownOption(ChoiceQuestionIdentitySchema)(value);
+  return Option.isSome(decoded) && hasUniqueOptionLabels(decoded.value.options);
+};
+
+// SAFETY: value is untrusted choice payload — any is intentional
+export const isParsedChoiceQuestion = (value: any): value is ChoiceQuestion & { blockId: string } => {
+  const decoded = Schema.decodeUnknownOption(ParsedChoiceQuestionSchema)(value);
+  return Option.isSome(decoded) && hasUniqueOptionLabels(decoded.value.options);
+};
+
+// SAFETY: value is untrusted choice payload — any is intentional
+export const isChoiceValidationEvidence = (value: any): value is ChoiceValidationEvidence => {
+  const decoded = Schema.decodeUnknownOption(ChoiceValidationEvidenceSchema)(value);
+  return Option.isSome(decoded) && hasUniqueOptionLabels(decoded.value.options);
+};
 
 export type ChoiceSelectionOutcome =
   | {
@@ -43,44 +93,6 @@ const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+(.+?)\s*$/i;
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const normalizeLineEndings = (value: string): string => value.replace(/\r\n?/g, '\n');
-
-// SAFETY: value is untrusted choice payload — any is intentional
-const isChoiceOption = (value: any): value is ChoiceQuestionOption => (
-  value instanceof Object &&
-  Object.prototype.toString.call(value.label) === "[object String]" &&
-  Object.prototype.toString.call(value.text) === "[object String]"
-);
-
-const hasUniqueOptionLabels = (options: readonly ChoiceQuestionOption[]): boolean => {
-  const labels = new Set(options.map(option => option.label));
-  return labels.size === options.length;
-};
-
-// SAFETY: value is untrusted choice payload — any is intentional
-const isChoiceQuestionIdentity = (value: any): value is ChoiceQuestionIdentity => (
-  value instanceof Object &&
-  Object.prototype.toString.call(value.question) === "[object String]" &&
-  Array.isArray(value.options) &&
-  value.options.every(isChoiceOption) &&
-  hasUniqueOptionLabels(value.options)
-);
-
-// SAFETY: value is untrusted choice payload — any is intentional
-const isParsedChoiceQuestion = (value: any): value is ChoiceQuestion & { blockId: string } => {
-  if (!isChoiceQuestionIdentity(value)) return false;
-  const w: any = value;
-  return (
-    Object.prototype.toString.call(w.blockId) === "[object String]" &&
-    Object.prototype.toString.call(w.sourceText) === "[object String]" &&
-    Object.prototype.toString.call(w.sourceLineCount) === "[object Number]"
-  );
-};
-
-// SAFETY: value is untrusted choice payload — any is intentional
-const isChoiceValidationEvidence = (value: any): value is ChoiceValidationEvidence => (
-  isChoiceQuestionIdentity(value) &&
-  value.options.every(isChoiceOption)
-);
 
 const matchesRecommendedLabel = (text: string, label: string): boolean => {
   if (!/\bOptions?\b/.test(text)) return false;

@@ -1,4 +1,4 @@
-import { Block, type Annotation, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
+import { Block, type Annotation, type ChoiceQuestionOption, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
 import { annotationFeedback } from '@plannotator/shared/feedback-templates';
 import { parseChoiceQuestion } from './choiceAnnotations';
 
@@ -402,7 +402,8 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
           id: `block-${currentId++}`,
           type: 'choice-question',
           content: choice.question,
-          choiceOptions: choice.options,
+          // SAFETY: Schema array is readonly, Block expects mutable — cast to mutable array
+          choiceOptions: choice.options as ChoiceQuestionOption[],
           recommendedChoiceLabel: choice.recommendedLabel,
           sourceText: choice.sourceText,
           sourceLineCount: choice.sourceLineCount,
