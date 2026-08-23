@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Option, Schema } from "effect";
 import type { Annotation, EditorMode, ImageAttachment, InputMethod } from "../../types";
 import { AnnotationType } from "../../types";
 import { getIdentity } from "../../utils/identity";
@@ -21,6 +22,9 @@ import { useHtmlAnnotation } from "./useHtmlAnnotation";
 import { ANNOTATION_HIGHLIGHT_CSS, BRIDGE_SCRIPT } from "./bridge-script";
 
 const PREFIX = "plannotator-bridge-";
+const decodeHtmlBridgeReadyMessage = Schema.decodeUnknownOption(Schema.Struct({
+  type: Schema.Literal(`${PREFIX}ready`),
+}));
 
 const THEME_TOKENS = [
   "--background",
@@ -201,8 +205,9 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     });
 
     useEffect(() => {
-      function handler(e: MessageEvent) {
-        if (e.data?.type === `${PREFIX}ready`) {
+      function handler(event: MessageEvent) {
+        if (event.source !== iframeRef.current?.contentWindow) return;
+        if (Option.isSome(decodeHtmlBridgeReadyMessage(event.data))) {
           setIframeReady(true);
         }
       }
