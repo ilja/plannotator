@@ -9,15 +9,81 @@
  * Add new settings here. Cookie-only settings omit serverKey.
  */
 
-import type { DiffLineBgIntensity } from '@plannotator/shared/config';
+import type { ConfigPatch, DiffLineBgIntensity } from '@plannotator/shared/config';
+import { Option, Schema } from 'effect';
 import { storage } from '../utils/storage';
 import { generateIdentity } from '../utils/generateIdentity';
 
-const DIFF_LINE_BG_INTENSITY_VALUES = ['subtle', 'normal', 'strong'] as const;
-// SAFETY: v is untyped config value — any is intentional for runtime check
-function isDiffLineBgIntensity(v: any): v is DiffLineBgIntensity {
-  // SAFETY: DIFF_LINE_BG_INTENSITY_VALUES is readonly DiffLineBgIntensity[] — cast to string[] for includes
-  return Object.prototype.toString.call(v) === "[object String]" && (DIFF_LINE_BG_INTENSITY_VALUES as readonly string[]).includes(v);
+const RawConfigRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+type RawConfigRecord = Schema.Schema.Type<typeof RawConfigRecordSchema>;
+
+const UiServerConfigSchema = Schema.Struct({
+  displayName: Schema.Unknown,
+  diffOptions: RawConfigRecordSchema,
+  annotationOptions: RawConfigRecordSchema,
+  conventionalComments: Schema.Unknown,
+  conventionalLabels: Schema.Unknown,
+});
+export type UiServerConfig = Schema.Schema.Type<typeof UiServerConfigSchema>;
+
+const DefaultDiffTypeSchema = Schema.Literals([
+  'uncommitted',
+  'unstaged',
+  'staged',
+  'merge-base',
+  'all',
+  'branch',
+]);
+const DiffStyleSchema = Schema.Literals(['split', 'unified']);
+const DiffOverflowSchema = Schema.Literals(['scroll', 'wrap']);
+const DiffIndicatorsSchema = Schema.Literals(['bars', 'classic', 'none']);
+const DiffLineTypeSchema = Schema.Literals(['word-alt', 'word', 'char', 'none']);
+const DiffLineBgIntensitySchema = Schema.Literals(['subtle', 'normal', 'strong']);
+const ConventionalLabelsSchema = Schema.NullOr(Schema.Array(Schema.Struct({
+  label: Schema.String,
+  display: Schema.String,
+  blocking: Schema.Boolean,
+})));
+
+const decodeString = Schema.decodeUnknownOption(Schema.String);
+const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
+const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
+const decodeDefaultDiffType = Schema.decodeUnknownOption(DefaultDiffTypeSchema);
+const decodeDiffStyle = Schema.decodeUnknownOption(DiffStyleSchema);
+const decodeDiffOverflow = Schema.decodeUnknownOption(DiffOverflowSchema);
+const decodeDiffIndicators = Schema.decodeUnknownOption(DiffIndicatorsSchema);
+const decodeDiffLineType = Schema.decodeUnknownOption(DiffLineTypeSchema);
+const decodeDiffLineBgIntensity = Schema.decodeUnknownOption(DiffLineBgIntensitySchema);
+const decodeConventionalLabels = Schema.decodeUnknownOption(ConventionalLabelsSchema);
+
+function decodeRawConfigRecord<Input>(value: Input): RawConfigRecord {
+  return Option.getOrElse(
+    Schema.decodeUnknownOption(RawConfigRecordSchema)(value),
+    () => ({}),
+  );
+}
+
+export function decodeUiServerConfig<Input>(value: Input): UiServerConfig {
+  const root = decodeRawConfigRecord(value);
+  return {
+    displayName: root.displayName,
+    diffOptions: decodeRawConfigRecord(root.diffOptions),
+    annotationOptions: decodeRawConfigRecord(root.annotationOptions),
+    conventionalComments: root.conventionalComments,
+    conventionalLabels: root.conventionalLabels,
+  };
+}
+
+function readString<Input>(value: Input): string | undefined {
+  return Option.getOrUndefined(decodeString(value));
+}
+
+function readBoolean<Input>(value: Input): boolean | undefined {
+  return Option.getOrUndefined(decodeBoolean(value));
+}
+
+function readDiffLineBgIntensity<Input>(value: Input): DiffLineBgIntensity | undefined {
+  return Option.getOrUndefined(decodeDiffLineBgIntensity(value));
 }
 
 export interface SettingDef<T> {
@@ -26,10 +92,8 @@ export interface SettingDef<T> {
   toCookie: (value: T) => void;
   /** If set, this setting syncs to server via POST /api/config */
   serverKey?: string;
-  // SAFETY: serverConfig is untyped server payload — any is intentional
-  fromServer?: (serverConfig: any) => T | undefined;
-  // SAFETY: server payload is untyped JSON — any is intentional for toServer
-  toServer?: (value: T) => any;
+  fromServer?: (serverConfig: UiServerConfig) => T | undefined;
+  toServer?: (value: T) => ConfigPatch;
 }
 
 export const SETTINGS = {
@@ -38,9 +102,7 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-identity') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-identity', v),
     serverKey: 'displayName',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) =>
-      Object.prototype.toString.call(sc.displayName) === "[object String]" && sc.displayName ? sc.displayName : undefined,
+    fromServer: sc => readString(sc.displayName) || undefined,
     toServer: (v: string) => ({ displayName: v }),
   },
 
@@ -69,14 +131,13 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-default-diff-type', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access defaultDiffType
-      const v = (sc.diffOptions as any)?.defaultDiffType;
-      if (v === 'branch') return 'merge-base' as const;
-      return v === 'uncommitted' || v === 'unstaged' || v === 'staged' || v === 'merge-base' || v === 'all' ? v : undefined;
+    fromServer: sc => {
+      const value = Option.getOrUndefined(decodeDefaultDiffType(sc.diffOptions.defaultDiffType));
+      return value === 'branch' ? 'merge-base' : value;
     },
-    toServer: (v: string) => ({ diffOptions: { defaultDiffType: v } }),
+    toServer: (v: 'uncommitted' | 'unstaged' | 'staged' | 'merge-base' | 'all') => ({
+      diffOptions: { defaultDiffType: v },
+    }),
   },
 
   diffStyle: {
@@ -88,13 +149,8 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-style', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access diffStyle
-      const v = (sc.diffOptions as any)?.diffStyle;
-      return v === 'split' || v === 'unified' ? v : undefined;
-    },
-    toServer: (v: string) => ({ diffOptions: { diffStyle: v } }),
+    fromServer: sc => Option.getOrUndefined(decodeDiffStyle(sc.diffOptions.diffStyle)),
+    toServer: (v: 'split' | 'unified') => ({ diffOptions: { diffStyle: v } }),
   },
 
   diffOverflow: {
@@ -106,13 +162,8 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-overflow', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access overflow
-      const v = (sc.diffOptions as any)?.overflow;
-      return v === 'scroll' || v === 'wrap' ? v : undefined;
-    },
-    toServer: (v: string) => ({ diffOptions: { overflow: v } }),
+    fromServer: sc => Option.getOrUndefined(decodeDiffOverflow(sc.diffOptions.overflow)),
+    toServer: (v: 'scroll' | 'wrap') => ({ diffOptions: { overflow: v } }),
   },
 
   diffIndicators: {
@@ -124,13 +175,8 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-indicators', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.diffIndicators;
-      return v === 'bars' || v === 'classic' || v === 'none' ? v : undefined;
-    },
-    toServer: (v: string) => ({ diffOptions: { diffIndicators: v } }),
+    fromServer: sc => Option.getOrUndefined(decodeDiffIndicators(sc.diffOptions.diffIndicators)),
+    toServer: (v: 'bars' | 'classic' | 'none') => ({ diffOptions: { diffIndicators: v } }),
   },
 
   diffLineDiffType: {
@@ -142,13 +188,10 @@ export const SETTINGS = {
     },
     toCookie: (v: string) => storage.setItem('plannotator-diff-line-diff-type', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.lineDiffType;
-      return v === 'word-alt' || v === 'word' || v === 'char' || v === 'none' ? v : undefined;
-    },
-    toServer: (v: string) => ({ diffOptions: { lineDiffType: v } }),
+    fromServer: sc => Option.getOrUndefined(decodeDiffLineType(sc.diffOptions.lineDiffType)),
+    toServer: (v: 'word-alt' | 'word' | 'char' | 'none') => ({
+      diffOptions: { lineDiffType: v },
+    }),
   },
 
   diffShowLineNumbers: {
@@ -160,12 +203,7 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-show-line-numbers', String(v)),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.showLineNumbers;
-      return v === true || v === false ? v : undefined;
-    },
+    fromServer: sc => readBoolean(sc.diffOptions.showLineNumbers),
     toServer: (v: boolean) => ({ diffOptions: { showLineNumbers: v } }),
   },
 
@@ -178,12 +216,7 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-show-background', String(v)),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.showDiffBackground;
-      return v === true || v === false ? v : undefined;
-    },
+    fromServer: sc => readBoolean(sc.diffOptions.showDiffBackground),
     toServer: (v: boolean) => ({ diffOptions: { showDiffBackground: v } }),
   },
 
@@ -193,12 +226,7 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-diff-font-family') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-diff-font-family', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.fontFamily;
-      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
-    },
+    fromServer: sc => readString(sc.diffOptions.fontFamily),
     toServer: (v: string) => ({ diffOptions: { fontFamily: v } }),
   },
 
@@ -211,12 +239,7 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-hide-whitespace', String(v)),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.hideWhitespace;
-      return v === true || v === false ? v : undefined;
-    },
+    fromServer: sc => readBoolean(sc.diffOptions.hideWhitespace),
     toServer: (v: boolean) => ({ diffOptions: { hideWhitespace: v } }),
   },
 
@@ -229,12 +252,7 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-diff-expand-unchanged', String(v)),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.expandUnchanged;
-      return v === true || v === false ? v : undefined;
-    },
+    fromServer: sc => readBoolean(sc.diffOptions.expandUnchanged),
     toServer: (v: boolean) => ({ diffOptions: { expandUnchanged: v } }),
   },
 
@@ -244,12 +262,7 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-diff-font-size') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-diff-font-size', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.fontSize;
-      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
-    },
+    fromServer: sc => readString(sc.diffOptions.fontSize),
     toServer: (v: string) => ({ diffOptions: { fontSize: v } }),
   },
 
@@ -261,12 +274,7 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-annotation-code-font-family') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-family', v),
     serverKey: 'annotationOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
-      const v = (sc.annotationOptions as any)?.codeFontFamily;
-      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
-    },
+    fromServer: sc => readString(sc.annotationOptions.codeFontFamily),
     toServer: (v: string) => ({ annotationOptions: { codeFontFamily: v } }),
   },
 
@@ -276,12 +284,7 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-annotation-code-font-size') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-code-font-size', v),
     serverKey: 'annotationOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
-      const v = (sc.annotationOptions as any)?.codeFontSize;
-      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
-    },
+    fromServer: sc => readString(sc.annotationOptions.codeFontSize),
     toServer: (v: string) => ({ annotationOptions: { codeFontSize: v } }),
   },
 
@@ -291,12 +294,7 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-annotation-prose-font-family') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-prose-font-family', v),
     serverKey: 'annotationOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
-      const v = (sc.annotationOptions as any)?.proseFontFamily;
-      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
-    },
+    fromServer: sc => readString(sc.annotationOptions.proseFontFamily),
     toServer: (v: string) => ({ annotationOptions: { proseFontFamily: v } }),
   },
 
@@ -306,12 +304,7 @@ export const SETTINGS = {
     fromCookie: () => storage.getItem('plannotator-annotation-prose-font-size') || undefined,
     toCookie: (v: string) => storage.setItem('plannotator-annotation-prose-font-size', v),
     serverKey: 'annotationOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.annotationOptions is untyped server payload — cast to access field
-      const v = (sc.annotationOptions as any)?.proseFontSize;
-      return Object.prototype.toString.call(v) === "[object String]" ? v : undefined;
-    },
+    fromServer: sc => readString(sc.annotationOptions.proseFontSize),
     toServer: (v: string) => ({ annotationOptions: { proseFontSize: v } }),
   },
 
@@ -325,11 +318,9 @@ export const SETTINGS = {
     },
     toCookie: (v: number) => storage.setItem('plannotator-diff-tab-size', String(v)),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.tabSize;
-      return Object.prototype.toString.call(v) === "[object Number]" && v >= 1 && v <= 8 ? v : undefined;
+    fromServer: sc => {
+      const value = Option.getOrUndefined(decodeNumber(sc.diffOptions.tabSize));
+      return value !== undefined && value >= 1 && value <= 8 ? value : undefined;
     },
     toServer: (v: number) => ({ diffOptions: { tabSize: v } }),
   },
@@ -338,17 +329,12 @@ export const SETTINGS = {
     defaultValue: 'subtle' as DiffLineBgIntensity,
     fromCookie: () => {
       const v = storage.getItem('plannotator-diff-line-bg-intensity');
-      return isDiffLineBgIntensity(v) ? v : undefined;
+      return readDiffLineBgIntensity(v);
     },
     toCookie: (v: DiffLineBgIntensity) =>
       storage.setItem('plannotator-diff-line-bg-intensity', v),
     serverKey: 'diffOptions',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      // SAFETY: sc.diffOptions is untyped server payload — cast to access field
-      const v = (sc.diffOptions as any)?.lineBgIntensity;
-      return isDiffLineBgIntensity(v) ? v : undefined;
-    },
+    fromServer: sc => readDiffLineBgIntensity(sc.diffOptions.lineBgIntensity),
     toServer: (v: DiffLineBgIntensity) => ({ diffOptions: { lineBgIntensity: v } }),
   },
   conventionalComments: {
@@ -360,11 +346,7 @@ export const SETTINGS = {
     },
     toCookie: (v: boolean) => storage.setItem('plannotator-conventional-comments', String(v)),
     serverKey: 'conventionalComments',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      const v = sc.conventionalComments;
-      return v === true || v === false ? v : undefined;
-    },
+    fromServer: sc => readBoolean(sc.conventionalComments),
     toServer: (v: boolean) => ({ conventionalComments: v }),
   },
   /** JSON-serialized array of label configs, or null for defaults.
@@ -378,17 +360,16 @@ export const SETTINGS = {
       else storage.removeItem('plannotator-cc-labels');
     },
     serverKey: 'conventionalLabels',
-    // SAFETY: sc is untyped server payload — any is intentional
-    fromServer: (sc: any) => {
-      const v = sc.conventionalLabels;
-      if (v === null) return null;
-      if (Array.isArray(v)) return JSON.stringify(v);
-      return undefined;
+    fromServer: sc => {
+      const labels = Option.getOrUndefined(decodeConventionalLabels(sc.conventionalLabels));
+      if (labels === undefined || labels === null) return labels;
+      return JSON.stringify(labels);
     },
     toServer: (v: string | null) => {
       if (v === null) return { conventionalLabels: null };
       try {
-        return { conventionalLabels: JSON.parse(v) };
+        const labels = Option.getOrUndefined(decodeConventionalLabels(JSON.parse(v)));
+        return labels === undefined ? {} : { conventionalLabels: labels };
       } catch {
         return {};
       }

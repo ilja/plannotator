@@ -11,22 +11,31 @@
  * via a debounced POST /api/config.
  */
 
-import { SETTINGS, type SettingName, type SettingsMap } from './settings';
+import type { ConfigPatch } from '@plannotator/shared/config';
+import {
+  decodeUiServerConfig,
+  SETTINGS,
+  type SettingDef,
+  type SettingName,
+  type SettingsMap,
+} from './settings';
 
 type Listener = () => void;
 
-// SAFETY: deepMerge operates on untyped JSON records — any is intentional for recursive merge
-function deepMerge(target: any, source: any): void {
-  for (const key of Object.keys(source)) {
-    if (
-      target[key] instanceof Object && target[key] !== null && !Array.isArray(target[key]) &&
-      source[key] instanceof Object && source[key] !== null && !Array.isArray(source[key])
-    ) {
-      deepMerge(target[key], source[key]);
-    } else {
-      target[key] = source[key];
-    }
-  }
+function mergeConfigPatches(current: ConfigPatch, patch: ConfigPatch): ConfigPatch {
+  const diffOptions = current.diffOptions || patch.diffOptions
+    ? { ...current.diffOptions, ...patch.diffOptions }
+    : undefined;
+  const annotationOptions = current.annotationOptions || patch.annotationOptions
+    ? { ...current.annotationOptions, ...patch.annotationOptions }
+    : undefined;
+
+  return {
+    ...current,
+    ...patch,
+    ...(diffOptions && { diffOptions }),
+    ...(annotationOptions && { annotationOptions }),
+  };
 }
 
 /** Infer the value type from a SettingDef */
@@ -34,29 +43,31 @@ type SettingValue<K extends SettingName> = SettingsMap[K] extends { defaultValue
   ? D extends (...args: unknown[]) => infer R ? R : D
   : never;
 
-class ConfigStore {
+function resolveDefaultValue<Value>(definition: SettingDef<Value>): Value {
+  return definition.defaultValue instanceof Function
+    ? definition.defaultValue()
+    : definition.defaultValue;
+}
+
+export class ConfigStore {
   private values = new Map<string, unknown>();
   private listeners = new Set<Listener>();
   private version = 0;
-  // SAFETY: pendingServerWrites is untyped server payload — any is intentional
-  private pendingServerWrites: any = {};
+  private pendingServerWrites: ConfigPatch = {};
   private serverSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // Eagerly resolve all settings from synchronous sources (cookie > default).
     // The store is safe to read from the moment it's created.
     for (const [name, def] of Object.entries(SETTINGS)) {
-      const fromCookie = def.fromCookie();
-      // SAFETY: def.defaultValue is factory per SettingDef — invoke to get default value, any is intentional for generic loop
-      const defaultVal = def.defaultValue instanceof Function
-        ? (def.defaultValue as () => any)()
-        : def.defaultValue;
+      const definition: SettingDef<unknown> = def;
+      const fromCookie = definition.fromCookie();
+      const defaultVal = resolveDefaultValue(definition);
       const resolved = fromCookie ?? defaultVal;
       this.values.set(name, resolved);
       // Persist generated defaults to cookie so the value is stable across calls
       if (fromCookie === undefined) {
-        // SAFETY: def.toCookie expects T per SettingDef — resolved is T
-        def.toCookie(resolved as never);
+        definition.toCookie(resolved);
       }
     }
   }
@@ -68,17 +79,15 @@ class ConfigStore {
    * Server values take precedence over the cookie/default already resolved
    * by the constructor. Settings without a server value are left untouched.
    */
-  // SAFETY: serverConfig is untyped server payload — any is intentional
-  init(serverConfig?: any): void {
-    if (serverConfig) {
-      for (const [name, def] of Object.entries(SETTINGS)) {
-        if (def.serverKey && def.fromServer) {
-          const fromServer = def.fromServer(serverConfig);
-          if (fromServer !== undefined) {
-            this.values.set(name, fromServer);
-            // SAFETY: def.toCookie expects T per SettingDef — fromServer is T
-            def.toCookie(fromServer as never);
-          }
+  init<Input>(serverConfig?: Input): void {
+    const decodedServerConfig = decodeUiServerConfig(serverConfig);
+    for (const [name, def] of Object.entries(SETTINGS)) {
+      const definition: SettingDef<unknown> = def;
+      if (definition.serverKey && definition.fromServer) {
+        const fromServer = definition.fromServer(decodedServerConfig);
+        if (fromServer !== undefined) {
+          this.values.set(name, fromServer);
+          definition.toCookie(fromServer);
         }
       }
     }
@@ -93,14 +102,15 @@ class ConfigStore {
 
   /** Set a config value. Writes cookie (sync), queues server write-back if applicable. */
   set<K extends SettingName>(key: K, value: SettingValue<K>): void {
-    const def = SETTINGS[key];
+    const def: SettingDef<unknown> = SETTINGS[key];
     this.values.set(key, value);
-    // SAFETY: def.toCookie expects T per SettingDef — value is T
-    def.toCookie(value as never);
+    def.toCookie(value);
 
     if (def.serverKey && def.toServer) {
-      // SAFETY: def.toServer returns Record<string, unknown> per SettingDef — any is intentional for merge
-      deepMerge(this.pendingServerWrites, def.toServer(value as never) as any);
+      this.pendingServerWrites = mergeConfigPatches(
+        this.pendingServerWrites,
+        def.toServer(value),
+      );
       this.scheduleServerSync();
     }
 
