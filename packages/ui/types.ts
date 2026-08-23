@@ -58,13 +58,13 @@ export interface Annotation {
 export type AlertKind = 'note' | 'tip' | 'warning' | 'caution' | 'important';
 
 export interface ChoiceQuestionOption {
-  label: string;
-  text: string;
+  readonly label: string;
+  readonly text: string;
 }
 
 export interface ChoiceValidationEvidence {
   question: string;
-  options: ChoiceQuestionOption[];
+  options: readonly ChoiceQuestionOption[];
 }
 
 export interface Block {
@@ -78,7 +78,7 @@ export interface Block {
   orderedStart?: number; // For ordered list items: integer parsed from the marker (e.g. 5 for "5.")
   alertKind?: AlertKind; // For blockquotes starting with [!NOTE] / [!TIP] / etc.
   directiveKind?: string; // For directive containers (e.g. ':::note' → 'note')
-  choiceOptions?: ChoiceQuestionOption[]; // For choice-question blocks
+  choiceOptions?: readonly ChoiceQuestionOption[]; // For choice-question blocks
   recommendedChoiceLabel?: string; // Recommended option label for choice-question blocks
   sourceText?: string; // Original source span for choice-question blocks
   sourceLineCount?: number; // Original source span line count for choice-question blocks

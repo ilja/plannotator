@@ -21,8 +21,12 @@ import type {
   SourceBackedSavedFileChangeDraftData,
 } from '@plannotator/shared/draft';
 import type { Annotation, CodeAnnotation, ImageAttachment } from '../types';
-import { fromShareable, parseShareableImages } from '../utils/sharing';
-import type { ShareableAnnotation } from '../utils/sharing';
+import {
+  decodeLegacyShareData,
+  fromShareable,
+  parseShareableImages,
+  type LegacyShareData,
+} from '../utils/sharing';
 
 const DEBOUNCE_MS = 500;
 
@@ -46,20 +50,6 @@ interface DraftData {
 interface MissingDraftData {
   found?: false;
   draftGeneration?: number;
-}
-
-/** Old format: compact tuples (for backward compat on load). */
-interface LegacyDraftData {
-  a: ShareableAnnotation[];
-  g?: unknown[];
-  d?: (string | null)[];
-  ts: number;
-}
-
-// SAFETY: data is untrusted draft payload — any is intentional
-function isLegacyDraft(data: any): data is LegacyDraftData {
-  // SAFETY: data-shape narrowed by 'a' in check — cast to read field
-  return !!data && data instanceof Object && 'a' in data && Array.isArray((data as LegacyDraftData).a);
 }
 
 // SAFETY: value is untrusted draft payload — any is intentional
@@ -232,7 +222,7 @@ export function useAnnotationDraft({
     fetch('/api/draft')
       .then(async res => {
         // SAFETY: res.json() is untyped JSON — binding types the result
-        const data: DraftData | LegacyDraftData | MissingDraftData | null = await res.json().catch(() => null);
+        const data: DraftData | LegacyShareData | MissingDraftData | null = await res.json().catch(() => null);
         if (!res.ok) {
           // SAFETY: data is draft union — cast to read MissingDraftData generation field
           const generation = readDraftGeneration((data as MissingDraftData | null)?.draftGeneration);
@@ -243,7 +233,7 @@ export function useAnnotationDraft({
         }
         return data;
       })
-      .then((data: DraftData | LegacyDraftData | null) => {
+      .then((data: DraftData | LegacyShareData | null) => {
         if (!data) {
           hasMountedRef.current = true;
           return;
@@ -253,12 +243,14 @@ export function useAnnotationDraft({
         let restoredCodeAnnotations: CodeAnnotation[] = [];
         let restoredGlobal: ImageAttachment[];
 
-        if (isLegacyDraft(data)) {
+        const legacyData = decodeLegacyShareData(data);
+        if (legacyData) {
           // Old tuple format — deserialize via fromShareable
-          restoredAnnotations = data.a.length > 0 ? fromShareable(data.a, data.d) : [];
-          // SAFETY: data.g is untyped legacy draft field — cast to parseShareableImages input
-          restoredGlobal = data.g ? (parseShareableImages(data.g as Parameters<typeof parseShareableImages>[0]) ?? []) : [];
-        } else if (Array.isArray(data.annotations)) {
+          restoredAnnotations = legacyData.a.length > 0
+            ? fromShareable(legacyData.a, legacyData.d)
+            : [];
+          restoredGlobal = parseShareableImages(legacyData.g) ?? [];
+        } else if ('annotations' in data && Array.isArray(data.annotations)) {
           // New direct-object format
           const generation = readDraftGeneration(data.draftGeneration);
           if (generation !== null) {
@@ -286,19 +278,19 @@ export function useAnnotationDraft({
 
         // SAFETY: data is draft union — cast to DraftData to read editedMarkdown
         const restoredEdited =
-          !isLegacyDraft(data) && Object.prototype.toString.call((data as DraftData).editedMarkdown) === "[object String]"
+          !legacyData && Object.prototype.toString.call((data as DraftData).editedMarkdown) === "[object String]"
             ? (data as DraftData).editedMarkdown!
             : null;
         // SAFETY: data is draft union — cast to DraftData to read editedDocuments
         const restoredEditedDocuments =
-          !isLegacyDraft(data) && Array.isArray((data as DraftData).editedDocuments)
+          !legacyData && Array.isArray((data as DraftData).editedDocuments)
             ? (data as DraftData).editedDocuments!
                 .map(parseSourceBackedDocumentDraft)
                 .filter((doc): doc is SourceBackedDocumentDraftData => doc !== null)
             : [];
         // SAFETY: data is draft union — cast to DraftData to read savedFileChanges
         const restoredSavedFileChanges =
-          !isLegacyDraft(data) && Array.isArray((data as DraftData).savedFileChanges)
+          !legacyData && Array.isArray((data as DraftData).savedFileChanges)
             ? (data as DraftData).savedFileChanges!.filter(isSourceBackedSavedFileChange)
             : [];
 

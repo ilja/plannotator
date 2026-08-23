@@ -17,6 +17,7 @@ import {
   parseShareHash,
   generateShareUrl,
   decompress,
+  decodeSharePayload,
   fromShareable,
   parseShareableImages,
   formatUrlSize,
@@ -384,8 +385,11 @@ export function useSharing(
           return { success: false, count: 0, planTitle: '', error: 'Invalid share URL: empty hash' };
         }
 
-        // SAFETY: cast is safe — SharePayload is expected shape
-        payload = (await decompress(hash)) as SharePayload;
+        const decodedPayload = decodeSharePayload(await decompress(hash));
+        if (!decodedPayload) {
+          return { success: false, count: 0, planTitle: '', error: 'Invalid share URL: malformed payload' };
+        }
+        payload = decodedPayload;
       }
 
       // Extract plan title from embedded plan text (or HTML <title>)
