@@ -17,16 +17,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   SourceBackedDocumentDraftData,
-  SourceBackedDraftSourceSaveCapability,
   SourceBackedSavedFileChangeDraftData,
 } from '@plannotator/shared/draft';
 import type { Annotation, CodeAnnotation, ImageAttachment } from '../types';
 import {
-  decodeLegacyShareData,
-  fromShareable,
-  parseShareableImages,
-  type LegacyShareData,
-} from '../utils/sharing';
+  decodeStoredAnnotationDraft,
+  decodeStoredDraftGeneration,
+  type DecodedStoredAnnotationDraft,
+} from '../utils/annotationDraftDecoding';
 
 const DEBOUNCE_MS = 500;
 
@@ -45,102 +43,6 @@ interface DraftData {
   /** Client-side generation used to ignore stale saves after a draft delete. */
   draftGeneration?: number;
   ts: number;
-}
-
-interface MissingDraftData {
-  found?: false;
-  draftGeneration?: number;
-}
-
-// SAFETY: value is untrusted draft payload — any is intentional
-function parseSourceBackedDocumentDraft(value: any): SourceBackedDocumentDraftData | null {
-  if (!value || !(value instanceof Object)) return null;
-  // SAFETY: value is untrusted draft payload — cast to access fields
-  const doc = value as Partial<SourceBackedDocumentDraftData>;
-  // SAFETY: doc.sourceSave is untrusted draft payload — cast to access fields
-  const sourceSave = doc.sourceSave as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
-  if (!(
-    Object.prototype.toString.call(doc.key) === "[object String]" &&
-    Object.prototype.toString.call(doc.sessionOpenText) === "[object String]" &&
-    Object.prototype.toString.call(doc.diskBaseline) === "[object String]" &&
-    Object.prototype.toString.call(doc.currentText) === "[object String]" &&
-    (doc.missingOnDisk === undefined || doc.missingOnDisk === true || doc.missingOnDisk === false) &&
-    isDraftSourceSaveCapability(sourceSave)
-  )) {
-    return null;
-  }
-  const savedChange = parseSourceBackedSavedFileChange(doc.savedChange, sourceSave);
-  const result: SourceBackedDocumentDraftData = {
-    key: doc.key,
-    sourceSave,
-    sessionOpenText: doc.sessionOpenText,
-    diskBaseline: doc.diskBaseline,
-    currentText: doc.currentText,
-  };
-  if (doc.missingOnDisk) result.missingOnDisk = true;
-  if (savedChange) result.savedChange = savedChange;
-  return result;
-}
-
-// SAFETY: value is untrusted draft payload — any is intentional
-function isSourceBackedSavedFileChange(value: any): value is SourceBackedSavedFileChangeDraftData {
-  return parseSourceBackedSavedFileChange(value) !== null;
-}
-
-// SAFETY: value is untrusted draft payload — any is intentional
-function parseSourceBackedSavedFileChange(
-  value: any,
-  fallbackSourceSave?: SourceBackedDraftSourceSaveCapability,
-): SourceBackedSavedFileChangeDraftData | null {
-  if (!value || !(value instanceof Object)) return null;
-  // SAFETY: value is untrusted draft payload — cast to access fields
-  const change = value as Partial<SourceBackedSavedFileChangeDraftData>;
-  if (!(
-    Object.prototype.toString.call(change.key) === "[object String]" &&
-    Object.prototype.toString.call(change.path) === "[object String]" &&
-    Object.prototype.toString.call(change.basename) === "[object String]" &&
-    Object.prototype.toString.call(change.beforeText) === "[object String]" &&
-    Object.prototype.toString.call(change.afterText) === "[object String]" &&
-    (change.beforeHash === undefined || Object.prototype.toString.call(change.beforeHash) === "[object String]") &&
-    (change.afterHash === undefined || Object.prototype.toString.call(change.afterHash) === "[object String]")
-  )) {
-    return null;
-  }
-  const sourceSave = isDraftSourceSaveCapability(change.sourceSave)
-    ? change.sourceSave
-    : fallbackSourceSave;
-  if (!sourceSave) return null;
-  return {
-    key: change.key,
-    path: change.path,
-    basename: change.basename,
-    beforeText: change.beforeText,
-    afterText: change.afterText,
-    beforeHash: change.beforeHash,
-    afterHash: change.afterHash,
-    sourceSave,
-  };
-}
-
-// SAFETY: value is untrusted draft payload — any is intentional
-function isDraftSourceSaveCapability(value: any): value is SourceBackedDraftSourceSaveCapability {
-  // SAFETY: value is untrusted draft payload — cast to access fields
-  const sourceSave = value as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
-  return (
-    !!sourceSave &&
-    sourceSave.enabled === true &&
-    Object.prototype.toString.call(sourceSave.path) === "[object String]" &&
-    Object.prototype.toString.call(sourceSave.basename) === "[object String]" &&
-    Object.prototype.toString.call(sourceSave.hash) === "[object String]" &&
-    Object.prototype.toString.call(sourceSave.mtimeMs) === "[object Number]" &&
-    Object.prototype.toString.call(sourceSave.size) === "[object Number]" &&
-    Object.prototype.toString.call(sourceSave.eol) === "[object String]"
-  );
-}
-
-// SAFETY: value is untrusted draft payload — any is intentional
-function readDraftGeneration(value: any): number | null {
-  return Object.prototype.toString.call(value) === "[object Number]" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function formatTimeAgo(ts: number): string {
@@ -221,93 +123,50 @@ export function useAnnotationDraft({
 
     fetch('/api/draft')
       .then(async res => {
-        // SAFETY: res.json() is untyped JSON — binding types the result
-        const data: DraftData | LegacyShareData | MissingDraftData | null = await res.json().catch(() => null);
+        const rawData = await res.json().catch(() => null);
         if (!res.ok) {
-          // SAFETY: data is draft union — cast to read MissingDraftData generation field
-          const generation = readDraftGeneration((data as MissingDraftData | null)?.draftGeneration);
+          const generation = decodeStoredDraftGeneration(rawData);
           if (generation !== null) {
             draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
           }
           return null;
         }
-        return data;
+        return decodeStoredAnnotationDraft(rawData);
       })
-      .then((data: DraftData | LegacyShareData | null) => {
+      .then((data: DecodedStoredAnnotationDraft | null) => {
         if (!data) {
           hasMountedRef.current = true;
           return;
         }
 
-        let restoredAnnotations: Annotation[];
-        let restoredCodeAnnotations: CodeAnnotation[] = [];
-        let restoredGlobal: ImageAttachment[];
-
-        const legacyData = decodeLegacyShareData(data);
-        if (legacyData) {
-          // Old tuple format — deserialize via fromShareable
-          restoredAnnotations = legacyData.a.length > 0
-            ? fromShareable(legacyData.a, legacyData.d)
-            : [];
-          restoredGlobal = parseShareableImages(legacyData.g) ?? [];
-        } else if ('annotations' in data && Array.isArray(data.annotations)) {
-          // New direct-object format
-          const generation = readDraftGeneration(data.draftGeneration);
-          if (generation !== null) {
-            draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
-          }
-          restoredAnnotations = data.annotations;
-          restoredCodeAnnotations = Array.isArray(data.codeAnnotations) ? data.codeAnnotations : [];
-          restoredGlobal = Array.isArray(data.globalAttachments) ? data.globalAttachments : [];
-        } else {
-          // SAFETY: data is draft union — cast to DraftData to check codeAnnotations
-          const draft = data as DraftData;
-          if (Array.isArray(draft.codeAnnotations) && draft.codeAnnotations.length > 0) {
-            const generation = readDraftGeneration(draft.draftGeneration);
-            if (generation !== null) {
-              draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
-            }
-            restoredAnnotations = [];
-            restoredCodeAnnotations = draft.codeAnnotations;
-            restoredGlobal = Array.isArray(draft.globalAttachments) ? draft.globalAttachments : [];
-          } else {
-            hasMountedRef.current = true;
-            return;
-          }
+        if (data.draftGeneration !== null) {
+          draftGenerationRef.current = Math.max(
+            draftGenerationRef.current,
+            data.draftGeneration,
+          );
         }
 
-        // SAFETY: data is draft union — cast to DraftData to read editedMarkdown
-        const restoredEdited =
-          !legacyData && Object.prototype.toString.call((data as DraftData).editedMarkdown) === "[object String]"
-            ? (data as DraftData).editedMarkdown!
-            : null;
-        // SAFETY: data is draft union — cast to DraftData to read editedDocuments
-        const restoredEditedDocuments =
-          !legacyData && Array.isArray((data as DraftData).editedDocuments)
-            ? (data as DraftData).editedDocuments!
-                .map(parseSourceBackedDocumentDraft)
-                .filter((doc): doc is SourceBackedDocumentDraftData => doc !== null)
-            : [];
-        // SAFETY: data is draft union — cast to DraftData to read savedFileChanges
-        const restoredSavedFileChanges =
-          !legacyData && Array.isArray((data as DraftData).savedFileChanges)
-            ? (data as DraftData).savedFileChanges!.filter(isSourceBackedSavedFileChange)
-            : [];
-
-        const totalCount = restoredAnnotations.length + restoredCodeAnnotations.length + restoredGlobal.length;
-        if (totalCount > 0 || restoredEdited !== null || restoredEditedDocuments.length > 0 || restoredSavedFileChanges.length > 0) {
+        const totalCount =
+          data.annotations.length +
+          data.codeAnnotations.length +
+          data.globalAttachments.length;
+        const hasEdits =
+          data.editedMarkdown !== null ||
+          data.editedDocuments.length > 0 ||
+          data.savedFileChanges.length > 0;
+        if (totalCount > 0 || hasEdits) {
           draftDataRef.current = {
-            annotations: restoredAnnotations,
-            codeAnnotations: restoredCodeAnnotations,
-            globalAttachments: restoredGlobal,
-            editedMarkdown: restoredEdited,
-            editedDocuments: restoredEditedDocuments,
-            savedFileChanges: restoredSavedFileChanges,
+            annotations: data.annotations,
+            codeAnnotations: data.codeAnnotations,
+            globalAttachments: data.globalAttachments,
+            editedMarkdown: data.editedMarkdown,
+            editedDocuments: data.editedDocuments,
+            savedFileChanges: data.savedFileChanges,
           };
           setDraftBanner({
             count: totalCount,
-            timeAgo: formatTimeAgo(data.ts || 0),
-            hasEdits: restoredEdited !== null || restoredEditedDocuments.length > 0 || restoredSavedFileChanges.length > 0,
+            timeAgo: formatTimeAgo(data.ts),
+            hasEdits,
           });
         }
         hasMountedRef.current = true;
