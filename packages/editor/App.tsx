@@ -4088,9 +4088,7 @@ const App: React.FC = () => {
         <CompletionOverlay
           submitted={submitted}
           title={
-            // eslint-disable-next-line no-constant-condition -- false branch is intentional for future archive state
-            false ? 'Archive Closed'
-            : submitted === 'exited' ? 'Session Closed'
+            submitted === 'exited' ? 'Session Closed'
             : submitted === 'approved'
               ? 'Approved'
               : 'Feedback Sent'
