@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Option } from 'effect';
 import type { Origin } from '@plannotator/shared/agents';
 import type { DiffLineBgIntensity } from '@plannotator/shared/config';
 import { configStore, useConfigValue } from '../config';
@@ -49,6 +50,7 @@ import {
   saveFileBrowserSettings,
   type FileBrowserSettings,
 } from '../utils/fileBrowser';
+import { decodeObsidianVaultsResponse } from '../utils/obsidianVaultsDecoding';
 
 type SettingsTab = 'general' | 'theme' | 'git' | 'display' | 'saving' | 'labels' | 'shortcuts' | 'ai' | 'files' | 'obsidian' | 'bear' | 'octarine' | 'comments' | 'hooks';
 
@@ -865,11 +867,19 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
       setVaultsLoading(true);
       fetch('/api/obsidian/vaults')
         .then(res => res.json())
-        .then((data: { vaults: string[] }) => {
-          setDetectedVaults(data.vaults || []);
+        .then((data) => {
+          const responseBody: unknown = data;
+          const decodedVaults = decodeObsidianVaultsResponse(responseBody);
+          if (Option.isNone(decodedVaults)) {
+            throw new Error('Invalid Obsidian vaults response envelope');
+          }
+
+          const vaults = decodedVaults.value;
+          setDetectedVaults(vaults);
           // Auto-select first vault if none set
-          if (data.vaults?.length > 0 && !obsidian.vaultPath) {
-            handleObsidianChange({ vaultPath: data.vaults[0] });
+          const firstVault = vaults[0];
+          if (firstVault !== undefined && !obsidian.vaultPath) {
+            handleObsidianChange({ vaultPath: firstVault });
           }
         })
         .catch(() => setDetectedVaults([]))
@@ -1728,8 +1738,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                                     onChange={(e) => handleObsidianChange({ vaultPath: e.target.value })}
                                     className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
                                   >
-                                    {detectedVaults.map((vault) => (
-                                      <option key={vault} value={vault}>
+                                    {detectedVaults.map((vault, index) => (
+                                      <option key={`${vault}-${index}`} value={vault}>
                                         {vault.split('/').pop() || vault}
                                       </option>
                                     ))}
