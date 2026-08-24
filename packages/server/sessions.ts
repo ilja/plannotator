@@ -14,17 +14,26 @@ import {
   unlinkSync,
   existsSync,
 } from "fs";
+import { Schema } from "effect";
 import { getPlannotatorDataDir } from "@plannotator/shared/data-dir";
 
-export interface SessionInfo {
-  pid: number;
-  port: number;
-  url: string;
-  mode: "review" | "annotate";
-  project: string;
-  startedAt: string;
-  label: string;
-}
+const PositiveIntegerSchema = Schema.Int.check(Schema.isGreaterThan(0));
+
+const SessionInfoSchema = Schema.Struct({
+  pid: PositiveIntegerSchema,
+  port: PositiveIntegerSchema,
+  url: Schema.String,
+  mode: Schema.Literals(["review", "annotate"]),
+  project: Schema.String,
+  startedAt: Schema.String,
+  label: Schema.String,
+});
+
+/** Persisted session metadata after validation at the sessions file boundary. */
+export interface SessionInfo extends Schema.Schema.Type<typeof SessionInfoSchema> {}
+
+/** Decode untrusted persisted session metadata into a validated session record. */
+export const decodeSessionInfo = Schema.decodeUnknownSync(SessionInfoSchema);
 
 function getSessionsDir(): string {
   const dir = join(getPlannotatorDataDir(), "sessions");
@@ -86,7 +95,7 @@ export function listSessions(): SessionInfo[] {
 
     const filePath = join(dir, entry);
     try {
-      const data: SessionInfo = JSON.parse(readFileSync(filePath, "utf-8"));
+      const data = decodeSessionInfo(JSON.parse(readFileSync(filePath, "utf-8")));
 
       if (isAlive(data.pid)) {
         active.push(data);
