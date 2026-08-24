@@ -1,16 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Result } from 'effect';
 import { FAVICON_SVG } from '@plannotator/shared/favicon';
-
-interface HooksStatus {
-  pfmReminder: { enabled: boolean };
-  improvementHook: {
-    present: boolean;
-    filePath: string | null;
-    fileSize: number | null;
-    content: string | null;
-  };
-  composedLength: number | null;
-}
+import { decodeHooksStatusResponse, type HooksStatusResponse } from './hooksStatusResponse';
 
 function displayPath(filePath: string): string {
   const idx = filePath.indexOf('/.plannotator/');
@@ -49,16 +40,19 @@ const CopyPathButton: React.FC<{ filePath: string }> = ({ filePath }) => {
 };
 
 export const HooksTab: React.FC = () => {
-  const [status, setStatus] = useState<HooksStatus | null>(null);
+  const [status, setStatus] = useState<HooksStatusResponse | null>(null);
   const [pfmEnabled, setPfmEnabled] = useState(false);
   const [hookExpanded, setHookExpanded] = useState(false);
 
   useEffect(() => {
     fetch('/api/hooks/status')
       .then(r => r.json())
-      .then((data: HooksStatus) => {
-        setStatus(data);
-        setPfmEnabled(data.pfmReminder.enabled);
+      .then(decodeHooksStatusResponse)
+      .then((decoded) => {
+        if (Result.isFailure(decoded)) return;
+
+        setStatus(decoded.success);
+        setPfmEnabled(decoded.success.pfmReminder.enabled);
       })
       .catch(() => {});
   }, []);
