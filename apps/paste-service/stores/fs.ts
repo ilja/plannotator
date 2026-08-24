@@ -1,11 +1,19 @@
 import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "fs";
 import { join, resolve } from "path";
+import { Schema } from "effect";
 import type { PasteStore } from "../core/storage";
 
-interface PasteFile {
-  data: string;
-  expiresAt: number;
-}
+const PasteFile = Schema.Struct({
+  data: Schema.String,
+  expiresAt: Schema.Finite,
+});
+
+type PasteFile = Schema.Schema.Type<typeof PasteFile>;
+
+const PasteFileJson = Schema.fromJsonString(PasteFile);
+
+/** Decode and validate JSON persisted by the filesystem paste store. */
+export const decodePasteFile = Schema.decodeUnknownSync(PasteFileJson);
 
 export class FsPasteStore implements PasteStore {
   private resolvedDir: string;
@@ -35,7 +43,7 @@ export class FsPasteStore implements PasteStore {
   async get(id: string): Promise<string | null> {
     const path = this.safePath(id);
     try {
-      const entry: PasteFile = await Bun.file(path).json();
+      const entry = decodePasteFile(await Bun.file(path).text());
       if (Date.now() > entry.expiresAt) {
         unlinkSync(path);
         return null;
@@ -55,7 +63,7 @@ export class FsPasteStore implements PasteStore {
         const path = join(this.dataDir, file);
         try {
           const raw = readFileSync(path, "utf-8");
-          const entry: PasteFile = JSON.parse(raw);
+          const entry = decodePasteFile(raw);
           if (now > entry.expiresAt) {
             unlinkSync(path);
           }
