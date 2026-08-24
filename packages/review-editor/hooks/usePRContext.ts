@@ -1,6 +1,21 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { PRContext } from '@plannotator/shared/pr-types';
-import type { PRMetadata } from '@plannotator/shared/pr-types';
+import type { PRContext, PRMetadata } from '@plannotator/shared/pr-types';
+import { decodePRContextError, decodePRContextResponse } from '../utils/pr-context-response';
+
+/** Read and validate one `/api/pr-context` response before updating hook state. */
+export async function readPRContextResponse(res: Response): Promise<PRContext> {
+  if (!res.ok) {
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      data = undefined;
+    }
+    throw new Error(decodePRContextError(data) ?? `HTTP ${res.status}`);
+  }
+
+  return decodePRContextResponse(await res.json());
+}
 
 export function usePRContext(prMetadata: PRMetadata | null) {
   const [prContext, setPRContext] = useState<PRContext | null>(null);
@@ -30,11 +45,7 @@ export function usePRContext(prMetadata: PRMetadata | null) {
     try {
       const res = await fetch('/api/pr-context');
       if (requestUrl !== lastUrl.current) return;
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
-      }
-      const context: PRContext = await res.json();
+      const context = await readPRContextResponse(res);
       if (requestUrl !== lastUrl.current) return;
       setPRContext(context);
     } catch (err) {
