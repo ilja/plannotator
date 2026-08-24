@@ -2,9 +2,10 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { SearchableSelect } from '@plannotator/ui/components/SearchableSelect';
 import { PullRequestIcon } from '@plannotator/ui/components/PullRequestIcon';
 import { getItem, setItem } from '@plannotator/ui/utils/storage';
-import type { PRListItem } from '@plannotator/shared/pr-types';
+import { Result } from 'effect';
+import { decodePRListResponse, type PRSelectorItem } from '../pr-list-response';
 
-type PRItem = PRListItem;
+type PRItem = PRSelectorItem;
 
 const stateColors = {
   open: 'text-success',
@@ -60,8 +61,10 @@ export function PRSelector({ mrNumberLabel, prTitle, currentNumber, onSelect, di
           if (!res.ok) throw new Error('Failed to fetch');
           return res.json();
         })
-        .then((data: { prs?: PRItem[] }) => {
-          setPrs(data.prs ?? []);
+        .then((data) => {
+          const decoded = decodePRListResponse(data);
+          if (Result.isFailure(decoded)) throw decoded.failure;
+          setPrs(decoded.success);
           setFetched(true);
         })
         .catch(() => setPrs([]))
