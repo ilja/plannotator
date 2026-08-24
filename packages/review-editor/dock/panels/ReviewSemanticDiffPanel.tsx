@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import type {
-  SemanticDiffBinaryChange,
-  SemanticDiffChange,
-  SemanticDiffResponse,
+import {
+  decodeSemanticDiffResponse,
+  type SemanticDiffBinaryChange,
+  type SemanticDiffChange,
+  type SemanticDiffResponse,
 } from '@plannotator/shared/semantic-diff-types';
 import { useReviewState } from '../ReviewStateContext';
 import {
@@ -73,8 +74,8 @@ export function ReviewSemanticDiffPanel() {
     fetch('/api/semantic-diff', { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error('Semantic diff failed');
-        const data: SemanticDiffResponse = await res.json();
-        return data;
+        const data: unknown = await res.json();
+        return decodeSemanticDiffResponse(data);
       })
       .then((data) => {
         if (controller.signal.aborted) return;
