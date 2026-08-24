@@ -4,6 +4,7 @@ import { ImageThumbnail, getImageSrc } from './ImageThumbnail';
 import { ImageAnnotator } from './ImageAnnotator';
 import type { ImageAttachment } from '../types';
 import { modKey } from '../utils/platform';
+import { decodeAttachmentUploadResponse } from '../utils/attachmentUploadResponse';
 
 /**
  * Derive a clean, human-readable name from an original filename.
@@ -138,7 +139,7 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
       }
 
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
+      const data = decodeAttachmentUploadResponse(await res.json());
       if (data.path) {
         // If re-editing, remove old path first
         if (editingImage) {
