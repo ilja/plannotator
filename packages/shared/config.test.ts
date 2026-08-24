@@ -4,12 +4,31 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { ConfigPatch } from "./config";
+import { ConfigPatch, type PlannotatorConfig } from "./config";
 
 const TEST_HOME = join(tmpdir(), `config-test-${Date.now()}`);
 const CONFIG_DIR = join(TEST_HOME, ".plannotator");
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 const PROJECT_ROOT = join(import.meta.dir, "../..");
+
+interface ConfigPropertyInspection {
+	prototypeIsObject: boolean;
+	ownsProto: boolean;
+	ownsKnownField: boolean;
+	inheritsKnownField: boolean;
+}
+
+interface LoadedConfigInspection {
+	config: PlannotatorConfig;
+	root: ConfigPropertyInspection;
+	diffOptions: ConfigPropertyInspection;
+	annotationOptions: ConfigPropertyInspection;
+	prompts: ConfigPropertyInspection;
+	review: ConfigPropertyInspection;
+	runtimes: ConfigPropertyInspection;
+	runtimeOverrides: ConfigPropertyInspection;
+	metadata: ConfigPropertyInspection;
+}
 
 async function loadConfigFromDisk(config: string): Promise<string> {
 	mkdirSync(CONFIG_DIR, { recursive: true });
@@ -33,6 +52,48 @@ async function loadConfigFromDisk(config: string): Promise<string> {
 	}
 
 	return stdout;
+}
+
+async function inspectConfigFromDisk(config: string): Promise<LoadedConfigInspection> {
+	mkdirSync(CONFIG_DIR, { recursive: true });
+	writeFileSync(CONFIG_PATH, config);
+
+	const proc = Bun.spawn(["bun", "-e", `
+		import { loadConfig } from "./packages/shared/config";
+		const config = loadConfig();
+		const inspect = (value, knownField) => ({
+			prototypeIsObject: Object.getPrototypeOf(value) === Object.prototype,
+			ownsProto: Object.hasOwn(value, "__proto__"),
+			ownsKnownField: Object.hasOwn(value, knownField),
+			inheritsKnownField: knownField in value && !Object.hasOwn(value, knownField),
+		});
+		console.log(JSON.stringify({
+			config,
+			root: inspect(config, "displayName"),
+			diffOptions: inspect(config.diffOptions, "showLineNumbers"),
+			annotationOptions: inspect(config.annotationOptions, "proseFontSize"),
+			prompts: inspect(config.prompts, "plan"),
+			review: inspect(config.prompts?.review, "approved"),
+			runtimes: inspect(config.prompts?.review?.runtimes, "unknownRuntime"),
+			runtimeOverrides: inspect(config.prompts?.review?.runtimes?.pi, "denied"),
+			metadata: inspect(config.prompts?.review?.runtimes?.pi?.metadata, "approved"),
+		}));
+	`], {
+		env: { ...process.env, HOME: TEST_HOME },
+		cwd: PROJECT_ROOT,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const stdout = await new Response(proc.stdout).text();
+	const exitCode = await proc.exited;
+
+	if (exitCode !== 0) {
+		const stderr = await new Response(proc.stderr).text();
+		throw new Error(`Config inspection subprocess failed: ${stderr}`);
+	}
+
+	const result: LoadedConfigInspection = JSON.parse(stdout);
+	return result;
 }
 
 async function saveAndLoadConfig(config: string): Promise<string> {
@@ -237,5 +298,67 @@ describe("loadConfig", () => {
 			diffOptions: { defaultDiffType: "merge-base", futureDiffOption: "retained" },
 			futureTopLevelOption: { enabled: true },
 		});
+	});
+
+	test("preserves __proto__ as own JSON data without inheriting known config fields", async () => {
+		const config = `{
+			"__proto__": { "displayName": "inherited root" },
+			"diffOptions": {
+				"__proto__": { "showLineNumbers": true },
+				"futureDiffOption": "retained"
+			},
+			"annotationOptions": {
+				"__proto__": { "proseFontSize": "inherited" },
+				"futureAnnotationOption": "retained"
+			},
+			"prompts": {
+				"__proto__": { "plan": { "approved": "inherited prompts" } },
+				"review": {
+					"__proto__": { "approved": "inherited" },
+					"runtimes": {
+						"__proto__": { "unknownRuntime": { "approved": "inherited runtime" } },
+						"pi": {
+							"__proto__": { "denied": "inherited override" },
+							"metadata": {
+								"__proto__": { "approved": "inherited metadata" },
+								"nested": { "enabled": true },
+								"tags": ["one"]
+							},
+							"approved": "accepted",
+							"denied": 1
+						}
+					}
+				}
+			}
+		}`;
+		const result = await inspectConfigFromDisk(config);
+
+		const loadedExpected = JSON.parse(config);
+		delete loadedExpected.prompts.review.runtimes.pi.denied;
+		expect(result.config).toEqual(loadedExpected);
+
+		for (const inspection of [
+			result.root,
+			result.diffOptions,
+			result.annotationOptions,
+			result.prompts,
+			result.review,
+			result.runtimes,
+			result.runtimeOverrides,
+			result.metadata,
+		]) {
+			expect(inspection).toEqual({
+				prototypeIsObject: true,
+				ownsProto: true,
+				ownsKnownField: false,
+				inheritsKnownField: false,
+			});
+		}
+
+		const saved = JSON.parse(await saveAndLoadConfig(config));
+		const expected = JSON.parse(config);
+		expected.displayName = "Updated";
+		delete expected.prompts.review.runtimes.pi.denied;
+		expect(saved).toEqual(expected);
 	});
 });

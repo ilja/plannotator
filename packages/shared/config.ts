@@ -44,7 +44,12 @@ export interface CCLabelConfig {
   blocking: boolean;
 }
 
-export type PromptSectionOverrides = Record<string, string | undefined>;
+const ConfigJson = Schema.Json;
+type ConfigJson = Schema.Schema.Type<typeof ConfigJson>;
+const ConfigRecord = Schema.Record(Schema.String, ConfigJson);
+type ConfigRecord = Schema.Schema.Type<typeof ConfigRecord>;
+
+export type PromptSectionOverrides = Record<string, ConfigJson | undefined>;
 
 export type PromptRuntime =
   | "claude-code"
@@ -58,7 +63,7 @@ export type PromptRuntime =
   | "gemini-cli";
 
 interface PromptSectionConfig {
-  [key: string]: string | Partial<Record<PromptRuntime, PromptSectionOverrides>> | undefined;
+  [key: string]: ConfigJson | Partial<Record<PromptRuntime, PromptSectionOverrides>> | undefined;
   runtimes?: Partial<Record<PromptRuntime, PromptSectionOverrides>>;
 }
 
@@ -147,9 +152,6 @@ export interface PlannotatorConfig {
 
 const CONFIG_DIR = getPlannotatorDataDir();
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
-const ConfigJson = Schema.Json;
-type ConfigJson = Schema.Schema.Type<typeof ConfigJson>;
-const ConfigRecord = Schema.Record(Schema.String, ConfigJson);
 const ConfigString = Schema.String;
 const ConfigBoolean = Schema.Boolean;
 const ConfigNumber = Schema.Number;
@@ -161,8 +163,34 @@ const ConfigDiffIndicators = Schema.Literals(["bars", "classic", "none"]);
 const ConfigLineDiffType = Schema.Literals(["word-alt", "word", "char", "none"]);
 const ConfigLineBgIntensity = Schema.Literals(["subtle", "normal", "strong"]);
 
-function decodeConfigRecord(value: ConfigJson | undefined): Record<string, ConfigJson> | undefined {
-  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigRecord)(value));
+type ConfigPropertyTarget =
+  | ConfigRecord
+  | PlannotatorConfig
+  | DiffOptions
+  | AnnotationOptions
+  | CCLabelConfig
+  | PromptConfig
+  | PromptSectionConfig
+  | PromptSectionOverrides
+  | Record<string, PromptSectionOverrides | undefined>;
+
+function decodeConfigRecord(value: ConfigJson | undefined): ConfigRecord | undefined {
+  return Schema.is(ConfigRecord)(value) ? value : undefined;
+}
+
+function defineConfigProperty<Value>(target: ConfigPropertyTarget, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function copyConfigProperties(target: ConfigPropertyTarget, record: ConfigRecord): void {
+  for (const [key, value] of Object.entries(record)) {
+    defineConfigProperty(target, key, value);
+  }
 }
 
 function decodeConfigString(value: ConfigJson | undefined): string | undefined {
@@ -182,7 +210,7 @@ function decodeDiffOptions(value: ConfigJson | undefined): DiffOptions | undefin
   if (!record) return undefined;
 
   const result: DiffOptions = {};
-  Object.assign(result, record);
+  copyConfigProperties(result, record);
   const diffStyle = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffStyle)(record.diffStyle));
   const overflow = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigOverflow)(record.overflow));
   const diffIndicators = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffIndicators)(record.diffIndicators));
@@ -233,7 +261,7 @@ function decodeAnnotationOptions(value: ConfigJson | undefined): AnnotationOptio
   if (!record) return undefined;
 
   const result: AnnotationOptions = {};
-  Object.assign(result, record);
+  copyConfigProperties(result, record);
   const proseFontFamily = decodeConfigString(record.proseFontFamily);
   const proseFontSize = decodeConfigString(record.proseFontSize);
   const codeFontFamily = decodeConfigString(record.codeFontFamily);
@@ -266,12 +294,18 @@ function decodeConventionalLabels(value: ConfigJson | undefined): CCLabelConfig[
     if (labelValue === undefined || display === undefined || blocking === undefined) return [];
 
     const decodedLabel: CCLabelConfig = { label: labelValue, display, blocking };
-    Object.assign(decodedLabel, record, { label: labelValue, display, blocking });
+    copyConfigProperties(decodedLabel, record);
+    defineConfigProperty(decodedLabel, "label", labelValue);
+    defineConfigProperty(decodedLabel, "display", display);
+    defineConfigProperty(decodedLabel, "blocking", blocking);
     return [decodedLabel];
   });
 }
 
-function decodePromptRuntimes(value: ConfigJson | undefined): Record<string, PromptSectionOverrides | undefined> | undefined {
+function decodePromptRuntimes(
+  value: ConfigJson | undefined,
+  fields: readonly string[],
+): Record<string, PromptSectionOverrides | undefined> | undefined {
   const runtimes = decodeConfigRecord(value);
   if (!runtimes) return undefined;
 
@@ -281,11 +315,13 @@ function decodePromptRuntimes(value: ConfigJson | undefined): Record<string, Pro
     if (!record) continue;
 
     const decodedOverrides: PromptSectionOverrides = {};
-    for (const [key, override] of Object.entries(record)) {
-      const decoded = decodeConfigString(override);
-      if (decoded !== undefined) decodedOverrides[key] = decoded;
+    copyConfigProperties(decodedOverrides, record);
+    for (const field of fields) {
+      delete decodedOverrides[field];
+      const decoded = decodeConfigString(record[field]);
+      if (decoded !== undefined) defineConfigProperty(decodedOverrides, field, decoded);
     }
-    result[runtime] = decodedOverrides;
+    defineConfigProperty(result, runtime, decodedOverrides);
   }
   return result;
 }
@@ -295,16 +331,16 @@ function decodePromptSection(value: ConfigJson | undefined, fields: readonly str
   if (!record) return undefined;
 
   const result: PromptSectionConfig = {};
-  Object.assign(result, record);
+  copyConfigProperties(result, record);
   for (const field of fields) {
     delete result[field];
     const decoded = decodeConfigString(record[field]);
-    if (decoded !== undefined) result[field] = decoded;
+    if (decoded !== undefined) defineConfigProperty(result, field, decoded);
   }
 
   delete result.runtimes;
-  const runtimes = decodePromptRuntimes(record.runtimes);
-  if (runtimes !== undefined) Object.assign(result, { runtimes });
+  const runtimes = decodePromptRuntimes(record.runtimes, fields);
+  if (runtimes !== undefined) defineConfigProperty(result, "runtimes", runtimes);
 
   return result;
 }
@@ -314,7 +350,7 @@ function decodePrompts(value: ConfigJson | undefined): PromptConfig | undefined 
   if (!record) return undefined;
 
   const result: PromptConfig = {};
-  Object.assign(result, record);
+  copyConfigProperties(result, record);
   const review = decodePromptSection(record.review, ["approved", "denied"]);
   const plan = decodePromptSection(record.plan, ["approved", "approvedWithNotes", "autoApproved", "denied"]);
   const annotate = decodePromptSection(record.annotate, ["fileFeedback", "messageFeedback", "approved"]);
@@ -322,9 +358,9 @@ function decodePrompts(value: ConfigJson | undefined): PromptConfig | undefined 
   delete result.review;
   delete result.plan;
   delete result.annotate;
-  if (review !== undefined) result.review = review;
-  if (plan !== undefined) result.plan = plan;
-  if (annotate !== undefined) result.annotate = annotate;
+  if (review !== undefined) defineConfigProperty(result, "review", review);
+  if (plan !== undefined) defineConfigProperty(result, "plan", plan);
+  if (annotate !== undefined) defineConfigProperty(result, "annotate", annotate);
 
   return result;
 }
@@ -338,11 +374,12 @@ export function loadConfig(): PlannotatorConfig {
     if (!existsSync(CONFIG_PATH)) return {};
     const raw = readFileSync(CONFIG_PATH, "utf-8");
     const parsed: unknown = JSON.parse(raw);
-    const record = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigRecord)(parsed));
+    const json = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigJson)(parsed));
+    const record = decodeConfigRecord(json);
     if (!record) return {};
 
     const config: PlannotatorConfig = {};
-    Object.assign(config, record);
+    copyConfigProperties(config, record);
     const displayName = decodeConfigString(record.displayName);
     const diffOptions = decodeDiffOptions(record.diffOptions);
     const annotationOptions = decodeAnnotationOptions(record.annotationOptions);
