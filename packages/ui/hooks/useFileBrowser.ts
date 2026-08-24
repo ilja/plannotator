@@ -10,6 +10,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { VaultNode } from "../types";
 import type { WorkspaceStatusPayload } from "@plannotator/shared/workspace-status";
+import { decodeFileWatchEvent } from "./fileWatchEvents";
 
 export interface DirState {
   path: string;
@@ -305,17 +306,15 @@ export function useFileBrowser(): UseFileBrowserReturn {
         fetchTreeRef.current(path, { quiet: true });
       }, 120));
     };
-    // SAFETY: dirPath is untyped event data — any is intentional
-    const scheduleEventFetch = (dirPath: any) => {
-      if (Object.prototype.toString.call(dirPath) === "[object String]" && paths.includes(dirPath)) {
+    const scheduleEventFetch = (dirPath: string | null) => {
+      if (dirPath && paths.includes(dirPath)) {
         scheduleFetch(dirPath);
         return;
       }
       for (const path of paths) scheduleFetch(path);
     };
-    // SAFETY: dirPath is untyped event data — any is intentional
-    const hasSeenReady = (dirPath: any): boolean => {
-      if (Object.prototype.toString.call(dirPath) === "[object String]" && paths.includes(dirPath)) {
+    const hasSeenReady = (dirPath: string | null): boolean => {
+      if (dirPath && paths.includes(dirPath)) {
         if (readyPaths.has(dirPath)) return true;
         readyPaths.add(dirPath);
         return false;
@@ -327,13 +326,12 @@ export function useFileBrowser(): UseFileBrowserReturn {
     };
     source.onmessage = (event) => {
       try {
-        // SAFETY: event.data is untyped JSON — cast to event shape
-        const data = JSON.parse(event.data) as { type?: string; dirPath?: string };
+        const data = decodeFileWatchEvent(JSON.parse(event.data));
+        if (!data) return;
         if (data.type === "ready") {
           if (hasSeenReady(data.dirPath)) scheduleEventFetch(data.dirPath);
           return;
         }
-        if (data.type !== "changed") return;
         scheduleEventFetch(data.dirPath);
       } catch {
         return;

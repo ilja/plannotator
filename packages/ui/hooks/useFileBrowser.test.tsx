@@ -336,6 +336,34 @@ describe("useFileBrowser", () => {
     await session.unmount();
   });
 
+  test.skipIf(!hasDom)("fans out malformed watch paths to every directory", async () => {
+    installMockEventSource();
+    const firstDir = "/tmp/plannotator-docs-a";
+    const secondDir = "/tmp/plannotator-docs-b";
+    const calls = installFetchResponses([
+      response({ tree: [] }),
+      response({ tree: [] }),
+      response({ tree: [] }),
+      response({ tree: [] }),
+    ]);
+
+    const session = await mountHook();
+    await act(async () => {
+      session.result.current!.fetchAll([firstDir, secondDir]);
+    });
+    await tick(0);
+
+    const source = MockEventSource.instances[0];
+    expect(source).toBeDefined();
+    expect(calls).toHaveLength(2);
+
+    source!.emit({ type: "changed", dirPath: 42 });
+    await tick(150);
+    expect(calls).toHaveLength(4);
+
+    await session.unmount();
+  });
+
   test.skipIf(!hasDom)("waits for the first tree snapshot before opening the live stream", async () => {
     installMockEventSource();
     const dirPath = "/tmp/plannotator-docs";
