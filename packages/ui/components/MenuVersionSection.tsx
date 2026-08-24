@@ -21,7 +21,7 @@ export const MenuVersionSection: React.FC<MenuVersionSectionProps> = ({
           Plannotator
         </a>
         <span className="text-[10px] font-mono text-muted-foreground/70">
-          v{appVersion}
+          v{appVersion} · Effect v{__EFFECT_VERSION__}
         </span>
       </div>
       <div className="flex flex-col items-start gap-1 text-[11px]">
