@@ -7,6 +7,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CodeAnnotation } from '../types';
+import {
+  decodeMissingCodeAnnotationDraft,
+  decodeSuccessfulCodeAnnotationDraft,
+  type DecodedSuccessfulCodeAnnotationDraft,
+} from '../utils/codeAnnotationDraftDecoding';
 
 const DEBOUNCE_MS = 500;
 
@@ -17,14 +22,9 @@ interface DraftData {
   ts: number;
 }
 
-interface MissingDraftData {
-  found?: false;
-  draftGeneration?: number;
-}
-
-// SAFETY: value is untrusted draft payload — any is intentional
-function readDraftGeneration(value: any): number | null {
-  return Object.prototype.toString.call(value) === "[object Number]" && Number.isInteger(value) && value >= 0 ? value : null;
+interface RestoredDraftData {
+  codeAnnotations: CodeAnnotation[];
+  viewedFiles: string[];
 }
 
 function formatTimeAgo(ts: number): string {
@@ -59,7 +59,7 @@ export function useCodeAnnotationDraft({
   submitted,
 }: UseCodeAnnotationDraftOptions): UseCodeAnnotationDraftResult {
   const [draftBanner, setDraftBanner] = useState<{ count: number; viewedCount: number; timeAgo: string } | null>(null);
-  const draftDataRef = useRef<DraftData | null>(null);
+  const draftDataRef = useRef<RestoredDraftData | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMountedRef = useRef(false);
   const draftGenerationRef = useRef(0);
@@ -75,31 +75,40 @@ export function useCodeAnnotationDraft({
 
     fetch('/api/draft')
       .then(async res => {
-        // SAFETY: res.json() is untyped JSON — cast to draft union
-        const data = await res.json().catch(() => null) as DraftData | MissingDraftData | null;
-        if (!res.ok) {
-          // SAFETY: data is draft union — cast to read MissingDraftData generation field
-          const generation = readDraftGeneration((data as MissingDraftData | null)?.draftGeneration);
-          if (generation !== null) {
-            draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
+        const data = await res.json().catch(() => null);
+        if (res.status === 404) {
+          const missingDraft = decodeMissingCodeAnnotationDraft(data);
+          if (missingDraft && missingDraft.draftGeneration !== null) {
+            draftGenerationRef.current = Math.max(
+              draftGenerationRef.current,
+              missingDraft.draftGeneration,
+            );
           }
           return null;
         }
-        return data;
+        if (!res.ok) return null;
+        return decodeSuccessfulCodeAnnotationDraft(data);
       })
-      .then((data: DraftData | null) => {
-        const generation = readDraftGeneration(data?.draftGeneration);
-        if (generation !== null) {
-          draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
+      .then((data: DecodedSuccessfulCodeAnnotationDraft | null) => {
+        if (!data) {
+          hasMountedRef.current = true;
+          return;
         }
-        const annotationCount = Array.isArray(data?.codeAnnotations) ? data.codeAnnotations.length : 0;
-        const viewedCount = Array.isArray(data?.viewedFiles) ? data.viewedFiles.length : 0;
+
+        if (data.draftGeneration !== null) {
+          draftGenerationRef.current = Math.max(draftGenerationRef.current, data.draftGeneration);
+        }
+        const annotationCount = data.codeAnnotations.length;
+        const viewedCount = data.viewedFiles.length;
         if (annotationCount > 0 || viewedCount > 0) {
-          draftDataRef.current = data;
+          draftDataRef.current = {
+            codeAnnotations: data.codeAnnotations,
+            viewedFiles: data.viewedFiles,
+          };
           setDraftBanner({
             count: annotationCount,
             viewedCount,
-            timeAgo: formatTimeAgo(data?.ts || 0),
+            timeAgo: formatTimeAgo(data.ts),
           });
         }
         hasMountedRef.current = true;
