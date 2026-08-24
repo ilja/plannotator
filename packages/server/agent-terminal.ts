@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { Option, Schema } from "effect";
 import {
   buildAgentTerminalWsPath,
   type AgentTerminalAgent,
@@ -17,6 +18,18 @@ type AgentTerminalSocketData = {
 };
 
 const MAX_PENDING_MESSAGES = 100;
+const SIDECAR_READINESS_ERROR = "Agent terminal sidecar did not report a WebSocket URL.";
+
+const AgentTerminalSidecarReadinessSchema = Schema.Union([
+  Schema.Struct({
+    ok: Schema.Literal(true),
+    wsUrl: Schema.NonEmptyString,
+  }),
+  Schema.Struct({
+    ok: Schema.Literal(false),
+    error: Schema.optionalKey(Schema.String),
+  }),
+]);
 
 type WebTuiCore = typeof import("@plannotator/webtui/core");
 
@@ -259,13 +272,10 @@ async function startNodeAgentTerminalSidecar(
 
   try {
     const line = await withTimeout(readFirstLine(proc.stdout), 5_000);
-    const ready: { ok?: boolean; wsUrl?: string; error?: string } = JSON.parse(line);
-    if (!ready.ok || !ready.wsUrl) {
-      throw new Error(ready.error ?? "Agent terminal sidecar did not report a WebSocket URL.");
-    }
+    const wsUrl = parseAgentTerminalReadyLine(line);
     let didDispose = false;
     return {
-      wsUrl: ready.wsUrl,
+      wsUrl,
       exited: proc.exited.then(() => {}, () => {}),
       dispose() {
         if (didDispose) return;
@@ -277,6 +287,19 @@ async function startNodeAgentTerminalSidecar(
     proc.kill();
     throw err;
   }
+}
+
+export function parseAgentTerminalReadyLine(line: string): string {
+  const input: unknown = JSON.parse(line);
+  return Option.match(Schema.decodeUnknownOption(AgentTerminalSidecarReadinessSchema)(input), {
+    onNone: () => {
+      throw new Error(SIDECAR_READINESS_ERROR);
+    },
+    onSome: (readiness) => {
+      if (!readiness.ok) throw new Error(readiness.error ?? SIDECAR_READINESS_ERROR);
+      return readiness.wsUrl;
+    },
+  });
 }
 
 async function readFirstLine(stream: ReadableStream<Uint8Array> | null): Promise<string> {

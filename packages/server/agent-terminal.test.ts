@@ -4,7 +4,42 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AGENT_TERMINAL_WS_BASE_PATH } from "@plannotator/shared/agent-terminal";
-import { createBunAgentTerminalBridge } from "./agent-terminal";
+import {
+  createBunAgentTerminalBridge,
+  parseAgentTerminalReadyLine,
+} from "./agent-terminal";
+
+describe("agent terminal sidecar readiness", () => {
+  test("returns the WebSocket URL from a successful readiness line", () => {
+    expect(parseAgentTerminalReadyLine('{"ok":true,"wsUrl":"ws://127.0.0.1:3000"}')).toBe(
+      "ws://127.0.0.1:3000",
+    );
+  });
+
+  test("preserves a sidecar-reported error", () => {
+    expect(() => parseAgentTerminalReadyLine('{"ok":false,"error":"PTY unavailable"}')).toThrow(
+      "PTY unavailable",
+    );
+  });
+
+  test("rejects malformed successful readiness payloads", () => {
+    expect(() => parseAgentTerminalReadyLine('{"ok":true}')).toThrow(
+      "Agent terminal sidecar did not report a WebSocket URL.",
+    );
+    expect(() => parseAgentTerminalReadyLine('{"ok":true,"wsUrl":""}')).toThrow(
+      "Agent terminal sidecar did not report a WebSocket URL.",
+    );
+    expect(() => parseAgentTerminalReadyLine('{"ok":true,"wsUrl":123}')).toThrow(
+      "Agent terminal sidecar did not report a WebSocket URL.",
+    );
+  });
+
+  test("uses the existing fallback for failure payloads without an error", () => {
+    expect(() => parseAgentTerminalReadyLine('{"ok":false}')).toThrow(
+      "Agent terminal sidecar did not report a WebSocket URL.",
+    );
+  });
+});
 
 describe("bun agent terminal bridge", () => {
   test("node sidecar rebuilds spawn options from the server-owned launch plan", async () => {
