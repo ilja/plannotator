@@ -5,6 +5,7 @@
  * so they persist across different port-based sessions.
  */
 
+import { Option, Schema } from 'effect';
 import { storage } from './storage';
 
 const STORAGE_KEY = 'plannotator-quick-labels';
@@ -35,6 +36,17 @@ export const LABEL_COLOR_MAP: LabelColorMap = {
   amber:  { bg: 'rgba(180,83,9,0.15)',    text: '#b45309', darkText: '#fbbf24' },
 };
 
+const QuickLabelSchema = Schema.Struct({
+  id: Schema.String,
+  emoji: Schema.String,
+  text: Schema.String,
+  color: Schema.String,
+  tip: Schema.optionalKey(Schema.String),
+});
+const QuickLabelItemsSchema = Schema.Array(Schema.Unknown);
+const decodeQuickLabel = Schema.decodeUnknownOption(QuickLabelSchema);
+const decodeQuickLabelItems = Schema.decodeUnknownOption(QuickLabelItemsSchema);
+
 export const DEFAULT_QUICK_LABELS: QuickLabel[] = [
   { id: 'clarify-this',            emoji: '❓', text: 'Clarify this',            color: 'yellow' },
   { id: 'missing-overview',        emoji: '🗺️', text: 'Missing overview',        color: 'purple', tip: 'Provide a narrative overview of what is being built, why it is being built, and how it will be built. Add this before the implementation details.' },
@@ -48,16 +60,24 @@ export const DEFAULT_QUICK_LABELS: QuickLabel[] = [
   { id: 'nice-approach',           emoji: '👍', text: 'Nice approach',           color: 'green' },
 ];
 
-export function getQuickLabels(): QuickLabel[] {
-  const raw = storage.getItem(STORAGE_KEY);
-  if (!raw) return DEFAULT_QUICK_LABELS;
+export function decodeStoredQuickLabels(raw: string): QuickLabel[] {
   try {
-    // SAFETY: raw is JSON string from storage — parsed is QuickLabel[]
-    const parsed = JSON.parse(raw) as QuickLabel[];
-    return parsed.length > 0 ? parsed : DEFAULT_QUICK_LABELS;
+    const items = Option.getOrNull(decodeQuickLabelItems(JSON.parse(raw)));
+    if (!items) return DEFAULT_QUICK_LABELS;
+    const labels: QuickLabel[] = [];
+    for (const item of items) {
+      const label = Option.getOrNull(decodeQuickLabel(item));
+      if (label) labels.push(label);
+    }
+    return labels.length > 0 ? labels : DEFAULT_QUICK_LABELS;
   } catch {
     return DEFAULT_QUICK_LABELS;
   }
+}
+
+export function getQuickLabels(): QuickLabel[] {
+  const raw = storage.getItem(STORAGE_KEY);
+  return raw ? decodeStoredQuickLabels(raw) : DEFAULT_QUICK_LABELS;
 }
 
 export function saveQuickLabels(labels: QuickLabel[]): void {
