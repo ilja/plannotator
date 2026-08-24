@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { Option, Schema } from "effect";
 import {
   buildRgArgs,
   classifyMatch,
+  CodeNavRequestSchema,
+  CodeNavResponseSchema,
+  decodeCodeNavRequest,
+  decodeCodeNavResponse,
   rankLocations,
   parseRgJsonOutput,
-  validateCodeNavRequest,
   extractChangedFiles,
   type CodeNavLocation,
 } from "./code-nav";
@@ -425,10 +429,10 @@ describe("parseRgJsonOutput", () => {
 });
 
 // ---------------------------------------------------------------------------
-// validateCodeNavRequest
+// HTTP wire schemas
 // ---------------------------------------------------------------------------
 
-describe("validateCodeNavRequest", () => {
+describe("code navigation HTTP wire schemas", () => {
   const valid = {
     symbol: "startServer",
     filePath: "src/server.ts",
@@ -438,32 +442,106 @@ describe("validateCodeNavRequest", () => {
     language: "typescript",
   };
 
-  test("accepts valid request", () => {
-    expect(validateCodeNavRequest(valid)).toBeNull();
+  const validResponse = {
+    backend: "search",
+    complete: true,
+    definitions: [{
+      kind: "definition",
+      confidence: "likely",
+      filePath: "src/server.ts",
+      line: 42,
+      column: 10,
+      snippet: "export function startServer() {}",
+    }],
+    references: [{
+      kind: "reference",
+      confidence: "possible",
+      filePath: "src/index.ts",
+      line: 8,
+      column: 3,
+      snippet: "startServer();",
+    }],
+    stats: { elapsedMs: 12, capped: false },
+    searchScope: "head",
+  };
+
+  test("accepts requests with legacy navigation fields without validating them", () => {
+    const decoded = Option.getOrUndefined(decodeCodeNavRequest({
+      ...valid,
+      line: "not-a-line-number",
+      charStart: null,
+      language: { unsupported: true },
+    }));
+
+    expect(decoded).toMatchObject({
+      symbol: "startServer",
+      filePath: "src/server.ts",
+      side: "new",
+    });
   });
 
-  test("rejects null body", () => {
-    expect(validateCodeNavRequest(null)).toBe("Invalid request body");
+  test("accepts a symbol that is nonempty after trimming", () => {
+    expect(Option.getOrUndefined(decodeCodeNavRequest({ ...valid, symbol: " startServer " }))).toBeDefined();
   });
 
-  test("rejects empty symbol", () => {
-    expect(validateCodeNavRequest({ ...valid, symbol: "" })).toBe("Missing or empty symbol");
+  test("accepts both sides without legacy navigation fields", () => {
+    for (const side of ["old", "new"] as const) {
+      expect(Option.getOrUndefined(decodeCodeNavRequest({
+        symbol: "startServer",
+        filePath: "src/server.ts",
+        side,
+      }))).toMatchObject({ side });
+    }
   });
 
-  test("rejects missing filePath", () => {
-    expect(validateCodeNavRequest({ ...valid, filePath: "" })).toBe("Missing filePath");
+  test("rejects malformed request envelopes", () => {
+    for (const malformed of [
+      null,
+      {},
+      { ...valid, symbol: 42 },
+      { ...valid, symbol: "   " },
+      { ...valid, filePath: 42 },
+      { ...valid, filePath: "   " },
+      { ...valid, filePath: "../etc/passwd" },
+      { ...valid, filePath: "/etc/passwd" },
+      { ...valid, side: "both" },
+    ]) {
+      expect(Option.getOrUndefined(decodeCodeNavRequest(malformed))).toBeUndefined();
+    }
   });
 
-  test("rejects directory traversal", () => {
-    expect(validateCodeNavRequest({ ...valid, filePath: "../etc/passwd" })).toBe("Invalid filePath");
+  test("exports the request schema for HTTP boundary consumers", () => {
+    expect(Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavRequestSchema)(valid))).toBeDefined();
   });
 
-  test("rejects absolute path", () => {
-    expect(validateCodeNavRequest({ ...valid, filePath: "/etc/passwd" })).toBe("Invalid filePath");
+  test("accepts complete search and unavailable response variants", () => {
+    expect(Option.getOrUndefined(decodeCodeNavResponse(validResponse))).toEqual(validResponse);
+    expect(Option.getOrUndefined(decodeCodeNavResponse({
+      ...validResponse,
+      backend: "unavailable",
+      definitions: [],
+      references: [],
+    }))).toBeDefined();
   });
 
-  test("rejects invalid side", () => {
-    expect(validateCodeNavRequest({ ...valid, side: "both" })).toBe("side must be 'old' or 'new'");
+  test("rejects malformed response envelopes", () => {
+    for (const malformed of [
+      {},
+      { ...validResponse, backend: "rg" },
+      { ...validResponse, complete: "yes" },
+      { ...validResponse, definitions: [{ ...validResponse.definitions[0], line: "42" }] },
+      { ...validResponse, definitions: [{ ...validResponse.definitions[0], snippet: undefined }] },
+      { ...validResponse, references: [{ ...validResponse.references[0], confidence: "certain" }] },
+      { ...validResponse, stats: { elapsedMs: "12", capped: false } },
+      { ...validResponse, stats: { capped: false } },
+      { ...validResponse, searchScope: "worktree" },
+    ]) {
+      expect(Option.getOrUndefined(decodeCodeNavResponse(malformed))).toBeUndefined();
+    }
+  });
+
+  test("exports the response schema for HTTP boundary consumers", () => {
+    expect(Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavResponseSchema)(validResponse))).toEqual(validResponse);
   });
 });
 

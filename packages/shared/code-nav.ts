@@ -7,12 +7,6 @@
 
 import { Option, Schema } from "effect";
 
-function validateFilePath(filePath: string): void {
-  if (filePath.includes("..") || filePath.startsWith("/")) {
-    throw new Error("Invalid file path");
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -22,6 +16,14 @@ export interface CodeNavRequest {
   filePath: string;
   line: number;
   charStart: number;
+  side: "old" | "new";
+  language?: string;
+}
+
+/** Validated fields used by search-based code navigation. */
+export interface CodeNavResolveRequest {
+  symbol: string;
+  filePath: string;
   side: "old" | "new";
   language?: string;
 }
@@ -51,6 +53,59 @@ export interface CodeNavRuntime {
     options?: { cwd?: string; timeoutMs?: number },
   ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
+
+/** HTTP request fields required to resolve code navigation. */
+const CodeNavSymbolSchema = Schema.String.pipe(
+  Schema.check(Schema.makeFilter((symbol) =>
+    symbol.trim() ? undefined : "symbol must be nonempty after trimming",
+  )),
+);
+
+/** HTTP file path that remains within the review workspace. */
+const CodeNavFilePathSchema = Schema.String.pipe(
+  Schema.check(Schema.makeFilter((filePath) => {
+    if (!filePath.trim()) return "filePath must be nonempty after trimming";
+    return filePath.includes("..") || filePath.startsWith("/")
+      ? "filePath must be a safe relative path"
+      : undefined;
+  })),
+);
+
+/** Code navigation request accepted at the HTTP boundary. Legacy cursor fields remain unvalidated. */
+export const CodeNavRequestSchema = Schema.Struct({
+  symbol: CodeNavSymbolSchema,
+  filePath: CodeNavFilePathSchema,
+  side: Schema.Literals(["old", "new"]),
+  line: Schema.optionalKey(Schema.Unknown),
+  charStart: Schema.optionalKey(Schema.Unknown),
+  language: Schema.optionalKey(Schema.Unknown),
+});
+
+/** Code navigation result location returned by the HTTP endpoint. */
+const CodeNavLocationSchema = Schema.Struct({
+  kind: Schema.Literals(["definition", "reference"]),
+  confidence: Schema.Literals(["likely", "possible"]),
+  filePath: Schema.String,
+  line: Schema.Number,
+  column: Schema.Number,
+  snippet: Schema.String,
+});
+
+/** Complete successful code navigation response returned by the HTTP endpoint. */
+export const CodeNavResponseSchema = Schema.Struct({
+  backend: Schema.Literals(["search", "unavailable"]),
+  complete: Schema.Boolean,
+  definitions: Schema.Array(CodeNavLocationSchema),
+  references: Schema.Array(CodeNavLocationSchema),
+  stats: Schema.Struct({ elapsedMs: Schema.Number, capped: Schema.Boolean }),
+  searchScope: Schema.Literal("head"),
+});
+
+/** Decode an untrusted code navigation HTTP request. */
+export const decodeCodeNavRequest = Schema.decodeUnknownOption(CodeNavRequestSchema);
+
+/** Decode an untrusted successful code navigation HTTP response. */
+export const decodeCodeNavResponse = Schema.decodeUnknownOption(CodeNavResponseSchema);
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -345,27 +400,25 @@ export function extractChangedFiles(patch: string | null): string[] {
 // Validation
 // ---------------------------------------------------------------------------
 
-interface CodeNavValidateBody {
+interface CodeNavRequestValidationBody {
   readonly symbol?: unknown;
   readonly filePath?: unknown;
   readonly side?: unknown;
 }
 
 export function validateCodeNavRequest(
-  body: CodeNavValidateBody | null,
+  body: CodeNavRequestValidationBody | null,
 ): string | null {
   if (!body) return "Invalid request body";
-  const symbol = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(body.symbol));
-  if (!symbol || !symbol.trim()) {
+  const symbol = Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavSymbolSchema)(body.symbol));
+  if (!symbol) {
     return "Missing or empty symbol";
   }
   const filePath = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(body.filePath));
   if (!filePath || !filePath.trim()) {
     return "Missing filePath";
   }
-  try {
-    validateFilePath(filePath);
-  } catch {
+  if (!Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavFilePathSchema)(filePath))) {
     return "Invalid filePath";
   }
   const side = Option.getOrUndefined(
@@ -386,7 +439,7 @@ let rgAvailable: boolean | null = null;
 
 export async function resolveCodeNav(
   runtime: CodeNavRuntime,
-  request: CodeNavRequest,
+  request: CodeNavResolveRequest,
   cwd: string,
   changedFiles: string[],
 ): Promise<CodeNavResponse> {
