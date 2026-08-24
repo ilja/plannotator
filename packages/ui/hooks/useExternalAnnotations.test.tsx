@@ -3,6 +3,7 @@ import React, { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useExternalAnnotations } from './useExternalAnnotations';
 import { AnnotationType, type Annotation } from '../types';
+import { decodeAnnotation } from '../utils/annotationSchemas';
 
 const hasDom = globalThis.document !== undefined;
 const realFetch = globalThis.fetch;
@@ -50,7 +51,7 @@ async function mountExternalAnnotations(): Promise<{
 
   function Harness() {
     const resultRef = useRef<ExternalAnnotations | null>(null);
-    resultRef.current = useExternalAnnotations<Annotation>({ enabled: true });
+    resultRef.current = useExternalAnnotations(decodeAnnotation, { enabled: true });
     latest = resultRef.current;
     return null;
   }
@@ -125,6 +126,40 @@ describe('useExternalAnnotations', () => {
       method: 'DELETE',
     }]);
 
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('filters malformed SSE records and ignores invalid events', async () => {
+    // SAFETY: MockEventSource matches the EventSource behavior used by this hook.
+    // @ts-expect-error — MockEventSource is incomplete, intentionally suppressed
+    globalThis.EventSource = MockEventSource as typeof EventSource;
+    const session = await mountExternalAnnotations();
+    const annotation: Annotation = { id: 'valid', blockId: 'block', startOffset: 0, endOffset: 1, type: AnnotationType.COMMENT, originalText: 'A', createdA: 1 };
+    await act(async () => {
+      MockEventSource.instances[0]!.emit({ type: 'snapshot', annotations: [annotation, { id: 1 }] });
+      MockEventSource.instances[0]!.emit({ type: 'unknown' });
+      MockEventSource.instances[0]!.emit({ type: 'update', id: 'valid', annotation: { ...annotation, id: 'other' } });
+      await Promise.resolve();
+    });
+    expect(session.current().externalAnnotations).toEqual([annotation]);
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('applies polling annotations when version metadata is malformed', async () => {
+    // SAFETY: MockEventSource matches the EventSource behavior used by this hook.
+    // @ts-expect-error — MockEventSource is incomplete, intentionally suppressed
+    globalThis.EventSource = MockEventSource as typeof EventSource;
+    const annotation: Annotation = { id: 'polled', blockId: 'block', startOffset: 0, endOffset: 1, type: AnnotationType.COMMENT, originalText: 'A', createdA: 1 };
+    // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
+    globalThis.fetch = (async (_input: RequestInfo | URL) =>
+      new Response(JSON.stringify({ annotations: [annotation, { id: 1 }], version: 'bad' }))) as typeof fetch;
+    const session = await mountExternalAnnotations();
+    await act(async () => {
+      MockEventSource.instances[0]!.onerror?.(new Event('error'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(session.current().externalAnnotations).toEqual([annotation]);
     await session.unmount();
   });
 });
