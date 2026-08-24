@@ -251,12 +251,23 @@ export function buildRgArgs(symbol: string, language?: string): string[] {
 // rg JSON output parsing
 // ---------------------------------------------------------------------------
 
-interface RgMatchData {
-  path: { text: string };
-  lines: { text: string };
-  line_number: number;
-  submatches: Array<{ start: number; end: number }>;
-}
+const RgMatchRecordSchema = Schema.Struct({
+  type: Schema.Literal("match"),
+  data: Schema.Struct({
+    path: Schema.Struct({ text: Schema.String }),
+    lines: Schema.Struct({ text: Schema.String }),
+    line_number: Schema.Number,
+    submatches: Schema.optionalKey(Schema.Unknown),
+  }),
+});
+
+const RgSubmatchSchema = Schema.Struct({ start: Schema.Number });
+
+const decodeRgMatchRecordLine = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RgMatchRecordSchema),
+);
+
+const decodeRgSubmatch = Schema.decodeUnknownOption(RgSubmatchSchema);
 
 const PARSE_CAP = 500;
 
@@ -272,18 +283,15 @@ export function parseRgJsonOutput(
     if (locations.length >= PARSE_CAP) break;
     if (!line.trim()) continue;
 
-    let parsed: { type: string; data: RgMatchData };
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-
-    if (parsed.type !== "match") continue;
+    const parsed = Option.getOrUndefined(decodeRgMatchRecordLine(line));
+    if (!parsed) continue;
 
     const d = parsed.data;
     const snippet = d.lines.text.trimEnd();
-    const column = d.submatches?.[0]?.start ?? 0;
+    const firstSubmatch = Array.isArray(d.submatches)
+      ? d.submatches[0]
+      : undefined;
+    const column = Option.getOrUndefined(decodeRgSubmatch(firstSubmatch))?.start ?? 0;
     const kind = classifyMatch(snippet, symbol, language);
     const filePath = d.path.text.startsWith("./")
       ? d.path.text.slice(2)
