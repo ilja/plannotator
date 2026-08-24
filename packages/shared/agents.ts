@@ -16,6 +16,13 @@ type AgentConfigEntry = {
   aiProviderTypes?: readonly string[];
 };
 
+export const AGENT_ORIGINS = [
+  'claude-code', 'amp', 'droid', 'kiro-cli', 'opencode', 'copilot-cli', 'pi', 'codex', 'gemini-cli',
+] as const;
+
+/** All recognized origin values. */
+export type Origin = typeof AGENT_ORIGINS[number];
+
 export const AGENT_CONFIG = {
   'claude-code': { name: 'Claude Code', badge: 'bg-orange-500/15 text-orange-400' },
   'amp':         { name: 'Amp',         badge: 'bg-lime-500/15 text-lime-400' },
@@ -26,10 +33,7 @@ export const AGENT_CONFIG = {
   'pi':          { name: 'Pi',          badge: 'bg-violet-500/15 text-violet-400', aiProviderTypes: ['pi-sdk'] },
   'codex':       { name: 'Codex',       badge: 'bg-purple-500/15 text-purple-400' },
   'gemini-cli':  { name: 'Gemini CLI', badge: 'bg-sky-500/15 text-sky-400' },
-} as const satisfies Record<string, AgentConfigEntry>;
-
-/** All recognized origin values. */
-export type Origin = keyof typeof AGENT_CONFIG;
+} as const satisfies Record<Origin, AgentConfigEntry>;
 
 /** Resolve an origin to a human-readable agent name. */
 export function getAgentName(origin: Origin | null | undefined): string {

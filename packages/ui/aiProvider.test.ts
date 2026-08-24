@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
   applyAIProviderSelection,
+  decodePreferredModels,
+  decodeProviderByOrigin,
   findOriginAIProvider,
   isPiProvider,
   resolveAIProviderSelection,
@@ -31,6 +33,23 @@ const settings = (overrides: Partial<AIProviderSettings> = {}): AIProviderSettin
   preferredModels: {},
   providerByOrigin: {},
   ...overrides,
+});
+
+describe('saved AI provider preferences', () => {
+  it('filters malformed preferred models without discarding valid siblings', () => {
+    expect(decodePreferredModels(JSON.stringify({ 'pi-local': 'pi-alt', broken: 42 }))).toEqual({
+      'pi-local': 'pi-alt',
+    });
+    expect(decodePreferredModels('{')).toEqual({});
+    expect(decodePreferredModels(JSON.stringify({ 'pi-local': '' }))).toEqual({ 'pi-local': '' });
+  });
+
+  it('keeps recognized origin preferences and filters malformed siblings', () => {
+    expect(decodeProviderByOrigin(JSON.stringify({ pi: 'pi-local', unknown: 'ignored', codex: 42 }))).toEqual({
+      pi: 'pi-local',
+    });
+    expect(decodeProviderByOrigin(JSON.stringify(['pi-local']))).toEqual({});
+  });
 });
 
 describe('AI provider origin defaults', () => {
