@@ -111,6 +111,7 @@ import {sourceBackedDocumentKey, sourceBackedLinkedDocumentKey, useSourceBackedD
 import { createSourceDocumentWatch } from './sourceDocumentWatch';
 import { dirnameBrowserPath, normalizeBrowserPath, pathIsInsideDir } from './sourceDocumentPaths';
 import { pickRestoredSingleFileDraftToDisplay } from './draftRestoreSelection';
+import { decodeGlobalPasteUploadResponse } from './globalPasteUploadResponse';
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -2364,10 +2365,8 @@ const App: React.FC = () => {
       formData.append('file', fileToUpload);
 
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (res.ok) {
-        const data = await res.json();
-        setGlobalAttachments(prev => [...prev, { path: data.path, name }]);
-      }
+      const attachment = await decodeGlobalPasteUploadResponse(res, name);
+      if (attachment) setGlobalAttachments(prev => [...prev, attachment]);
     } catch {
       // Upload failed silently
     } finally {
