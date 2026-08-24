@@ -9,7 +9,7 @@ import { join } from "path";
 import { getPlannotatorDataDir } from "./data-dir";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { execSync } from "child_process";
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 export type DefaultDiffType = 'uncommitted' | 'unstaged' | 'staged' | 'merge-base' | 'all';
 export type DiffLineBgIntensity = 'subtle' | 'normal' | 'strong';
@@ -147,6 +147,187 @@ export interface PlannotatorConfig {
 
 const CONFIG_DIR = getPlannotatorDataDir();
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+const ConfigJson = Schema.Json;
+type ConfigJson = Schema.Schema.Type<typeof ConfigJson>;
+const ConfigRecord = Schema.Record(Schema.String, ConfigJson);
+const ConfigString = Schema.String;
+const ConfigBoolean = Schema.Boolean;
+const ConfigNumber = Schema.Number;
+const ConfigDiffType = Schema.Literals(["uncommitted", "unstaged", "staged", "merge-base", "all", "branch"]);
+const ConfigShare = Schema.Literals(["enabled", "disabled"]);
+const ConfigDiffStyle = Schema.Literals(["split", "unified"]);
+const ConfigOverflow = Schema.Literals(["scroll", "wrap"]);
+const ConfigDiffIndicators = Schema.Literals(["bars", "classic", "none"]);
+const ConfigLineDiffType = Schema.Literals(["word-alt", "word", "char", "none"]);
+const ConfigLineBgIntensity = Schema.Literals(["subtle", "normal", "strong"]);
+
+function decodeConfigRecord(value: ConfigJson | undefined): Record<string, ConfigJson> | undefined {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigRecord)(value));
+}
+
+function decodeConfigString(value: ConfigJson | undefined): string | undefined {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigString)(value));
+}
+
+function decodeConfigBoolean(value: ConfigJson | undefined): boolean | undefined {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigBoolean)(value));
+}
+
+function decodeConfigNumber(value: ConfigJson | undefined): number | undefined {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigNumber)(value));
+}
+
+function decodeDiffOptions(value: ConfigJson | undefined): DiffOptions | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: DiffOptions = {};
+  Object.assign(result, record);
+  const diffStyle = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffStyle)(record.diffStyle));
+  const overflow = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigOverflow)(record.overflow));
+  const diffIndicators = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffIndicators)(record.diffIndicators));
+  const lineDiffType = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigLineDiffType)(record.lineDiffType));
+  const showLineNumbers = decodeConfigBoolean(record.showLineNumbers);
+  const showDiffBackground = decodeConfigBoolean(record.showDiffBackground);
+  const fontFamily = decodeConfigString(record.fontFamily);
+  const fontSize = decodeConfigString(record.fontSize);
+  const tabSize = decodeConfigNumber(record.tabSize);
+  const hideWhitespace = decodeConfigBoolean(record.hideWhitespace);
+  const expandUnchanged = decodeConfigBoolean(record.expandUnchanged);
+  const defaultDiffType = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffType)(record.defaultDiffType));
+  const lineBgIntensity = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigLineBgIntensity)(record.lineBgIntensity));
+
+  delete result.diffStyle;
+  delete result.overflow;
+  delete result.diffIndicators;
+  delete result.lineDiffType;
+  delete result.showLineNumbers;
+  delete result.showDiffBackground;
+  delete result.fontFamily;
+  delete result.fontSize;
+  delete result.tabSize;
+  delete result.hideWhitespace;
+  delete result.expandUnchanged;
+  delete result.defaultDiffType;
+  delete result.lineBgIntensity;
+
+  if (diffStyle !== undefined) result.diffStyle = diffStyle;
+  if (overflow !== undefined) result.overflow = overflow;
+  if (diffIndicators !== undefined) result.diffIndicators = diffIndicators;
+  if (lineDiffType !== undefined) result.lineDiffType = lineDiffType;
+  if (showLineNumbers !== undefined) result.showLineNumbers = showLineNumbers;
+  if (showDiffBackground !== undefined) result.showDiffBackground = showDiffBackground;
+  if (fontFamily !== undefined) result.fontFamily = fontFamily;
+  if (fontSize !== undefined) result.fontSize = fontSize;
+  if (tabSize !== undefined) result.tabSize = tabSize;
+  if (hideWhitespace !== undefined) result.hideWhitespace = hideWhitespace;
+  if (expandUnchanged !== undefined) result.expandUnchanged = expandUnchanged;
+  if (defaultDiffType !== undefined) result.defaultDiffType = defaultDiffType === "branch" ? "merge-base" : defaultDiffType;
+  if (lineBgIntensity !== undefined) result.lineBgIntensity = lineBgIntensity;
+
+  return result;
+}
+
+function decodeAnnotationOptions(value: ConfigJson | undefined): AnnotationOptions | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: AnnotationOptions = {};
+  Object.assign(result, record);
+  const proseFontFamily = decodeConfigString(record.proseFontFamily);
+  const proseFontSize = decodeConfigString(record.proseFontSize);
+  const codeFontFamily = decodeConfigString(record.codeFontFamily);
+  const codeFontSize = decodeConfigString(record.codeFontSize);
+
+  delete result.proseFontFamily;
+  delete result.proseFontSize;
+  delete result.codeFontFamily;
+  delete result.codeFontSize;
+
+  if (proseFontFamily !== undefined) result.proseFontFamily = proseFontFamily;
+  if (proseFontSize !== undefined) result.proseFontSize = proseFontSize;
+  if (codeFontFamily !== undefined) result.codeFontFamily = codeFontFamily;
+  if (codeFontSize !== undefined) result.codeFontSize = codeFontSize;
+
+  return result;
+}
+
+function decodeConventionalLabels(value: ConfigJson | undefined): CCLabelConfig[] | null | undefined {
+  if (value === null) return null;
+  const labels = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Array(ConfigJson))(value));
+  if (!labels) return undefined;
+
+  return labels.flatMap((label): CCLabelConfig[] => {
+    const record = decodeConfigRecord(label);
+    if (!record) return [];
+    const labelValue = decodeConfigString(record.label);
+    const display = decodeConfigString(record.display);
+    const blocking = decodeConfigBoolean(record.blocking);
+    if (labelValue === undefined || display === undefined || blocking === undefined) return [];
+
+    const decodedLabel: CCLabelConfig = { label: labelValue, display, blocking };
+    Object.assign(decodedLabel, record, { label: labelValue, display, blocking });
+    return [decodedLabel];
+  });
+}
+
+function decodePromptRuntimes(value: ConfigJson | undefined): Record<string, PromptSectionOverrides | undefined> | undefined {
+  const runtimes = decodeConfigRecord(value);
+  if (!runtimes) return undefined;
+
+  const result: Record<string, PromptSectionOverrides | undefined> = {};
+  for (const [runtime, overrides] of Object.entries(runtimes)) {
+    const record = decodeConfigRecord(overrides);
+    if (!record) continue;
+
+    const decodedOverrides: PromptSectionOverrides = {};
+    for (const [key, override] of Object.entries(record)) {
+      const decoded = decodeConfigString(override);
+      if (decoded !== undefined) decodedOverrides[key] = decoded;
+    }
+    result[runtime] = decodedOverrides;
+  }
+  return result;
+}
+
+function decodePromptSection(value: ConfigJson | undefined, fields: readonly string[]): PromptSectionConfig | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: PromptSectionConfig = {};
+  Object.assign(result, record);
+  for (const field of fields) {
+    delete result[field];
+    const decoded = decodeConfigString(record[field]);
+    if (decoded !== undefined) result[field] = decoded;
+  }
+
+  delete result.runtimes;
+  const runtimes = decodePromptRuntimes(record.runtimes);
+  if (runtimes !== undefined) Object.assign(result, { runtimes });
+
+  return result;
+}
+
+function decodePrompts(value: ConfigJson | undefined): PromptConfig | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: PromptConfig = {};
+  Object.assign(result, record);
+  const review = decodePromptSection(record.review, ["approved", "denied"]);
+  const plan = decodePromptSection(record.plan, ["approved", "approvedWithNotes", "autoApproved", "denied"]);
+  const annotate = decodePromptSection(record.annotate, ["fileFeedback", "messageFeedback", "approved"]);
+
+  delete result.review;
+  delete result.plan;
+  delete result.annotate;
+  if (review !== undefined) result.review = review;
+  if (plan !== undefined) result.plan = plan;
+  if (annotate !== undefined) result.annotate = annotate;
+
+  return result;
+}
 
 /**
  * Load config from ~/.plannotator/config.json.
@@ -157,11 +338,45 @@ export function loadConfig(): PlannotatorConfig {
     if (!existsSync(CONFIG_PATH)) return {};
     const raw = readFileSync(CONFIG_PATH, "utf-8");
     const parsed: unknown = JSON.parse(raw);
-    if (parsed !== null && parsed instanceof Object && !Array.isArray(parsed)) {
-      // SAFETY: JSON-parsed config is a record of optional PlannotatorConfig fields; caller uses optional chaining.
-      return parsed as PlannotatorConfig;
-    }
-    return {};
+    const record = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigRecord)(parsed));
+    if (!record) return {};
+
+    const config: PlannotatorConfig = {};
+    Object.assign(config, record);
+    const displayName = decodeConfigString(record.displayName);
+    const diffOptions = decodeDiffOptions(record.diffOptions);
+    const annotationOptions = decodeAnnotationOptions(record.annotationOptions);
+    const prompts = decodePrompts(record.prompts);
+    const conventionalComments = decodeConfigBoolean(record.conventionalComments);
+    const conventionalLabels = decodeConventionalLabels(record.conventionalLabels);
+    const jina = decodeConfigBoolean(record.jina);
+    const pfmReminder = decodeConfigBoolean(record.pfmReminder);
+    const glimpse = decodeConfigBoolean(record.glimpse);
+    const share = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigShare)(record.share));
+
+    delete config.displayName;
+    delete config.diffOptions;
+    delete config.annotationOptions;
+    delete config.prompts;
+    delete config.conventionalComments;
+    delete config.conventionalLabels;
+    delete config.jina;
+    delete config.pfmReminder;
+    delete config.glimpse;
+    delete config.share;
+
+    if (displayName !== undefined) config.displayName = displayName;
+    if (diffOptions !== undefined) config.diffOptions = diffOptions;
+    if (annotationOptions !== undefined) config.annotationOptions = annotationOptions;
+    if (prompts !== undefined) config.prompts = prompts;
+    if (conventionalComments !== undefined) config.conventionalComments = conventionalComments;
+    if (conventionalLabels !== undefined) config.conventionalLabels = conventionalLabels;
+    if (jina !== undefined) config.jina = jina;
+    if (pfmReminder !== undefined) config.pfmReminder = pfmReminder;
+    if (glimpse !== undefined) config.glimpse = glimpse;
+    if (share !== undefined) config.share = share;
+
+    return config;
   } catch (e) {
     process.stderr.write(`[plannotator] Warning: failed to read config.json: ${e}\n`);
     return {};
