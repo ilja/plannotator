@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { BearConfig, ObsidianConfig, OctarineConfig } from "@plannotator/shared/integrations-common";
+import { Schema } from "effect";
 
 interface StderrCapture {
   writes: string[];
@@ -15,19 +15,33 @@ import {
   writeServerReadyMetadata,
 } from "./shared-handlers";
 
-interface SaveNotesRequestBody {
-  obsidian?: ObsidianConfig;
-  bear?: BearConfig;
-  octarine?: OctarineConfig;
-}
+type JsonRequestBody = Schema.Schema.Type<typeof Schema.Json>;
 
-function saveNotesRequest(body: SaveNotesRequestBody): Request {
+function saveNotesRequest(body: JsonRequestBody): Request {
   return new Request("http://localhost/api/save-notes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
+
+const malformedSaveNoteTargets = [
+  {
+    target: "obsidian",
+    name: "Obsidian",
+    config: { folder: "plannotator", plan: "# Test Plan" },
+  },
+  {
+    target: "bear",
+    name: "Bear",
+    config: { customTags: "plannotator" },
+  },
+  {
+    target: "octarine",
+    name: "Octarine",
+    config: { workspace: "workspace", folder: "plannotator" },
+  },
+] as const;
 
 type StderrChunk = string | Uint8Array;
 
@@ -78,6 +92,67 @@ describe("handleSaveNotes", () => {
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(json).toHaveProperty("ok", true);
+    expect(json.results).toEqual({});
+  });
+
+  test("returns a 400 JSON error for valid JSON with a non-object root", async () => {
+    const response = await handleSaveNotes(saveNotesRequest("not a save-notes object"));
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(await response.json()).toEqual({ error: "Invalid JSON" });
+  });
+
+  for (const { target, name, config } of malformedSaveNoteTargets) {
+    test(`reports a malformed ${name} target as an integration failure`, async () => {
+      const response = await handleSaveNotes(saveNotesRequest({ [target]: config }));
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.results[target]).toEqual({
+        success: false,
+        error: `Invalid ${name} save configuration`,
+      });
+    });
+  }
+
+  test("saves a valid target when another requested target is malformed", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "plannotator-save-notes-"));
+    try {
+      const response = await handleSaveNotes(
+        saveNotesRequest({
+          obsidian: {
+            vaultPath: tmpDir,
+            folder: "plannotator",
+            plan: "# Test Plan\n\nContent here",
+          },
+          bear: { customTags: "plannotator" },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.results.obsidian).toHaveProperty("success", true);
+      expect(json.results.bear).toEqual({
+        success: false,
+        error: "Invalid Bear save configuration",
+      });
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps schema-valid empty strings omitted by existing save gates", async () => {
+    const response = await handleSaveNotes(
+      saveNotesRequest({
+        obsidian: { vaultPath: "", folder: "", plan: "" },
+        bear: { plan: "" },
+        octarine: { plan: "", workspace: "", folder: "" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
     expect(json.results).toEqual({});
   });
 
