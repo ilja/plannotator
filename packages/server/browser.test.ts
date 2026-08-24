@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { isNoOpBrowserSentinel, shouldTryRemoteBrowserFallback } from "./browser";
+import {
+  decodeVscodeIpcRegistry,
+  isNoOpBrowserSentinel,
+  shouldTryRemoteBrowserFallback,
+} from "./browser";
 
 const savedEnv: Record<string, string | undefined> = {};
 const envKeys = ["PLANNOTATOR_BROWSER", "BROWSER"];
@@ -54,6 +58,49 @@ describe("shouldTryRemoteBrowserFallback", () => {
     clearEnv();
     process.env.PLANNOTATOR_BROWSER = "none";
     expect(shouldTryRemoteBrowserFallback(true)).toBe(true);
+  });
+});
+
+describe("decodeVscodeIpcRegistry", () => {
+  test("preserves a valid registry", () => {
+    expect(
+      decodeVscodeIpcRegistry(
+        JSON.stringify({
+          "/workspace/project": 3000,
+          "/workspace/other": 4000,
+        }),
+      ),
+    ).toEqual({
+      "/workspace/project": 3000,
+      "/workspace/other": 4000,
+    });
+  });
+
+  test("returns an empty registry for malformed JSON or a non-object root", () => {
+    for (const raw of ["{", "null", "[]", "42", '"registry"']) {
+      expect(decodeVscodeIpcRegistry(raw)).toEqual({});
+    }
+  });
+
+  test("drops malformed entries while retaining valid siblings", () => {
+    expect(
+      decodeVscodeIpcRegistry(
+        JSON.stringify({
+          "/workspace/valid": 3000,
+          "/workspace/object": { port: 4000 },
+          "/workspace/null": null,
+          "/workspace/array": [5000],
+        }),
+      ),
+    ).toEqual({ "/workspace/valid": 3000 });
+  });
+
+  test("drops invalid PIDs while retaining valid siblings", () => {
+    expect(
+      decodeVscodeIpcRegistry(
+        '{"/workspace/valid":3000,"/workspace/string":"4000","/workspace/fractional":4000.5,"/workspace/nonfinite":1e400,"/workspace/zero":0,"/workspace/negative":-1}',
+      ),
+    ).toEqual({ "/workspace/valid": 3000 });
   });
 });
 
