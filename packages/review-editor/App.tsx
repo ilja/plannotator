@@ -65,6 +65,7 @@ import { DEMO_DIFF } from './demoData';
 import { exportReviewFeedback } from './utils/exportFeedback';
 import { buildReviewFeedbackAnnotations } from './utils/reviewFeedbackAnnotations';
 import { parseDiffToFiles } from './utils/diffParser';
+import { loadInitialDiffResponse } from './utils/initial-diff-response';
 import { ReviewSubmissionDialog, buildReviewSubmission, type ReviewSubmission, type SubmissionTarget } from './components/ReviewSubmissionDialog';
 import { ReviewStateProvider, type ReviewState } from './dock/ReviewStateContext';
 import { reviewPanelComponents } from './dock/reviewPanelComponents';
@@ -85,8 +86,7 @@ import {
 import type { DiffFile, AnnotationScrollTarget } from './types';
 import { annotationMatchesPrScope } from './utils/annotationScope';
 import type {DiffOption, GitContext} from '@plannotator/shared/types';
-import type { PRMetadata } from '@plannotator/shared/pr-types';
-import type { PRDiffScope, PRDiffScopeOption, PRStackInfo, PRStackTree } from '@plannotator/shared/pr-stack';
+import type { PRDiffScope, PRDiffScopeOption, PRStackInfo } from '@plannotator/shared/pr-stack';
 import { altKey } from '@plannotator/ui/utils/platform';
 
 declare const __APP_VERSION__: string;
@@ -809,36 +809,30 @@ const [aiConfig, setAiConfig] = useState(() => {
 
   // Load diff content - try API first, fall back to demo
   useEffect(() => {
+    const fallbackToDemo = () => {
+      const demoFiles = parseDiffToFiles(DEMO_DIFF);
+      setDiffData({
+        files: demoFiles,
+        rawPatch: DEMO_DIFF,
+        gitRef: 'demo',
+      });
+      setFiles(demoFiles);
+      setWorkspaceDiffOptions(null);
+      setSemanticDiffAvailable(false);
+    };
+
     fetch('/api/diff')
       .then(res => {
         if (!res.ok) throw new Error('Not in API mode');
-        return res.json();
+        return loadInitialDiffResponse(() => res.json());
       })
-      .then((data: {
-        rawPatch: string;
-        gitRef: string;
-        origin?: Origin;
-        mode?: string;
-        diffType?: string;
-        base?: string;
-        gitContext?: GitContext;
-        diffOptions?: DiffOption[];
-        agentCwd?: string | null;
-        sharingEnabled?: boolean;
-        repoInfo?: { display: string; branch?: string };
-        prMetadata?: PRMetadata;
-        prStackInfo?: PRStackInfo | null;
-        prStackTree?: PRStackTree | null;
-        prDiffScope?: PRDiffScope;
-        prDiffScopeOptions?: PRDiffScopeOption[];
-        prPatchIncomplete?: boolean;
-        prPatchUpgradeAvailable?: boolean;
-        platformUser?: string;
-        viewedFiles?: string[];
-        error?: string;
-        semanticDiff?: SemanticDiffAdvert;
-        serverConfig?: { displayName?: string; gitUser?: string };
-      }) => {
+      .then(result => {
+        if (result.source === 'demo') {
+          fallbackToDemo();
+          return;
+        }
+
+        const data = result.data;
         // Initialize config store with server-provided values (config file > cookie > default)
         configStore.init(data.serverConfig);
         // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
@@ -894,18 +888,7 @@ const [aiConfig, setAiConfig] = useState(() => {
           setDiffTypeSetupPending(true);
         }
       })
-      .catch(() => {
-        // Not in API mode - use demo content
-        const demoFiles = parseDiffToFiles(DEMO_DIFF);
-        setDiffData({
-          files: demoFiles,
-          rawPatch: DEMO_DIFF,
-          gitRef: 'demo',
-        });
-        setFiles(demoFiles);
-        setWorkspaceDiffOptions(null);
-        setSemanticDiffAvailable(false);
-      })
+      .catch(fallbackToDemo)
       .finally(() => setIsLoading(false));
   }, []);
 
