@@ -162,6 +162,78 @@ afterEach(() => {
 });
 
 describe("useFileBrowser", () => {
+  test.skipIf(!hasDom)("falls back when a failed response has a malformed error envelope", async () => {
+    const dirPath = "/tmp/plannotator-docs";
+    installFetchResponses([response({ error: 42 }, 500)]);
+
+    const session = await mountHook();
+    await fetchTree(session.result.current!, dirPath);
+
+    expect(session.result.current!.dirs[0]).toMatchObject({
+      path: dirPath,
+      isLoading: false,
+      error: "Failed to load",
+    });
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)("falls back when a failed response has invalid JSON", async () => {
+    const dirPath = "/tmp/plannotator-docs";
+    installFetchResponses([new Response("{", { status: 500 })]);
+
+    const session = await mountHook();
+    await fetchTree(session.result.current!, dirPath);
+
+    expect(session.result.current!.dirs[0]).toMatchObject({
+      path: dirPath,
+      isLoading: false,
+      error: "Failed to load",
+    });
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)("uses the existing connection failure path for malformed successful responses", async () => {
+    const dirPath = "/tmp/plannotator-docs";
+    installFetchResponses([response({ tree: {} })]);
+
+    const session = await mountHook();
+    await fetchTree(session.result.current!, dirPath);
+
+    expect(session.result.current!.dirs[0]).toMatchObject({
+      path: dirPath,
+      isLoading: false,
+      error: "Failed to connect to server",
+    });
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)("filters malformed Obsidian tree nodes", async () => {
+    const vaultPath = "/tmp/plannotator-vault";
+    installFetchResponses([response({
+      tree: [
+        { name: "valid.md", path: "valid.md", type: "file" },
+        { name: "broken.md", path: 42, type: "file" },
+      ],
+    })]);
+
+    const session = await mountHook();
+    await act(async () => {
+      await session.result.current!.addVaultDir(vaultPath);
+    });
+
+    expect(session.result.current!.dirs[0]).toMatchObject({
+      path: vaultPath,
+      isLoading: false,
+      isVault: true,
+      tree: [{ name: "valid.md", path: "valid.md", type: "file" }],
+    });
+
+    await session.unmount();
+  });
+
   test.skipIf(!hasDom)("waits for the initial tree fetch before opening the live watcher", async () => {
     installMockEventSource();
     const dirPath = "/tmp/plannotator-docs";

@@ -11,6 +11,11 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { VaultNode } from "../types";
 import type { WorkspaceStatusPayload } from "@plannotator/shared/workspace-status";
 import { decodeFileWatchEvent } from "./fileWatchEvents";
+import {
+  decodeFileBrowserErrorResponse,
+  decodeFileBrowserSuccessResponse,
+  type FileBrowserSuccessResponse,
+} from "./fileBrowserResponses";
 
 export interface DirState {
   path: string;
@@ -42,6 +47,32 @@ export interface UseFileBrowserReturn {
 
 function isPermanentFileBrowserFetchError(status: number): boolean {
   return status >= 400 && status < 500;
+}
+
+type FileBrowserFetchResponse =
+  | { kind: "success"; data: FileBrowserSuccessResponse }
+  | { kind: "failure"; status: number; error: string };
+
+async function readFileBrowserResponse(res: Response): Promise<FileBrowserFetchResponse> {
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch (error) {
+    if (!res.ok) return { kind: "failure", status: res.status, error: "Failed to load" };
+    throw error;
+  }
+
+  if (!res.ok) {
+    return {
+      kind: "failure",
+      status: res.status,
+      error: decodeFileBrowserErrorResponse(body) ?? "Failed to load",
+    };
+  }
+
+  const data = decodeFileBrowserSuccessResponse(body);
+  if (!data) throw new Error("Malformed file browser success response");
+  return { kind: "success", data };
 }
 
 function normalizeRoot(path: string): string {
@@ -117,11 +148,10 @@ export function useFileBrowser(): UseFileBrowserReturn {
       const res = await fetch(
         `/api/reference/files?dirPath=${encodeURIComponent(dirPath)}`
       );
-      const data = await res.json();
+      const response = await readFileBrowserResponse(res);
 
-      if (!res.ok || data.error) {
-        const error = data.error || "Failed to load";
-        const shouldSurfaceError = !options.quiet || isPermanentFileBrowserFetchError(res.status);
+      if (response.kind === "failure") {
+        const shouldSurfaceError = !options.quiet || isPermanentFileBrowserFetchError(response.status);
         setDirs((prev) =>
           prev.map((d) =>
             d.path === dirPath
@@ -132,7 +162,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
                   workspaceStatus: options.quiet ? undefined : d.workspaceStatus,
                   isLoading: false,
                   hasLoadedTree: false,
-                  error,
+                  error: response.error,
                 }
                 : { ...d, isLoading: false, error: d.error }
               : d
@@ -140,6 +170,8 @@ export function useFileBrowser(): UseFileBrowserReturn {
         );
         return;
       }
+
+      const data = response.data;
 
       const workspaceStatus = remapWorkspaceStatusForDir(data.workspaceStatus, dirPath);
       setDirs((prev) =>
@@ -158,8 +190,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
       );
 
       if (!options.quiet) {
-        // SAFETY: data.tree is untyped vault response — cast to VaultNode[]
-      const rootFolders = (data.tree as VaultNode[])
+        const rootFolders = data.tree
           .filter((n) => n.type === "folder")
           .map((n) => `${dirPath}:${n.path}`);
         setExpandedFolders((prev) => {
@@ -225,16 +256,18 @@ export function useFileBrowser(): UseFileBrowserReturn {
       const res = await fetch(
         `/api/reference/obsidian/files?vaultPath=${encodeURIComponent(vaultPath)}`
       );
-      const data = await res.json();
+      const response = await readFileBrowserResponse(res);
 
-      if (!res.ok || data.error) {
+      if (response.kind === "failure") {
         setDirs((prev) =>
           prev.map((d) =>
-            d.path === vaultPath ? { ...d, isLoading: false, error: data.error || "Failed to load" } : d
+            d.path === vaultPath ? { ...d, isLoading: false, error: response.error } : d
           )
         );
         return;
       }
+
+      const data = response.data;
 
       setDirs((prev) =>
         prev.map((d) =>
@@ -242,8 +275,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
         )
       );
 
-      // SAFETY: data.tree is untyped vault response — cast to VaultNode[]
-      const rootFolders = (data.tree as VaultNode[])
+      const rootFolders = data.tree
         .filter((n) => n.type === "folder")
         .map((n) => `${vaultPath}:${n.path}`);
       setExpandedFolders((prev) => {
