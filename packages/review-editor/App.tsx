@@ -65,7 +65,10 @@ import { DEMO_DIFF } from './demoData';
 import { exportReviewFeedback } from './utils/exportFeedback';
 import { buildReviewFeedbackAnnotations } from './utils/reviewFeedbackAnnotations';
 import { parseDiffToFiles } from './utils/diffParser';
-import { loadInitialDiffResponse } from './utils/initial-diff-response';
+import {
+  decodeDiffSwitchResponse,
+  loadInitialDiffResponse,
+} from './utils/initial-diff-response';
 import { ReviewSubmissionDialog, buildReviewSubmission, type ReviewSubmission, type SubmissionTarget } from './components/ReviewSubmissionDialog';
 import { ReviewStateProvider, type ReviewState } from './dock/ReviewStateContext';
 import { reviewPanelComponents } from './dock/reviewPanelComponents';
@@ -1221,16 +1224,9 @@ const [aiConfig, setAiConfig] = useState(() => {
 
       if (!res.ok) throw new Error('Failed to switch diff');
 
-      const data: {
-        rawPatch: string;
-        gitRef: string;
-        diffType: string;
-        base?: string;
-        gitContext?: GitContext;
-        diffOptions?: DiffOption[];
-        error?: string;
-        semanticDiff?: SemanticDiffAdvert;
-      } = await res.json();
+      const rawData: unknown = await res.json();
+      const data = decodeDiffSwitchResponse(rawData);
+      if (!data) throw new Error('Failed to switch diff');
 
       const nextFiles = parseDiffToFiles(data.rawPatch);
       applySemanticDiffAdvert(data.semanticDiff);

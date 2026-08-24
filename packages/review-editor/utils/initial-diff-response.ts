@@ -829,6 +829,23 @@ export function decodeInitialDiffResponse(
   });
 }
 
+/** Decoded `/api/diff/switch` data with a required string diff type. */
+export interface DiffSwitchResponse extends InitialDiffResponse {
+  diffType: string;
+}
+
+/** Decode a diff switch response, rejecting malformed roots and required fields. */
+export function decodeDiffSwitchResponse(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): DiffSwitchResponse | undefined {
+  const decoded = decodeInitialDiffResponse(value);
+  if (Result.isFailure(decoded)) return undefined;
+
+  const { diffType } = decoded.success;
+  if (diffType === undefined) return undefined;
+  return { ...decoded.success, diffType };
+}
+
 export type InitialDiffLoadResult =
   | { source: 'api'; data: InitialDiffResponse }
   | { source: 'demo' };

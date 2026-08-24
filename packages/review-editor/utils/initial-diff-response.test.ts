@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { Result } from 'effect';
-import { decodeInitialDiffResponse, loadInitialDiffResponse } from './initial-diff-response';
+import {
+  decodeDiffSwitchResponse,
+  decodeInitialDiffResponse,
+  loadInitialDiffResponse,
+} from './initial-diff-response';
 
 const validResponse = {
   rawPatch: 'diff --git a/file.ts b/file.ts',
@@ -608,6 +612,57 @@ describe('decodeInitialDiffResponse', () => {
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.serverConfig?.conventionalLabels).toEqual(validResponse.serverConfig.conventionalLabels);
     }
+  });
+
+  test('decodes a complete diff switch response', () => {
+    expect(decodeDiffSwitchResponse(validResponse)).toEqual(validResponse);
+  });
+
+  test('rejects malformed roots and required diff switch fields', () => {
+    const malformedResponses = [
+      null,
+      [],
+      {},
+      { ...validResponse, rawPatch: undefined },
+      { ...validResponse, rawPatch: 42 },
+      { ...validResponse, gitRef: undefined },
+      { ...validResponse, gitRef: null },
+      { ...validResponse, diffType: undefined },
+      { ...validResponse, diffType: null },
+      { ...validResponse, diffType: 42 },
+    ];
+
+    for (const response of malformedResponses) {
+      expect(decodeDiffSwitchResponse(response)).toBeUndefined();
+    }
+  });
+
+  test('retains valid optional siblings while filtering malformed ones', () => {
+    const decoded = decodeDiffSwitchResponse({
+      ...validResponse,
+      mode: 42,
+      diffOptions: [{ id: 'valid', label: 'Valid option' }, { id: 'invalid' }],
+      viewedFiles: ['valid.ts', 42],
+      semanticDiff: { available: 'yes' },
+      serverConfig: {
+        displayName: 'Retained display name',
+        diffOptions: { diffStyle: 'invalid', tabSize: 4 },
+      },
+    });
+
+    expect(decoded).toMatchObject({
+      rawPatch: validResponse.rawPatch,
+      gitRef: validResponse.gitRef,
+      diffType: validResponse.diffType,
+      diffOptions: [{ id: 'valid', label: 'Valid option' }],
+      viewedFiles: ['valid.ts'],
+      serverConfig: {
+        displayName: 'Retained display name',
+        diffOptions: { tabSize: 4 },
+      },
+    });
+    expect(decoded).not.toHaveProperty('mode');
+    expect(decoded).not.toHaveProperty('semanticDiff');
   });
 
   test('falls back to demo when JSON reading or decoding fails', async () => {
