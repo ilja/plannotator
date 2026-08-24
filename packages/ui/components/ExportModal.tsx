@@ -6,11 +6,13 @@
  * Notes tab: Save plan to Obsidian/Bear without approving
  */
 
+import { Result } from 'effect';
 import React, { useState, useEffect } from 'react';
 import { getObsidianSettings, getEffectiveVaultPath } from '../utils/obsidian';
 import { getBearSettings } from '../utils/bear';
 import { getOctarineSettings } from '../utils/octarine';
 import { wrapFeedbackForAgent } from '../utils/parser';
+import { decodeSaveNotesResponse } from '../utils/saveNotesResponse';
 import { OverlayScrollArea } from './OverlayScrollArea';
 
 interface ExportModalProps {
@@ -151,8 +153,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      const result = data.results?.[target];
+      const data: unknown = await res.json();
+      const decoded = decodeSaveNotesResponse(data);
+      const result = Result.isSuccess(decoded) ? decoded.success[target] : undefined;
 
       if (result?.success) {
         setSaveStatus(prev => ({ ...prev, [target]: 'success' }));
