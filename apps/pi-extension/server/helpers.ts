@@ -15,15 +15,20 @@ import { Option, Schema } from "effect";
 const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
 export type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
 
-/** Parse a JSON request body and normalize non-object payloads to an empty object. */
-export function parseRequestBody(rawBody: string): ParsedRequestBody {
+/** Parse a JSON request body and return null for malformed or non-object payloads. */
+export function parseStrictRequestBody(rawBody: string): ParsedRequestBody | null {
 	try {
 		return Option.getOrUndefined(
 			Schema.decodeUnknownOption(ParsedRequestBodySchema)(JSON.parse(rawBody)),
-		) ?? {};
+		) ?? null;
 	} catch {
-		return {};
+		return null;
 	}
+}
+
+/** Parse a JSON request body and normalize non-object payloads to an empty object. */
+export function parseRequestBody(rawBody: string): ParsedRequestBody {
+	return parseStrictRequestBody(rawBody) ?? {};
 }
 
 export function parseBody(req: IncomingMessage): Promise<ParsedRequestBody> {
@@ -31,6 +36,14 @@ export function parseBody(req: IncomingMessage): Promise<ParsedRequestBody> {
 		let data = "";
 		req.on("data", (chunk: string) => (data += chunk));
 		req.on("end", () => resolve(parseRequestBody(data)));
+	});
+}
+
+export function parseStrictBody(req: IncomingMessage): Promise<ParsedRequestBody | null> {
+	return new Promise((resolve) => {
+		let data = "";
+		req.on("data", (chunk: string) => (data += chunk));
+		req.on("end", () => resolve(parseStrictRequestBody(data)));
 	});
 }
 

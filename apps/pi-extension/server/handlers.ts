@@ -11,7 +11,7 @@ import { join, resolve as resolvePath } from "node:path";
 import { decodeDraftEnvelope, saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "../generated/draft.js";
 import { FAVICON_SVG } from "../generated/favicon.js";
 
-import { json, parseBody, send, toWebRequest } from "./helpers";
+import { json, parseStrictBody, send, toWebRequest } from "./helpers";
 import {
 	type IntegrationResult,
 	saveToBear,
@@ -286,7 +286,7 @@ export async function handleSaveNotesRequest(
 ): Promise<void> {
 	const results: SaveNotesResults = {};
 	try {
-		const body = Schema.decodeUnknownSync(NoteSaveRequestSchema)(await parseBody(req));
+		const body = Schema.decodeUnknownSync(NoteSaveRequestSchema)(await parseStrictBody(req));
 		const promises: Promise<void>[] = [];
 		const obsConfig = body.obsidian;
 		const bearConfig = body.bear;

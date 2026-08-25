@@ -1122,6 +1122,56 @@ describe("pi review server", () => {
     }
   });
 
+  test("rejects non-object config and save-notes request bodies", async () => {
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+    const annotateServer = await startAnnotateServer({
+      markdown: "# Test",
+      filePath: "test.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+    });
+
+    try {
+      const configResponse = await fetch(`${annotateServer.url}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(configResponse.status).toBe(400);
+      expect(await configResponse.json()).toEqual({ error: "Invalid request" });
+
+      const notesResponse = await fetch(`${annotateServer.url}/api/save-notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(notesResponse.status).toBe(500);
+      expect(await notesResponse.json()).toEqual({ error: "Save failed" });
+    } finally {
+      annotateServer.stop();
+    }
+
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+    const reviewServer = await startReviewServer({
+      rawPatch: "",
+      gitRef: "test",
+      origin: "pi",
+      htmlContent: "<html></html>",
+    });
+
+    try {
+      const configResponse = await fetch(`${reviewServer.url}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(configResponse.status).toBe(400);
+      expect(await configResponse.json()).toEqual({ error: "Invalid request" });
+    } finally {
+      reviewServer.stop();
+    }
+  });
+
   test("rejects malformed GitHub viewed-file requests before mutation", async () => {
     const ghDir = makeTempDir("plannotator-pi-gh-");
     const ghPath = join(ghDir, "gh");

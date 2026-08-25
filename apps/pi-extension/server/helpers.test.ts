@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseRequestBody } from "./helpers";
+import { parseRequestBody, parseStrictRequestBody } from "./helpers";
 
 describe("parseRequestBody", () => {
 	test("returns JSON objects", () => {
@@ -15,5 +15,15 @@ describe("parseRequestBody", () => {
 
 	test("normalizes malformed JSON to an empty object", () => {
 		expect(parseRequestBody("not-json")).toEqual({});
+	});
+});
+
+describe("parseStrictRequestBody", () => {
+	test("returns objects and rejects non-object or malformed payloads", () => {
+		expect(parseStrictRequestBody('{"filePath":"src/app.ts"}')).toEqual({ filePath: "src/app.ts" });
+		expect(parseStrictRequestBody("42")).toBeNull();
+		expect(parseStrictRequestBody("[]")).toBeNull();
+		expect(parseStrictRequestBody("null")).toBeNull();
+		expect(parseStrictRequestBody("not-json")).toBeNull();
 	});
 });

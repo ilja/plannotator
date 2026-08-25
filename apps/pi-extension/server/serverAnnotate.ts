@@ -25,7 +25,7 @@ import {
 	handleSaveNotesRequest,
 	handleUploadRequest,
 } from "./handlers.js";
-import { html, json, parseBody, requestUrl, toWebRequest } from "./helpers.js";
+import { html, json, parseBody, parseStrictBody, requestUrl, toWebRequest } from "./helpers.js";
 import { decodeFeedbackRequest, OpenInRequestSchema } from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
@@ -378,7 +378,7 @@ export async function startAnnotateServer(options: {
 			handleShareHtml(res, url);
 		} else if (url.pathname === "/api/config" && req.method === "POST") {
 			try {
-				const body = Schema.decodeUnknownSync(ConfigPatch)(await parseBody(req));
+				const body = Schema.decodeUnknownSync(ConfigPatch)(await parseStrictBody(req));
 				if (Object.keys(body).length > 0) saveConfig(body);
 				json(res, { ok: true });
 			} catch {
