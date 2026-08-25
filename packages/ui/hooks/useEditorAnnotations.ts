@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EditorAnnotation } from '../types';
+import { loadEditorAnnotationsResponse } from './editorAnnotationsResponse';
 
 const POLL_INTERVAL = 500;
 // SAFETY: VSCode webview injects __PLANNOTATOR_VSCODE — cast to access flag
@@ -24,9 +25,8 @@ export function useEditorAnnotations(): UseEditorAnnotationsReturn {
   const fetchAnnotations = useCallback(async () => {
     try {
       const res = await fetch('/api/editor-annotations');
-      if (!res.ok) return;
-      const data = await res.json();
-      const incoming: EditorAnnotation[] = data.annotations ?? [];
+      const incoming = await loadEditorAnnotationsResponse(res);
+      if (!incoming) return;
       setAnnotations((prev) => {
         if (prev.length === incoming.length && prev.every((a, i) => a.id === incoming[i].id)) return prev;
         return incoming;
