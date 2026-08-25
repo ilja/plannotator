@@ -414,6 +414,66 @@ describe("pi annotate server", () => {
     }
   });
 
+  test("rejects malformed feedback without consuming the annotate decision", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-feedback-boundary-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "assistant text",
+      filePath: "last-message",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate-last",
+    });
+    const decision = server.waitForDecision();
+
+    try {
+      const invalidJson = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{invalid-json",
+      });
+      expect(invalidJson.status).toBe(500);
+
+      const malformed = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback: 42 }),
+      });
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid request" });
+
+      const nonObject = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(nonObject.status).toBe(400);
+      expect(await nonObject.json()).toEqual({ error: "Invalid request" });
+
+      const valid = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedback: "valid feedback",
+          annotations: [null, { id: "unknown" }],
+          selectedMessageId: "entry-1",
+          feedbackScope: "messages",
+        }),
+      });
+      expect(valid.status).toBe(200);
+      await expect(decision).resolves.toEqual({
+        feedback: "valid feedback",
+        annotations: [null, { id: "unknown" }],
+        selectedMessageId: "entry-1",
+        feedbackScope: "messages",
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
   test("resolves gate approval and clears drafts", async () => {
     const dataDir = makeTempDir("plannotator-pi-annotate-approve-data-");
     process.env.PLANNOTATOR_DATA_DIR = dataDir;
@@ -824,6 +884,21 @@ describe("pi review server", () => {
         body: JSON.stringify(generatedDraft),
       });
       expect(generatedDraftSave.status).toBe(200);
+
+      const invalidReviewFeedback = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: {} }),
+      });
+      expect(invalidReviewFeedback.status).toBe(400);
+      expect(await invalidReviewFeedback.json()).toEqual({ error: "Invalid request" });
+
+      const invalidReviewJson = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{invalid-json",
+      });
+      expect(invalidReviewJson.status).toBe(500);
 
       const feedbackResponse = await fetch(`${server.url}/api/feedback`, {
         method: "POST",

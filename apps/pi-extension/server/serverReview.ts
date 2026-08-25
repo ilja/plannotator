@@ -46,12 +46,12 @@ import {
 	readDraftGenerationFromUrl,
 	handleUploadRequest,
 } from "./handlers.js";
-import { html, json, parseBody, requestUrl } from "./helpers.js";
+import { html, json, parseBody, requestUrl, toWebRequest } from "./helpers.js";
 import {
 	CodeNavRequestSchema,
 	DiffSwitchRequestSchema,
 	DiffTypeSchema,
-	FeedbackRequestSchema,
+	decodeFeedbackRequest,
 	GitAddRequestSchema,
 	OpenInRequestSchema,
 	PrActionRequestSchema,
@@ -1294,7 +1294,11 @@ export async function startReviewServer(options: {
 			json(res, { ok: true });
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
 			try {
-				const request = Schema.decodeUnknownSync(FeedbackRequestSchema)(await parseBody(req));
+				const request = decodeFeedbackRequest(await toWebRequest(req).json());
+				if (!request) {
+					json(res, { error: "Invalid request" }, 400);
+					return;
+				}
 				deleteDraft(draftKey, request.draftGeneration);
 				resolveDecision({
 					approved: request.approved ?? false,

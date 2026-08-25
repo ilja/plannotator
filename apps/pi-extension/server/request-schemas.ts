@@ -4,7 +4,7 @@
  * handlers decode with them instead of narrowing parsed JSON manually.
  */
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 /** DiffType wire union (generated/review-core.ts) used by review payloads. */
 export const DiffTypeSchema = Schema.Union([
@@ -82,6 +82,18 @@ export const FeedbackRequestSchema = Schema.Struct({
 	feedbackScope: Schema.optionalKey(Schema.Literals(["message", "messages"])),
 	draftGeneration: Schema.optionalKey(Schema.Natural),
 });
+
+const FeedbackRequestRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+const decodeFeedbackRequestRecord = Schema.decodeUnknownOption(FeedbackRequestRecordSchema);
+const decodeFeedbackRequestSchema = Schema.decodeUnknownOption(FeedbackRequestSchema);
+
+export function decodeFeedbackRequest<Input>(
+	value: Input,
+): Schema.Schema.Type<typeof FeedbackRequestSchema> | undefined {
+	const record = Option.getOrUndefined(decodeFeedbackRequestRecord(value));
+	if (!record) return undefined;
+	return Option.getOrUndefined(decodeFeedbackRequestSchema(record));
+}
 
 /** Code navigation request. */
 export const CodeNavRequestSchema = Schema.Struct({

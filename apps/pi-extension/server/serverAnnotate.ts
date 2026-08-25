@@ -25,8 +25,8 @@ import {
 	handleSaveNotesRequest,
 	handleUploadRequest,
 } from "./handlers.js";
-import { html, json, parseBody, requestUrl } from "./helpers.js";
-import { FeedbackRequestSchema, OpenInRequestSchema } from "./request-schemas.js";
+import { html, json, parseBody, requestUrl, toWebRequest } from "./helpers.js";
+import { decodeFeedbackRequest, OpenInRequestSchema } from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -521,7 +521,11 @@ export async function startAnnotateServer(options: {
 			json(res, { ok: true });
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
 			try {
-				const request = Schema.decodeUnknownSync(FeedbackRequestSchema)(await parseBody(req));
+				const request = decodeFeedbackRequest(await toWebRequest(req).json());
+				if (!request) {
+					json(res, { error: "Invalid request" }, 400);
+					return;
+				}
 				deleteDraft(draftKey, request.draftGeneration);
 				resolveDecision({
 					feedback: request.feedback ?? "",
