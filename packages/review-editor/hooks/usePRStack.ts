@@ -1,26 +1,15 @@
 import { useState, useCallback, type RefObject } from 'react';
 import { Option, Result, Schema } from 'effect';
 import type { PRDiffScope } from '@plannotator/shared/pr-stack';
-import type { SemanticDiffAdvert } from '@plannotator/shared/semantic-diff-types';
+import type { PRMetadata } from '@plannotator/shared/pr-types';
 import {
   decodeInitialDiffResponse,
   type InitialDiffResponse,
 } from '../utils/initial-diff-response';
 
-export interface PRSwitchResponse {
-  rawPatch: string;
-  gitRef: string;
-  prMetadata?: unknown;
-  prStackInfo?: unknown;
-  prStackTree?: unknown;
-  prDiffScope?: PRDiffScope;
-  prDiffScopeOptions?: unknown[];
-  prPatchIncomplete?: boolean;
-  prPatchUpgradeAvailable?: boolean;
-  repoInfo?: unknown;
-  viewedFiles?: string[];
-  error?: string;
-  semanticDiff?: SemanticDiffAdvert;
+/** Decoded `/api/pr-switch` data with required GitHub or GitLab metadata. */
+export interface PRSwitchResponse extends InitialDiffResponse {
+  prMetadata: PRMetadata;
 }
 
 export interface PRDiffScopeResponse extends InitialDiffResponse {
@@ -31,13 +20,61 @@ const PRDiffScopeErrorSchema = Schema.Struct({
   error: Schema.optionalKey(Schema.Unknown),
 });
 const decodePRDiffScopeErrorEnvelope = Schema.decodeUnknownOption(PRDiffScopeErrorSchema);
+const PRSwitchErrorSchema = Schema.Struct({
+  error: Schema.optionalKey(Schema.Unknown),
+});
+const decodePRSwitchErrorEnvelope = Schema.decodeUnknownOption(PRSwitchErrorSchema);
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
-type PRDiffScopeResponseInput = Schema.Schema.Type<typeof Schema.Unknown>;
-type PRDiffScopeErrorInput = Schema.Schema.Type<typeof Schema.Unknown>;
+type PRResponseInput = Schema.Schema.Type<typeof Schema.Unknown>;
+type PRErrorResponseInput = Schema.Schema.Type<typeof Schema.Unknown>;
+
+/** Decode a successful `/api/pr-switch` response with required PR metadata. */
+export function decodePRSwitchResponse(value: PRResponseInput): PRSwitchResponse | undefined {
+  const decoded = decodeInitialDiffResponse(value);
+  if (Result.isFailure(decoded)) return undefined;
+
+  const { prMetadata } = decoded.success;
+  if (prMetadata === undefined) return undefined;
+
+  return { ...decoded.success, prMetadata };
+}
+
+/** Read only a string `error` from a non-OK `/api/pr-switch` response. */
+export function decodePRSwitchError(value: PRErrorResponseInput): string | undefined {
+  const envelope = Option.getOrUndefined(decodePRSwitchErrorEnvelope(value));
+  if (envelope === undefined) return undefined;
+  return Option.getOrUndefined(decodeString(envelope.error));
+}
+
+/** Read and validate one successful `/api/pr-switch` response. */
+export async function readPRSwitchResponse(
+  res: Response,
+  fallbackMessage: string,
+): Promise<PRSwitchResponse> {
+  if (!res.ok) {
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      data = undefined;
+    }
+    throw new Error(decodePRSwitchError(data) ?? fallbackMessage);
+  }
+
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error('Invalid PR switch response');
+  }
+  const decoded = decodePRSwitchResponse(data);
+  if (decoded === undefined) throw new Error('Invalid PR switch response');
+  return decoded;
+}
 
 /** Decode a successful `/api/pr-diff-scope` response with its required scope. */
-export function decodePRDiffScopeResponse(value: PRDiffScopeResponseInput): PRDiffScopeResponse | undefined {
+export function decodePRDiffScopeResponse(value: PRResponseInput): PRDiffScopeResponse | undefined {
   const decoded = decodeInitialDiffResponse(value);
   if (Result.isFailure(decoded)) return undefined;
 
@@ -48,7 +85,7 @@ export function decodePRDiffScopeResponse(value: PRDiffScopeResponseInput): PRDi
 }
 
 /** Read only a string `error` from a non-OK `/api/pr-diff-scope` response. */
-export function decodePRDiffScopeError(value: PRDiffScopeErrorInput): string | undefined {
+export function decodePRDiffScopeError(value: PRErrorResponseInput): string | undefined {
   const envelope = Option.getOrUndefined(decodePRDiffScopeErrorEnvelope(value));
   if (envelope === undefined) return undefined;
   return Option.getOrUndefined(decodeString(envelope.error));
@@ -75,7 +112,7 @@ export async function readPRDiffScopeResponse(
 }
 
 export interface PRStackCallbacks {
-  applyPRResponse: (data: PRSwitchResponse) => void;
+  applyPRResponse: (data: PRSwitchResponse | PRDiffScopeResponse) => void;
   onError: (message: string) => void;
 }
 
@@ -135,10 +172,7 @@ export function usePRStack(callbacksRef: RefObject<PRStackCallbacks | null>) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: prUrl }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? 'Failed to switch PR');
-      }
+      const data = await readPRSwitchResponse(res, 'Failed to switch PR');
       cb.applyPRResponse(data);
     } catch (err) {
       cb.onError(err instanceof Error ? err.message : 'Failed to switch PR');
