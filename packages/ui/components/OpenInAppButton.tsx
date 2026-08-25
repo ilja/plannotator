@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check, Copy, MoreHorizontal } from 'lucide-react';
 import { AppIcon } from './icons/AppIcon';
 import { loadOpenInApps, type OpenInAppsResponse } from '../utils/openInAppsResponse';
+import { readOpenInResponse } from '../utils/openInResponse';
 import { getLastOpenInApp, setLastOpenInApp } from '../utils/storage';
 import {
   DropdownMenu,
@@ -117,9 +118,11 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath, base: base ?? null, appId }),
       });
-      const data: { ok: boolean; error?: string } | null = await res.json().catch(() => null);
-      if (!res.ok || !data || data.ok === false) {
-        flashError(data?.error || 'Failed to open');
+      const data = await readOpenInResponse(res);
+      if (!data) {
+        flashError('Failed to open');
+      } else if (data.ok === false) {
+        flashError(data.error || 'Failed to open');
       }
     } catch {
       flashError('Failed to open');
