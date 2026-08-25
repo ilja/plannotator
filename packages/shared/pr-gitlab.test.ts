@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Option, Schema } from "effect";
-import { fetchGlMR, fetchGlMRContext, parsePaginatedArray, submitGlMRReview } from "./pr-gitlab";
+import { fetchGlMR, fetchGlMRContext, getGlUser, parsePaginatedArray, submitGlMRReview } from "./pr-gitlab";
 import type { PRRuntime } from "./pr-types";
 
 describe("fetchGlMR", () => {
@@ -227,6 +227,40 @@ describe("fetchGlMR metadata boundary", () => {
 
     expect(calls).toContain("glab api projects/g%2Fp");
     expect(result.metadata.defaultBranch).toBeUndefined();
+  });
+});
+
+describe("getGlUser", () => {
+  test("decodes optional usernames and preserves null fallbacks", async () => {
+    const responses = [
+      { stdout: JSON.stringify({ username: "dev", unknown: true }), exitCode: 0, expected: "dev" },
+      { stdout: JSON.stringify({ username: "" }), exitCode: 0, expected: "" },
+      { stdout: JSON.stringify({ username: 42 }), exitCode: 0, expected: null },
+      { stdout: JSON.stringify({}), exitCode: 0, expected: null },
+      { stdout: "null", exitCode: 0, expected: null },
+      { stdout: "not json", exitCode: 0, expected: null },
+      { stdout: "", exitCode: 0, expected: null },
+      { stdout: "ignored", exitCode: 1, expected: null },
+    ];
+
+    for (const response of responses) {
+      const runtime: PRRuntime = { async runCommand() { return { stdout: response.stdout, stderr: "", exitCode: response.exitCode }; } };
+      await expect(getGlUser(runtime, "gitlab.com")).resolves.toBe(response.expected);
+    }
+  });
+
+  test("routes self-hosted requests with a hostname", async () => {
+    let args: string[] = [];
+    const runtime: PRRuntime = {
+      async runCommand(command, commandArgs) {
+        args = commandArgs;
+        return { stdout: JSON.stringify({ username: "dev" }), stderr: "", exitCode: 0 };
+      },
+    };
+
+    await expect(getGlUser(runtime, "gitlab.example.com")).resolves.toBe("dev");
+    expect(args).toContain("--hostname");
+    expect(args).toContain("gitlab.example.com");
   });
 });
 

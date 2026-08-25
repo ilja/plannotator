@@ -201,8 +201,10 @@ export async function getGlUser(runtime: PRRuntime, host: string): Promise<strin
   try {
     const result = await runtime.runCommand("glab", apiArgs(host, "/user"));
     if (result.exitCode === 0 && result.stdout.trim()) {
-      const user: { username?: string } = JSON.parse(result.stdout);
-      return user.username ?? null;
+      const user = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.fromJsonString(RawGlRecordSchema))(result.stdout),
+      );
+      return user ? Option.getOrUndefined(decodeString(user.username)) ?? null : null;
     }
     return null;
   } catch {
