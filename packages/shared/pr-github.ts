@@ -76,12 +76,31 @@ export async function getGhUser(runtime: PRRuntime, host: string): Promise<strin
 // --- Fetch PR ---
 
 /** Shape of each entry from the GitHub pulls files API (fields we use) */
+export const GitHubFileEntrySchema = Schema.Struct({
+  filename: Schema.String,
+  previous_filename: Schema.optionalKey(Schema.String),
+  status: Schema.Literals([
+    "added",
+    "removed",
+    "modified",
+    "renamed",
+    "copied",
+    "changed",
+    "unchanged",
+  ]),
+  patch: Schema.optionalKey(Schema.String),
+});
+
 export interface GitHubFileEntry {
   filename: string;
   previous_filename?: string;
   status: "added" | "removed" | "modified" | "renamed" | "copied" | "changed" | "unchanged";
   patch?: string;
 }
+
+const decodeGitHubFileEntry = Schema.decodeUnknownOption(GitHubFileEntrySchema);
+const decodeGitHubFileEntryForPagination = <Input>(value: Input) =>
+  Option.getOrUndefined(decodeGitHubFileEntry(value));
 
 // Git only C-quotes paths containing quotes, backslashes, or control chars —
 // bare spaces stay raw. Downstream parsers (our diff-paths regex branch,
@@ -216,7 +235,14 @@ export async function fetchGhPR(
       const filesErr = filesResult.stderr.trim() || `exit code ${filesResult.exitCode}`;
       throw new Error(`Failed to fetch PR diff (pr diff: ${diffErr}; files API: ${filesErr}).`);
     }
-    const fileEntries = parsePaginatedArray<GitHubFileEntry>(filesResult.stdout);
+    const parsedFiles = parsePaginatedArray(filesResult.stdout, decodeGitHubFileEntryForPagination);
+    const fileEntries = parsedFiles.items;
+    if (parsedFiles.rejected > 0) {
+      console.error(
+        `Warning: GitHub files API returned ${parsedFiles.rejected} malformed file entr${parsedFiles.rejected === 1 ? "y" : "ies"}; the review is missing the remainder.`,
+      );
+      patchIncomplete = true;
+    }
     rawPatch = reconstructGhPatch(fileEntries);
     if (!rawPatch.trim()) {
       throw new Error(

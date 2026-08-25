@@ -38,6 +38,19 @@ function apiArgs(host: string, endpoint: string, extra: string[] = []): string[]
 }
 
 /** Shape of each entry from the GitLab merge_request diffs API */
+export const GitLabDiffEntrySchema = Schema.Struct({
+  diff: Schema.String,
+  old_path: Schema.String,
+  new_path: Schema.String,
+  new_file: Schema.Boolean,
+  deleted_file: Schema.Boolean,
+  renamed_file: Schema.Boolean,
+  /** Content withheld because the file's diff exceeds GitLab's size limits. Absent on older GitLab. */
+  too_large: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+  /** Diff collapsed (content omitted from the response). Absent on older GitLab. */
+  collapsed: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+});
+
 interface GitLabDiffEntry {
   diff: string;
   old_path: string;
@@ -50,6 +63,10 @@ interface GitLabDiffEntry {
   /** Diff collapsed (content omitted from the response). Absent on older GitLab. */
   collapsed?: boolean | null;
 }
+
+const decodeGitLabDiffEntry = Schema.decodeUnknownOption(GitLabDiffEntrySchema);
+const decodeGitLabDiffEntryForPagination = <Input>(value: Input) =>
+  Option.getOrUndefined(decodeGitLabDiffEntry(value));
 
 export { parsePaginatedArray } from "./cli-pagination";
 import { parsePaginatedArray } from "./cli-pagination";
@@ -183,7 +200,14 @@ export async function fetchGlMR(
       const fbErr = fallback.stderr.trim() || `exit code ${fallback.exitCode}`;
       throw new Error(`Failed to fetch MR diff (raw_diffs: ${rawErr}; diffs: ${fbErr}).`);
     }
-    const entries = parsePaginatedArray<GitLabDiffEntry>(fallback.stdout);
+    const parsedDiffs = parsePaginatedArray(fallback.stdout, decodeGitLabDiffEntryForPagination);
+    const entries = parsedDiffs.items;
+    if (parsedDiffs.rejected > 0) {
+      console.error(
+        `Warning: GitLab diffs API returned ${parsedDiffs.rejected} malformed entr${parsedDiffs.rejected === 1 ? "y" : "ies"}; the review is missing the remainder.`,
+      );
+      patchIncomplete = true;
+    }
     rawPatch = reconstructPatch(entries);
     if (!rawPatch.trim()) {
       throw new Error(

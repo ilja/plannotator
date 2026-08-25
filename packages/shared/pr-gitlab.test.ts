@@ -1,4 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { Option, Schema } from "effect";
 import { fetchGlMR, parsePaginatedArray } from "./pr-gitlab";
 import type { PRRuntime } from "./pr-types";
 
@@ -348,22 +349,37 @@ describe("fetchGlMR raw_diffs fallback", () => {
 
 describe("parsePaginatedArray", () => {
   test("merges adjacent JSON array pages from glab --paginate", () => {
-    expect(parsePaginatedArray<{ a: number }>('[{"a":1}][{"a":2},{"a":3}]')).toEqual([
-      { a: 1 },
-      { a: 2 },
-      { a: 3 },
-    ]);
+    const schema = Schema.Struct({ a: Schema.Number });
+    const decode = <Input>(value: Input) =>
+      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
+    expect(parsePaginatedArray('[{"a":1}][{"a":2},{"a":3}]', decode)).toEqual({
+      items: [{ a: 1 }, { a: 2 }, { a: 3 }],
+      rejected: 0,
+    });
   });
 
   test("round-trips single-page output", () => {
-    expect(parsePaginatedArray<{ a: number }>('[{"a":1}]')).toEqual([{ a: 1 }]);
+    const schema = Schema.Struct({ a: Schema.Number });
+    const decode = <Input>(value: Input) =>
+      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
+    expect(parsePaginatedArray('[{"a":1}]', decode)).toEqual({
+      items: [{ a: 1 }],
+      rejected: 0,
+    });
   });
 
   test("returns [] for empty output", () => {
-    expect(parsePaginatedArray("")).toEqual([]);
+    const decode = <Input>(value: Input) => value;
+    expect(parsePaginatedArray("", decode)).toEqual({ items: [], rejected: 0 });
   });
 
   test("does not split on bracket characters inside strings", () => {
-    expect(parsePaginatedArray<{ s: string }>('[{"s":"a][b"}]')).toEqual([{ s: "a][b" }]);
+    const schema = Schema.Struct({ s: Schema.String });
+    const decode = <Input>(value: Input) =>
+      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
+    expect(parsePaginatedArray('[{"s":"a][b"}]', decode)).toEqual({
+      items: [{ s: "a][b" }],
+      rejected: 0,
+    });
   });
 });
