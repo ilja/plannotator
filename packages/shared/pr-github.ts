@@ -39,6 +39,31 @@ const decodeGhPRListJson = Schema.decodeUnknownSync(
 );
 const decodeGhPRListItem = Schema.decodeUnknownOption(GhPRListItemSchema);
 
+const GhViewedFileNodeSchema = Schema.Struct({
+  path: Schema.String,
+  viewerViewedState: Schema.Literals(["VIEWED", "UNVIEWED", "DISMISSED"]),
+});
+const GhViewedFilesResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    repository: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+      pullRequest: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+        files: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+          nodes: Schema.Array(Schema.Unknown),
+          pageInfo: Schema.Struct({
+            hasNextPage: Schema.Boolean,
+            endCursor: Schema.NullOr(Schema.String),
+          }),
+        }))),
+      }))),
+    }))),
+  }))),
+  errors: Schema.optionalKey(Schema.Array(Schema.Struct({ message: Schema.String }))),
+});
+const decodeGhViewedFilesJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(GhViewedFilesResponseSchema),
+);
+const decodeGhViewedFileNode = Schema.decodeUnknownOption(GhViewedFileNodeSchema);
+
 const GhReviewThreadCommentSchema = Schema.Struct({
   id: Schema.String,
   body: Schema.String,
@@ -662,19 +687,8 @@ export async function fetchGhPRViewedFiles(
       );
     }
 
-    const data: {
-      data?: {
-        repository?: {
-          pullRequest?: {
-            files?: {
-              nodes: Array<{ path: string; viewerViewedState: string }>;
-              pageInfo: { hasNextPage: boolean; endCursor: string | null };
-            };
-          };
-        };
-      };
-      errors?: Array<{ message: string }>;
-    } = JSON.parse(res.stdout);
+    const data = Option.getOrUndefined(decodeGhViewedFilesJson(res.stdout));
+    if (!data) throw new Error("Failed to fetch PR viewed files: Invalid response");
 
     if (data.errors?.length) {
       throw new Error(`GraphQL error: ${data.errors[0].message}`);
@@ -683,7 +697,9 @@ export async function fetchGhPRViewedFiles(
     const files = data.data?.repository?.pullRequest?.files;
     if (!files) break;
 
-    for (const node of files.nodes) {
+    for (const rawNode of files.nodes) {
+      const node = Option.getOrUndefined(decodeGhViewedFileNode(rawNode));
+      if (!node) continue;
       // VIEWED = explicitly marked as viewed
       // DISMISSED = was viewed but new commits arrived (still "was reviewed")
       result[node.path] = node.viewerViewedState === "VIEWED" || node.viewerViewedState === "DISMISSED";

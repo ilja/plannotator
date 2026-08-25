@@ -1,5 +1,11 @@
 import { describe, expect, test, spyOn } from "bun:test";
-import { fetchGhPR, fetchGhPRContext, fetchGhPRList, reconstructGhPatch } from "./pr-github";
+import {
+  fetchGhPR,
+  fetchGhPRContext,
+  fetchGhPRList,
+  fetchGhPRViewedFiles,
+  reconstructGhPatch,
+} from "./pr-github";
 import { parseDiffGitHeader, parseDiffFilePathLines, parseDiffMetadataPathLines } from "./diff-paths";
 import type { PRRuntime } from "./pr-types";
 
@@ -287,6 +293,81 @@ describe("fetchGhPRList", () => {
 
     const nonArray: PRRuntime = { async runCommand() { return { stdout: "{}", stderr: "", exitCode: 0 }; } };
     await expect(fetchGhPRList(nonArray, listRef)).rejects.toThrow();
+  });
+});
+
+describe("fetchGhPRViewedFiles", () => {
+  const viewedRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+
+  test("merges paginated viewed states and filters malformed file nodes", async () => {
+    let page = 0;
+    const runtime: PRRuntime = {
+      async runCommand() {
+        page++;
+        if (page === 1) {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequest: {
+                    files: {
+                      nodes: [
+                        { path: "src/a.ts", viewerViewedState: "VIEWED" },
+                        { path: "src/b.ts", viewerViewedState: "UNVIEWED" },
+                        { path: 42, viewerViewedState: "VIEWED" },
+                      ],
+                      pageInfo: { hasNextPage: true, endCursor: "cursor-1" },
+                    },
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  files: {
+                    nodes: [{ path: "src/c.ts", viewerViewedState: "DISMISSED" }],
+                    pageInfo: { hasNextPage: false, endCursor: null },
+                  },
+                },
+              },
+            },
+          }),
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+
+    await expect(fetchGhPRViewedFiles(runtime, viewedRef)).resolves.toEqual({
+      "src/a.ts": true,
+      "src/b.ts": false,
+      "src/c.ts": true,
+    });
+  });
+
+  test("throws for CLI and GraphQL errors", async () => {
+    const failedCli: PRRuntime = {
+      async runCommand() { return { stdout: "", stderr: "boom", exitCode: 1 }; },
+    };
+    await expect(fetchGhPRViewedFiles(failedCli, viewedRef)).rejects.toThrow(/Failed to fetch PR viewed files/);
+
+    const graphqlError: PRRuntime = {
+      async runCommand() {
+        return {
+          stdout: JSON.stringify({ errors: [{ message: "forbidden" }] }),
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+    await expect(fetchGhPRViewedFiles(graphqlError, viewedRef)).rejects.toThrow("GraphQL error: forbidden");
   });
 });
 
