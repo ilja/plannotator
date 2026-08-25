@@ -1,5 +1,5 @@
 import { describe, expect, test, spyOn } from "bun:test";
-import {fetchGhPR, reconstructGhPatch} from "./pr-github";
+import { fetchGhPR, fetchGhPRContext, reconstructGhPatch } from "./pr-github";
 import { parseDiffGitHeader, parseDiffFilePathLines, parseDiffMetadataPathLines } from "./diff-paths";
 import type { PRRuntime } from "./pr-types";
 
@@ -242,6 +242,159 @@ describe("fetchGhPR", () => {
 
     const result = await fetchGhPR(runtime, REF);
     expect(result.patchIncomplete).toBeFalsy();
+  });
+});
+
+describe("fetchGhPRContext review threads", () => {
+  const contextRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+  const contextBody = JSON.stringify({
+    body: "Context body",
+    state: "OPEN",
+    isDraft: false,
+    labels: [],
+    comments: [],
+    reviews: [],
+    reviewDecision: "",
+    mergeable: "MERGEABLE",
+    mergeStateStatus: "CLEAN",
+    statusCheckRollup: [],
+    closingIssuesReferences: [],
+  });
+
+  test("retains valid threads and comments around malformed siblings", async () => {
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        if (args[0] === "pr" && args[1] === "view") {
+          return { stdout: contextBody, stderr: "", exitCode: 0 };
+        }
+        if (args[0] === "api" && args[1] === "graphql") {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequest: {
+                    reviewThreads: {
+                      nodes: [
+                        {
+                          id: "thread-1",
+                          isResolved: false,
+                          isOutdated: false,
+                          path: "src/a.ts",
+                          line: 10,
+                          startLine: null,
+                          diffSide: "LEFT",
+                          comments: {
+                            nodes: [
+                              {
+                                id: "comment-1",
+                                body: "First",
+                                author: null,
+                                createdAt: "2024-01-01T00:00:00Z",
+                                url: "https://comments/1",
+                                diffHunk: "@@ -1 +1 @@",
+                              },
+                              { id: "bad", body: 42 },
+                              {
+                                id: "comment-2",
+                                body: "Second",
+                                author: { login: "reviewer" },
+                                createdAt: "2024-01-02T00:00:00Z",
+                                url: "https://comments/2",
+                                diffHunk: null,
+                              },
+                            ],
+                          },
+                        },
+                        { id: "bad-thread", isResolved: true },
+                        {
+                          id: "thread-2",
+                          isResolved: true,
+                          isOutdated: true,
+                          path: "src/b.ts",
+                          line: null,
+                          startLine: 20,
+                          diffSide: "RIGHT",
+                          comments: { nodes: [] },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: "", stderr: "unexpected", exitCode: 1 };
+      },
+    };
+
+    const context = await fetchGhPRContext(runtime, contextRef);
+
+    expect(context.body).toBe("Context body");
+    expect(context.reviewThreads).toEqual([
+      {
+        id: "thread-1",
+        isResolved: false,
+        isOutdated: false,
+        path: "src/a.ts",
+        line: 10,
+        startLine: null,
+        diffSide: "LEFT",
+        comments: [
+          {
+            id: "comment-1",
+            author: "",
+            body: "First",
+            createdAt: "2024-01-01T00:00:00Z",
+            url: "https://comments/1",
+            diffHunk: "@@ -1 +1 @@",
+          },
+          {
+            id: "comment-2",
+            author: "reviewer",
+            body: "Second",
+            createdAt: "2024-01-02T00:00:00Z",
+            url: "https://comments/2",
+          },
+        ],
+      },
+      {
+        id: "thread-2",
+        isResolved: true,
+        isOutdated: true,
+        path: "src/b.ts",
+        line: null,
+        startLine: 20,
+        diffSide: "RIGHT",
+        comments: [],
+      },
+    ]);
+  });
+
+  test("keeps context when GraphQL fails or has no response branch", async () => {
+    for (const graphqlResult of [
+      { stdout: "not json", exitCode: 0 },
+      { stdout: JSON.stringify({ data: { repository: null } }), exitCode: 0 },
+      { stdout: "", exitCode: 1 },
+    ]) {
+      const runtime: PRRuntime = {
+        async runCommand(command, args) {
+          if (args[0] === "pr" && args[1] === "view") {
+            return { stdout: contextBody, stderr: "", exitCode: 0 };
+          }
+          if (args[0] === "api" && args[1] === "graphql") {
+            return { stdout: graphqlResult.stdout, stderr: "graphql failed", exitCode: graphqlResult.exitCode };
+          }
+          return { stdout: "", stderr: "unexpected", exitCode: 1 };
+        },
+      };
+
+      const context = await fetchGhPRContext(runtime, contextRef);
+      expect(context.body).toBe("Context body");
+      expect(context.reviewThreads).toEqual([]);
+    }
   });
 });
 

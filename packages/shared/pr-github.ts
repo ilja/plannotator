@@ -26,6 +26,43 @@ const decodeRawGhPRViewJson = Schema.decodeUnknownOption(
 const RawGhPRContextSchema = Schema.Record(Schema.String, Schema.Unknown);
 type RawGhPRContext = Schema.Schema.Type<typeof RawGhPRContextSchema>;
 
+const GhReviewThreadCommentSchema = Schema.Struct({
+  id: Schema.String,
+  body: Schema.String,
+  author: Schema.optionalKey(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
+  createdAt: Schema.String,
+  url: Schema.String,
+  diffHunk: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const GhReviewThreadSchema = Schema.Struct({
+  id: Schema.String,
+  isResolved: Schema.Boolean,
+  isOutdated: Schema.Boolean,
+  path: Schema.String,
+  line: Schema.NullOr(Schema.Number),
+  startLine: Schema.NullOr(Schema.Number),
+  diffSide: Schema.NullOr(Schema.Literals(["LEFT", "RIGHT"])),
+  comments: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    nodes: Schema.optionalKey(Schema.Array(Schema.Unknown)),
+  }))),
+});
+const GhReviewThreadsResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    repository: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+      pullRequest: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+        reviewThreads: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+          nodes: Schema.optionalKey(Schema.Array(Schema.Unknown)),
+        }))),
+      }))),
+    }))),
+  }))),
+});
+const decodeGhReviewThreadsJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(GhReviewThreadsResponseSchema),
+);
+const decodeGhReviewThread = Schema.decodeUnknownOption(GhReviewThreadSchema);
+const decodeGhReviewThreadComment = Schema.decodeUnknownOption(GhReviewThreadCommentSchema);
+
 // GitHub-specific PRRef shape (used internally)
 interface GhPRRef {
   platform: "github";
@@ -492,38 +529,42 @@ async function fetchGhReviewThreads(
 
   if (result.exitCode !== 0) return [];
 
-  const data = JSON.parse(result.stdout);
-  const threads = data?.data?.repository?.pullRequest?.reviewThreads?.nodes;
-  if (!Array.isArray(threads)) return [];
+  const response = Option.getOrUndefined(decodeGhReviewThreadsJson(result.stdout));
+  const threads = response?.data?.repository?.pullRequest?.reviewThreads?.nodes;
+  if (!threads) return [];
 
-  return threads.map((t: any): PRReviewThread => {
-    const thread: PRReviewThread = {
-      id: String(t.id ?? ""),
-      isResolved: t.isResolved === true,
-      isOutdated: t.isOutdated === true,
-      path: String(t.path ?? ""),
-      line: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(t.line)) ?? null,
-      startLine: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(t.startLine)) ?? null,
-      diffSide: t.diffSide === "LEFT" || t.diffSide === "RIGHT" ? t.diffSide : null,
-      comments: Array.isArray(t.comments?.nodes)
-        ? t.comments.nodes.map((c: any): PRThreadComment => {
-            const comment: PRThreadComment = {
-              id: String(c.id ?? ""),
-              author: c.author?.login ? String(c.author.login) : "",
-              body: String(c.body ?? ""),
-              createdAt: String(c.createdAt ?? ""),
-              url: String(c.url ?? ""),
-            };
-            const diffHunkDecoded = Option.getOrUndefined(
-              Schema.decodeUnknownOption(Schema.String)(c.diffHunk),
-            );
-            if (diffHunkDecoded) comment.diffHunk = diffHunkDecoded;
-            return comment;
-          })
-        : [],
-    };
-    return thread;
-  });
+  const decodedThreads: PRReviewThread[] = [];
+  for (const rawThread of threads) {
+    const decodedThread = Option.getOrUndefined(decodeGhReviewThread(rawThread));
+    if (!decodedThread) continue;
+
+    const comments: PRThreadComment[] = [];
+    for (const rawComment of decodedThread.comments?.nodes ?? []) {
+      const decodedComment = Option.getOrUndefined(decodeGhReviewThreadComment(rawComment));
+      if (!decodedComment) continue;
+      const comment: PRThreadComment = {
+        id: decodedComment.id,
+        author: decodedComment.author?.login ?? "",
+        body: decodedComment.body,
+        createdAt: decodedComment.createdAt,
+        url: decodedComment.url,
+      };
+      if (decodedComment.diffHunk) comment.diffHunk = decodedComment.diffHunk;
+      comments.push(comment);
+    }
+
+    decodedThreads.push({
+      id: decodedThread.id,
+      isResolved: decodedThread.isResolved,
+      isOutdated: decodedThread.isOutdated,
+      path: decodedThread.path,
+      line: decodedThread.line,
+      startLine: decodedThread.startLine,
+      diffSide: decodedThread.diffSide,
+      comments,
+    });
+  }
+  return decodedThreads;
 }
 
 // --- File Content ---
