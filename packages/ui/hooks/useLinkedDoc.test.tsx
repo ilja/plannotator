@@ -4,10 +4,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { disabledSourceSave } from '@plannotator/shared/source-save';
 import { AnnotationType, type Annotation, type ImageAttachment } from '../types';
 import type { ViewerHandle } from '../components/Viewer';
-import { useLinkedDoc } from './useLinkedDoc';
+import { type LinkedDocLoadData, useLinkedDoc } from './useLinkedDoc';
 
 const hasDom = globalThis.document !== undefined;
 const unsupportedSourceSave = disabledSourceSave('unsupported-extension');
+const originalFetch = globalThis.fetch;
 
 const annotation = (id: string, originalText: string): Annotation => ({
   id,
@@ -43,8 +44,12 @@ type Session = {
   current: () => {
     hook: LinkedDocApi;
     markdown: string;
+    renderAs: 'markdown' | 'html';
+    rawHtml: string;
+    shareHtml: string;
     annotations: Annotation[];
     selectedAnnotationId: string | null;
+    loadedDocuments: LinkedDocLoadData[];
     setAnnotations: React.Dispatch<React.SetStateAction<Annotation[]>>;
     setSelectedAnnotationId: React.Dispatch<React.SetStateAction<string | null>>;
   };
@@ -61,9 +66,13 @@ async function mountLinkedDoc(): Promise<Session> {
   roots.push(root);
   containers.push(container);
 
+  const loadedDocuments: LinkedDocLoadData[] = [];
   let latest: Session['current'] extends () => infer T ? T : never;
   function Harness() {
     const [markdown, setMarkdown] = useState('root markdown');
+    const [renderAs, setRenderAs] = useState<'markdown' | 'html'>('markdown');
+    const [rawHtml, setRawHtml] = useState('');
+    const [shareHtml, setShareHtml] = useState('');
     const [annotations, setAnnotations] = useState<Annotation[]>([annotation('root', 'root')]);
     const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
     const [globalAttachments, setGlobalAttachments] = useState<ImageAttachment[]>([]);
@@ -77,17 +86,31 @@ async function mountLinkedDoc(): Promise<Session> {
       setAnnotations,
       setSelectedAnnotationId,
       setGlobalAttachments,
-      renderAs: 'markdown',
-      rawHtml: '',
-      shareHtml: '',
-      setRenderAs: () => undefined,
-      setRawHtml: () => undefined,
-      setShareHtml: () => undefined,
+      renderAs,
+      rawHtml,
+      shareHtml,
+      setRenderAs,
+      setRawHtml,
+      setShareHtml,
       viewerRef,
       sidebar: { open: () => undefined },
-      onDocumentLoaded: () => undefined,
+      onDocumentLoaded: (doc) => {
+        loadedDocuments.push(doc);
+        return undefined;
+      },
     });
-    latest = { hook, markdown, annotations, selectedAnnotationId, setAnnotations, setSelectedAnnotationId };
+    latest = {
+      hook,
+      markdown,
+      renderAs,
+      rawHtml,
+      shareHtml,
+      annotations,
+      selectedAnnotationId,
+      loadedDocuments,
+      setAnnotations,
+      setSelectedAnnotationId,
+    };
     return null;
   }
 
@@ -107,10 +130,191 @@ async function mountLinkedDoc(): Promise<Session> {
 }
 
 afterEach(async () => {
+  Object.defineProperty(globalThis, 'fetch', { configurable: true, writable: true, value: originalFetch });
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
   for (const container of containers.splice(0)) container.remove();
+});
+
+function mockFetch(response: Response | Error): void {
+  Object.defineProperty(globalThis, 'fetch', {
+    configurable: true,
+    writable: true,
+    value: async () => {
+      if (response instanceof Error) throw response;
+      return response;
+    },
+  });
+}
+
+type LinkedMarkdownResponseOverrides = {
+  filepath?: unknown;
+  markdown?: unknown;
+  rawHtml?: unknown;
+  shareHtml?: unknown;
+  renderAs?: unknown;
+  isConverted?: unknown;
+  sourceSave?: unknown;
+};
+
+const linkedMarkdownResponse = (overrides: LinkedMarkdownResponseOverrides = {}): Response => Response.json({
+  filepath: '/repo/docs/guide.md',
+  markdown: 'linked markdown',
+  renderAs: 'markdown',
+  ...overrides,
+});
+
+describe('useLinkedDoc /api/doc response validation', () => {
+  test.skipIf(!hasDom)('opens valid markdown and passes source-save data to the host', async () => {
+    const session = await mountLinkedDoc();
+    const sourceSave = {
+      enabled: true,
+      kind: 'local-text-file',
+      scope: 'single-file',
+      path: '/repo/docs/guide.md',
+      basename: 'guide.md',
+      language: 'markdown',
+      hash: 'sha256:guide',
+      mtimeMs: 1000,
+      size: 16,
+      eol: 'lf',
+    } as const;
+    mockFetch(linkedMarkdownResponse({ sourceSave }));
+
+    await act(async () => {
+      await session.current().hook.open('/repo/docs/guide.md');
+    });
+
+    expect(session.current().markdown).toBe('linked markdown');
+    expect(session.current().loadedDocuments).toEqual([{
+      filepath: '/repo/docs/guide.md',
+      markdown: 'linked markdown',
+      renderAs: 'markdown',
+      sourceSave,
+    }]);
+    expect(session.current().hook.error).toBeNull();
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('opens valid HTML with raw and share HTML', async () => {
+    const session = await mountLinkedDoc();
+    mockFetch(Response.json({
+      filepath: '/repo/docs/guide.html',
+      rawHtml: '<h1>Guide</h1>',
+      shareHtml: '<article><h1>Guide</h1></article>',
+      renderAs: 'html',
+      isConverted: false,
+    }));
+
+    await act(async () => {
+      await session.current().hook.open('/repo/docs/guide.html');
+    });
+
+    expect(session.current().renderAs).toBe('html');
+    expect(session.current().rawHtml).toBe('<h1>Guide</h1>');
+    expect(session.current().shareHtml).toBe('<article><h1>Guide</h1></article>');
+    expect(session.current().markdown).toBe('');
+    expect(session.current().loadedDocuments).toEqual([]);
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('rejects malformed success roots and required fields', async () => {
+    const session = await mountLinkedDoc();
+
+    for (const response of [
+      Response.json({ markdown: 'missing filepath' }),
+      Response.json({ filepath: '' }),
+      Response.json({ filepath: 42, markdown: 'malformed filepath' }),
+      Response.json(null),
+    ]) {
+      mockFetch(response);
+      await act(async () => {
+        await session.current().hook.open('/repo/docs/guide.md');
+      });
+      expect(session.current().hook.error).toBe('Failed to load document');
+      expect(session.current().markdown).toBe('root markdown');
+    }
+
+    expect(session.current().loadedDocuments).toEqual([]);
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('drops malformed optional fields while retaining valid fields', async () => {
+    const session = await mountLinkedDoc();
+    mockFetch(linkedMarkdownResponse({
+      rawHtml: 42,
+      shareHtml: 'valid share HTML',
+      renderAs: 'invalid',
+      isConverted: 'false',
+      sourceSave: { enabled: true, path: 42 },
+    }));
+
+    await act(async () => {
+      await session.current().hook.open('/repo/docs/guide.md');
+    });
+
+    expect(session.current().markdown).toBe('linked markdown');
+    expect(session.current().renderAs).toBe('markdown');
+    expect(session.current().rawHtml).toBe('');
+    expect(session.current().shareHtml).toBe('');
+    expect(session.current().loadedDocuments).toEqual([{
+      filepath: '/repo/docs/guide.md',
+      markdown: 'linked markdown',
+      shareHtml: 'valid share HTML',
+    }]);
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('uses string error envelopes and the load fallback', async () => {
+    const session = await mountLinkedDoc();
+
+    mockFetch(Response.json({ error: 'File not found' }));
+    await act(async () => {
+      await session.current().hook.open('/repo/docs/missing.md');
+    });
+    expect(session.current().hook.error).toBe('File not found');
+
+    mockFetch(Response.json({ error: 'Forbidden' }, { status: 403 }));
+    await act(async () => {
+      await session.current().hook.open('/repo/docs/forbidden.md');
+    });
+    expect(session.current().hook.error).toBe('Forbidden');
+
+    for (const response of [
+      Response.json({ error: 42 }, { status: 404 }),
+      Response.json({}, { status: 404 }),
+    ]) {
+      mockFetch(response);
+      await act(async () => {
+        await session.current().hook.open('/repo/docs/malformed-error.md');
+      });
+      expect(session.current().hook.error).toBe('Failed to load document');
+    }
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)('uses the connection fallback for invalid JSON and network errors', async () => {
+    const session = await mountLinkedDoc();
+
+    mockFetch(new Response('{', { headers: { 'Content-Type': 'application/json' } }));
+    await act(async () => {
+      await session.current().hook.open('/repo/docs/invalid-json.md');
+    });
+    expect(session.current().hook.error).toBe('Failed to connect to server');
+
+    mockFetch(new Error('network failure'));
+    await act(async () => {
+      await session.current().hook.open('/repo/docs/network.md');
+    });
+    expect(session.current().hook.error).toBe('Failed to connect to server');
+
+    await session.unmount();
+  });
 });
 
 describe('useLinkedDoc unsupported Markdown path', () => {
