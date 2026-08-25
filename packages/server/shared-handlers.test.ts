@@ -110,7 +110,7 @@ describe("handleAgents", () => {
     });
   });
 
-  test("uses the empty-agent fallback when the SDK response data is malformed", async () => {
+  test("uses the empty-agent fallback when the SDK response data is null", async () => {
     const response = await handleAgents({
       app: {
         agents: async () => ({ data: null }),
@@ -119,6 +119,20 @@ describe("handleAgents", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ agents: [] });
+  });
+
+  test("returns the existing error fallback when the SDK response data is not an array", async () => {
+    const response = await handleAgents({
+      app: {
+        agents: async () => ({ data: "malformed" }),
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      agents: [],
+      error: "Failed to fetch agents",
+    });
   });
 });
 

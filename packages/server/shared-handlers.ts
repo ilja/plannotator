@@ -113,7 +113,7 @@ const OpencodeAgentSchema = Schema.Struct({
   hidden: Schema.optionalKey(Schema.Boolean),
 });
 const OpencodeAgentsResponseSchema = Schema.Struct({
-  data: Schema.optionalKey(Schema.Array(Schema.Json)),
+  data: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.Json))),
 });
 const decodeOpencodeAgent = Schema.decodeUnknownOption(OpencodeAgentSchema);
 const decodeOpencodeAgentsResponse = Schema.decodeUnknownOption(OpencodeAgentsResponseSchema);
@@ -136,7 +136,10 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
   try {
     const result = await opencodeClient.app.agents({});
     const response = Option.getOrUndefined(decodeOpencodeAgentsResponse(result));
-    const agents = (response?.data ?? []).flatMap((rawAgent) => {
+    if (!response) {
+      return Response.json({ agents: [], error: "Failed to fetch agents" });
+    }
+    const agents = (response.data ?? []).flatMap((rawAgent) => {
       const agent = Option.getOrUndefined(decodeOpencodeAgent(rawAgent));
       if (!agent || agent.mode !== "primary" || agent.hidden) return [];
       return [{ id: agent.name, name: agent.name, description: agent.description }];
