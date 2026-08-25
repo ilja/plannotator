@@ -9,17 +9,20 @@ import type { PRRuntime, PRMetadata, PRContext, PRReviewThread, PRThreadComment,
 import { encodeApiFilePath } from "./pr-types";
 import { parsePaginatedArray } from "./cli-pagination";
 
-interface RawGhPRView {
-  readonly id: string;
-  readonly title: string;
-  readonly author: { readonly login: string };
-  readonly baseRefName: string;
-  readonly headRefName: string;
-  readonly baseRefOid: string;
-  readonly headRefOid: string;
-  readonly url: string;
-}
-
+const RawGhPRViewSchema = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  author: Schema.Struct({ login: Schema.String }),
+  baseRefName: Schema.String,
+  headRefName: Schema.String,
+  baseRefOid: Schema.String,
+  headRefOid: Schema.String,
+  url: Schema.String,
+  changedFiles: Schema.optionalKey(Schema.Unknown),
+});
+const decodeRawGhPRViewJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGhPRViewSchema),
+);
 const RawGhPRContextSchema = Schema.Record(Schema.String, Schema.Unknown);
 type RawGhPRContext = Schema.Schema.Type<typeof RawGhPRContextSchema>;
 
@@ -216,6 +219,11 @@ export async function fetchGhPR(
     );
   }
 
+  const raw = Option.getOrUndefined(decodeRawGhPRViewJson(viewResult.stdout));
+  if (!raw) {
+    throw new Error("Failed to fetch PR metadata: Invalid response");
+  }
+
   // Resolve the patch. Primary: `gh pr diff` — one server-rendered document,
   // perfect fidelity. GitHub refuses to render it for very large PRs (406 /
   // "diff exceeded the maximum number of lines"); in that case fetch the same
@@ -251,8 +259,9 @@ export async function fetchGhPR(
     }
     // The files API silently caps at 3000 files — never present a truncated
     // review as complete.
-    const viewMeta: { changedFiles?: number } = JSON.parse(viewResult.stdout);
-    const expectedFiles = viewMeta.changedFiles;
+    const expectedFiles = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.Natural)(raw.changedFiles),
+    );
     if (expectedFiles !== undefined && fileEntries.length < expectedFiles) {
       console.error(
         `Warning: PR reports ${expectedFiles} changed files but the GitHub files API returned ${fileEntries.length} (the API caps at 3000). The review is missing the remainder.`,
@@ -267,8 +276,6 @@ export async function fetchGhPR(
       patchIncomplete = true;
     }
   }
-
-  const raw: RawGhPRView = JSON.parse(viewResult.stdout);
 
   // Fetch the merge-base SHA — the common ancestor commit GitHub uses to compute the PR diff.
   // baseSha (baseRefOid) is the tip of the base branch, which may have moved since the branch point.

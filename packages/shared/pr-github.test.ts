@@ -206,6 +206,43 @@ describe("fetchGhPR", () => {
     await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata/);
     expect(calls.some((c) => c.includes("/pulls/123/files"))).toBe(false);
   });
+
+  test("rejects invalid metadata JSON before fallback or compare requests", async () => {
+    const { runtime, calls } = githubRuntime({
+      prDiff: { exitCode: 1, stderr: "406" },
+      files: { exitCode: 0, stdout: "[]" },
+      view: { exitCode: 0, stdout: "not json" },
+    });
+
+    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata: Invalid response/);
+    expect(calls.some((c) => c.includes("/pulls/123/files"))).toBe(false);
+    expect(calls.some((c) => c.includes("/compare/"))).toBe(false);
+  });
+
+  test("rejects malformed required metadata fields", async () => {
+    const view = JSON.parse(VIEW_JSON);
+    view.author.login = 42;
+    const { runtime, calls } = githubRuntime({
+      prDiff: { exitCode: 0, stdout: "diff --git a/a.ts b/a.ts\n" },
+      view: { exitCode: 0, stdout: JSON.stringify(view) },
+    });
+
+    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata: Invalid response/);
+    expect(calls.some((c) => c.includes("/compare/"))).toBe(false);
+  });
+
+  test("ignores a malformed optional changedFiles count", async () => {
+    const view = JSON.parse(VIEW_JSON);
+    view.changedFiles = "many";
+    const { runtime } = githubRuntime({
+      prDiff: { exitCode: 1, stderr: "406" },
+      files: { exitCode: 0, stdout: JSON.stringify([{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" }]) },
+      view: { exitCode: 0, stdout: JSON.stringify(view) },
+    });
+
+    const result = await fetchGhPR(runtime, REF);
+    expect(result.patchIncomplete).toBeFalsy();
+  });
 });
 
 describe("reconstructGhPatch", () => {
