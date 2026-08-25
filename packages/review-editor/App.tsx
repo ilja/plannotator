@@ -18,11 +18,9 @@ import { configStore, useConfigValue } from '@plannotator/ui/config';
 import { loadDiffFont } from '@plannotator/ui/utils/diffFonts';
 import {
   getAIProviderSettings,
-  isPiProvider,
   resolveAIModelForProvider,
   resolveAIProviderSelection,
   saveAIProviderSelection,
-  type AIProviderOption,
 } from '@plannotator/ui/utils/aiProvider';
 import { DiffTypeSetupDialog } from '@plannotator/ui/components/DiffTypeSetupDialog';
 import { needsDiffTypeSetup } from '@plannotator/ui/utils/diffTypeSetup';
@@ -69,6 +67,7 @@ import {
   decodeDiffSwitchResponse,
   loadInitialDiffResponse,
 } from './utils/initial-diff-response';
+import { loadReviewAICapabilitiesState } from './utils/ai-capabilities-response';
 import { ReviewSubmissionDialog, buildReviewSubmission, type ReviewSubmission, type SubmissionTarget } from './components/ReviewSubmissionDialog';
 import { ReviewStateProvider, type ReviewState } from './dock/ReviewStateContext';
 import { reviewPanelComponents } from './dock/reviewPanelComponents';
@@ -93,13 +92,6 @@ import type { PRDiffScope, PRDiffScopeOption, PRStackInfo } from '@plannotator/s
 import { altKey } from '@plannotator/ui/utils/platform';
 
 declare const __APP_VERSION__: string;
-
-/** The capabilities advertised by the review server's /api/ai/capabilities endpoint. */
-interface AiCapabilitiesResponse {
-  available?: boolean;
-  providers?: AIProviderOption[];
-  defaultProvider?: string | null;
-}
 
 interface DiffData {
   files: DiffFile[];
@@ -505,18 +497,12 @@ const [aiConfig, setAiConfig] = useState(() => {
   // Check AI capabilities on mount
   useEffect(() => {
     fetch('/api/ai/capabilities')
-      .then(r => r.ok ? r.json() : null)
-      .then((data: AiCapabilitiesResponse | null) => {
-        if (data?.available) {
-          const providers = (data.providers ?? []).filter(isPiProvider);
-          setAiAvailable(providers.length > 0);
-          const defaultProvider = data.defaultProvider !== undefined &&
-            providers.some(provider => provider.id === data.defaultProvider)
-            ? data.defaultProvider
-            : null;
-          setAiProviders(providers);
-          setAiDefaultProvider(defaultProvider);
-        }
+      .then(loadReviewAICapabilitiesState)
+      .then(state => {
+        if (!state) return;
+        setAiAvailable(state.available);
+        setAiProviders(state.providers);
+        setAiDefaultProvider(state.defaultProvider);
       })
       .catch(() => {});
   }, []);
