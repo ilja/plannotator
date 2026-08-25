@@ -103,11 +103,23 @@ export async function handleUpload(req: Request): Promise<Response> {
 
 interface AgentListOptions {}
 
- /** OpenCode agent client interface (subset of OpenCode SDK) */
+const OpencodeAgentSchema = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  mode: Schema.String,
+  hidden: Schema.optionalKey(Schema.Boolean),
+});
+const OpencodeAgentsResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.Array(Schema.Json)),
+});
+const decodeOpencodeAgent = Schema.decodeUnknownOption(OpencodeAgentSchema);
+const decodeOpencodeAgentsResponse = Schema.decodeUnknownOption(OpencodeAgentsResponseSchema);
+
+/** OpenCode agent client interface (subset of OpenCode SDK) */
 export interface OpencodeClient {
   app: {
     agents: (options?: AgentListOptions) => Promise<{
-      data?: Array<{ name: string; description?: string; mode: string; hidden?: boolean }>;
+      data?: Schema.Schema.Type<typeof Schema.Json>;
     }>;
   };
 }
@@ -120,9 +132,12 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
 
   try {
     const result = await opencodeClient.app.agents({});
-    const agents = (result.data ?? [])
-      .filter((a) => a.mode === "primary" && !a.hidden)
-      .map((a) => ({ id: a.name, name: a.name, description: a.description }));
+    const response = Option.getOrUndefined(decodeOpencodeAgentsResponse(result));
+    const agents = (response?.data ?? []).flatMap((rawAgent) => {
+      const agent = Option.getOrUndefined(decodeOpencodeAgent(rawAgent));
+      if (!agent || agent.mode !== "primary" || agent.hidden) return [];
+      return [{ id: agent.name, name: agent.name, description: agent.description }];
+    });
 
     return Response.json({ agents });
   } catch {

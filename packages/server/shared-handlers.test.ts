@@ -9,6 +9,7 @@ interface StderrCapture {
   restore: () => void;
 }
 import {
+  handleAgents,
   handleDraftLoad,
   handleDraftSave,
   handleSaveNotes,
@@ -62,6 +63,44 @@ function captureStderrWrites(): StderrCapture {
     },
   };
 }
+
+describe("handleAgents", () => {
+  test("retains valid primary agents while filtering malformed entries", async () => {
+    const response = await handleAgents({
+      app: {
+        agents: async () => ({
+          data: [
+            { name: "review", mode: "primary", description: "Review code" },
+            { name: 42, mode: "primary" },
+            null,
+            { name: "hidden", mode: "primary", hidden: true },
+            { name: "annotate", mode: "primary" },
+            { name: "build", mode: "subagent" },
+          ],
+        }),
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      agents: [
+        { id: "review", name: "review", description: "Review code" },
+        { id: "annotate", name: "annotate" },
+      ],
+    });
+  });
+
+  test("uses the empty-agent fallback when the SDK response data is malformed", async () => {
+    const response = await handleAgents({
+      app: {
+        agents: async () => ({ data: null }),
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ agents: [] });
+  });
+});
 
 describe("handleDraftSave", () => {
   test("rejects non-object JSON without overwriting a valid draft", async () => {
