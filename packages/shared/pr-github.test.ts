@@ -3,11 +3,12 @@ import {
   fetchGhPR,
   fetchGhPRContext,
   fetchGhPRList,
+  fetchGhPRStack,
   fetchGhPRViewedFiles,
   reconstructGhPatch,
 } from "./pr-github";
 import { parseDiffGitHeader, parseDiffFilePathLines, parseDiffMetadataPathLines } from "./diff-paths";
-import type { PRRuntime } from "./pr-types";
+import type { PRMetadata, PRRuntime } from "./pr-types";
 
 const REF = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
 
@@ -293,6 +294,89 @@ describe("fetchGhPRList", () => {
 
     const nonArray: PRRuntime = { async runCommand() { return { stdout: "{}", stderr: "", exitCode: 0 }; } };
     await expect(fetchGhPRList(nonArray, listRef)).rejects.toThrow();
+  });
+});
+
+describe("fetchGhPRStack", () => {
+  const stackRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 3 };
+  const metadata: PRMetadata = {
+    platform: "github",
+    host: "github.com",
+    owner: "o",
+    repo: "r",
+    number: 3,
+    title: "Current",
+    author: "dev",
+    baseBranch: "base",
+    headBranch: "feature",
+    defaultBranch: "main",
+    baseSha: "base-sha",
+    headSha: "head-sha",
+    url: "https://prs/3",
+  };
+
+  test("builds ordered stack nodes from valid GraphQL siblings", async () => {
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        const query = args.find((arg) => arg.includes("RefName=")) ?? "";
+        if (query === "headRefName=base") {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequests: {
+                    nodes: [
+                      { number: 1, title: "Ancestor", url: "https://prs/1", baseRefName: "main", headRefName: "base", state: "MERGED" },
+                      { number: 99, title: 42 },
+                    ],
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (query === "baseRefName=feature") {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequests: {
+                    nodes: [{ number: 4, title: "Descendant", url: "https://prs/4", baseRefName: "feature", headRefName: "leaf", state: "OPEN" }],
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }), stderr: "", exitCode: 0 };
+      },
+    };
+
+    await expect(fetchGhPRStack(runtime, stackRef, metadata)).resolves.toEqual({
+      nodes: [
+        { branch: "main", isCurrent: false, isDefaultBranch: true },
+        { branch: "base", number: 1, title: "Ancestor", url: "https://prs/1", isCurrent: false, isDefaultBranch: false, state: "merged" },
+        { branch: "feature", number: 3, title: "Current", url: "https://prs/3", isCurrent: true, isDefaultBranch: false },
+        { branch: "leaf", number: 4, title: "Descendant", url: "https://prs/4", isCurrent: false, isDefaultBranch: false, state: "open" },
+      ],
+    });
+  });
+
+  test("returns null without a default branch and preserves empty query results", async () => {
+    let calls = 0;
+    const runtime: PRRuntime = {
+      async runCommand() {
+        calls++;
+        return { stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }), stderr: "", exitCode: 0 };
+      },
+    };
+    const noDefault = { ...metadata, defaultBranch: undefined };
+    await expect(fetchGhPRStack(runtime, stackRef, noDefault)).resolves.toBeNull();
+    expect(calls).toBe(0);
   });
 });
 

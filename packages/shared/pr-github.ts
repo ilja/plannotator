@@ -794,7 +794,28 @@ export async function submitGhPRReview(
 
 // --- Stack Tree (GraphQL) ---
 
-type StackPRNode = { number: number; title: string; url: string; baseRefName: string; headRefName: string; state: string };
+const StackPRNodeSchema = Schema.Struct({
+  number: Schema.Number,
+  title: Schema.String,
+  url: Schema.String,
+  baseRefName: Schema.String,
+  headRefName: Schema.String,
+  state: Schema.Literals(["OPEN", "MERGED", "CLOSED"]),
+});
+const StackPRResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    repository: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+      pullRequests: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+        nodes: Schema.Array(Schema.Unknown),
+      }))),
+    }))),
+  }))),
+});
+const decodeStackPRResponseJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(StackPRResponseSchema),
+);
+const decodeStackPRNode = Schema.decodeUnknownOption(StackPRNodeSchema);
+type StackPRNode = Schema.Schema.Type<typeof StackPRNodeSchema>;
 
 function stackPRQuery(kind: "head" | "base"): string {
   const varName = kind === "head" ? "headRefName" : "baseRefName";
@@ -824,9 +845,16 @@ async function queryPRsByRef(
     "-f", `${varName}=${refName}`,
   ]));
   if (result.exitCode !== 0) return [];
-  const data = JSON.parse(result.stdout);
-  const prs = data?.data?.repository?.pullRequests?.nodes;
-  return Array.isArray(prs) ? prs : [];
+  const response = Option.getOrUndefined(decodeStackPRResponseJson(result.stdout));
+  const nodes = response?.data?.repository?.pullRequests?.nodes;
+  if (!nodes) return [];
+
+  const prs: StackPRNode[] = [];
+  for (const rawNode of nodes) {
+    const node = Option.getOrUndefined(decodeStackPRNode(rawNode));
+    if (node) prs.push(node);
+  }
+  return prs;
 }
 
 /**
@@ -877,7 +905,7 @@ export async function fetchGhPRStack(
       url: pr.url,
       isCurrent: false,
       isDefaultBranch: false,
-      state: (pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open") as PRStackNode["state"],
+      state: pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open",
     });
     nextHead = pr.baseRefName;
   }
@@ -899,7 +927,7 @@ export async function fetchGhPRStack(
       url: pr.url,
       isCurrent: false,
       isDefaultBranch: false,
-      state: (pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open") as PRStackNode["state"],
+      state: pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open",
     });
     nextBase = pr.headRefName;
   }
