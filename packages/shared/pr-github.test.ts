@@ -1,5 +1,5 @@
 import { describe, expect, test, spyOn } from "bun:test";
-import { fetchGhPR, fetchGhPRContext, reconstructGhPatch } from "./pr-github";
+import { fetchGhPR, fetchGhPRContext, fetchGhPRList, reconstructGhPatch } from "./pr-github";
 import { parseDiffGitHeader, parseDiffFilePathLines, parseDiffMetadataPathLines } from "./diff-paths";
 import type { PRRuntime } from "./pr-types";
 
@@ -242,6 +242,51 @@ describe("fetchGhPR", () => {
 
     const result = await fetchGhPR(runtime, REF);
     expect(result.patchIncomplete).toBeFalsy();
+  });
+});
+
+describe("fetchGhPRList", () => {
+  const listRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+
+  test("decodes valid entries and filters malformed siblings", async () => {
+    const runtime: PRRuntime = {
+      async runCommand() {
+        return {
+          stdout: JSON.stringify([
+            { number: 1, title: "", author: { login: "" }, url: "", baseRefName: "", state: "OPEN" },
+            { number: 1, title: "Duplicate", author: { login: "dev" }, url: "url", baseRefName: "main", state: "MERGED" },
+            { number: 2, title: "Closed", author: { login: "dev" }, url: "url-2", baseRefName: "main", state: "CLOSED" },
+            { number: 3, title: "Bad author", author: { login: 42 }, url: "url-3", baseRefName: "main", state: "OPEN" },
+            { number: 4, title: "Bad state", author: { login: "dev" }, url: "url-4", baseRefName: "main", state: "UNKNOWN" },
+          ]),
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+
+    await expect(fetchGhPRList(runtime, listRef)).resolves.toEqual([
+      { id: "1", number: 1, title: "", author: "", url: "", baseBranch: "", state: "open" },
+      { id: "1", number: 1, title: "Duplicate", author: "dev", url: "url", baseBranch: "main", state: "merged" },
+      { id: "2", number: 2, title: "Closed", author: "dev", url: "url-2", baseBranch: "main", state: "closed" },
+    ]);
+  });
+
+  test("preserves empty output, exit fallback, and root parse failures", async () => {
+    const outputs = [
+      { stdout: "[]", exitCode: 0 },
+      { stdout: "", exitCode: 1 },
+    ];
+    for (const output of outputs) {
+      const runtime: PRRuntime = { async runCommand() { return { ...output, stderr: "failed" }; } };
+      await expect(fetchGhPRList(runtime, listRef)).resolves.toEqual([]);
+    }
+
+    const invalidJson: PRRuntime = { async runCommand() { return { stdout: "not json", stderr: "", exitCode: 0 }; } };
+    await expect(fetchGhPRList(invalidJson, listRef)).rejects.toThrow();
+
+    const nonArray: PRRuntime = { async runCommand() { return { stdout: "{}", stderr: "", exitCode: 0 }; } };
+    await expect(fetchGhPRList(nonArray, listRef)).rejects.toThrow();
   });
 });
 

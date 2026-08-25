@@ -26,6 +26,19 @@ const decodeRawGhPRViewJson = Schema.decodeUnknownOption(
 const RawGhPRContextSchema = Schema.Record(Schema.String, Schema.Unknown);
 type RawGhPRContext = Schema.Schema.Type<typeof RawGhPRContextSchema>;
 
+const GhPRListItemSchema = Schema.Struct({
+  number: Schema.Number,
+  title: Schema.String,
+  author: Schema.Struct({ login: Schema.String }),
+  url: Schema.String,
+  baseRefName: Schema.String,
+  state: Schema.Literals(["OPEN", "MERGED", "CLOSED"]),
+});
+const decodeGhPRListJson = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Array(Schema.Unknown)),
+);
+const decodeGhPRListItem = Schema.decodeUnknownOption(GhPRListItemSchema);
+
 const GhReviewThreadCommentSchema = Schema.Struct({
   id: Schema.String,
   body: Schema.String,
@@ -902,23 +915,21 @@ export async function fetchGhPRList(
 
   if (result.exitCode !== 0) return [];
 
-  const raw: Array<{
-    number: number;
-    title: string;
-    author: { login: string };
-    url: string;
-    baseRefName: string;
-    state: string;
-  }> = JSON.parse(result.stdout);
-
-  return raw.map((pr) => ({
-    id: String(pr.number),
-    number: pr.number,
-    title: pr.title,
-    author: pr.author.login,
-    url: pr.url,
-    baseBranch: pr.baseRefName,
-    // SAFETY: pr.state is OPEN/MERGED/CLOSED from GitHub API; mapping to PRListItem state is exhaustive
-    state: (pr.state === "OPEN" ? "open" : pr.state === "MERGED" ? "merged" : "closed") as PRListItem["state"],
-  }));
+  const raw = decodeGhPRListJson(result.stdout);
+  const items: PRListItem[] = [];
+  for (const rawEntry of raw) {
+    const pr = Option.getOrUndefined(decodeGhPRListItem(rawEntry));
+    if (!pr) continue;
+    const state = pr.state === "OPEN" ? "open" : pr.state === "MERGED" ? "merged" : "closed";
+    items.push({
+      id: String(pr.number),
+      number: pr.number,
+      title: pr.title,
+      author: pr.author.login,
+      url: pr.url,
+      baseBranch: pr.baseRefName,
+      state,
+    });
+  }
+  return items;
 }
