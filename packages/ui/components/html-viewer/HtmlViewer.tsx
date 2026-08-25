@@ -19,6 +19,7 @@ import { CommentPopover, type CommentAskAIHandler } from "../CommentPopover";
 import { FloatingQuickLabelPicker } from "../FloatingQuickLabelPicker";
 import type { ViewerHandle } from "../Viewer";
 import { useHtmlAnnotation } from "./useHtmlAnnotation";
+import { postHtmlBridgeMessage } from "./bridgeMessages";
 import { ANNOTATION_HIGHLIGHT_CSS, BRIDGE_SCRIPT } from "./bridge-script";
 
 const PREFIX = "plannotator-bridge-";
@@ -226,20 +227,21 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     // ready (fresh iframe) and whenever the user switches it in the toolstrip.
     useEffect(() => {
       if (!iframeReady) return;
-      iframeRef.current?.contentWindow?.postMessage(
-        { type: `${PREFIX}set-input-method`, method: inputMethod },
-        "*",
-      );
+      postHtmlBridgeMessage(iframeRef.current, {
+        type: `${PREFIX}set-input-method`,
+        method: inputMethod,
+      });
     }, [iframeReady, inputMethod]);
 
     useEffect(() => {
       if (!iframeReady) return;
       function sendTheme() {
         const tokens = { ...readThemeTokens(), ...readTypographyTokens(typographyStyle) };
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: `${PREFIX}theme`, tokens, isLight: isLightTheme() },
-          "*",
-        );
+        postHtmlBridgeMessage(iframeRef.current, {
+          type: `${PREFIX}theme`,
+          tokens,
+          isLight: isLightTheme(),
+        });
       }
       sendTheme();
       const observer = new MutationObserver(sendTheme);

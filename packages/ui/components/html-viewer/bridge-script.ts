@@ -50,13 +50,26 @@ export const ANNOTATION_HIGHLIGHT_CSS = `
 export const BRIDGE_SCRIPT = `(function() {
   var PREFIX = 'plannotator-bridge-';
 
+  function isRecord(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+  function isNonEmptyString(value) {
+    return typeof value === 'string' && value.length > 0;
+  }
+  function annotationType(value) {
+    return value === 'deletion' ? 'deletion' : 'comment';
+  }
+
   // --- Theme ---
   window.addEventListener('message', function(e) {
-    if (!e.data || e.data.type !== PREFIX + 'theme') return;
+    if (e.source !== parent || !e.data || e.data.type !== PREFIX + 'theme') return;
+    if (!isRecord(e.data.tokens) || typeof e.data.isLight !== 'boolean') return;
     var root = document.documentElement;
     var tokens = e.data.tokens;
     for (var key in tokens) {
-      if (tokens.hasOwnProperty(key)) root.style.setProperty(key, tokens[key]);
+      if (Object.prototype.hasOwnProperty.call(tokens, key) && typeof tokens[key] === 'string') {
+        root.style.setProperty(key, tokens[key]);
+      }
     }
     root.classList.remove('light');
     if (e.data.isLight) root.classList.add('light');
@@ -149,12 +162,13 @@ export const BRIDGE_SCRIPT = `(function() {
 
   // --- Mark Creation ---
   window.addEventListener('message', function(e) {
-    if (!e.data || !e.data.type) return;
+    if (e.source !== parent || !e.data || !e.data.type) return;
     var type = e.data.type;
 
     if (type === PREFIX + 'create-mark') {
       var id = e.data.id;
-      var annType = e.data.annotationType || 'comment';
+      if (!isNonEmptyString(id)) return;
+      var annType = annotationType(e.data.annotationType);
       if (pendingSelection) {
         // Text selections wrap a <mark>; element pinpoints (e.g. SVG nodes) carry
         // no range, so there's no inline mark to apply — the annotation is still
@@ -167,7 +181,8 @@ export const BRIDGE_SCRIPT = `(function() {
     }
 
     else if (type === PREFIX + 'find-and-mark') {
-      var found = findTextAndMark(e.data.id, e.data.originalText, e.data.annotationType || 'comment');
+      if (!isNonEmptyString(e.data.id) || !isNonEmptyString(e.data.originalText)) return;
+      var found = findTextAndMark(e.data.id, e.data.originalText, annotationType(e.data.annotationType));
       parent.postMessage({
         type: PREFIX + 'mark-applied',
         id: e.data.id,
@@ -176,6 +191,7 @@ export const BRIDGE_SCRIPT = `(function() {
     }
 
     else if (type === PREFIX + 'remove-mark') {
+      if (!isNonEmptyString(e.data.id)) return;
       removeMark(e.data.id);
     }
 
@@ -185,6 +201,7 @@ export const BRIDGE_SCRIPT = `(function() {
     }
 
     else if (type === PREFIX + 'scroll-to') {
+      if (!isNonEmptyString(e.data.id)) return;
       var mark = document.querySelector('[data-bind-id="' + e.data.id + '"]');
       if (mark) {
         mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -194,6 +211,7 @@ export const BRIDGE_SCRIPT = `(function() {
     }
 
     else if (type === PREFIX + 'focus-mark') {
+      if (e.data.id !== null && !isNonEmptyString(e.data.id)) return;
       var all = document.querySelectorAll('.annotation-highlight');
       for (var j = 0; j < all.length; j++) all[j].classList.remove('focused');
       if (e.data.id) {

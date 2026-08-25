@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type RefObject } from "react"
 import { Option, Schema } from "effect";
 import { AnnotationType, type Annotation, type EditorMode, type ImageAttachment } from "../../types";
 import type { QuickLabel } from "../../utils/quickLabels";
+import { postHtmlBridgeMessage, type HtmlBridgeOutboundMessage } from "./bridgeMessages";
 import { getIdentity } from "../../utils/identity";
 import type {
   ToolbarState,
@@ -68,28 +69,11 @@ export interface UseHtmlAnnotationOptions {
   onResize?: (height: number) => void;
 }
 
-type HtmlBridgeOutboundMessage =
-  | {
-      type: `${typeof PREFIX}create-mark`;
-      id: string;
-      annotationType: "comment" | "deletion";
-    }
-  | {
-      type: `${typeof PREFIX}find-and-mark`;
-      id: string;
-      originalText: string;
-      annotationType: "comment" | "deletion";
-    }
-  | { type: `${typeof PREFIX}remove-mark`; id: string }
-  | { type: `${typeof PREFIX}clear-marks` }
-  | { type: `${typeof PREFIX}scroll-to`; id: string }
-  | { type: `${typeof PREFIX}focus-mark`; id: string | null };
-
 function postToIframe(
   iframe: HTMLIFrameElement | null,
   message: HtmlBridgeOutboundMessage,
 ): void {
-  iframe?.contentWindow?.postMessage(message, "*");
+  postHtmlBridgeMessage(iframe, message);
 }
 
 export function useHtmlAnnotation({
