@@ -11,7 +11,7 @@ import { dirname } from "node:path";
 import { Option, Schema } from "effect";
 import { openBrowser as openBrowserImpl } from "./browser";
 import { validateImagePath, validateUploadExtension, UPLOAD_DIR } from "./image";
-import { saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "./draft";
+import { decodeDraftEnvelope, saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "./draft";
 import { FAVICON_SVG } from "@plannotator/shared/favicon";
 import { saveToObsidian, saveToBear, saveToOctarine } from "./integrations";
 import type { IntegrationResult } from "./integrations";
@@ -133,7 +133,10 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
 /** Save annotation draft. Used by all 3 servers. */
 export async function handleDraftSave(req: Request, contentKey: string): Promise<Response> {
   try {
-    const body = await req.json();
+    const body = decodeDraftEnvelope(await req.json());
+    if (body === null) {
+      return Response.json({ error: "Invalid draft" }, { status: 400 });
+    }
     saveDraft(contentKey, body);
     return Response.json({ ok: true });
   } catch (err) {

@@ -17,7 +17,11 @@ import type { SourceSaveCapability } from "./source-save";
 
 const DraftGenerationSchema = Schema.Natural;
 const DraftEnvelopeSchema = Schema.Record(Schema.String, Schema.Unknown);
-type DraftEnvelope = Schema.Schema.Type<typeof DraftEnvelopeSchema>;
+export type DraftEnvelope = Schema.Schema.Type<typeof DraftEnvelopeSchema>;
+
+export function decodeDraftEnvelope<Input>(value: Input): DraftEnvelope | null {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(DraftEnvelopeSchema)(value)) ?? null;
+}
 
 export type SourceBackedDraftSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
 
@@ -128,8 +132,8 @@ function clearTombstone(key: string): void {
  * Save a draft to disk.
  */
 export function saveDraft<T>(key: string, data: T): boolean {
-  const draft = Option.getOrUndefined(Schema.decodeUnknownOption(DraftEnvelopeSchema)(data));
-  if (draft === undefined) return false;
+  const draft = decodeDraftEnvelope(data);
+  if (draft === null) return false;
 
   const draftGeneration = readDraftGeneration(draft);
   const deletedGeneration = readTombstoneGeneration(key);

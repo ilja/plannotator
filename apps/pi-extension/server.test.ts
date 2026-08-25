@@ -318,6 +318,54 @@ describe("pi annotate server", () => {
     }
   });
 
+  test("rejects malformed drafts without overwriting a valid draft", async () => {
+    const dataDir = makeTempDir("plannotator-pi-draft-boundary-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "assistant text",
+      filePath: "last-message",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate-last",
+      recentMessages: [{ messageId: "entry-1", text: "assistant text" }],
+    });
+
+    try {
+      const initial = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: [{ id: "initial" }] }),
+      });
+      expect(initial.status).toBe(200);
+
+      const malformed = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid draft" });
+
+      const loaded = await fetch(`${server.url}/api/draft`);
+      expect(loaded.status).toBe(200);
+      expect(await loaded.json()).toEqual({ annotations: [{ id: "initial" }] });
+
+      const valid = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: [{ id: "updated" }] }),
+      });
+      expect(valid.status).toBe(200);
+
+      const updated = await fetch(`${server.url}/api/draft`);
+      expect(await updated.json()).toEqual({ annotations: [{ id: "updated" }] });
+    } finally {
+      server.stop();
+    }
+  });
+
   test("resolves feedback with selected message metadata and clears drafts", async () => {
     const dataDir = makeTempDir("plannotator-pi-annotate-feedback-data-");
     process.env.PLANNOTATOR_DATA_DIR = dataDir;

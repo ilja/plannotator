@@ -9,6 +9,8 @@ interface StderrCapture {
   restore: () => void;
 }
 import {
+  handleDraftLoad,
+  handleDraftSave,
   handleSaveNotes,
   handleServerReady,
   isCodexDesktopHost,
@@ -60,6 +62,54 @@ function captureStderrWrites(): StderrCapture {
     },
   };
 }
+
+describe("handleDraftSave", () => {
+  test("rejects non-object JSON without overwriting a valid draft", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "plannotator-draft-boundary-"));
+    const previousDataDir = process.env.PLANNOTATOR_DATA_DIR;
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+
+    try {
+      const initial = await handleDraftSave(
+        new Request("http://localhost/api/draft", {
+          method: "POST",
+          body: JSON.stringify({ annotations: [{ id: "initial" }] }),
+        }),
+        "draft-boundary",
+      );
+      expect(initial.status).toBe(200);
+
+      const malformed = await handleDraftSave(
+        new Request("http://localhost/api/draft", {
+          method: "POST",
+          body: JSON.stringify([]),
+        }),
+        "draft-boundary",
+      );
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid draft" });
+      expect(await handleDraftLoad("draft-boundary").json()).toEqual({
+        annotations: [{ id: "initial" }],
+      });
+
+      const valid = await handleDraftSave(
+        new Request("http://localhost/api/draft", {
+          method: "POST",
+          body: JSON.stringify({ annotations: [{ id: "updated" }] }),
+        }),
+        "draft-boundary",
+      );
+      expect(valid.status).toBe(200);
+      expect(await handleDraftLoad("draft-boundary").json()).toEqual({
+        annotations: [{ id: "updated" }],
+      });
+    } finally {
+      if (previousDataDir === undefined) delete process.env.PLANNOTATOR_DATA_DIR;
+      else process.env.PLANNOTATOR_DATA_DIR = previousDataDir;
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("handleSaveNotes", () => {
   test("saves to an Obsidian vault and returns JSON success", async () => {

@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve as resolvePath } from "node:path";
-import { saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "../generated/draft.js";
+import { decodeDraftEnvelope, saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "../generated/draft.js";
 import { FAVICON_SVG } from "../generated/favicon.js";
 
 import { json, parseBody, send, toWebRequest } from "./helpers";
@@ -197,8 +197,15 @@ export function handleDraftRequest(
 	draftKey: string,
 ): Promise<void> | void {
 	if (req.method === "POST") {
-		return parseBody(req)
-			.then((body) => {
+		return toWebRequest(req)
+			.json()
+			.catch(() => ({}))
+			.then((rawBody) => {
+				const body = decodeDraftEnvelope(rawBody);
+				if (body === null) {
+					json(res, { error: "Invalid draft" }, 400);
+					return;
+				}
 				saveDraft(draftKey, body);
 				json(res, { ok: true });
 			})
