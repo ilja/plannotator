@@ -7,7 +7,6 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Option, Schema } from "effect";
 import {
 	createAnnotationStore,
 	transformPlanInput,
@@ -17,8 +16,9 @@ import {
 	HEARTBEAT_INTERVAL_MS,
 	type StorableAnnotation,
 	type ExternalAnnotationEvent,
+	decodeExternalAnnotationPatch,
 } from "../generated/external-annotation.js";
-import { json, parseBody, type ParsedRequestBody } from "./helpers.js";
+import { json, parseBody, toWebRequest, type ParsedRequestBody } from "./helpers.js";
 
 // ---------------------------------------------------------------------------
 // Route prefix
@@ -26,14 +26,6 @@ import { json, parseBody, type ParsedRequestBody } from "./helpers.js";
 
 const BASE = "/api/external-annotations";
 const STREAM = `${BASE}/stream`;
-
-const AnnotationPatchSchema = Schema.StructWithRest(
-	Schema.Struct({
-		id: Schema.optionalKey(Schema.String),
-		source: Schema.optionalKey(Schema.String),
-	}),
-	[Schema.Record(Schema.String, Schema.Unknown)],
-);
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -156,9 +148,9 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 					return true;
 				}
 				try {
-					const body = await parseBody(req);
-					const patch = Option.getOrUndefined(
-						Schema.decodeUnknownOption(AnnotationPatchSchema)(body),
+					const patch = decodeExternalAnnotationPatch(
+						mode,
+						await toWebRequest(req).json(),
 					);
 					if (!patch) {
 						json(res, { error: "Invalid JSON" }, 400);

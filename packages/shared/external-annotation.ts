@@ -52,6 +52,94 @@ export interface ParseError {
 const ExternalFieldsSchema = Schema.Record(Schema.String, Schema.Unknown);
 export type ExternalFields = Schema.Schema.Type<typeof ExternalFieldsSchema>;
 
+const ImageAttachmentSchema = Schema.Struct({
+  path: Schema.String,
+  name: Schema.String,
+});
+const ChoiceValidationEvidenceSchema = Schema.Struct({
+  question: Schema.String,
+  options: Schema.Array(Schema.Struct({
+    label: Schema.String,
+    text: Schema.String,
+  })),
+});
+const AnnotationMetaSchema = Schema.Struct({
+  parentTagName: Schema.String,
+  parentIndex: Schema.Number,
+  textOffset: Schema.Number,
+});
+
+const PlanAnnotationPatchSchema = Schema.StructWithRest(
+  Schema.Struct({
+    id: Schema.optionalKey(Schema.String),
+    source: Schema.optionalKey(Schema.String),
+    blockId: Schema.optionalKey(Schema.String),
+    startOffset: Schema.optionalKey(Schema.Number),
+    endOffset: Schema.optionalKey(Schema.Number),
+    type: Schema.optionalKey(Schema.Literals(["DELETION", "COMMENT", "GLOBAL_COMMENT"])),
+    text: Schema.optionalKey(Schema.String),
+    originalText: Schema.optionalKey(Schema.String),
+    createdA: Schema.optionalKey(Schema.Number),
+    createdAt: Schema.optionalKey(Schema.Number),
+    author: Schema.optionalKey(Schema.String),
+    images: Schema.optionalKey(Schema.Array(ImageAttachmentSchema)),
+    isQuickLabel: Schema.optionalKey(Schema.Boolean),
+    quickLabelTip: Schema.optionalKey(Schema.String),
+    choiceOptionLabel: Schema.optionalKey(Schema.String),
+    choiceValidationEvidence: Schema.optionalKey(ChoiceValidationEvidenceSchema),
+    diffContext: Schema.optionalKey(Schema.Literals(["added", "removed", "modified"])),
+    startMeta: Schema.optionalKey(AnnotationMetaSchema),
+    endMeta: Schema.optionalKey(AnnotationMetaSchema),
+  }),
+  [ExternalFieldsSchema],
+);
+
+const ReviewAnnotationPatchSchema = Schema.StructWithRest(
+  Schema.Struct({
+    id: Schema.optionalKey(Schema.String),
+    source: Schema.optionalKey(Schema.String),
+    type: Schema.optionalKey(Schema.Literals(["comment", "suggestion", "concern"])),
+    scope: Schema.optionalKey(Schema.Literals(["line", "file", "general"])),
+    filePath: Schema.optionalKey(Schema.String),
+    lineStart: Schema.optionalKey(Schema.Number),
+    lineEnd: Schema.optionalKey(Schema.Number),
+    side: Schema.optionalKey(Schema.Literals(["old", "new"])),
+    text: Schema.optionalKey(Schema.String),
+    images: Schema.optionalKey(Schema.Array(ImageAttachmentSchema)),
+    suggestedCode: Schema.optionalKey(Schema.String),
+    originalCode: Schema.optionalKey(Schema.String),
+    charStart: Schema.optionalKey(Schema.Number),
+    charEnd: Schema.optionalKey(Schema.Number),
+    tokenText: Schema.optionalKey(Schema.String),
+    createdAt: Schema.optionalKey(Schema.Number),
+    author: Schema.optionalKey(Schema.String),
+    severity: Schema.optionalKey(Schema.Literals(["important", "nit", "pre_existing"])),
+    reasoning: Schema.optionalKey(Schema.String),
+    reviewProfileLabel: Schema.optionalKey(Schema.String),
+    conventionalLabel: Schema.optionalKey(Schema.String),
+    decorations: Schema.optionalKey(Schema.Array(Schema.String)),
+    prUrl: Schema.optionalKey(Schema.String),
+    prNumber: Schema.optionalKey(Schema.Number),
+    prTitle: Schema.optionalKey(Schema.String),
+    prRepo: Schema.optionalKey(Schema.String),
+    diffScope: Schema.optionalKey(Schema.Literals(["layer", "full-stack"])),
+  }),
+  [ExternalFieldsSchema],
+);
+
+const decodePlanAnnotationPatch = Schema.decodeUnknownOption(PlanAnnotationPatchSchema);
+const decodeReviewAnnotationPatch = Schema.decodeUnknownOption(ReviewAnnotationPatchSchema);
+
+export function decodeExternalAnnotationPatch<Input>(
+  mode: "plan" | "review",
+  value: Input,
+): ExternalFields | undefined {
+  if (mode === "plan") {
+    return Option.getOrUndefined(decodePlanAnnotationPatch(value));
+  }
+  return Option.getOrUndefined(decodeReviewAnnotationPatch(value));
+}
+
 /**
  * Unwrap a POST body into an array of raw input objects.
  *

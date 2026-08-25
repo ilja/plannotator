@@ -474,6 +474,62 @@ describe("pi annotate server", () => {
     }
   });
 
+  test("validates external annotation patches without mutating malformed updates", async () => {
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+    const server = await startAnnotateServer({
+      markdown: "# Test",
+      filePath: "test.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+    });
+
+    try {
+      const create = await fetch(`${server.url}/api/external-annotations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "editor", text: "original" }),
+      });
+      const { ids } = await create.json();
+      const id = ids[0];
+
+      const invalidJson = await fetch(`${server.url}/api/external-annotations?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: "{invalid-json",
+      });
+      expect(invalidJson.status).toBe(400);
+
+      const invalidField = await fetch(`${server.url}/api/external-annotations?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: 7 }),
+      });
+      expect(invalidField.status).toBe(400);
+
+      const unchanged = await fetch(`${server.url}/api/external-annotations`);
+      expect(await unchanged.json()).toMatchObject({
+        version: 1,
+        annotations: [{ id, text: "original" }],
+      });
+
+      const valid = await fetch(`${server.url}/api/external-annotations?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "spoofed-id",
+          text: "updated",
+          futureMetadata: { preserved: true },
+        }),
+      });
+      expect(valid.status).toBe(200);
+      expect(await valid.json()).toMatchObject({
+        annotation: { id, text: "updated", futureMetadata: { preserved: true } },
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
   test("resolves gate approval and clears drafts", async () => {
     const dataDir = makeTempDir("plannotator-pi-annotate-approve-data-");
     process.env.PLANNOTATOR_DATA_DIR = dataDir;

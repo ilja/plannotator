@@ -20,6 +20,7 @@ import {
   type AnnotationStore,
   type StorableAnnotation,
   type ExternalAnnotationEvent,
+  decodeExternalAnnotationPatch,
 } from "@plannotator/shared/external-annotation";
 
 export type { ExternalAnnotationEvent } from "@plannotator/shared/external-annotation";
@@ -47,14 +48,6 @@ const STREAM = `${BASE}/stream`;
 
 const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
 type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
-
-const AnnotationPatchSchema = Schema.StructWithRest(
-  Schema.Struct({
-    id: Schema.optionalKey(Schema.String),
-    source: Schema.optionalKey(Schema.String),
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
-);
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -187,10 +180,7 @@ export function createExternalAnnotationHandler(
           return Response.json({ error: "Missing ?id parameter" }, { status: 400 });
         }
         try {
-          const body = await req.json();
-          const patch = Option.getOrUndefined(
-            Schema.decodeUnknownOption(AnnotationPatchSchema)(body),
-          );
+          const patch = decodeExternalAnnotationPatch(mode, await req.json());
           if (!patch) {
             return Response.json({ error: "Invalid JSON" }, { status: 400 });
           }
