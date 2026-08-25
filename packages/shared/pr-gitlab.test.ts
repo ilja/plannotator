@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Option, Schema } from "effect";
-import { fetchGlMR, fetchGlMRContext, parsePaginatedArray } from "./pr-gitlab";
+import { fetchGlMR, fetchGlMRContext, parsePaginatedArray, submitGlMRReview } from "./pr-gitlab";
 import type { PRRuntime } from "./pr-types";
 
 describe("fetchGlMR", () => {
@@ -227,6 +227,77 @@ describe("fetchGlMR metadata boundary", () => {
 
     expect(calls).toContain("glab api projects/g%2Fp");
     expect(result.metadata.defaultBranch).toBeUndefined();
+  });
+});
+
+describe("submitGlMRReview diff refs", () => {
+  const reviewRef = { platform: "gitlab" as const, host: "gitlab.com", projectPath: "g/p", iid: 1 };
+  const fileComments = [{ path: "src/a.ts", line: 3, side: "RIGHT" as const, body: "Review" }];
+
+  async function submitAndReadPosition(
+    metadataResponse: { stdout: string; exitCode: number },
+  ): Promise<{ base_sha: string; start_sha: string }> {
+    let position = { base_sha: "", start_sha: "" };
+    const runtime: PRRuntime = {
+      async runCommand() {
+        return { stdout: metadataResponse.stdout, stderr: "", exitCode: metadataResponse.exitCode };
+      },
+      async runCommandWithInput(command, args, input) {
+        const payload = Schema.decodeUnknownSync(
+          Schema.fromJsonString(Schema.Struct({
+            position: Schema.Struct({ base_sha: Schema.String, start_sha: Schema.String }),
+          })),
+        )(input);
+        position = payload.position;
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+    };
+    await submitGlMRReview(runtime, reviewRef, "head-fallback", "comment", "", fileComments);
+    return position;
+  }
+
+  test("uses valid diff refs and independent fallbacks for malformed siblings", async () => {
+    const cases = [
+      {
+        response: JSON.stringify({ diff_refs: { base_sha: "base", start_sha: "start", head_sha: "ignored" } }),
+        expected: { base_sha: "base", start_sha: "start" },
+      },
+      {
+        response: JSON.stringify({ diff_refs: { base_sha: 42, start_sha: "start" } }),
+        expected: { base_sha: "head-fallback", start_sha: "start" },
+      },
+      {
+        response: JSON.stringify({ diff_refs: { base_sha: "base", start_sha: 42 } }),
+        expected: { base_sha: "base", start_sha: "head-fallback" },
+      },
+      { response: JSON.stringify({ diff_refs: null }), expected: { base_sha: "head-fallback", start_sha: "head-fallback" } },
+      { response: "not json", expected: { base_sha: "head-fallback", start_sha: "head-fallback" } },
+      { response: "", expected: { base_sha: "head-fallback", start_sha: "head-fallback" } },
+    ];
+
+    for (const { response, expected } of cases) {
+      await expect(submitAndReadPosition({ stdout: response, exitCode: 0 })).resolves.toMatchObject(expected);
+    }
+    await expect(submitAndReadPosition({ stdout: "ignored", exitCode: 1 })).resolves.toMatchObject({
+      base_sha: "head-fallback",
+      start_sha: "head-fallback",
+    });
+  });
+
+  test("does not fetch diff refs when there are no inline comments", async () => {
+    let metadataCalls = 0;
+    const runtime: PRRuntime = {
+      async runCommand() {
+        metadataCalls++;
+        return { stdout: "not json", stderr: "", exitCode: 0 };
+      },
+      async runCommandWithInput() {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+    };
+
+    await submitGlMRReview(runtime, reviewRef, "head", "comment", "Body only", []);
+    expect(metadataCalls).toBe(0);
   });
 });
 

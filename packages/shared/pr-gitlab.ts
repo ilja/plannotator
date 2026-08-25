@@ -38,6 +38,13 @@ const ProjectResponseSchema = Schema.Struct({
 const decodeProjectResponseJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(ProjectResponseSchema),
 );
+const GlReviewDiffRefsResponseSchema = Schema.Struct({
+  diff_refs: Schema.optionalKey(Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown))),
+});
+const decodeGlReviewDiffRefsResponseJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(GlReviewDiffRefsResponseSchema),
+);
+const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 const GitLabLabelRecordSchema = Schema.Struct({
   name: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -604,14 +611,13 @@ export async function submitGlMRReview(
     let baseSha = headSha; // fallback
     let startSha = headSha;
     if (mrResult.exitCode === 0 && mrResult.stdout.trim()) {
-      try {
-        const mrData: { diff_refs?: { base_sha: string; start_sha: string; head_sha: string } } = JSON.parse(mrResult.stdout);
-        if (mrData.diff_refs) {
-          baseSha = mrData.diff_refs.base_sha;
-          startSha = mrData.diff_refs.start_sha;
-        }
-      } catch {
-        // Use fallbacks
+      const mrData = Option.getOrUndefined(
+        decodeGlReviewDiffRefsResponseJson(mrResult.stdout),
+      );
+      const diffRefs = mrData?.diff_refs;
+      if (diffRefs) {
+        baseSha = Option.getOrUndefined(decodeString(diffRefs.base_sha)) ?? headSha;
+        startSha = Option.getOrUndefined(decodeString(diffRefs.start_sha)) ?? headSha;
       }
     }
 
