@@ -31,6 +31,9 @@ const RawGlViewSchema = Schema.Struct({
 const decodeRawGlViewJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(RawGlViewSchema),
 );
+const decodeRawGlRecordJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGlRecordSchema),
+);
 const decodeTargetProjectId = Schema.decodeUnknownOption(Schema.Number);
 const ProjectResponseSchema = Schema.Struct({
   default_branch: Schema.optionalKey(Schema.String),
@@ -363,7 +366,7 @@ export async function fetchGlMRContext(
   // --- MR details ---
   let mr: RawGlRecord = {};
   if (mrResult.exitCode === 0) {
-    try { mr = JSON.parse(mrResult.stdout); } catch { /* non-JSON response */ }
+    mr = Option.getOrUndefined(decodeRawGlRecordJson(mrResult.stdout)) ?? {};
   }
 
   // Normalize state: GitLab uses "opened"/"closed"/"merged" → uppercase

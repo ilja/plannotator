@@ -336,6 +336,31 @@ describe("submitGlMRReview diff refs", () => {
 });
 
 describe("fetchGlMRContext labels and notes", () => {
+  test("normalizes malformed MR roots without losing valid sibling endpoint data", async () => {
+    for (const mrRoot of ["not json", "null", "[]", "42"]) {
+      const runtime: PRRuntime = {
+        async runCommand(command, args) {
+          const endpoint = args[1] ?? "";
+          if (endpoint.endsWith("/merge_requests/1")) return { stdout: mrRoot, stderr: "", exitCode: 0 };
+          if (endpoint.endsWith("/notes?sort=asc&per_page=100")) {
+            return {
+              stdout: JSON.stringify([{ id: 1, body: "note", author: { username: "dev" } }]),
+              stderr: "",
+              exitCode: 0,
+            };
+          }
+          return { stdout: "[]", stderr: "", exitCode: 0 };
+        },
+      };
+
+      await expect(fetchGlMRContext(runtime, REF)).resolves.toMatchObject({
+        state: "",
+        labels: [],
+        comments: [{ id: "1", body: "note", author: "dev" }],
+      });
+    }
+  });
+
   test("retains valid siblings while filtering malformed labels and notes", async () => {
     const calls: string[] = [];
     const runtime: PRRuntime = {
