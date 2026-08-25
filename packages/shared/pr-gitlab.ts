@@ -16,6 +16,29 @@ import { getPlannotatorDataDir } from "./data-dir";
 const RawGlRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
 type RawGlRecord = Schema.Schema.Type<typeof RawGlRecordSchema>;
 
+const RawGlViewSchema = Schema.Struct({
+  title: Schema.String,
+  author: Schema.Struct({ username: Schema.String }),
+  source_branch: Schema.String,
+  target_branch: Schema.String,
+  target_project_id: Schema.optionalKey(Schema.Unknown),
+  diff_refs: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    base_sha: Schema.String,
+    head_sha: Schema.String,
+  }))),
+  web_url: Schema.String,
+});
+const decodeRawGlViewJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGlViewSchema),
+);
+const decodeTargetProjectId = Schema.decodeUnknownOption(Schema.Number);
+const ProjectResponseSchema = Schema.Struct({
+  default_branch: Schema.optionalKey(Schema.String),
+});
+const decodeProjectResponseJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(ProjectResponseSchema),
+);
+
 interface GlMRRef {
   platform: "gitlab";
   host: string;
@@ -182,6 +205,11 @@ export async function fetchGlMR(
     );
   }
 
+  const raw = Option.getOrUndefined(decodeRawGlViewJson(viewResult.stdout));
+  if (!raw) {
+    throw new Error("Failed to fetch MR metadata: Invalid response");
+  }
+
   // Fall back to the paginated JSON diffs API when raw_diffs is unavailable
   // (older self-hosted GitLab that doesn't expose the raw_diffs endpoint) or
   // returns empty (very large MRs that exceed its safety limit). Reconstruct a
@@ -223,31 +251,21 @@ export async function fetchGlMR(
     }
   }
 
-  interface RawGlView {
-    readonly title: string;
-    readonly author: { readonly username: string };
-    readonly source_branch: string;
-    readonly target_branch: string;
-    readonly target_project_id?: number;
-    readonly diff_refs: { readonly base_sha: string; readonly head_sha: string; readonly start_sha: string } | null;
-    readonly web_url: string;
-  }
-
-  const raw: RawGlView = JSON.parse(viewResult.stdout);
-
   if (!raw.diff_refs) {
     throw new Error("MR has no diff refs — it may have been merged or the source branch deleted.");
   }
 
   let defaultBranch: string | undefined;
-  const projectEndpoint = raw.target_project_id !== undefined
-    ? `projects/${raw.target_project_id}`
+  const targetProjectId = Option.getOrUndefined(decodeTargetProjectId(raw.target_project_id));
+  const projectEndpoint = targetProjectId !== undefined
+    ? `projects/${targetProjectId}`
     : `projects/${encoded}`;
   try {
     const projectResult = await runtime.runCommand("glab", apiArgs(ref.host, projectEndpoint));
     if (projectResult.exitCode === 0 && projectResult.stdout.trim()) {
-      const project: { default_branch?: string } = JSON.parse(projectResult.stdout);
-      defaultBranch = project.default_branch;
+      defaultBranch = Option.getOrUndefined(
+        decodeProjectResponseJson(projectResult.stdout),
+      )?.default_branch;
     }
   } catch { /* default branch is best-effort metadata */ }
 

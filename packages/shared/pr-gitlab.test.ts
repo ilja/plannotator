@@ -146,6 +146,90 @@ function gitlabRuntime(opts: {
   return { runtime, calls };
 }
 
+function gitlabMetadataRuntime(
+  metadataJson: string,
+  projectResponse: { stdout: string; exitCode: number } = {
+    stdout: JSON.stringify({ default_branch: "main" }),
+    exitCode: 0,
+  },
+): GitlabRuntimeResult {
+  const calls: string[] = [];
+  const runtime: PRRuntime = {
+    async runCommand(command, args) {
+      calls.push([command, ...args].join(" "));
+      const endpoint = args[1] ?? "";
+      if (endpoint.endsWith("/raw_diffs")) {
+        return { stdout: "diff --git a/a.ts b/a.ts\n", stderr: "", exitCode: 0 };
+      }
+      if (/merge_requests\/\d+$/.test(endpoint)) {
+        return { stdout: metadataJson, stderr: "", exitCode: 0 };
+      }
+      if (endpoint.startsWith("projects/")) {
+        return { stdout: projectResponse.stdout, stderr: "", exitCode: projectResponse.exitCode };
+      }
+      return { stdout: "", stderr: `unexpected endpoint: ${endpoint}`, exitCode: 1 };
+    },
+  };
+  return { runtime, calls };
+}
+
+describe("fetchGlMR metadata boundary", () => {
+  const validMetadata = {
+    title: "",
+    author: { username: "u" },
+    source_branch: "feature",
+    target_branch: "main",
+    diff_refs: { base_sha: "a", head_sha: "b" },
+    web_url: "",
+    unknown: { preserved: true },
+  };
+
+  test("rejects invalid JSON and malformed required fields", async () => {
+    const invalidJson = gitlabMetadataRuntime("not json");
+    await expect(fetchGlMR(invalidJson.runtime, REF)).rejects.toThrow(
+      /Failed to fetch MR metadata: Invalid response/,
+    );
+    expect(invalidJson.calls.some((call) => call === "glab api projects/g%2Fp")).toBe(false);
+
+    const malformed = gitlabMetadataRuntime(
+      JSON.stringify({ ...validMetadata, author: { username: 42 } }),
+    );
+    await expect(fetchGlMR(malformed.runtime, REF)).rejects.toThrow(
+      /Failed to fetch MR metadata: Invalid response/,
+    );
+  });
+
+  test("preserves the explicit missing diff refs error", async () => {
+    for (const diff_refs of [null, undefined]) {
+      const metadata = { ...validMetadata, diff_refs };
+      await expect(fetchGlMR(gitlabMetadataRuntime(JSON.stringify(metadata)).runtime, REF)).rejects.toThrow(
+        /MR has no diff refs/,
+      );
+    }
+  });
+
+  test("routes a valid target project id and preserves compatible metadata", async () => {
+    const { runtime, calls } = gitlabMetadataRuntime(
+      JSON.stringify({ ...validMetadata, target_project_id: 123 }),
+    );
+    const result = await fetchGlMR(runtime, REF);
+
+    expect(calls).toContain("glab api projects/123");
+    expect(result.metadata).toMatchObject({ title: "", author: "u", url: "", defaultBranch: "main" });
+  });
+
+  test("falls back to the encoded project path for malformed target ids and project metadata", async () => {
+    const { runtime, calls } = gitlabMetadataRuntime(
+      JSON.stringify({ ...validMetadata, target_project_id: "123" }),
+      { stdout: "not json", exitCode: 0 },
+    );
+    const result = await fetchGlMR(runtime, REF);
+
+    expect(calls).toContain("glab api projects/g%2Fp");
+    expect(result.metadata.defaultBranch).toBeUndefined();
+  });
+});
+
 describe("fetchGlMR raw_diffs fallback", () => {
   test("falls back to the JSON diffs API when raw_diffs is unavailable (older GitLab)", async () => {
     const { runtime, calls } = gitlabRuntime({
