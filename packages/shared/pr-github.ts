@@ -25,6 +25,9 @@ const decodeRawGhPRViewJson = Schema.decodeUnknownOption(
 );
 const RawGhPRContextSchema = Schema.Record(Schema.String, Schema.Unknown);
 type RawGhPRContext = Schema.Schema.Type<typeof RawGhPRContextSchema>;
+const decodeRawGhPRContextJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGhPRContextSchema),
+);
 
 const GhPRListItemSchema = Schema.Struct({
   number: Schema.Number,
@@ -508,7 +511,10 @@ export async function fetchGhPRContext(
     );
   }
 
-  const raw: RawGhPRContext = JSON.parse(result.stdout);
+  const raw = Option.getOrUndefined(decodeRawGhPRContextJson(result.stdout));
+  if (!raw) {
+    throw new Error("Failed to fetch PR context: Invalid response");
+  }
   const context = parseGhPRContext(raw);
 
   // Fetch inline review threads via GraphQL (parallel-safe, non-blocking failure)

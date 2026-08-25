@@ -455,6 +455,63 @@ describe("fetchGhPRViewedFiles", () => {
   });
 });
 
+describe("fetchGhPRContext envelope", () => {
+  const envelopeRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+
+  test("rejects invalid roots before fetching review threads", async () => {
+    for (const stdout of ["not json", "null", "[]"]) {
+      let graphqlCalls = 0;
+      const runtime: PRRuntime = {
+        async runCommand(command, args) {
+          if (args[0] === "pr" && args[1] === "view") {
+            return { stdout, stderr: "", exitCode: 0 };
+          }
+          graphqlCalls++;
+          return { stdout: "{}", stderr: "", exitCode: 0 };
+        },
+      };
+
+      await expect(fetchGhPRContext(runtime, envelopeRef)).rejects.toThrow(
+        "Failed to fetch PR context: Invalid response",
+      );
+      expect(graphqlCalls).toBe(0);
+    }
+  });
+
+  test("preserves field-level defaults for malformed members in a valid record", async () => {
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        if (args[0] === "pr" && args[1] === "view") {
+          return {
+            stdout: JSON.stringify({
+              body: "valid body",
+              state: 42,
+              labels: "not an array",
+              comments: "not an array",
+              reviews: [],
+              statusCheckRollup: [],
+              closingIssuesReferences: [],
+              unknownField: { preserved: true },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: JSON.stringify({ data: { repository: null } }), stderr: "", exitCode: 0 };
+      },
+    };
+
+    await expect(fetchGhPRContext(runtime, envelopeRef)).resolves.toMatchObject({
+      body: "valid body",
+      state: "",
+      labels: [],
+      comments: [],
+      reviews: [],
+      reviewThreads: [],
+    });
+  });
+});
+
 describe("fetchGhPRContext review threads", () => {
   const contextRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
   const contextBody = JSON.stringify({
