@@ -41,6 +41,7 @@ import { AI_QUERY_ENDPOINT, createAIRuntime } from "./ai-runtime";
 import type { AIEndpoints } from "@plannotator/ai";
 import { createHtmlAssetRegistry } from "./html-assets";
 import { createBunAgentTerminalBridge } from "./agent-terminal";
+import { FeedbackRequestSchema } from "./review-request-schemas";
 import { isAgentTerminalWsRoute, supportsAnnotateAgentTerminalMode } from "@plannotator/shared/agent-terminal";
 
 // Re-export utilities
@@ -554,18 +555,18 @@ export async function startAnnotateServer(
           // API: Submit annotation feedback
           if (url.pathname === "/api/feedback" && req.method === "POST") {
             try {
-              const body: {
-                feedback: string;
-                annotations: unknown[];
-                selectedMessageId?: string;
-                feedbackScope?: "message" | "messages";
-                draftGeneration?: number;
-              } = await req.json();
+              const rawBody = await req.json();
+              const body = Option.getOrUndefined(
+                Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
+              );
+              if (!body) {
+                return Response.json({ error: "Invalid request" }, { status: 400 });
+              }
 
               deleteDraft(draftKey, readDraftGenerationFromBody(body));
               resolveDecision({
                 feedback: body.feedback || "",
-                annotations: body.annotations || [],
+                annotations: body.annotations ? [...body.annotations] : [],
                 selectedMessageId: body.selectedMessageId,
                 feedbackScope: body.feedbackScope,
               });

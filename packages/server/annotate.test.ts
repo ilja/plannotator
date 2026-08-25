@@ -140,6 +140,49 @@ describe("annotate server: /api/save-notes wiring", () => {
 
     expect(JSON.parse(result)).toEqual({ status: 200, body: { ok: true } });
   });
+
+  test("rejects malformed feedback without consuming the decision session", async () => {
+    const server = await startAnnotateServer({
+      markdown: "# Test",
+      filePath: join(tmpdir(), "test.md"),
+      htmlContent: MINIMAL_HTML,
+    });
+    const decision = server.waitForDecision();
+
+    try {
+      const malformed = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback: 123, annotations: {} }),
+      });
+
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid request" });
+
+      const validAnnotations = [null, { type: "unknown", value: "preserved" }];
+      const valid = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedback: "valid feedback",
+          annotations: validAnnotations,
+          selectedMessageId: "message-1",
+          feedbackScope: "messages",
+        }),
+      });
+
+      expect(valid.status).toBe(200);
+      expect(await valid.json()).toEqual({ ok: true });
+      await expect(decision).resolves.toEqual({
+        feedback: "valid feedback",
+        annotations: validAnnotations,
+        selectedMessageId: "message-1",
+        feedbackScope: "messages",
+      });
+    } finally {
+      server.stop();
+    }
+  });
 });
 
 describe("annotate server: /api/share-html symlink containment", () => {
