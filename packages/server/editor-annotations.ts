@@ -6,6 +6,7 @@
  * server stops. No disk persistence.
  */
 
+import { Option, Schema } from "effect";
 import type { EditorAnnotation } from "@plannotator/shared/types";
 
 export type { EditorAnnotation };
@@ -13,6 +14,16 @@ export type { EditorAnnotation };
 export interface EditorAnnotationHandler {
   handle: (req: Request, url: URL) => Promise<Response | null>;
 }
+
+const EditorAnnotationRequestSchema = Schema.Struct({
+  filePath: Schema.String,
+  selectedText: Schema.String,
+  lineStart: Schema.Number,
+  lineEnd: Schema.Number,
+});
+const decodeEditorAnnotationRequest = Schema.decodeUnknownOption(EditorAnnotationRequestSchema);
+const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown));
+const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 export function createEditorAnnotationHandler(): EditorAnnotationHandler {
   const annotations: EditorAnnotation[] = [];
@@ -27,25 +38,21 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
       // POST /api/editor-annotation — add one
       if (url.pathname === "/api/editor-annotation" && req.method === "POST") {
         try {
-          const body: {
-            filePath?: string;
-            selectedText?: string;
-            lineStart?: number;
-            lineEnd?: number;
-            comment?: string;
-          } = await req.json();
-
-          if (!body.filePath || !body.selectedText || !body.lineStart || !body.lineEnd) {
+          const body = await req.json();
+          const decoded = Option.getOrUndefined(decodeEditorAnnotationRequest(body));
+          if (!decoded || !decoded.filePath || !decoded.selectedText || !decoded.lineStart || !decoded.lineEnd) {
             return Response.json({ error: "Missing required fields" }, { status: 400 });
           }
 
+          const record = Option.getOrUndefined(decodeRecord(body));
+          const comment = record ? Option.getOrUndefined(decodeString(record.comment)) : undefined;
           const annotation: EditorAnnotation = {
             id: crypto.randomUUID(),
-            filePath: body.filePath,
-            selectedText: body.selectedText,
-            lineStart: body.lineStart,
-            lineEnd: body.lineEnd,
-            comment: body.comment,
+            filePath: decoded.filePath,
+            selectedText: decoded.selectedText,
+            lineStart: decoded.lineStart,
+            lineEnd: decoded.lineEnd,
+            ...(comment !== undefined && { comment }),
             createdAt: Date.now(),
           };
 
