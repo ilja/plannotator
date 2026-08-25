@@ -58,6 +58,29 @@ const GitLabNoteSchema = Schema.Struct({
 });
 const decodeGitLabNote = Schema.decodeUnknownOption(GitLabNoteSchema);
 const decodeJsonArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
+const GitLabApprovalEntrySchema = Schema.Struct({
+  user: Schema.optionalKey(Schema.Struct({
+    id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, Schema.Number]))),
+    username: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  })),
+});
+const decodeGitLabApprovalEntry = Schema.decodeUnknownOption(GitLabApprovalEntrySchema);
+const GitLabPipelineSchema = Schema.Struct({
+  id: Schema.Union([Schema.String, Schema.Number]),
+  ref: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabPipeline = Schema.decodeUnknownOption(GitLabPipelineSchema);
+const GitLabJobSchema = Schema.Struct({
+  name: Schema.String,
+  status: Schema.String,
+  web_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabJob = Schema.decodeUnknownOption(GitLabJobSchema);
+const GitLabIssueSchema = Schema.Struct({
+  iid: Schema.Number,
+  web_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabIssue = Schema.decodeUnknownOption(GitLabIssueSchema);
 
 interface GlMRRef {
   platform: "gitlab";
@@ -408,22 +431,28 @@ export async function fetchGlMRContext(
   const reviews: PRContext["reviews"] = [];
   if (approvalsResult.exitCode === 0) {
     try {
-      const approvals: RawGlRecord = JSON.parse(approvalsResult.stdout);
-      const approvedBy = arr(approvals.approved_by);
-      const approved = approvals.approved === true || approvedBy.length > 0;
-      reviewDecision = approved ? "APPROVED" : "";
+      const approvals = Option.getOrUndefined(
+        Schema.decodeUnknownOption(RawGlRecordSchema)(JSON.parse(approvalsResult.stdout)),
+      );
+      if (approvals) {
+        const approvedBy = Option.getOrUndefined(
+          Schema.decodeUnknownOption(Schema.Array(Schema.Unknown))(approvals.approved_by),
+        ) ?? [];
+        const approved = approvals.approved === true || approvedBy.length > 0;
+        reviewDecision = approved ? "APPROVED" : "";
 
-      for (const a of approvedBy) {
-        // SAFETY: a is an element of approvedBy array from GitLab approvals API, which contains user objects
-        const user = (a as any)?.user;
-        if (!user) continue;
-        reviews.push({
-          id: String(user.id ?? ""),
-          author: str(user.username),
-          state: "APPROVED",
-          body: "",
-          submittedAt: "",
-        });
+        for (const rawApproval of approvedBy) {
+          const approval = Option.getOrUndefined(decodeGitLabApprovalEntry(rawApproval));
+          const user = approval?.user;
+          if (!user) continue;
+          reviews.push({
+            id: String(user.id ?? ""),
+            author: str(user.username),
+            state: "APPROVED",
+            body: "",
+            submittedAt: "",
+          });
+        }
       }
     } catch { /* non-JSON response */ }
   }
@@ -432,18 +461,22 @@ export async function fetchGlMRContext(
   const checks: PRContext["checks"] = [];
   if (pipelinesResult.exitCode === 0) {
     try {
-      const pipelines: any[] = JSON.parse(pipelinesResult.stdout);
-      if (pipelines.length > 0) {
-        const latest = pipelines[0];
+      const pipelines = Option.getOrUndefined(decodeJsonArray(JSON.parse(pipelinesResult.stdout))) ?? [];
+      const latest = pipelines.length > 0
+        ? Option.getOrUndefined(decodeGitLabPipeline(pipelines[0]))
+        : undefined;
+      if (latest) {
         const jobsResult = await runtime.runCommand(
           "glab",
           apiArgs(ref.host, `projects/${encoded}/pipelines/${latest.id}/jobs?per_page=100`),
         );
         if (jobsResult.exitCode === 0) {
           try {
-            const jobs: any[] = JSON.parse(jobsResult.stdout);
-            for (const job of jobs) {
-              const jobStatus = str(job.status);
+            const jobs = Option.getOrUndefined(decodeJsonArray(JSON.parse(jobsResult.stdout))) ?? [];
+            for (const rawJob of jobs) {
+              const job = Option.getOrUndefined(decodeGitLabJob(rawJob));
+              if (!job) continue;
+              const jobStatus = job.status;
               const isComplete = ["success", "failed", "canceled", "skipped"].includes(jobStatus);
               // Map GitLab job statuses to GitHub-compatible conclusion enums
               interface ConclusionMap {
@@ -456,11 +489,11 @@ export async function fetchGlMRContext(
                 skipped: "SKIPPED",
               };
               checks.push({
-                name: str(job.name),
+                name: job.name,
                 status: isComplete ? "COMPLETED" : "IN_PROGRESS",
                 conclusion: isComplete ? (conclusionMap[jobStatus] ?? jobStatus.toUpperCase()) : null,
-                workflowName: str(latest.ref),
-                detailsUrl: str(job.web_url),
+                workflowName: latest.ref ?? "",
+                detailsUrl: job.web_url ?? "",
               });
             }
           } catch { /* non-JSON jobs response */ }
@@ -473,11 +506,13 @@ export async function fetchGlMRContext(
   const linkedIssues: PRContext["linkedIssues"] = [];
   if (issuesResult.exitCode === 0) {
     try {
-      const issues: any[] = JSON.parse(issuesResult.stdout);
-      for (const i of issues) {
+      const issues = Option.getOrUndefined(decodeJsonArray(JSON.parse(issuesResult.stdout))) ?? [];
+      for (const rawIssue of issues) {
+        const issue = Option.getOrUndefined(decodeGitLabIssue(rawIssue));
+        if (!issue) continue;
         linkedIssues.push({
-          number: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(i.iid)) ?? 0,
-          url: str(i.web_url),
+          number: issue.iid,
+          url: issue.web_url ?? "",
           repo: ref.projectPath,
         });
       }

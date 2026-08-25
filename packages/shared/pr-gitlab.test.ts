@@ -309,6 +309,127 @@ describe("fetchGlMRContext labels and notes", () => {
   });
 });
 
+describe("fetchGlMRContext approvals, checks, and linked issues", () => {
+  const contextRef = { platform: "gitlab" as const, host: "gitlab.com", projectPath: "g/p", iid: 1 };
+
+  test("retains valid approvers, jobs, and linked issues around malformed siblings", async () => {
+    const calls: string[] = [];
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        calls.push([command, ...args].join(" "));
+        const endpoint = args[1] ?? "";
+        if (endpoint.endsWith("/merge_requests/1")) return { stdout: JSON.stringify({ state: "opened" }), stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/approvals")) {
+          return {
+            stdout: JSON.stringify({
+              approved: false,
+              approved_by: [
+                { user: { id: 1, username: "first" } },
+                { user: 42 },
+                { user: { id: "2", username: "second" } },
+              ],
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (endpoint.endsWith("/pipelines?per_page=5")) {
+          return { stdout: JSON.stringify([{ id: 7, ref: "main" }]), stderr: "", exitCode: 0 };
+        }
+        if (endpoint.endsWith("/pipelines/7/jobs?per_page=100")) {
+          return {
+            stdout: JSON.stringify([
+              { name: "build", status: "success", web_url: "https://jobs/1" },
+              { name: "bad", status: 42 },
+              { name: "test", status: "running", web_url: "https://jobs/2" },
+            ]),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (endpoint.endsWith("/closes_issues")) {
+          return {
+            stdout: JSON.stringify([
+              { iid: 10, web_url: "https://issues/10" },
+              { iid: "bad", web_url: "https://issues/bad" },
+              { iid: 11, web_url: "https://issues/11" },
+            ]),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (endpoint.endsWith("/notes?sort=asc&per_page=100")) return { stdout: "[]", stderr: "", exitCode: 0 };
+        return { stdout: "", stderr: "unexpected", exitCode: 1 };
+      },
+    };
+
+    const context = await fetchGlMRContext(runtime, contextRef);
+
+    expect(context.reviewDecision).toBe("APPROVED");
+    expect(context.reviews).toEqual([
+      { id: "1", author: "first", state: "APPROVED", body: "", submittedAt: "" },
+      { id: "2", author: "second", state: "APPROVED", body: "", submittedAt: "" },
+    ]);
+    expect(context.checks).toEqual([
+      {
+        name: "build",
+        status: "COMPLETED",
+        conclusion: "SUCCESS",
+        workflowName: "main",
+        detailsUrl: "https://jobs/1",
+      },
+      {
+        name: "test",
+        status: "IN_PROGRESS",
+        conclusion: null,
+        workflowName: "main",
+        detailsUrl: "https://jobs/2",
+      },
+    ]);
+    expect(context.linkedIssues).toEqual([
+      { number: 10, url: "https://issues/10", repo: "g/p" },
+      { number: 11, url: "https://issues/11", repo: "g/p" },
+    ]);
+  });
+
+  test("does not fetch jobs when the first pipeline is malformed", async () => {
+    const calls: string[] = [];
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        calls.push([command, ...args].join(" "));
+        const endpoint = args[1] ?? "";
+        if (endpoint.endsWith("/merge_requests/1")) return { stdout: "{}", stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/pipelines?per_page=5")) return { stdout: JSON.stringify([{ id: {} }, { id: 9 }]), stderr: "", exitCode: 0 };
+        return { stdout: "[]", stderr: "", exitCode: 0 };
+      },
+    };
+
+    const context = await fetchGlMRContext(runtime, contextRef);
+    expect(context.checks).toEqual([]);
+    expect(calls.some((call) => call.includes("/jobs?per_page=100"))).toBe(false);
+  });
+
+  test("keeps endpoint fallback defaults when response JSON is invalid", async () => {
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        const endpoint = args[1] ?? "";
+        if (endpoint.endsWith("/merge_requests/1")) return { stdout: JSON.stringify({ state: "opened" }), stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/approvals") || endpoint.endsWith("/pipelines?per_page=5") || endpoint.endsWith("/closes_issues")) {
+          return { stdout: "not json", stderr: "", exitCode: 0 };
+        }
+        if (endpoint.endsWith("/notes?sort=asc&per_page=100")) return { stdout: "[]", stderr: "", exitCode: 0 };
+        return { stdout: "", stderr: "unexpected", exitCode: 1 };
+      },
+    };
+
+    const context = await fetchGlMRContext(runtime, contextRef);
+    expect(context.reviewDecision).toBe("");
+    expect(context.reviews).toEqual([]);
+    expect(context.checks).toEqual([]);
+    expect(context.linkedIssues).toEqual([]);
+  });
+});
+
 describe("fetchGlMR raw_diffs fallback", () => {
   test("falls back to the JSON diffs API when raw_diffs is unavailable (older GitLab)", async () => {
     const { runtime, calls } = gitlabRuntime({
