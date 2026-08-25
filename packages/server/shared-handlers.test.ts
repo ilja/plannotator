@@ -13,6 +13,7 @@ import {
   handleDraftLoad,
   handleDraftSave,
   handleSaveNotes,
+  handleUpload,
   handleServerReady,
   isCodexDesktopHost,
   writeServerReadyMetadata,
@@ -63,6 +64,25 @@ function captureStderrWrites(): StderrCapture {
     },
   };
 }
+
+describe("handleUpload", () => {
+  test("treats a missing file field as a bad request", async () => {
+    const response = await handleUpload(new Request("http://localhost/api/upload", { method: "POST", body: new FormData() }));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe("No file provided");
+  });
+
+  test("treats a string file field as a missing file", async () => {
+    const formData = new FormData();
+    formData.set("file", "not a file");
+
+    const response = await handleUpload(new Request("http://localhost/api/upload", { method: "POST", body: formData }));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe("No file provided");
+  });
+});
 
 describe("handleAgents", () => {
   test("retains valid primary agents while filtering malformed entries", async () => {

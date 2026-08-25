@@ -76,13 +76,16 @@ export async function handleImage(req: Request): Promise<Response> {
   }
 }
 
+function isUploadFile(file: FormDataEntryValue | null): file is File {
+  return file !== null && "arrayBuffer" in Object(file) && "name" in Object(file);
+}
+
 /** Upload image to temp dir, return path. Used by all 3 servers. */
 export async function handleUpload(req: Request): Promise<Response> {
   try {
     const formData = await req.formData();
-    // SAFETY: form field "file" is written by our own upload form as a File; non-File values are treated as missing.
-    const file = formData.get("file") as File;
-    if (!file) {
+    const file = formData.get("file");
+    if (!isUploadFile(file)) {
       return new Response("No file provided", { status: 400 });
     }
 
