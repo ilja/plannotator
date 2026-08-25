@@ -39,6 +39,7 @@ import {
 } from '../utils/defaultNotesApp';
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { type QuickLabel, getQuickLabels, saveQuickLabels, resetQuickLabels, DEFAULT_QUICK_LABELS, getLabelColors, LABEL_COLOR_MAP } from '../utils/quickLabels';
+import { decodeConventionalLabelEntryFields, decodeConventionalLabelJsonArray, decodeConventionalLabelString } from '../utils/conventionalLabelDecoding';
 import { ThemeTab } from './ThemeTab';
 import { isMac, modKey, altKey } from '../utils/platform';
 import { getAIProviderSettings, isPiProvider, resolveAIProviderSelection } from '../utils/aiProvider';
@@ -553,25 +554,21 @@ const DEFAULT_CC_LABELS: CCLabelConfig[] = [
   { label: 'chore',      display: 'chore',      blocking: true },
 ];
 
-function parseCCLabels(json: string | null): CCLabelConfig[] {
-  if (!json) return DEFAULT_CC_LABELS;
-  try {
-    const parsed = JSON.parse(json);
-    if (!Array.isArray(parsed)) return DEFAULT_CC_LABELS;
-    // SAFETY: l is JSON-parsed label config — any is intentional for untyped payload
-    return parsed.map((l: any) => ({
-      label: Object.prototype.toString.call(l.label) === "[object String]" && l.label.trim() ? l.label : 'custom',
-      display:
-        Object.prototype.toString.call(l.display) === "[object String]" && l.display.trim()
-          ? l.display
-          : Object.prototype.toString.call(l.label) === "[object String]" && l.label.trim()
-            ? l.label
-            : 'custom',
-      blocking: l.blocking === true || l.blocking === 'true',
-    }));
-  } catch {
-    return DEFAULT_CC_LABELS;
-  }
+export function parseCCLabels(json: string | null): CCLabelConfig[] {
+  const parsed = decodeConventionalLabelJsonArray(json);
+  if (!parsed || parsed.some((value) => value === null)) return DEFAULT_CC_LABELS;
+
+  return parsed.map((value) => {
+    const fields = decodeConventionalLabelEntryFields(value);
+    const labelValue = decodeConventionalLabelString(fields?.label);
+    const displayValue = decodeConventionalLabelString(fields?.display);
+    const label = labelValue?.trim() ? labelValue : 'custom';
+    return {
+      label,
+      display: displayValue?.trim() ? displayValue : label,
+      blocking: fields?.blocking === true || fields?.blocking === 'true',
+    };
+  });
 }
 
 const CommentsTab: React.FC = () => {

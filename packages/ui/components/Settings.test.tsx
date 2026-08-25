@@ -8,7 +8,7 @@ import {
   type ObsidianSettings,
 } from '../utils/obsidian';
 import { storage } from '../utils/storage';
-import { Settings } from './Settings';
+import { parseCCLabels, Settings } from './Settings';
 
 const hasDom = globalThis.document !== undefined;
 const realFetch = globalThis.fetch;
@@ -108,6 +108,31 @@ afterEach(async () => {
     document.body.innerHTML = '';
     for (const key of OBSIDIAN_STORAGE_KEYS) storage.removeItem(key);
   }
+});
+
+describe('Settings conventional label decoding', () => {
+  test('preserves defaults and explicit empty arrays', () => {
+    expect(parseCCLabels(null)).toHaveLength(9);
+    expect(parseCCLabels('not json')).toHaveLength(9);
+    expect(parseCCLabels('{"labels":[]}')).toHaveLength(9);
+    expect(parseCCLabels('[]')).toEqual([]);
+  });
+
+  test('falls back to defaults for a null array sibling', () => {
+    expect(parseCCLabels(JSON.stringify([null]))).toHaveLength(9);
+  });
+
+  test('normalizes malformed entries while preserving legacy blocking values', () => {
+    expect(parseCCLabels(JSON.stringify([
+      { label: 'issue', display: 'issue', blocking: 'true' },
+      { label: '', display: '', blocking: false },
+      { label: 42, display: null, blocking: 1 },
+    ]))).toEqual([
+      { label: 'issue', display: 'issue', blocking: true },
+      { label: 'custom', display: 'custom', blocking: false },
+      { label: 'custom', display: 'custom', blocking: false },
+    ]);
+  });
 });
 
 describe('Settings Obsidian vault discovery', () => {

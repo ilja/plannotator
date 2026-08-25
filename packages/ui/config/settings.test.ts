@@ -44,6 +44,20 @@ describe('UI server config decoding', () => {
     expect(SETTINGS.conventionalLabels.fromServer(config)).toBeUndefined();
     expect(SETTINGS.displayName.fromServer(config)).toBe('Grace');
   });
+
+  test('preserves valid empty and null conventional-label settings', () => {
+    expect(SETTINGS.conventionalLabels.fromServer(decodeUiServerConfig({ conventionalLabels: [] }))).toBe('[]');
+    expect(SETTINGS.conventionalLabels.fromServer(decodeUiServerConfig({ conventionalLabels: null }))).toBeNull();
+    expect(SETTINGS.conventionalLabels.toServer('[]')).toEqual({ conventionalLabels: [] });
+    expect(SETTINGS.conventionalLabels.toServer('null')).toEqual({ conventionalLabels: null });
+    expect(SETTINGS.conventionalLabels.toServer(null)).toEqual({ conventionalLabels: null });
+  });
+
+  test('rejects legacy string booleans atomically during server synchronization', () => {
+    expect(SETTINGS.conventionalLabels.toServer(JSON.stringify([
+      { label: 'issue', display: 'Issue', blocking: 'true' },
+    ]))).toEqual({});
+  });
 });
 
 describe('ConfigStore', () => {

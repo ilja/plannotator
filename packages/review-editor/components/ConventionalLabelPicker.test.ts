@@ -62,6 +62,18 @@ describe('getEnabledLabels', () => {
     expect(labels[0]?.hint).toBe('typo');
   });
 
+  it('retains empty strings and unknown labels in valid entries', () => {
+    const labels = getEnabledLabels(JSON.stringify([
+      { label: '', display: '', blocking: false },
+      { label: 'custom', display: 'Custom', blocking: 'true' },
+    ]));
+
+    expect(labels.map(({ label, display, showBlockingToggle }) => ({ label, display, showBlockingToggle }))).toEqual([
+      { label: '', display: '', showBlockingToggle: false },
+      { label: 'custom', display: 'Custom', showBlockingToggle: true },
+    ]);
+  });
+
   it('skips malformed entries but keeps well-formed siblings', () => {
     const labels = getEnabledLabels(
       JSON.stringify([

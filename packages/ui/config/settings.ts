@@ -13,6 +13,10 @@ import type { ConfigPatch, DiffLineBgIntensity } from '@plannotator/shared/confi
 import { Option, Schema } from 'effect';
 import { storage } from '../utils/storage';
 import { generateIdentity } from '../utils/generateIdentity';
+import {
+  decodeStrictConventionalLabels,
+  decodeStrictConventionalLabelsJson,
+} from '../utils/conventionalLabelDecoding';
 
 const RawConfigRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
 type RawConfigRecord = Schema.Schema.Type<typeof RawConfigRecordSchema>;
@@ -39,12 +43,6 @@ const DiffOverflowSchema = Schema.Literals(['scroll', 'wrap']);
 const DiffIndicatorsSchema = Schema.Literals(['bars', 'classic', 'none']);
 const DiffLineTypeSchema = Schema.Literals(['word-alt', 'word', 'char', 'none']);
 const DiffLineBgIntensitySchema = Schema.Literals(['subtle', 'normal', 'strong']);
-const ConventionalLabelsSchema = Schema.NullOr(Schema.Array(Schema.Struct({
-  label: Schema.String,
-  display: Schema.String,
-  blocking: Schema.Boolean,
-})));
-
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
 const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
@@ -54,7 +52,6 @@ const decodeDiffOverflow = Schema.decodeUnknownOption(DiffOverflowSchema);
 const decodeDiffIndicators = Schema.decodeUnknownOption(DiffIndicatorsSchema);
 const decodeDiffLineType = Schema.decodeUnknownOption(DiffLineTypeSchema);
 const decodeDiffLineBgIntensity = Schema.decodeUnknownOption(DiffLineBgIntensitySchema);
-const decodeConventionalLabels = Schema.decodeUnknownOption(ConventionalLabelsSchema);
 
 function decodeRawConfigRecord<Input>(value: Input): RawConfigRecord {
   return Option.getOrElse(
@@ -361,18 +358,14 @@ export const SETTINGS = {
     },
     serverKey: 'conventionalLabels',
     fromServer: sc => {
-      const labels = Option.getOrUndefined(decodeConventionalLabels(sc.conventionalLabels));
+      const labels = decodeStrictConventionalLabels(sc.conventionalLabels);
       if (labels === undefined || labels === null) return labels;
       return JSON.stringify(labels);
     },
     toServer: (v: string | null) => {
       if (v === null) return { conventionalLabels: null };
-      try {
-        const labels = Option.getOrUndefined(decodeConventionalLabels(JSON.parse(v)));
-        return labels === undefined ? {} : { conventionalLabels: labels };
-      } catch {
-        return {};
-      }
+      const labels = decodeStrictConventionalLabelsJson(v);
+      return labels === undefined ? {} : { conventionalLabels: labels };
     },
   },
 } satisfies Record<string, SettingDef<unknown>>;
