@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { Option, Schema } from "effect";
+import { EditorAnnotationRequestSchema } from "./request-schemas.js";
 import { json, parseBody } from "./helpers";
 
 interface EditorAnnotation {
@@ -17,6 +18,10 @@ interface EditorAnnotation {
 	comment?: string;
 	createdAt: number;
 }
+
+const decodeEditorAnnotationRequest = Schema.decodeUnknownOption(EditorAnnotationRequestSchema);
+const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown));
+const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 export function createEditorAnnotationHandler() {
 	const annotations: EditorAnnotation[] = [];
@@ -35,25 +40,29 @@ export function createEditorAnnotationHandler() {
 			if (url.pathname === "/api/editor-annotation" && req.method === "POST") {
 				try {
 					const body = await parseBody(req);
+					const decoded = Option.getOrUndefined(decodeEditorAnnotationRequest(body));
 					if (
-						!body.filePath ||
-						!body.selectedText ||
-						!body.lineStart ||
-						!body.lineEnd
+						!decoded ||
+						!decoded.filePath ||
+						!decoded.selectedText ||
+						!decoded.lineStart ||
+						!decoded.lineEnd
 					) {
 						json(res, { error: "Missing required fields" }, 400);
 						return true;
 					}
 
+					const record = Option.getOrUndefined(decodeRecord(body));
+					const comment = record
+						? Option.getOrUndefined(decodeString(record.comment))
+						: undefined;
 					const annotation: EditorAnnotation = {
 						id: randomUUID(),
-						filePath: String(body.filePath),
-						selectedText: String(body.selectedText),
-						lineStart: Number(body.lineStart),
-						lineEnd: Number(body.lineEnd),
-						comment: Option.getOrUndefined(
-							Schema.decodeUnknownOption(Schema.String)(body.comment),
-						),
+						filePath: decoded.filePath,
+						selectedText: decoded.selectedText,
+						lineStart: decoded.lineStart,
+						lineEnd: decoded.lineEnd,
+						...(comment !== undefined && { comment }),
 						createdAt: Date.now(),
 					};
 

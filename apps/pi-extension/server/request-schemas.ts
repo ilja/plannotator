@@ -65,6 +65,14 @@ export const OpenInRequestSchema = Schema.Struct({
 	base: Schema.optionalKey(Schema.String),
 });
 
+/** Editor annotation request from a VS Code integration. */
+export const EditorAnnotationRequestSchema = Schema.Struct({
+	filePath: Schema.String,
+	selectedText: Schema.String,
+	lineStart: Schema.Number,
+	lineEnd: Schema.Number,
+});
+
 /** Feedback request (annotate and review servers). */
 export const FeedbackRequestSchema = Schema.Struct({
 	feedback: Schema.optionalKey(Schema.String),

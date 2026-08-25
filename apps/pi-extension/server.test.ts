@@ -756,6 +756,18 @@ describe("pi review server", () => {
       expect(draftLoad.status).toBe(200);
       expect(await draftLoad.json()).toEqual(draftBody);
 
+      const malformedAnnotation = await fetch(`${server.url}/api/editor-annotation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filePath: 42,
+          selectedText: "after",
+          lineStart: 1,
+          lineEnd: 1,
+        }),
+      });
+      expect(malformedAnnotation.status).toBe(400);
+
       const annotationCreate = await fetch(`${server.url}/api/editor-annotation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
