@@ -39,6 +39,26 @@ const decodeProjectResponseJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(ProjectResponseSchema),
 );
 
+const GitLabLabelRecordSchema = Schema.Struct({
+  name: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  color: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const GitLabLabelSchema = Schema.Union([Schema.String, GitLabLabelRecordSchema]);
+const decodeGitLabLabel = Schema.decodeUnknownOption(GitLabLabelSchema);
+const decodeGitLabLabelRecord = Schema.decodeUnknownOption(GitLabLabelRecordSchema);
+const GitLabNoteSchema = Schema.Struct({
+  system: Schema.optionalKey(Schema.Boolean),
+  id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, Schema.Number]))),
+  author: Schema.optionalKey(Schema.Struct({
+    username: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  })),
+  body: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  created_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  web_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabNote = Schema.decodeUnknownOption(GitLabNoteSchema);
+const decodeJsonArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
+
 interface GlMRRef {
   platform: "gitlab";
   host: string;
@@ -321,10 +341,14 @@ export async function fetchGlMRContext(
   const titleString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(mr.title));
   const isDraft = mr.draft === true || (titleString !== undefined && /^(Draft:|WIP:)/i.test(titleString));
 
-  const labels = arr(mr.labels).map((l: any) => {
-    const lString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(l));
-    if (lString !== undefined) return { name: lString, color: "" };
-    return { name: str(l?.name), color: str(l?.color) };
+  const labels = arr(mr.labels).flatMap((l) => {
+    const decoded = Option.getOrUndefined(decodeGitLabLabel(l));
+    if (decoded === undefined) return [];
+    const lString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(decoded));
+    if (lString !== undefined) return [{ name: lString, color: "" }];
+    const record = Option.getOrUndefined(decodeGitLabLabelRecord(decoded));
+    if (!record) return [];
+    return [{ name: str(record.name), color: str(record.color) }];
   });
 
   // GitLab merge_status values
@@ -364,9 +388,10 @@ export async function fetchGlMRContext(
   const notes: PRContext["comments"] = [];
   if (notesResult.exitCode === 0) {
     try {
-      const rawNotes: any[] = JSON.parse(notesResult.stdout);
-      for (const n of rawNotes) {
-        if (n.system) continue;
+      const rawNotes = Option.getOrUndefined(decodeJsonArray(JSON.parse(notesResult.stdout))) ?? [];
+      for (const rawNote of rawNotes) {
+        const n = Option.getOrUndefined(decodeGitLabNote(rawNote));
+        if (!n || n.system) continue;
         notes.push({
           id: String(n.id ?? ""),
           author: str(n.author?.username),

@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Option, Schema } from "effect";
-import { fetchGlMR, parsePaginatedArray } from "./pr-gitlab";
+import { fetchGlMR, fetchGlMRContext, parsePaginatedArray } from "./pr-gitlab";
 import type { PRRuntime } from "./pr-types";
 
 describe("fetchGlMR", () => {
@@ -227,6 +227,85 @@ describe("fetchGlMR metadata boundary", () => {
 
     expect(calls).toContain("glab api projects/g%2Fp");
     expect(result.metadata.defaultBranch).toBeUndefined();
+  });
+});
+
+describe("fetchGlMRContext labels and notes", () => {
+  test("retains valid siblings while filtering malformed labels and notes", async () => {
+    const calls: string[] = [];
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        calls.push([command, ...args].join(" "));
+        const endpoint = args[1] ?? "";
+        if (endpoint.endsWith("/merge_requests/1")) {
+          return {
+            stdout: JSON.stringify({
+              labels: ["bug", { name: "team", color: "#123456" }, { name: 42 }],
+              state: "opened",
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (endpoint.endsWith("/notes?sort=asc&per_page=100")) {
+          return {
+            stdout: JSON.stringify([
+              {
+                id: 1,
+                author: { username: "first" },
+                body: "First note",
+                created_at: "2024-01-01T00:00:00Z",
+                web_url: "https://gitlab.com/notes/1",
+              },
+              { id: 2, body: 42 },
+              {
+                system: true,
+                id: 3,
+                author: { username: "system" },
+                body: "System note",
+              },
+              {
+                id: 4,
+                author: { username: "second" },
+                body: "Second note",
+                created_at: "2024-01-02T00:00:00Z",
+                web_url: "https://gitlab.com/notes/4",
+              },
+            ]),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (endpoint.endsWith("/approvals")) return { stdout: "{}", stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/pipelines?per_page=5")) return { stdout: "[]", stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/closes_issues")) return { stdout: "[]", stderr: "", exitCode: 0 };
+        return { stdout: "", stderr: "unexpected", exitCode: 1 };
+      },
+    };
+
+    const context = await fetchGlMRContext(runtime, REF);
+
+    expect(context.labels).toEqual([
+      { name: "bug", color: "" },
+      { name: "team", color: "#123456" },
+    ]);
+    expect(context.comments).toEqual([
+      {
+        id: "1",
+        author: "first",
+        body: "First note",
+        createdAt: "2024-01-01T00:00:00Z",
+        url: "https://gitlab.com/notes/1",
+      },
+      {
+        id: "4",
+        author: "second",
+        body: "Second note",
+        createdAt: "2024-01-02T00:00:00Z",
+        url: "https://gitlab.com/notes/4",
+      },
+    ]);
+    expect(calls.some((call) => call.includes("/notes?sort=asc&per_page=100"))).toBe(true);
   });
 });
 
