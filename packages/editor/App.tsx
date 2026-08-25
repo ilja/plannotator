@@ -26,7 +26,7 @@ import { loadCodeFont, loadProseFont } from '@plannotator/ui/utils/diffFonts';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
 import { LookAndFeelAnnouncementDialog } from '@plannotator/ui/components/LookAndFeelAnnouncementDialog';
 import {getObsidianSettings, getEffectiveVaultPath, isObsidianConfigured} from '@plannotator/ui/utils/obsidian';
-import { getBearSettings } from '@plannotator/ui/utils/bear';
+import { buildBearQuickSavePayload, getBearSettings } from '@plannotator/ui/utils/bear';
 import { getOctarineSettings, isOctarineConfigured } from '@plannotator/ui/utils/octarine';
 import { getDefaultNotesApp } from '@plannotator/ui/utils/defaultNotesApp';
 import {
@@ -3035,12 +3035,7 @@ const App: React.FC = () => {
       }
     }
     if (target === 'bear') {
-      const bs = getBearSettings();
-      body.bear = {
-        plan: quickSaveMarkdown,
-        customTags: bs.customTags,
-        tagPosition: bs.tagPosition,
-      };
+      body.bear = buildBearQuickSavePayload(quickSaveMarkdown, getBearSettings());
     }
     if (target === 'octarine') {
       const os = getOctarineSettings();
