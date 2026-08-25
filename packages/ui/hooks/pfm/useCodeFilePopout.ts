@@ -1,5 +1,9 @@
 import { useState, useCallback } from "react";
 import { parseCodePath } from "@plannotator/shared/code-file";
+import {
+  decodeCodeFileErrorResponse,
+  decodeCodeFileSuccessResponse,
+} from "../codeFileResponse";
 
 interface CodeFileState {
   filepath: string;
@@ -50,20 +54,14 @@ export function useCodeFilePopout(
       const parsed = parseCodePath(codePath);
       try {
         const res = await fetch(buildUrl(codePath));
-        const data: {
-          codeFile?: boolean;
-          contents?: string;
-          filepath?: string;
-          prerenderedHTML?: string;
-          error?: string;
-          line?: number;
-          lineEnd?: number;
-        } = await res.json();
-        if (!res.ok || data.error || !data.codeFile || Object.prototype.toString.call(data.contents) !== "[object String]" || !data.filepath) {
+        const rawData: unknown = await res.json();
+        const data = decodeCodeFileSuccessResponse(rawData);
+        const error = decodeCodeFileErrorResponse(rawData);
+        if (!res.ok || error || !data || data.codeFile !== true) {
           setState({
             filepath: codePath,
             contents: "",
-            error: data.error ?? `File not found in repo: ${codePath}`,
+            error: error ?? `File not found in repo: ${codePath}`,
             requestedPath: codePath,
           });
           setIsLoading(false);

@@ -6,6 +6,7 @@ import { transformPlainText } from "../utils/inlineTransforms";
 import { getImageSrc } from "./ImageThumbnail";
 import { useCodePathValidation, type CodePathValidationContextValue } from "./CodePathValidationContext";
 import { CodeFilePicker } from "./CodeFilePicker";
+import { decodeCodeFileSuccessResponse } from "../hooks/codeFileResponse";
 
 const inlineCodeTypographyStyle: React.CSSProperties = {
   fontFamily: 'var(--annotation-code-font-family, var(--font-mono))',
@@ -158,8 +159,9 @@ const CodeFileLink: React.FC<{
         const params = new URLSearchParams({ path: candidate });
         if (baseDir) params.set('base', baseDir);
         const res = await fetch(`/api/doc?${params}`);
-        const data = await res.json();
-        if (data.contents) setHoverPreview({ contents: data.contents, filepath: data.filepath ?? candidate });
+        if (!res.ok) return;
+        const data = decodeCodeFileSuccessResponse(await res.json());
+        if (data?.contents) setHoverPreview({ contents: data.contents, filepath: data.filepath });
       } catch {}
     }, 150);
   }, [candidate, hasLineRef, gate.render, cancelHide, baseDir]);
