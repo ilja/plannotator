@@ -3,10 +3,12 @@ import { describe, expect, test } from 'bun:test';
 import { AnnotationType } from '../types';
 import {
   compress,
+  createShortShareUrl,
   decodeLegacyShareData,
   decodeSharePayload,
   decompress,
   fromShareable,
+  loadFromPasteId,
 } from './sharing';
 
 const validPayload = () => ({
@@ -22,6 +24,51 @@ const validPayload = () => ({
     ],
   }],
   co: ['B'],
+});
+
+describe('paste service URL validation', () => {
+  test('rejects malformed and non-HTTP(S) targets without calling fetch', async () => {
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    // SAFETY: fetch shim matches the global fetch shape for this test.
+    // @ts-expect-error — fetch shim intentionally omits the preconnect property.
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      return new Response('{}');
+    }) as typeof fetch;
+
+    try {
+      for (const pasteApiUrl of ['not-a-url', 'file:///tmp/paste', 'data:text/plain,paste', 'javascript:alert(1)']) {
+        expect(await createShortShareUrl('# Plan', [], undefined, { pasteApiUrl })).toBeNull();
+        expect(await loadFromPasteId('paste-id', pasteApiUrl)).toBeNull();
+      }
+      expect(fetchCalls).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('calls a custom HTTP paste backend with its original URL', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchUrls: string[] = [];
+    // SAFETY: fetch shim matches the global fetch shape for this test.
+    globalThis.fetch = (async (input) => {
+      fetchUrls.push(String(input));
+      return new Response(JSON.stringify({ id: 'paste-id' }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      await expect(createShortShareUrl(
+        '# Plan',
+        [],
+        undefined,
+        { pasteApiUrl: 'http://paste.test/custom', shareBaseUrl: 'http://share.test' },
+      )).resolves.toMatchObject({ id: 'paste-id' });
+      expect(fetchUrls).toEqual(['http://paste.test/custom/api/paste']);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe('decodeSharePayload', () => {

@@ -332,6 +332,18 @@ export function formatUrlSize(url: string): string {
 const DEFAULT_PASTE_API = 'https://plannotator-paste.plannotator.workers.dev';
 const DEFAULT_SHARE_BASE = 'https://share.plannotator.ai';
 
+function decodePasteApiUrl(value: string): string | null {
+  const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(value));
+  if (decoded === undefined) return null;
+
+  try {
+    const { protocol } = new URL(decoded);
+    return protocol === 'http:' || protocol === 'https:' ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
 export class ShortShareUrlError extends Error {
   constructor(message: string) {
     super(message);
@@ -360,8 +372,9 @@ export async function createShortShareUrl(
   },
   rawHtml?: string,
 ): Promise<{ shortUrl: string; id: string } | null> {
-  const pasteApi = options?.pasteApiUrl ?? DEFAULT_PASTE_API;
+  const pasteApi = decodePasteApiUrl(options?.pasteApiUrl ?? DEFAULT_PASTE_API);
   const shareBase = options?.shareBaseUrl ?? DEFAULT_SHARE_BASE;
+  if (pasteApi === null) return null;
 
   try {
     const payload = buildSharePayload(markdown, annotations, globalAttachments, rawHtml);
@@ -431,8 +444,11 @@ export async function loadFromPasteId(
   pasteApiUrl: string = DEFAULT_PASTE_API,
   encryptionKey?: string
 ): Promise<SharePayload | null> {
+  const pasteApi = decodePasteApiUrl(pasteApiUrl);
+  if (pasteApi === null) return null;
+
   try {
-    const response = await fetch(`${pasteApiUrl}/api/paste/${pasteId}`, {
+    const response = await fetch(`${pasteApi}/api/paste/${pasteId}`, {
       signal: AbortSignal.timeout(10_000),
     });
 
