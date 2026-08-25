@@ -19,6 +19,7 @@ import { lineAnnotationMetadata } from '../utils/annotationDisplay';
 import type { AnnotationScrollTarget } from '../types';
 import { getLineNumberFromNode, getSideFromNode, getDiffSelection } from '../utils/diffSelection';
 import { isContentConsistentWithPatch } from '../utils/patchConsistency';
+import { loadFileContentResponse } from '../utils/file-content-response';
 import { InlineAnnotation } from './InlineAnnotation';
 import { InlineAIMarker } from './InlineAIMarker';
 import { ReviewGutterActions, type HoveredDiffLine } from './ReviewGutterActions';
@@ -310,8 +311,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     if (oldPath) params.set('oldPath', oldPath);
     if (reviewBase) params.set('base', reviewBase);
     fetch(`/api/file-content?${params}`, { signal: controller.signal })
-      .then(res => res.ok ? res.json() : null)
-      .then((data: { oldContent: string | null; newContent: string | null } | null) => {
+      .then(loadFileContentResponse)
+      .then((data) => {
         if (data && (data.oldContent != null || data.newContent != null)) {
           setFileContents({ forPath: filePath, old: data.oldContent, new: data.newContent });
         }

@@ -29,6 +29,7 @@ import { buildFileTree, getVisualFileOrder } from '../utils/buildFileTree';
 import { buildCodeNavRequest } from '../utils/buildCodeNavRequest';
 import { getDiffSelection, getLineNumberFromNode, getSideFromNode } from '../utils/diffSelection';
 import { isContentConsistentWithPatch } from '../utils/patchConsistency';
+import { loadFileContentResponse } from '../utils/file-content-response';
 import { ToolbarHost, type ToolbarHostHandle } from './ToolbarHost';
 import { FileHeader } from './FileHeader';
 import { FileCommentBanner } from './FileCommentBanner';
@@ -942,8 +943,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     if (base) params.set('base', base);
 
     fetch(`/api/file-content?${params}`, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { oldContent: string | null; newContent: string | null } | null) => {
+      .then(loadFileContentResponse)
+      .then((data) => {
         if (isStale()) return;
         if (!data || (data.oldContent == null && data.newContent == null)) {
           // No content available (e.g. demo mode / binary): mark done so we do
