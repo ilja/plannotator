@@ -68,6 +68,7 @@ import {
   loadInitialDiffResponse,
 } from './utils/initial-diff-response';
 import { loadReviewAICapabilitiesState } from './utils/ai-capabilities-response';
+import { readPRActionResponse } from './utils/pr-action-response';
 import { ReviewSubmissionDialog, buildReviewSubmission, type ReviewSubmission, type SubmissionTarget } from './components/ReviewSubmissionDialog';
 import { ReviewStateProvider, type ReviewState } from './dock/ReviewStateContext';
 import { reviewPanelComponents } from './dock/reviewPanelComponents';
@@ -1705,11 +1706,11 @@ const [aiConfig, setAiConfig] = useState(() => {
                 targetPrUrl: target.prUrl || undefined,
               }),
             });
-            const prData: { ok?: boolean; prUrl?: string; error?: string } = await prRes.json();
-            if (!prRes.ok || prData.error) {
-              return { ...target, status: 'failed', error: prData.error ?? 'Failed to submit' };
+            const prResult = await readPRActionResponse(prRes);
+            if (!prResult.ok) {
+              return { ...target, status: 'failed', error: prResult.error };
             }
-            if (prData.prUrl) openUrls.push(prData.prUrl);
+            if (prResult.prUrl) openUrls.push(prResult.prUrl);
             return { ...target, status: 'success' };
           } catch (err) {
             return { ...target, status: 'failed', error: err instanceof Error ? err.message : 'Network error' };
