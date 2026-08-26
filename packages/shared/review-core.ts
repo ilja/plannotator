@@ -555,6 +555,7 @@ export async function runGitDiff(
   let patch = "";
   let label = "";
   let cwd: string | undefined = externalCwd;
+  // SAFETY: DiffType is a string union; widening to string for worktree prefix check is intentional
   let effectiveDiffType = diffType as string;
 
   if (diffType.startsWith("worktree:")) {
@@ -809,6 +810,7 @@ export async function getGitDiffFingerprint(
   options?: GitDiffOptions,
 ): Promise<string | null> {
   let cwd: string | undefined = externalCwd;
+  // SAFETY: DiffType is a string union; widening to string for worktree prefix check is intentional
   let effectiveDiffType = diffType as string;
   if (diffType.startsWith("worktree:")) {
     const parsed = parseWorktreeDiffType(diffType);
@@ -902,6 +904,7 @@ export async function getFileContentsForDiff(
 ): Promise<{ oldContent: string | null; newContent: string | null }> {
   const oldFilePath = oldPath || filePath;
 
+  // SAFETY: DiffType is a string union; widening to string for worktree prefix check is intentional
   let effectiveDiffType = diffType as string;
   if (diffType.startsWith("worktree:")) {
     const parsed = parseWorktreeDiffType(diffType);

@@ -39,6 +39,7 @@ export const BlockRenderer: React.FC<{
 
   switch (block.type) {
     case 'heading': {
+      // SAFETY: block.level is 1-3 heading level, Template literal produces valid h1/h2/h3 tag
       const Tag = `h${block.level || 1}` as React.ElementType;
       const styles = {
         1: 'text-2xl font-bold mb-4 mt-6 first:mt-0 tracking-tight',

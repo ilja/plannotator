@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
+import { Effect, Option, Schema, SchemaGetter } from "effect";
+
 import {
 	buildAgentTerminalWsPath,
 	type AgentTerminalAgent,
@@ -220,9 +222,13 @@ export function normalizeSpawnOptions(
 		cwd,
 		startupCommandMode: "shell-ready",
 	};
-	const cols = normalizeTerminalDimension(options.cols);
+	const cols = Option.getOrUndefined(
+		Schema.decodeUnknownOption(TerminalDimension)(options.cols),
+	);
 	if (cols !== undefined) value.cols = cols;
-	const rows = normalizeTerminalDimension(options.rows);
+	const rows = Option.getOrUndefined(
+		Schema.decodeUnknownOption(TerminalDimension)(options.rows),
+	);
 	if (rows !== undefined) value.rows = rows;
 	if (Object.keys(launch.env).length > 0) value.env = launch.env;
 	if (launch.preflightTrust) value.preflightTrust = launch.preflightTrust;
@@ -232,10 +238,21 @@ export function normalizeSpawnOptions(
 	};
 }
 
-function normalizeTerminalDimension(value: unknown): number | undefined {
-	if (!Number.isInteger(value) || (value as number) <= 0) return undefined;
-	return Math.min(value as number, 1_000);
-}
+// Positive integer terminal dimension (columns/rows), capped at 1000.
+const TerminalDimension = Schema.Number.pipe(
+	Schema.decodeTo(Schema.Number, {
+		decode: SchemaGetter.checkEffect<number>((value) =>
+			Effect.succeed(
+				Number.isInteger(value) && value > 0
+					? undefined
+					: "terminal dimension must be a positive integer",
+			),
+		).compose(
+			SchemaGetter.transform((value) => Math.min(value, 1_000)),
+		),
+		encode: SchemaGetter.transform((n) => n),
+	}),
+);
 
 function isAgentTerminalRemoteEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 	return /^(1|true|yes)$/i.test(env.PLANNOTATOR_AGENT_TERMINAL_REMOTE ?? "");
@@ -273,8 +290,12 @@ function commandExists(command: string): boolean {
 	return false;
 }
 
+interface AgentDisplayNameOverrides {
+	[agentId: string]: string;
+}
+
 function formatAgentName(id: string): string {
-	const overrides: Record<string, string> = {
+	const overrides: AgentDisplayNameOverrides = {
 		amp: "Amp",
 		claude: "Claude",
 		codex: "Codex",

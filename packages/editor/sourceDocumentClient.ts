@@ -1,9 +1,11 @@
 import {
-  isSourceFileEol,
   type SourceFileEol,
   type SourceSaveCapability,
   type SourceSaveRequest,
+  SourceSaveCapabilitySchema,
+  SourceSaveResponseSchema,
 } from '@plannotator/shared/source-save';
+import { Option, Schema } from 'effect';
 
 type EnabledSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
 
@@ -12,11 +14,13 @@ export type SourceSaveProbeResult =
   | { status: 'missing' }
   | { status: 'unavailable' };
 
-interface SourceDocumentResponse {
-  markdown?: string;
-  sourceSave?: SourceSaveCapability;
-  renderAs?: 'markdown' | 'html';
-}
+const SourceDocumentResponseSchema = Schema.Struct({
+  markdown: Schema.optionalKey(Schema.String),
+  sourceSave: Schema.optionalKey(SourceSaveCapabilitySchema),
+  renderAs: Schema.optionalKey(Schema.Literals(['markdown', 'html'])),
+});
+
+type SourceDocumentResponse = Schema.Schema.Type<typeof SourceDocumentResponseSchema>;
 
 type SourceDocumentFetchResult =
   | { status: 'ok'; data: SourceDocumentResponse }
@@ -61,7 +65,10 @@ async function fetchSourceDocument(path: string): Promise<SourceDocumentFetchRes
     const res = await fetch(`/api/doc?path=${encodeURIComponent(path)}`);
     if (res.status === 404) return { status: 'missing' };
     if (!res.ok) return { status: 'unavailable' };
-    return { status: 'ok', data: await res.json() as SourceDocumentResponse };
+    const data = Option.getOrUndefined(
+      Schema.decodeUnknownOption(SourceDocumentResponseSchema)(await res.json()),
+    );
+    return data ? { status: 'ok', data } : { status: 'unavailable' };
   } catch {
     return { status: 'unavailable' };
   }
@@ -87,30 +94,8 @@ export async function fetchSourceDocumentSnapshot(path: string): Promise<SourceD
   if (sourceSave?.enabled === false && sourceSave.reason === 'missing-file') {
     return { status: 'missing' };
   }
-  if (renderAs === 'html' || typeof markdown !== 'string' || !sourceSave?.enabled) return { status: 'unavailable' };
+  if (renderAs === 'html' || markdown === undefined || !sourceSave?.enabled) return { status: 'unavailable' };
   return { status: 'ok', snapshot: { markdown, sourceSave } };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function sourceDocumentSaveMetadata(value: Record<string, unknown>): SourceDocumentSaveMetadata | null {
-  if (
-    typeof value.hash !== 'string' ||
-    typeof value.mtimeMs !== 'number' ||
-    typeof value.size !== 'number' ||
-    !isSourceFileEol(value.eol)
-  ) return null;
-  return { hash: value.hash, mtimeMs: value.mtimeMs, size: value.size, eol: value.eol };
-}
-
-async function readSourceDocumentSaveResponse(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
 }
 
 /** Save a source-backed document through the browser source-save endpoint. */
@@ -126,8 +111,10 @@ export async function saveSourceDocument(input: SourceDocumentSaveRequest): Prom
     return { status: 'error', code: 'unavailable', message: 'Save failed' };
   }
 
-  const payload = await readSourceDocumentSaveResponse(response);
-  if (!isRecord(payload) || typeof payload.ok !== 'boolean') {
+  const payload = Option.getOrUndefined(
+    Schema.decodeUnknownOption(SourceSaveResponseSchema)(await response.json().catch(() => null)),
+  );
+  if (!payload) {
     return { status: 'error', code: 'invalid-response', message: 'Save failed' };
   }
 
@@ -136,27 +123,33 @@ export async function saveSourceDocument(input: SourceDocumentSaveRequest): Prom
   }
 
   if (payload.ok) {
-    const sourceSave = sourceDocumentSaveMetadata(payload);
-    return sourceSave
-      ? { status: 'saved', sourceSave }
-      : { status: 'error', code: 'invalid-response', message: 'Save failed' };
+    return {
+      status: 'saved',
+      sourceSave: { hash: payload.hash, mtimeMs: payload.mtimeMs, size: payload.size, eol: payload.eol },
+    };
   }
 
-  const message = typeof payload.message === 'string' ? payload.message : 'Save failed';
+  const message = payload.message;
   if (payload.code === 'conflict') {
-    const snapshot = sourceDocumentSaveMetadata({
-      hash: payload.currentHash,
-      mtimeMs: payload.currentMtimeMs,
-      size: payload.currentSize,
-      eol: payload.currentEol,
-    });
-    if (typeof payload.currentText !== 'string' || !snapshot) {
+    if (
+      payload.currentText === undefined ||
+      payload.currentHash === undefined ||
+      payload.currentMtimeMs === undefined ||
+      payload.currentSize === undefined ||
+      payload.currentEol === undefined
+    ) {
       return { status: 'conflict-incomplete', message };
     }
     return {
       status: 'conflict',
       message,
-      snapshot: { text: payload.currentText, ...snapshot },
+      snapshot: {
+        text: payload.currentText,
+        hash: payload.currentHash,
+        mtimeMs: payload.currentMtimeMs,
+        size: payload.currentSize,
+        eol: payload.currentEol,
+      },
     };
   }
 

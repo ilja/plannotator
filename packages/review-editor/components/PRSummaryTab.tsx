@@ -30,7 +30,7 @@ function sanitizeHtml(html: string): string {
 
 /** Renders sanitized HTML and hides broken images via ref (no inline event handlers). */
 function SafeHtml({ html, as: Tag = 'div' }: { html: string; as?: 'div' | 'span' }) {
-  const ref = useRef<HTMLElement>(null);
+  const ref = useRef<HTMLDivElement | HTMLSpanElement>(null);
   useEffect(() => {
     if (!ref.current) return;
     const imgs = ref.current.querySelectorAll('img');
@@ -38,7 +38,7 @@ function SafeHtml({ html, as: Tag = 'div' }: { html: string; as?: 'div' | 'span'
       img.onerror = () => { img.style.display = 'none'; img.onerror = null; };
     });
   }, [html]);
-  return <Tag ref={ref as any} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <Tag ref={ref} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 /**
@@ -61,8 +61,13 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
       {blocks.map((block) => {
         switch (block.type) {
           case 'heading': {
-            const Tag = `h${Math.min(block.level ?? 1, 6)}` as keyof JSX.IntrinsicElements;
-            const sizes: Record<number, string> = {
+            // SAFETY: level is clamped to 1..6, so the template literal is always a valid heading tag.
+            const Tag = `h${Math.min(Math.max(block.level ?? 1, 1), 6)}` as keyof JSX.IntrinsicElements;
+            interface HeadingSizeMap {
+  [level: number]: string;
+}
+
+const sizes: HeadingSizeMap = {
               1: 'text-base font-bold',
               2: 'text-sm font-semibold',
               3: 'text-xs font-semibold',

@@ -15,7 +15,13 @@ export interface Frontmatter {
  * line number where content begins in the original file (so downstream
  * line references stay accurate).
  */
-export function extractFrontmatter(markdown: string): { frontmatter: Frontmatter | null; content: string; contentStartLine: number } {
+export interface ExtractFrontmatterResult {
+  frontmatter: Frontmatter | null;
+  content: string;
+  contentStartLine: number;
+}
+
+export function extractFrontmatter(markdown: string): ExtractFrontmatterResult {
   const trimmed = markdown.trimStart();
   if (!trimmed.startsWith('---')) {
     return { frontmatter: null, content: markdown, contentStartLine: 1 };
@@ -250,7 +256,10 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
           type: 'blockquote',
           content: alertMatch ? '' : stripped,
           alertKind: alertMatch
-            ? (alertMatch[1].toLowerCase() as 'note' | 'tip' | 'warning' | 'caution' | 'important')
+            ? (
+                // SAFETY: alertMatch[1] is known alert kind string — cast to union
+                alertMatch[1].toLowerCase() as 'note' | 'tip' | 'warning' | 'caution' | 'important'
+              )
             : undefined,
           order: currentId,
           startLine: currentLineNum
@@ -507,9 +516,9 @@ const blockEndLine = (block: Block): number => {
  *  Returns null for global comments, diff-view annotations, or missing blocks. */
 const lineLabelForAnnotation = (blocks: Block[], ann: any): string | null => {
   if (!ann.blockId || ann.type === 'GLOBAL_COMMENT') return null;
-  if (typeof ann.blockId === 'string' && ann.blockId.startsWith('diff-block-')) return null;
+  if (Object.prototype.toString.call(ann.blockId) === "[object String]" && ann.blockId.startsWith('diff-block-')) return null;
   const block = blocks.find(b => b.id === ann.blockId);
-  if (!block || typeof block.startLine !== 'number') return null;
+  if (!block || Object.prototype.toString.call(block.startLine) !== "[object Number]") return null;
   const end = blockEndLine(block);
   if (end <= block.startLine) return `line ${block.startLine}`;
   return `lines ${block.startLine}–${end}`;

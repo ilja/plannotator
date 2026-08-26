@@ -6,7 +6,9 @@
  * @plannotator/ui import from here — single source of truth.
  */
 
-export async function compress(data: unknown): Promise<string> {
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+export async function compress<T>(data: T): Promise<string> {
   const json = JSON.stringify(data);
   const byteArray = new TextEncoder().encode(json);
 
@@ -31,13 +33,13 @@ export async function compress(data: unknown): Promise<string> {
     .replace(/=/g, '');
 }
 
-export async function decompress(b64: string): Promise<unknown> {
+export async function decompress<T = JsonValue>(b64: string): Promise<T> {
   const base64 = b64
     .replace(/-/g, '+')
     .replace(/_/g, '/');
 
   const binary = atob(base64);
-  const byteArray = Uint8Array.from(binary, c => c.charCodeAt(0));
+  const byteArray = Uint8Array.from(binary, (c) => c.charCodeAt(0));
 
   const stream = new DecompressionStream('deflate-raw');
   const writer = stream.writable.getWriter();
@@ -47,5 +49,6 @@ export async function decompress(b64: string): Promise<unknown> {
   const buffer = await new Response(stream.readable).arrayBuffer();
   const json = new TextDecoder().decode(buffer);
 
-  return JSON.parse(json);
+  const parsed: T = JSON.parse(json);
+  return parsed;
 }

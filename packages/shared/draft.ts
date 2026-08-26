@@ -11,8 +11,17 @@
 import { join } from "path";
 import { mkdirSync, writeFileSync, readFileSync, renameSync, unlinkSync, existsSync } from "fs";
 import { createHash } from "crypto";
+import { Option, Schema } from "effect";
 import { getPlannotatorDataDir } from "./data-dir";
 import type { SourceSaveCapability } from "./source-save";
+
+const DraftGenerationSchema = Schema.Natural;
+const DraftEnvelopeSchema = Schema.Record(Schema.String, Schema.Unknown);
+export type DraftEnvelope = Schema.Schema.Type<typeof DraftEnvelopeSchema>;
+
+export function decodeDraftEnvelope<Input>(value: Input): DraftEnvelope | null {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(DraftEnvelopeSchema)(value)) ?? null;
+}
 
 export type SourceBackedDraftSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
 
@@ -62,18 +71,25 @@ function tombstonePath(key: string): string {
   return join(getDraftDir(), `${key}.deleted.json`);
 }
 
-function readGeneration(value: unknown): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0
-    ? value
-    : null;
+function readDraftGeneration(draft: DraftEnvelope): number | null {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(DraftGenerationSchema)(draft.draftGeneration)) ?? null;
+}
+
+function parseDraftEnvelope(serializedDraft: string): DraftEnvelope | null {
+  try {
+    const parsedDraft: unknown = JSON.parse(serializedDraft);
+    return Option.getOrUndefined(Schema.decodeUnknownOption(DraftEnvelopeSchema)(parsedDraft)) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function readTombstoneGeneration(key: string): number | null {
   const filePath = tombstonePath(key);
   try {
     if (!existsSync(filePath)) return null;
-    const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
-    return readGeneration((parsed as { draftGeneration?: unknown }).draftGeneration);
+    const tombstone = parseDraftEnvelope(readFileSync(filePath, "utf-8"));
+    return tombstone === null ? null : readDraftGeneration(tombstone);
   } catch {
     return null;
   }
@@ -83,8 +99,8 @@ function readStoredDraftGeneration(key: string): number | null {
   const filePath = draftPath(key);
   try {
     if (!existsSync(filePath)) return null;
-    const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
-    return readGeneration((parsed as { draftGeneration?: unknown }).draftGeneration);
+    const draft = parseDraftEnvelope(readFileSync(filePath, "utf-8"));
+    return draft === null ? null : readDraftGeneration(draft);
   } catch {
     return null;
   }
@@ -115,8 +131,11 @@ function clearTombstone(key: string): void {
 /**
  * Save a draft to disk.
  */
-export function saveDraft(key: string, data: object): boolean {
-  const draftGeneration = readGeneration((data as { draftGeneration?: unknown }).draftGeneration);
+export function saveDraft<T>(key: string, data: T): boolean {
+  const draft = decodeDraftEnvelope(data);
+  if (draft === null) return false;
+
+  const draftGeneration = readDraftGeneration(draft);
   const deletedGeneration = readTombstoneGeneration(key);
   if (draftGeneration !== null && deletedGeneration !== null && draftGeneration <= deletedGeneration) {
     return false;
@@ -131,7 +150,7 @@ export function saveDraft(key: string, data: object): boolean {
   // drafts exist for. rename() is atomic within a directory.
   const finalPath = draftPath(key);
   const tmpPath = `${finalPath}.tmp`;
-  writeFileSync(tmpPath, JSON.stringify(data), "utf-8");
+  writeFileSync(tmpPath, JSON.stringify(draft), "utf-8");
   renameSync(tmpPath, finalPath);
   if (draftGeneration === null) {
     clearTombstone(key);
@@ -142,12 +161,14 @@ export function saveDraft(key: string, data: object): boolean {
 /**
  * Load a draft from disk. Returns null if not found.
  */
-export function loadDraft(key: string): object | null {
+export function loadDraft(key: string): DraftEnvelope | null {
   const filePath = draftPath(key);
   try {
     if (!existsSync(filePath)) return null;
-    const draft = JSON.parse(readFileSync(filePath, "utf-8"));
-    const draftGeneration = readGeneration((draft as { draftGeneration?: unknown }).draftGeneration);
+    const draft = parseDraftEnvelope(readFileSync(filePath, "utf-8"));
+    if (draft === null) return null;
+
+    const draftGeneration = readDraftGeneration(draft);
     const deletedGeneration = readTombstoneGeneration(key);
     if (draftGeneration !== null && deletedGeneration !== null && draftGeneration <= deletedGeneration) {
       return null;
@@ -164,7 +185,9 @@ export function loadDraft(key: string): object | null {
 export function deleteDraft(key: string, draftGeneration?: number): void {
   const filePath = draftPath(key);
   try {
-    const generation = readGeneration(draftGeneration);
+    const generation = Option.getOrUndefined(
+      Schema.decodeUnknownOption(DraftGenerationSchema)(draftGeneration),
+    ) ?? null;
     if (generation !== null) {
       const knownGeneration = getDraftGeneration(key);
       if (knownGeneration !== null && generation < knownGeneration) return;

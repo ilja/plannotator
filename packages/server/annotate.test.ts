@@ -140,6 +140,49 @@ describe("annotate server: /api/save-notes wiring", () => {
 
     expect(JSON.parse(result)).toEqual({ status: 200, body: { ok: true } });
   });
+
+  test("rejects malformed feedback without consuming the decision session", async () => {
+    const server = await startAnnotateServer({
+      markdown: "# Test",
+      filePath: join(tmpdir(), "test.md"),
+      htmlContent: MINIMAL_HTML,
+    });
+    const decision = server.waitForDecision();
+
+    try {
+      const malformed = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback: 123, annotations: {} }),
+      });
+
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid request" });
+
+      const validAnnotations = [null, { type: "unknown", value: "preserved" }];
+      const valid = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedback: "valid feedback",
+          annotations: validAnnotations,
+          selectedMessageId: "message-1",
+          feedbackScope: "messages",
+        }),
+      });
+
+      expect(valid.status).toBe(200);
+      expect(await valid.json()).toEqual({ ok: true });
+      await expect(decision).resolves.toEqual({
+        feedback: "valid feedback",
+        annotations: validAnnotations,
+        selectedMessageId: "message-1",
+        feedbackScope: "messages",
+      });
+    } finally {
+      server.stop();
+    }
+  });
 });
 
 describe("annotate server: /api/share-html symlink containment", () => {
@@ -224,7 +267,7 @@ describe("annotate server: source save", () => {
 
     try {
       const planResponse = await fetch(`${server.url}/api/plan`);
-      const plan = await planResponse.json() as { sourceSave?: { hash: string; mtimeMs: number; eol: "lf" | "crlf" | "mixed" | "none" } };
+      const plan: { sourceSave?: { hash: string; mtimeMs: number; eol: "lf" | "crlf" | "mixed" | "none" } } = await planResponse.json();
       if (!plan.sourceSave) throw new Error("expected source save metadata");
       unlinkSync(sourcePath);
 
@@ -259,7 +302,7 @@ describe("annotate server: source save", () => {
 
     try {
       const planResponse = await fetch(`${server.url}/api/plan`);
-      const plan = await planResponse.json() as {
+      const plan: {
         plan?: string;
         sourceSave?: {
           enabled?: boolean;
@@ -268,7 +311,7 @@ describe("annotate server: source save", () => {
           mtimeMs: number;
           eol: "lf" | "crlf" | "mixed" | "none";
         };
-      };
+      } = await planResponse.json();
       expect(plan.plan).toBe("Recovered\n");
       expect(plan.sourceSave?.enabled).toBe(true);
       expect(plan.sourceSave?.path).toBe(join(realpathSync(docDir), "source.md"));
@@ -308,7 +351,7 @@ describe("annotate server: source save", () => {
 
     try {
       const planResponse = await fetch(`${server.url}/api/plan`);
-      const plan = await planResponse.json() as {
+      const plan: {
         sourceSave?: {
           enabled?: boolean;
           path?: string;
@@ -316,7 +359,7 @@ describe("annotate server: source save", () => {
           mtimeMs: number;
           eol: "lf" | "crlf" | "mixed" | "none";
         };
-      };
+      } = await planResponse.json();
       expect(plan.sourceSave?.enabled).toBe(true);
       expect(plan.sourceSave?.path).toBe(realpathSync(realPath));
 
@@ -335,7 +378,7 @@ describe("annotate server: source save", () => {
 
       const probeResponse = await fetch(`${server.url}/api/doc?path=${encodeURIComponent(plan.sourceSave!.path!)}`);
       expect(probeResponse.status).toBe(200);
-      const probe = await probeResponse.json() as { markdown?: string; sourceSave?: { enabled?: boolean; path?: string } };
+      const probe: { markdown?: string; sourceSave?: { enabled?: boolean; path?: string } } = await probeResponse.json();
       expect(probe.markdown).toBe("After\n");
       expect(probe.sourceSave?.enabled).toBe(true);
       expect(probe.sourceSave?.path).toBe(realpathSync(realPath));
@@ -360,7 +403,7 @@ describe("annotate server: source save", () => {
 
     try {
       const docResponse = await fetch(`${server.url}/api/doc?path=${encodeURIComponent(openedPath)}`);
-      const doc = await docResponse.json() as { sourceSave?: { path: string; hash: string; mtimeMs: number; eol: "lf" | "crlf" | "mixed" | "none" } };
+      const doc: { sourceSave?: { path: string; hash: string; mtimeMs: number; eol: "lf" | "crlf" | "mixed" | "none" } } = await docResponse.json();
       if (!doc.sourceSave) throw new Error("expected folder source save metadata");
       unlinkSync(openedPath);
 
@@ -417,7 +460,7 @@ describe("annotate server: source save", () => {
       const docResponse = await fetch(
         `${server.url}/api/doc?path=${encodeURIComponent("../linked.md")}&base=${encodeURIComponent(subDir)}`,
       );
-      const doc = await docResponse.json() as { sourceSave?: { path: string; hash: string; mtimeMs: number; eol: "lf" | "crlf" | "mixed" | "none" } };
+      const doc: { sourceSave?: { path: string; hash: string; mtimeMs: number; eol: "lf" | "crlf" | "mixed" | "none" } } = await docResponse.json();
       if (!doc.sourceSave) throw new Error("expected folder source save metadata");
       unlinkSync(linkedPath);
 
@@ -460,7 +503,7 @@ describe("annotate server: source save", () => {
     try {
       const docResponse = await fetch(`${server.url}/api/doc?path=${encodeURIComponent(realpathSync(realPath))}`);
       expect(docResponse.status).toBe(200);
-      const doc = await docResponse.json() as { markdown?: string; sourceSave?: { enabled?: boolean; path?: string } };
+      const doc: { markdown?: string; sourceSave?: { enabled?: boolean; path?: string } } = await docResponse.json();
       expect(doc.markdown).toBe("Before\n");
       expect(doc.sourceSave?.enabled).toBe(true);
       expect(doc.sourceSave?.path).toBe(realpathSync(realPath));
@@ -489,7 +532,7 @@ describe("annotate server: source save", () => {
         body: JSON.stringify({ paths: ["package.json"], base: folderPath }),
       });
       expect(existsResponse.status).toBe(200);
-      const existsData = await existsResponse.json() as { results?: Record<string, { status?: string }> };
+      const existsData: { results?: Record<string, { status?: string }> } = await existsResponse.json();
       expect(existsData.results?.["package.json"]?.status).toBe("missing");
     } finally {
       server.stop();

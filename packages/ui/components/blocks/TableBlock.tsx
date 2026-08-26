@@ -17,7 +17,12 @@ interface TableBlockProps {
 // Parse pipe-delimited markdown table content into headers + rows.
 // Exported so TableToolbar can reuse it to build a CSV copy without
 // needing a second parser.
-export const parseTableContent = (content: string): { headers: string[]; rows: string[][] } => {
+interface TableContent {
+  headers: string[];
+  rows: string[][];
+}
+
+export const parseTableContent = (content: string): TableContent => {
   const lines = content.split('\n').filter((line) => line.trim());
   if (lines.length === 0) return { headers: [], rows: [] };
 
@@ -32,7 +37,7 @@ export const parseTableContent = (content: string): { headers: string[]; rows: s
   const rows: string[][] = [];
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (/^[\|\-:\s]+$/.test(line)) continue; // separator row
+    if (/^[|\-:\s]+$/.test(line)) continue; // separator row
     rows.push(parseRow(line));
   }
   return { headers, rows };

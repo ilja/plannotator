@@ -20,6 +20,7 @@ afterEach(() => {
  */
 function mockFetchWithMarkdownSupport(markdown: string) {
   return mock((url: string | URL | Request, init?: RequestInit) => {
+    // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(url), headers: headers ?? {} });
 
@@ -45,8 +46,9 @@ function mockFetchWithMarkdownSupport(markdown: string) {
 }
 
 /** Mock fetch that only returns HTML (no markdown support). */
-function mockFetchHtmlOnly(html = "<html><body><p>Fallback</p></body></html>") {
+function _mockFetchHtmlOnly(html = "<html><body><p>Fallback</p></body></html>") {
   return mock((url: string | URL | Request, init?: RequestInit) => {
+    // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(url), headers: headers ?? {} });
     return Promise.resolve(
@@ -60,6 +62,7 @@ function mockFetchHtmlOnly(html = "<html><body><p>Fallback</p></body></html>") {
 
 test("content negotiation: uses markdown when server supports it", async () => {
   const md = "# Hello\n\nThis is markdown from the server.";
+  // SAFETY: mock helper returns compatible fetch signature for test shim
   globalThis.fetch = mockFetchWithMarkdownSupport(md) as typeof fetch;
 
   const result = await urlToMarkdown("https://example.com/page", { useJina: true });
@@ -73,13 +76,15 @@ test("content negotiation: uses markdown when server supports it", async () => {
 
 test("content negotiation: falls through to Jina when server returns HTML", async () => {
   // First call (content negotiation) returns HTML, second (Jina) returns markdown
-  let callCount = 0;
+  let _callCount = 0;
+  // SAFETY: mock returns compatible fetch signature for test shim
   globalThis.fetch = mock((url: string | URL | Request, init?: RequestInit) => {
+    // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(url), headers: headers ?? {} });
-    callCount++;
+    _callCount++;
 
-    if (callCount === 1) {
+    if (_callCount === 1) {
       // Content negotiation attempt — server doesn't support it
       return Promise.resolve(
         new Response("<html><body>Hi</body></html>", {
@@ -107,11 +112,13 @@ test("content negotiation: falls through to Jina when server returns HTML", asyn
 });
 
 test("content negotiation: skipped for local URLs", async () => {
-  let callCount = 0;
+  let _callCount = 0;
+  // SAFETY: mock returns compatible fetch signature for test shim
   globalThis.fetch = mock((_url: string | URL | Request, init?: RequestInit) => {
+    // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(_url), headers: headers ?? {} });
-    callCount++;
+    _callCount++;
     return Promise.resolve(
       new Response("<html><body>Local</body></html>", {
         status: 200,
@@ -133,13 +140,15 @@ test("content negotiation: skipped for local URLs", async () => {
 });
 
 test("content negotiation: handles server error gracefully", async () => {
-  let callCount = 0;
+  let _callCount = 0;
+  // SAFETY: mock returns compatible fetch signature for test shim
   globalThis.fetch = mock((_url: string | URL | Request, init?: RequestInit) => {
+    // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(_url), headers: headers ?? {} });
-    callCount++;
+    _callCount++;
 
-    if (callCount === 1) {
+    if (_callCount === 1) {
       // Content negotiation — server error
       return Promise.resolve(new Response(null, { status: 500 }));
     }
@@ -159,7 +168,9 @@ test("content negotiation: handles server error gracefully", async () => {
 });
 
 test("raw .md URL: still takes priority over content negotiation", async () => {
+  // SAFETY: mock returns compatible fetch signature for test shim
   globalThis.fetch = mock((_url: string | URL | Request, init?: RequestInit) => {
+    // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(_url), headers: headers ?? {} });
     return Promise.resolve(

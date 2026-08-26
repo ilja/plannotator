@@ -25,6 +25,7 @@ export function useDismissOnOutsideAndEscape({
       // Events spec says PointerEvent.detail SHOULD be 0.
       if (event.detail >= 2) return;
 
+      // SAFETY: event.target is EventTarget | null — cast to Node for contains check
       const target = event.target as Node | null;
       if (!target) return;
       if (ref.current && ref.current.contains(target)) {

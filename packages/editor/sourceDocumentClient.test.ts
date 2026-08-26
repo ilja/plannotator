@@ -8,10 +8,10 @@ import {
 const originalFetch = globalThis.fetch;
 
 function mockFetch(response: Response | Error) {
-  globalThis.fetch = (async () => {
+  globalThis.fetch = async () => {
     if (response instanceof Error) throw response;
     return response;
-  }) as typeof fetch;
+  };
 }
 
 afterEach(() => {
@@ -35,7 +35,7 @@ describe('source document client', () => {
       },
     }));
 
-    expect(await probeSourceSave('/repo/docs/a.md')).toEqual({
+    await expect(probeSourceSave('/repo/docs/a.md')).resolves.toEqual({
       status: 'ok',
       sourceSave: {
         enabled: true,
@@ -76,7 +76,7 @@ describe('source document client', () => {
         eol: 'lf',
       },
     }));
-    expect(await fetchSourceDocumentSnapshot('/repo/docs/a.md')).toEqual({
+    await expect(fetchSourceDocumentSnapshot('/repo/docs/a.md')).resolves.toEqual({
       status: 'ok',
       snapshot: {
         markdown: 'after\n',
@@ -109,7 +109,7 @@ describe('source document client', () => {
 
   test('sends the source-save request and maps a successful response', async () => {
     let request: RequestInit | undefined;
-    globalThis.fetch = (async (_input, init) => {
+    globalThis.fetch = async (_input, init) => {
       request = init;
       return Response.json({
         ok: true,
@@ -118,7 +118,7 @@ describe('source document client', () => {
         size: 6,
         eol: 'lf',
       });
-    }) as typeof fetch;
+    };
 
     await expect(saveSourceDocument({
       path: '/repo/docs/a.md',

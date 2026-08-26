@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {useState, useEffect, useRef, useMemo} from "react";
 import { AnnotationType } from "../types";
 import { createPortal } from "react-dom";
 import { useDismissOnOutsideAndEscape } from "../hooks/useDismissOnOutsideAndEscape";
@@ -18,6 +18,7 @@ const isEditableElement = (node: EventTarget | Element | null): boolean => {
   if (!(node instanceof Element)) return false;
   if (node.matches('input, textarea, select, [role="textbox"]')) return true;
   if (node.closest('[contenteditable]:not([contenteditable="false"])')) return true;
+  // SAFETY: node is an Element checked via instanceof before this cast
   return (node as HTMLElement).isContentEditable;
 };
 

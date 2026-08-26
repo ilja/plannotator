@@ -11,7 +11,6 @@ import { TableToolbar } from './blocks/TableToolbar';
 import { TablePopout } from './blocks/TablePopout';
 import { CodePathValidationContext } from './CodePathValidationContext';
 import { useValidatedCodePaths } from '../hooks/useValidatedCodePaths';
-import { ListMarker } from './ListMarker';
 import { AnnotationToolbar } from './AnnotationToolbar';
 import { FloatingQuickLabelPicker } from './FloatingQuickLabelPicker';
 
@@ -20,6 +19,7 @@ class ToolbarErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
 > {
+  // SAFETY: initial error is null per Error | null
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) { return { error }; }
   componentDidCatch(error: Error) { console.error('AnnotationToolbar crashed:', error); }
@@ -33,12 +33,12 @@ class ToolbarErrorBoundary extends React.Component<
   }
 }
 
-import { CommentPopover, type CommentAskAIContext, type CommentAskAIHandler } from './CommentPopover';
+import { CommentPopover, type CommentAskAIHandler } from './CommentPopover';
 import { AttachmentsButton } from './AttachmentsButton';
 import { MessagesIcon } from './icons/MessagesIcon';
 import { GraphvizBlock } from './GraphvizBlock';
 import { MermaidBlock } from './MermaidBlock';
-import { getImageSrc } from './ImageThumbnail';
+
 import { isGraphvizLanguage, isMermaidLanguage } from './diagramLanguages';
 import { getIdentity } from '../utils/identity';
 import { type QuickLabel } from '../utils/quickLabels';
@@ -430,8 +430,8 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   // nothing to copy by the time Cmd+C fires — we inject the captured text here.
   useEffect(() => {
     const handleCopy = (e: ClipboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const target = e.target;
+      if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
 
       if (toolbarState?.selectionText) {
         e.preventDefault();
@@ -452,6 +452,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
       manualHighlights?.forEach(el => {
         const parent = el.parentNode;
         if (parent && parent.nodeName === 'CODE') {
+          // SAFETY: parent is CODE element per nodeName check — HTMLElement
           const codeEl = parent as HTMLElement;
           const plainText = el.textContent || '';
           el.remove();
@@ -502,9 +503,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
       createdA: Date.now(),
       author: getIdentity(),
       images,
-      ...(isQuickLabel ? { isQuickLabel: true } : {}),
-      ...(quickLabelTip ? { quickLabelTip } : {}),
     };
+    if (isQuickLabel) newAnnotation.isQuickLabel = true;
+    if (quickLabelTip) newAnnotation.quickLabelTip = quickLabelTip;
 
     onAddAnnotationRef.current(newAnnotation);
     window.getSelection()?.removeAllRanges();
@@ -590,6 +591,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
         data-print-region="article"
         data-annotation-typography
         className={`w-full bg-card rounded-xl py-5 md:py-8 lg:py-10 xl:py-12 relative ${gridEnabled ? 'px-5 md:px-8 lg:px-10 xl:px-12 shadow-xl border border-border/50' : ''} ${inputMethod === 'pinpoint' ? 'cursor-crosshair' : ''}`}
+        // SAFETY: typographyStyle is React.CSSProperties per ViewerProps — spread is CSSProperties
         style={{ WebkitTouchCallout: 'none', ...typographyStyle } as React.CSSProperties}
       >
         {/* Repo info + demo badge + linked doc badge - top left */}

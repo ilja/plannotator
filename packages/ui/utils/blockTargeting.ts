@@ -51,6 +51,7 @@ export function resolvePinpointTarget(
   if (!container.contains(target)) return null;
 
   // Group detection: cursor is in the gap/gutter of a list group wrapper
+  // SAFETY: closest with data-pinpoint-group returns HTMLElement — cast to HTMLElement
   const groupEl = target.closest('[data-pinpoint-group]') as HTMLElement | null;
   if (groupEl && container.contains(groupEl) && !target.closest('[data-block-id]')) {
     const groupType = groupEl.getAttribute('data-pinpoint-group');
@@ -59,6 +60,7 @@ export function resolvePinpointTarget(
   }
 
   // Find the parent block
+  // SAFETY: closest with data-block-id returns HTMLElement — cast to HTMLElement
   const blockEl = target.closest('[data-block-id]') as HTMLElement | null;
   if (!blockEl || !container.contains(blockEl)) return null;
 
@@ -138,6 +140,7 @@ export function resolvePinpointTarget(
     };
   }
   // Check if inside a table cell
+  // SAFETY: closest with td/th returns HTMLElement — cast to HTMLElement
   const cell = target.closest('td, th') as HTMLElement | null;
   if (cell && blockEl.contains(cell)) {
     return {
@@ -151,6 +154,7 @@ export function resolvePinpointTarget(
   // List item — target the content span (second child), not the bullet
   if (blockEl.querySelector('.select-none')) {
     // This is a list item with a bullet. Find the content span.
+    // SAFETY: blockEl children[1] is HTMLElement for list item content — cast to HTMLElement
     const contentSpan = blockEl.children[1] as HTMLElement | undefined;
     if (contentSpan && (contentSpan === target || contentSpan.contains(target))) {
       return {

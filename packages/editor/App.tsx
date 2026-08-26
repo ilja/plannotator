@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallba
 import { toast, Toaster } from 'sonner';
 import { type Origin, getAgentName } from '@plannotator/shared/agents';
 import { annotateFileFeedback, annotateMessageFeedback } from '@plannotator/shared/feedback-templates';
-import { parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, exportCodeFileAnnotations, exportMessageAnnotations, extractFrontmatter, wrapFeedbackForAgent, Frontmatter, type LinkedDocAnnotationEntry, type MessageAnnotationEntry } from '@plannotator/ui/utils/parser';
+import {parseMarkdownToBlocks, exportAnnotations, exportLinkedDocAnnotations, exportEditorAnnotations, exportCodeFileAnnotations, exportMessageAnnotations, extractFrontmatter, wrapFeedbackForAgent, type LinkedDocAnnotationEntry, type MessageAnnotationEntry} from '@plannotator/ui/utils/parser';
 import { Viewer, ViewerHandle } from '@plannotator/ui/components/Viewer';
 import { HtmlViewer } from '@plannotator/ui/components/html-viewer';
 import { MarkdownEditor, type MarkdownEditorHandle } from '@plannotator/ui/components/MarkdownEditor';
@@ -21,13 +21,12 @@ import { StickyHeaderLane } from '@plannotator/ui/components/StickyHeaderLane';
 import { useSharing } from '@plannotator/ui/hooks/useSharing';
 import { getCallbackConfig, CallbackAction, executeCallback } from '@plannotator/ui/utils/callback';
 import { useActiveSection } from '@plannotator/ui/hooks/useActiveSection';
-import { storage } from '@plannotator/ui/utils/storage';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
-import { loadCodeFont } from '@plannotator/ui/utils/diffFonts';
+import { loadCodeFont, loadProseFont } from '@plannotator/ui/utils/diffFonts';
 import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay';
 import { LookAndFeelAnnouncementDialog } from '@plannotator/ui/components/LookAndFeelAnnouncementDialog';
-import { getObsidianSettings, getEffectiveVaultPath, isObsidianConfigured, CUSTOM_PATH_SENTINEL } from '@plannotator/ui/utils/obsidian';
-import { getBearSettings } from '@plannotator/ui/utils/bear';
+import {getObsidianSettings, getEffectiveVaultPath, isObsidianConfigured} from '@plannotator/ui/utils/obsidian';
+import { buildBearQuickSavePayload, getBearSettings } from '@plannotator/ui/utils/bear';
 import { getOctarineSettings, isOctarineConfigured } from '@plannotator/ui/utils/octarine';
 import { getDefaultNotesApp } from '@plannotator/ui/utils/defaultNotesApp';
 import {
@@ -40,7 +39,7 @@ import {
 } from '@plannotator/ui/utils/aiProvider';
 import { markLookAndFeelAnnouncementSeen, needsLookAndFeelAnnouncement } from '@plannotator/ui/utils/lookAndFeelAnnouncement';
 import { buildDefaultPrompt, useAIChat } from '@plannotator/ui/hooks/useAIChat';
-import { getUIPreferences, type UIPreferences, type PlanWidth } from '@plannotator/ui/utils/uiPreferences';
+import {getUIPreferences, type PlanWidth} from '@plannotator/ui/utils/uiPreferences';
 import { getEditorMode, saveEditorMode } from '@plannotator/ui/utils/editorMode';
 import { getInputMethod, saveInputMethod } from '@plannotator/ui/utils/inputMethod';
 import { useInputMethodSwitch } from '@plannotator/ui/hooks/useInputMethodSwitch';
@@ -59,6 +58,7 @@ import { useCodeFilePopout } from '@plannotator/ui/hooks/useCodeFilePopout';
 import { useAnnotationDraft } from '@plannotator/ui/hooks/useAnnotationDraft';
 import { useEditorAnnotations } from '@plannotator/ui/hooks/useEditorAnnotations';
 import { useExternalAnnotations } from '@plannotator/ui/hooks/useExternalAnnotations';
+import { decodeAnnotation } from '@plannotator/ui/utils/annotationSchemas';
 import { useExternalAnnotationHighlights } from '@plannotator/ui/hooks/useExternalAnnotationHighlights';
 import { useFileBrowser } from '@plannotator/ui/hooks/useFileBrowser';
 import { getFileEditStatus } from '@plannotator/ui/components/sidebar/FileBrowser';
@@ -74,8 +74,15 @@ import type { CommentAskAIContext } from '@plannotator/ui/components/CommentPopo
 import {
   type SourceSaveCapability,
 } from '@plannotator/shared/source-save';
+import type { BearConfig, ObsidianConfig, OctarineConfig } from '@plannotator/shared/integrations-common';
 import type { AgentTerminalCapability } from '@plannotator/shared/agent-terminal';
 import { DEMO_PLAN_CONTENT } from './demoPlan';
+import {
+  parseAICapabilitiesResponse,
+  parsePlanResponse,
+  parseSaveNotesResponse,
+  parseShareHtmlResponse,
+} from './app-boundaries';
 import { canUseAnnotateWideMode, resolveWideModeExitLayout, type WideModeLayoutSnapshot, type WideModeType } from './wideMode';
 import { useCheckboxOverrides } from './hooks/useCheckboxOverrides';
 import { AppHeader } from './components/AppHeader';
@@ -100,24 +107,43 @@ import {
   computeEditStats,
   normalizeEditedMarkdown,
 } from './directEdits';
-import {
-  sourceBackedDocumentKey,
-  sourceBackedLinkedDocumentKey,
-  useSourceBackedDocuments,
-  type EnabledSourceSaveCapability,
-  type SourceBackedDocumentDraftData,
-  type SourceBackedSavedFileChangeDraftData,
-  type SourceBackedDocumentLifecycleOutcome,
-} from './sourceBackedDocuments';
+import {sourceBackedDocumentKey, sourceBackedLinkedDocumentKey, useSourceBackedDocuments, type SourceBackedDocumentDraftData, type SourceBackedSavedFileChangeDraftData, type SourceBackedDocumentLifecycleOutcome} from './sourceBackedDocuments';
 import { createSourceDocumentWatch } from './sourceDocumentWatch';
 import { dirnameBrowserPath, normalizeBrowserPath, pathIsInsideDir } from './sourceDocumentPaths';
 import { pickRestoredSingleFileDraftToDisplay } from './draftRestoreSelection';
+import { decodeGlobalPasteUploadResponse } from './globalPasteUploadResponse';
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
   bear?: boolean;
   octarine?: boolean;
 };
+
+type AnnotationTypographyStyle = React.CSSProperties & {
+  '--annotation-prose-font-family'?: string;
+  '--annotation-prose-font-size'?: string;
+  '--annotation-code-font-family'?: string;
+  '--annotation-code-font-size'?: string;
+};
+
+type SaveNotesRequest = {
+  obsidian?: ObsidianConfig;
+  bear?: BearConfig;
+  octarine?: OctarineConfig;
+};
+
+type EditorFeedbackRequest = {
+  draftGeneration: number;
+  feedback: string;
+  annotations: Annotation[];
+  codeAnnotations: CodeAnnotation[];
+  selectedMessageId?: string;
+  feedbackScope?: 'messages';
+};
+
+function getHTMLElementTarget(target: EventTarget | null): HTMLElement | null {
+  return target instanceof HTMLElement ? target : null;
+}
 
 type MessageAnnotationState = {
   messageId: string;
@@ -277,20 +303,25 @@ const App: React.FC = () => {
   const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
   const annotationProseFontFamily = useConfigValue('annotationProseFontFamily');
   const annotationProseFontSize = useConfigValue('annotationProseFontSize');
-  const annotationTypographyStyle = useMemo<React.CSSProperties>(() => ({
-    ...(annotationProseFontFamily && {
-      ['--annotation-prose-font-family' as string]: `'${annotationProseFontFamily}', var(--font-sans)`,
-    }),
-    ...(annotationProseFontSize && {
-      ['--annotation-prose-font-size' as string]: annotationProseFontSize,
-    }),
-    ...(annotationCodeFontFamily && {
-      ['--annotation-code-font-family' as string]: `'${annotationCodeFontFamily}', var(--font-mono)`,
-    }),
-    ...(annotationCodeFontSize && {
-      ['--annotation-code-font-size' as string]: annotationCodeFontSize,
-    }),
-  }), [annotationCodeFontFamily, annotationCodeFontSize, annotationProseFontFamily, annotationProseFontSize]);
+  const annotationTypographyStyle = useMemo<AnnotationTypographyStyle>(() => {
+    const style: AnnotationTypographyStyle = {};
+    if (annotationProseFontFamily) {
+      style['--annotation-prose-font-family'] = `'${annotationProseFontFamily}', var(--font-sans)`;
+    }
+    if (annotationProseFontSize) {
+      style['--annotation-prose-font-size'] = annotationProseFontSize;
+    }
+    if (annotationCodeFontFamily) {
+      style['--annotation-code-font-family'] = `'${annotationCodeFontFamily}', var(--font-mono)`;
+    }
+    if (annotationCodeFontSize) {
+      style['--annotation-code-font-size'] = annotationCodeFontSize;
+    }
+    return style;
+  }, [annotationCodeFontFamily, annotationCodeFontSize, annotationProseFontFamily, annotationProseFontSize]);
+  useEffect(() => {
+    if (annotationProseFontFamily) loadProseFont(annotationProseFontFamily);
+  }, [annotationProseFontFamily]);
   useEffect(() => {
     if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
   }, [annotationCodeFontFamily]);
@@ -324,7 +355,7 @@ const App: React.FC = () => {
   // the Viewer DOM, and reconciling changed blocks against the old subtree throws.
   const [editGeneration, setEditGeneration] = useState(0);
   // True while the open editor buffer differs from what it mounted with.
-  const [editorDirty, setEditorDirty] = useState(false);
+  const [_editorDirty, setEditorDirty] = useState(false);
   // True while the open editor buffer differs from the as-submitted baseline.
   const [editorDiffersFromBaseline, setEditorDiffersFromBaseline] = useState(false);
   const [agentFeedbackRevision, setAgentFeedbackRevision] = useState(0);
@@ -394,13 +425,14 @@ const App: React.FC = () => {
   const [aiSessionEnabled, setAISessionEnabled] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiProviders, setAiProviders] = useState<Array<{ id: string; name: string; capabilities?: Record<string, boolean>; models?: Array<{ id: string; label: string; default?: boolean }> }>>([]);
-  const [aiConfig, setAIConfig] = useState(() => {
+  type EditorAIConfig = { providerId: string | null; model: string | null; reasoningEffort: string | null };
+  const [aiConfig, setAIConfig] = useState<EditorAIConfig>(() => {
     const saved = getAIProviderSettings();
     const providerId = saved.providerId;
     return {
       providerId,
       model: providerId ? (saved.preferredModels[providerId] ?? null) : null,
-      reasoningEffort: null as string | null,
+      reasoningEffort: null,
     };
   });
   const [showLookAndFeelAnnouncement, setShowLookAndFeelAnnouncement] = useState(needsLookAndFeelAnnouncement);
@@ -607,7 +639,6 @@ const App: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, hasTocEntries]);
-
 
   const linkedDocSidebar = useMemo(() => ({
     ...sidebar,
@@ -1064,7 +1095,10 @@ const App: React.FC = () => {
   const activeSection = useActiveSection(containerRef, headingCount, scrollViewport);
 
   const { editorAnnotations, deleteEditorAnnotation } = useEditorAnnotations();
-  const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations<Annotation>({ enabled: isApiMode });
+  const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations(
+    decodeAnnotation,
+    { enabled: isApiMode },
+  );
   const externalChoiceReconciliation = useMemo(
     () => reconcileDocumentChoiceAnnotations(externalAnnotations, blocks),
     [externalAnnotations, blocks],
@@ -1109,7 +1143,7 @@ const App: React.FC = () => {
   }, [annotations, safeExternalAnnotations]);
 
   // Plan diff state — memoize filtered annotation lists to avoid new references per render
-  const diffAnnotations = useMemo(() => allAnnotations.filter(a => !!a.diffContext), [allAnnotations]);
+  const _diffAnnotations = useMemo(() => allAnnotations.filter(a => !!a.diffContext), [allAnnotations]);
   const viewerAnnotations = useMemo(() => allAnnotations.filter(a => !a.diffContext), [allAnnotations]);
   // Any-annotations flag used by Close/Approve/Send guards. Consolidates the
   // four-term check that was inlined across the annotate-mode header + keyboard paths.
@@ -1214,8 +1248,8 @@ const App: React.FC = () => {
     if (activePath) params.set('path', activePath);
     const query = params.toString();
     const res = await fetch(`/api/share-html${query ? `?${query}` : ''}`);
-    const data = (await res.json().catch(() => ({}))) as { shareHtml?: unknown; error?: string };
-    if (!res.ok || data.error || typeof data.shareHtml !== 'string') {
+    const data = parseShareHtmlResponse(await res.json().catch(() => ({})));
+    if (!res.ok || data.error || data.shareHtml === undefined) {
       throw new Error(data.error || 'Failed to prepare HTML for sharing');
     }
     setShareHtml(data.shareHtml);
@@ -1232,7 +1266,7 @@ const App: React.FC = () => {
     isGeneratingShortUrl,
     shortUrlError,
     pendingSharedAnnotations,
-    sharedGlobalAttachments,
+    _sharedGlobalAttachments,
     clearPendingSharedAnnotations,
     generateShortUrl,
     importFromShareUrl,
@@ -1349,7 +1383,6 @@ const App: React.FC = () => {
     submitted: !!submitted || isSubmitting,
   });
 
-
   // Apply shared annotations to DOM after they're loaded
   useEffect(() => {
     if (pendingSharedAnnotations && pendingSharedAnnotations.length > 0) {
@@ -1428,7 +1461,7 @@ const App: React.FC = () => {
       if ((blk?.id ?? '') === a.blockId) return [a];
       // Block moved: also strip startMeta/endMeta — fromStore() anchors by
       // positional parent index without validating text. Text-search is safe.
-      return [{ ...a, blockId: blk?.id ?? '', startMeta: undefined, endMeta: undefined }];
+      return [{ ...a, _blockId: blk?.id ?? '', startMeta: undefined, endMeta: undefined }];
     });
     setMarkdown(next);
     setEditGeneration((g) => g + 1);
@@ -1875,7 +1908,7 @@ const App: React.FC = () => {
   const savedFileChangesVerb = savedFileChanges.length === 1 ? 'is' : 'are';
   const savedFileChangesPronoun = savedFileChanges.length === 1 ? 'it' : 'them';
   const savedFileChangesOnDiskMessage = <>Your {savedFileChangesLabel} {savedFileChangesVerb} already on disk.</>;
-  const savedFileAwarenessOnlyMessage = <>{savedFileChangesOnDiskMessage} The agent won't be told about {savedFileChangesPronoun}.</>;
+  const _savedFileAwarenessOnlyMessage = <>{savedFileChangesOnDiskMessage} The agent won't be told about {savedFileChangesPronoun}.</>;
   const savedFileAwarenessMixedMessage = hasSavedFileChanges
     ? <> Your {savedFileChangesLabel} will stay on disk, but the agent won't be told about {savedFileChangesPronoun}.</>
     : null;
@@ -2059,11 +2092,11 @@ const App: React.FC = () => {
     fetch('/api/plan')
       .then(res => {
         if (!res.ok) throw new Error('Not in API mode');
-        return res.json();
+        return res.json().then(body => parsePlanResponse(body));
       })
-      .then((data: { plan: string; origin?: Origin; mode?: 'annotate' | 'annotate-last' | 'annotate-folder'; filePath?: string; sourceInfo?: string; sourceConverted?: boolean; sourceSave?: SourceSaveCapability; gate?: boolean; renderAs?: 'html' | 'markdown'; rawHtml?: string; shareHtml?: string; convertHtml?: boolean; sharingEnabled?: boolean; shareBaseUrl?: string; pasteApiUrl?: string; repoInfo?: { display: string; branch?: string; host?: string }; projectRoot?: string; serverConfig?: { displayName?: string; gitUser?: string }; recentMessages?: PickerMessage[]; agentTerminal?: AgentTerminalCapability }) => {
+      .then((data) => {
         // Initialize config store with server-provided values (config file > cookie > default)
-        configStore.init(data.serverConfig);
+        configStore.init(data.serverConfig ? { ...data.serverConfig } : undefined);
         // Session-level force-markdown preference (--markdown); threaded into folder/linked
         // /api/doc requests so on-demand HTML files convert too.
         setConvertHtml(data.convertHtml ?? false);
@@ -2078,7 +2111,7 @@ const App: React.FC = () => {
         } else if (data.mode === 'annotate-folder') {
           // Folder annotation mode: clear demo content, let user pick a file
           setMarkdown('');
-        } else if (typeof data.plan === 'string') {
+        } else if (data.plan !== null && data.plan !== undefined) {
           // CM6 joins lines with \n; CRLF input would make an untouched
           // edit round-trip fabricate a whole-document diff. Normalize once.
           const normalizedPlan = data.plan.replace(/\r\n?/g, '\n');
@@ -2160,12 +2193,14 @@ const App: React.FC = () => {
 
     let cancelled = false;
     fetch('/api/ai/capabilities')
-      .then(res => res.ok ? res.json() : null)
+      .then(res => res.ok
+        ? res.json().then(body => parseAICapabilitiesResponse(body))
+        : null)
       .then(data => {
         if (cancelled) return;
         if (data?.available) {
           const providers = (data.providers ?? []).filter(isPiProvider);
-          const defaultProvider = typeof data.defaultProvider === 'string' &&
+          const defaultProvider = data.defaultProvider !== null &&
             providers.some(provider => provider.id === data.defaultProvider)
             ? data.defaultProvider
             : null;
@@ -2217,7 +2252,7 @@ const App: React.FC = () => {
     if (!isApiMode || !markdown || isSharedSession || annotateMode || false) return;
     if (autoSaveAttempted.current) return;
 
-    const body: { obsidian?: object; bear?: object; octarine?: object } = {};
+    const body: SaveNotesRequest = {};
     const targets: string[] = [];
 
     const obsSettings = getObsidianSettings();
@@ -2263,16 +2298,20 @@ const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-      .then(res => res.json())
+      .then(res => res.json().then(data => parseSaveNotesResponse(data)))
       .then(data => {
-        const results: NoteAutoSaveResults = {
-          ...(body.obsidian ? { obsidian: Boolean(data.results?.obsidian?.success) } : {}),
-          ...(body.bear ? { bear: Boolean(data.results?.bear?.success) } : {}),
-          ...(body.octarine ? { octarine: Boolean(data.results?.octarine?.success) } : {}),
-        };
+        const results: NoteAutoSaveResults = {};
+        if (body.obsidian) results.obsidian = Boolean(data.results?.obsidian?.success);
+        if (body.bear) results.bear = Boolean(data.results?.bear?.success);
+        if (body.octarine) results.octarine = Boolean(data.results?.octarine?.success);
         autoSaveResultsRef.current = results;
 
-        const failed = targets.filter(t => !data.results?.[t.toLowerCase()]?.success);
+        const didSave = (target: string): boolean => {
+          if (target === 'Obsidian') return data.results?.obsidian?.success === true;
+          if (target === 'Bear') return data.results?.bear?.success === true;
+          return data.results?.octarine?.success === true;
+        };
+        const failed = targets.filter(target => !didSave(target));
         if (failed.length === 0) {
           toast.success(`Auto-saved to ${targets.join(' & ')}`);
         } else {
@@ -2326,10 +2365,8 @@ const App: React.FC = () => {
       formData.append('file', fileToUpload);
 
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (res.ok) {
-        const data = await res.json();
-        setGlobalAttachments(prev => [...prev, { path: data.path, name }]);
-      }
+      const attachment = await decodeGlobalPasteUploadResponse(res, name);
+      if (attachment) setGlobalAttachments(prev => [...prev, attachment]);
     } catch {
       // Upload failed silently
     } finally {
@@ -2459,17 +2496,20 @@ const App: React.FC = () => {
       const scopedSelectedMessageId = messageMultiSelectMode
         ? annotatedMessageIds.length === 1 ? annotatedMessageIds[0] : undefined
         : selectedMessageId ?? undefined;
+      const feedbackRequest: EditorFeedbackRequest = {
+        draftGeneration: getDraftGeneration(),
+        feedback,
+        annotations: allAnnotations,
+        codeAnnotations,
+      };
+      if (scopedSelectedMessageId) feedbackRequest.selectedMessageId = scopedSelectedMessageId;
+      if (messageMultiSelectMode && annotatedMessageIds.length > 1) {
+        feedbackRequest.feedbackScope = 'messages';
+      }
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftGeneration: getDraftGeneration(),
-          feedback,
-          annotations: allAnnotations,
-          codeAnnotations,
-          ...(scopedSelectedMessageId ? { selectedMessageId: scopedSelectedMessageId } : {}),
-          ...(messageMultiSelectMode && annotatedMessageIds.length > 1 ? { feedbackScope: 'messages' } : {}),
-        }),
+        body: JSON.stringify(feedbackRequest),
       });
       if (!res.ok) throw new Error('Failed to send feedback');
       dismissDraft();
@@ -2542,7 +2582,7 @@ const App: React.FC = () => {
       // Only handle Cmd/Ctrl+Enter
       if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
 
-      const target = e.target as HTMLElement | null;
+      const target = getHTMLElementTarget(e.target);
       const tag = target?.tagName;
       const isTextField = tag === 'INPUT' || tag === 'TEXTAREA' || Boolean(target?.isContentEditable);
 
@@ -2720,8 +2760,7 @@ const App: React.FC = () => {
     setGlobalAttachments(prev => prev.filter(p => p.path !== path));
   };
 
-
-  const handleTocNavigate = (blockId: string) => {
+  const handleTocNavigate = (_blockId: string) => {
     // Navigation handled by TableOfContents component
     // This is just a placeholder for future custom logic
   };
@@ -2741,7 +2780,7 @@ const App: React.FC = () => {
   // renderAs now tracks the active file (plan, linked doc, or folder file), so the AI
   // sees the current surface's mode — raw HTML for an .html file, markdown otherwise.
   const aiRenderAs = renderAs;
-  const aiDocumentMode = annotateMode || linkedDocHook.isActive;
+  const _aiDocumentMode = annotateMode || linkedDocHook.isActive;
   const hasAIDocumentContext =
     annotateMode ||
     linkedDocHook.isActive ||
@@ -2877,7 +2916,7 @@ const App: React.FC = () => {
     setIsPanelOpen(true);
   }, [exitWideMode, wideModeType]);
 
-  const handleOpenAIAnnouncement = useCallback(() => {
+  const _handleOpenAIAnnouncement = useCallback(() => {
     dismissAIAnnouncement();
     openAIChat();
   }, [dismissAIAnnouncement, openAIChat]);
@@ -2976,7 +3015,7 @@ const App: React.FC = () => {
   };
 
   const handleQuickSaveToNotes = async (target: 'obsidian' | 'bear' | 'octarine') => {
-    const body: { obsidian?: object; bear?: object; octarine?: object } = {};
+    const body: SaveNotesRequest = {};
     // Mid-edit saves describe the live buffer, matching handleApprove.
     const quickSaveMarkdown = isEditingMarkdown
       ? markdownEditorHandleRef.current?.getMarkdown() ?? displayedMarkdown
@@ -2996,12 +3035,7 @@ const App: React.FC = () => {
       }
     }
     if (target === 'bear') {
-      const bs = getBearSettings();
-      body.bear = {
-        plan: quickSaveMarkdown,
-        customTags: bs.customTags,
-        tagPosition: bs.tagPosition,
-      };
+      body.bear = buildBearQuickSavePayload(quickSaveMarkdown, getBearSettings());
     }
     if (target === 'octarine') {
       const os = getOctarineSettings();
@@ -3019,7 +3053,7 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = parseSaveNotesResponse(await res.json());
       const result = data.results?.[target];
       if (result?.success) {
         toast.success(`Saved to ${targetName}`);
@@ -3174,7 +3208,7 @@ const App: React.FC = () => {
     const handleSaveShortcut = (e: KeyboardEvent) => {
       if (e.key !== 's' || !(e.metaKey || e.ctrlKey)) return;
 
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = getHTMLElementTarget(e.target)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
       if (showExport || showFeedbackPrompt ||
@@ -3223,7 +3257,7 @@ const App: React.FC = () => {
     const handlePrintShortcut = (e: KeyboardEvent) => {
       if (e.key !== 'p' || !(e.metaKey || e.ctrlKey)) return;
 
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = getHTMLElementTarget(e.target)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
       if (showExport || showFeedbackPrompt ||
@@ -3303,11 +3337,11 @@ const App: React.FC = () => {
   const handleSaveToBear = useCallback(() => headerHandlersRef.current.handleQuickSaveToNotes('bear'), []);
 
   const planMaxWidth = useMemo(() => {
-    const widths: Record<PlanWidth, number> = { compact: 832, default: 1040, wide: 1280 };
-    return widths[uiPrefs.planWidth] ?? 832;
+    const widths = { compact: 832, default: 1040, wide: 1280 } as const satisfies Record<PlanWidth, number>;
+    return widths[uiPrefs.planWidth];
   }, [uiPrefs.planWidth]);
   const annotateReaderMaxWidth = canUseWideMode && wideModeType === 'wide' ? null : planMaxWidth;
-  const selectedAIProvider = aiProviders.find(provider => provider.id === aiConfig.providerId) ?? null;
+  const _selectedAIProvider = aiProviders.find(provider => provider.id === aiConfig.providerId) ?? null;
   const showAgentTerminalControls =
     annotateMode &&
     annotateSource !== 'message' &&
@@ -3324,9 +3358,6 @@ const App: React.FC = () => {
     showLookAndFeelAnnouncement &&
     !isSharedSession;
 
-
-
-
   if (isLoading && !isSharedSession) {
     return (
       <ThemeProvider defaultTheme="dark">
@@ -3334,6 +3365,21 @@ const App: React.FC = () => {
       </ThemeProvider>
     );
   }
+
+  // SAFETY: sonner style tokens are custom CSS properties (--normal-bg & friends)
+  // that React.CSSProperties deliberately excludes via closed typing; the keys are
+  // all valid custom properties and the values are var()/oklch() references.
+  const toastStyle = {
+    '--normal-bg': 'var(--card)',
+    '--normal-border': 'var(--border)',
+    '--normal-text': 'var(--foreground)',
+    '--success-bg': 'oklch(from var(--success) l c h / 0.15)',
+    '--success-border': 'oklch(from var(--success) l c h / 0.3)',
+    '--success-text': 'var(--success)',
+    '--error-bg': 'oklch(from var(--destructive) l c h / 0.15)',
+    '--error-border': 'oklch(from var(--destructive) l c h / 0.3)',
+    '--error-text': 'var(--destructive)',
+  } as React.CSSProperties;
 
   return (
     <ThemeProvider defaultTheme="dark">
@@ -3380,7 +3426,7 @@ const App: React.FC = () => {
           onSaveToObsidian={handleSaveToObsidian}
           onSaveToBear={handleSaveToBear}
           onSaveToOctarine={handleSaveToOctarine}
-          appVersion={typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'}
+          appVersion={__APP_VERSION__}
           agentInstructionsEnabled={false}
           obsidianConfigured={isObsidianConfigured()}
           bearConfigured={getBearSettings().enabled}
@@ -3998,7 +4044,6 @@ const App: React.FC = () => {
           showCancel
         />
 
-
         {/* Unsent feedback warning dialog — reused by Close and (in gate mode) Approve */}
         <ConfirmDialog
           isOpen={showExitWarning}
@@ -4021,7 +4066,6 @@ const App: React.FC = () => {
           showCancel
         />
 
-
         {/* Shared URL load failure warning */}
         <ConfirmDialog
           isOpen={!!shareLoadError && !isApiMode}
@@ -4035,27 +4079,14 @@ const App: React.FC = () => {
         <Toaster
           position="top-right"
           offset={64}
-          toastOptions={{
-            style: {
-              '--normal-bg': 'var(--card)',
-              '--normal-border': 'var(--border)',
-              '--normal-text': 'var(--foreground)',
-              '--success-bg': 'oklch(from var(--success) l c h / 0.15)',
-              '--success-border': 'oklch(from var(--success) l c h / 0.3)',
-              '--success-text': 'var(--success)',
-              '--error-bg': 'oklch(from var(--destructive) l c h / 0.15)',
-              '--error-border': 'oklch(from var(--destructive) l c h / 0.3)',
-              '--error-text': 'var(--destructive)',
-            } as React.CSSProperties,
-          }}
+          toastOptions={{ style: toastStyle }}
         />
 
         {/* Completion overlay - shown after approve/deny */}
         <CompletionOverlay
           submitted={submitted}
           title={
-            false ? 'Archive Closed'
-            : submitted === 'exited' ? 'Session Closed'
+            submitted === 'exited' ? 'Session Closed'
             : submitted === 'approved'
               ? 'Approved'
               : 'Feedback Sent'
@@ -4069,7 +4100,6 @@ const App: React.FC = () => {
           }
           agentLabel={agentName}
         />
-
 
         <LookAndFeelAnnouncementDialog
           isOpen={shouldShowLookAndFeelAnnouncement}

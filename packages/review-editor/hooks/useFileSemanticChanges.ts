@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import type {
-  SemanticDiffBinaryChange,
-  SemanticDiffChange,
-  SemanticDiffResponse,
+import {
+  decodeSemanticDiffResponse,
+  type SemanticDiffBinaryChange,
+  type SemanticDiffChange,
+  type SemanticDiffResponse,
 } from '@plannotator/shared/semantic-diff-types';
 import { isOrphanChange } from '../dock/panels/semanticDiffShared';
 
@@ -29,7 +30,8 @@ const FAILURE_RETRY_COOLDOWN_MS = 60_000;
 async function fetchSemanticDiff(): Promise<SemanticDiffResponse> {
   const res = await fetch('/api/semantic-diff');
   if (!res.ok) throw new Error('Semantic diff failed');
-  return res.json() as Promise<SemanticDiffResponse>;
+  const data: unknown = await res.json();
+  return decodeSemanticDiffResponse(data);
 }
 
 function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {

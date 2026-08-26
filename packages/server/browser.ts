@@ -9,8 +9,13 @@ import path from "node:path";
 import fs from "node:fs";
 import { getPlannotatorDataDir } from "@plannotator/shared/data-dir";
 import { loadConfig, resolveUseGlimpse } from "@plannotator/shared/config";
+import { Option, Schema } from "effect";
 
 const IPC_REGISTRY = path.join(getPlannotatorDataDir(), "vscode-ipc.json");
+const VscodeIpcRegistrySchema = Schema.Record(Schema.String, Schema.Unknown);
+const VscodeIpcPortSchema = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThan(0)),
+);
 
 /**
  * Common "no-op" values for $BROWSER used by headless/background environments
@@ -27,12 +32,37 @@ export function isNoOpBrowserSentinel(value: string | undefined): boolean {
 }
 
 /**
+ * Parse persisted VS Code IPC registry data, retaining only valid positive integer ports.
+ */
+export function decodeVscodeIpcRegistry(raw: string) {
+  try {
+    const parsedRegistry = Option.getOrUndefined(
+      Schema.decodeUnknownOption(VscodeIpcRegistrySchema)(JSON.parse(raw)),
+    );
+    if (!parsedRegistry) return {};
+
+    const registry: Record<string, number> = {};
+    for (const [workspace, port] of Object.entries(parsedRegistry)) {
+      const decodedPort = Option.getOrUndefined(
+        Schema.decodeUnknownOption(VscodeIpcPortSchema)(port),
+      );
+      if (decodedPort !== undefined) {
+        registry[workspace] = decodedPort;
+      }
+    }
+    return registry;
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Try opening URL via VS Code extension IPC registry.
  * Falls back when env vars (PLANNOTATOR_BROWSER) aren't available to the process.
  */
 async function tryVscodeIpc(url: string): Promise<boolean> {
   try {
-    const registry: Record<string, number> = JSON.parse(
+    const registry = decodeVscodeIpcRegistry(
       fs.readFileSync(IPC_REGISTRY, "utf-8"),
     );
     const cwd = process.cwd();

@@ -5,6 +5,7 @@
  * /api/reference/obsidian/doc, and /api/reference/files. Extracted from index.ts for modularity.
  */
 
+import { Option, Schema } from "effect";
 import { existsSync, statSync } from "fs";
 import { readdir } from "fs/promises";
 import { join, relative, resolve } from "path";
@@ -51,6 +52,25 @@ interface HandleDocExistsOptions {
 	rootPaths?: string[];
 }
 
+const DocExistsRequestSchema = Schema.Struct({
+	paths: Schema.Array(Schema.String),
+	base: Schema.optionalKey(Schema.String),
+});
+
+type DocExistsRequest = Schema.Schema.Type<typeof DocExistsRequestSchema>;
+
+interface DocumentPayload {
+	rawHtml?: string;
+	markdown?: string;
+	filepath?: string;
+	renderAs: "html" | "markdown";
+	isConverted?: boolean;
+}
+
+interface DocumentResponsePayload extends DocumentPayload {
+	sourceSave?: SourceSaveCapability;
+}
+
 type RouteResolveResult =
 	| { kind: "found"; path: string }
 	| { kind: "not_found"; input: string }
@@ -63,7 +83,7 @@ function getAllowedRootPaths(options?: { rootPath?: string; rootPaths?: string[]
 		: [options?.rootPath ?? process.cwd()];
 	const roots: string[] = [];
 	for (const root of rawRoots) {
-		if (typeof root !== "string" || root.length === 0) continue;
+		if (root.length === 0) continue;
 		const resolved = resolveUserPath(root);
 		if (!roots.includes(resolved)) roots.push(resolved);
 	}
@@ -144,29 +164,25 @@ function resolveMarkdownFileFromAllowedRoots(input: string, roots: string[]): Ro
 	return { kind: "not_found", input };
 }
 
-function applyDocOptions<T extends Record<string, unknown>>(
-	data: T,
+function applyDocOptions(
+	data: DocumentPayload,
 	options: HandleDocOptions = {},
 	sourceSnapshot?: SourceFileSnapshot,
-): T & { sourceSave?: SourceSaveCapability } {
-	const next: Record<string, unknown> = { ...data };
-	if (
-		typeof next.rawHtml === "string" &&
-		typeof next.filepath === "string" &&
-		options.rewriteHtml
-	) {
+): DocumentResponsePayload {
+	const next: DocumentResponsePayload = { ...data };
+	if (next.rawHtml !== undefined && next.filepath !== undefined && options.rewriteHtml) {
 		next.rawHtml = options.rewriteHtml(next.rawHtml, next.filepath);
 	}
-	if (typeof data.filepath !== "string") {
+	if (data.filepath === undefined) {
 		return options.sourceSaveFolderPath || options.sourceSaveFilePath
-			? { ...next, sourceSave: disabledSourceSave("not-local-file") } as T & { sourceSave?: SourceSaveCapability }
-			: next as T & { sourceSave?: SourceSaveCapability };
+			? { ...next, sourceSave: disabledSourceSave("not-local-file") }
+			: next;
 	}
 	if (data.renderAs === "html") {
-		return { ...next, sourceSave: disabledSourceSave("html-render") } as T & { sourceSave?: SourceSaveCapability };
+		return { ...next, sourceSave: disabledSourceSave("html-render") };
 	}
 	if (data.isConverted === true) {
-		return { ...next, sourceSave: disabledSourceSave("converted-source") } as T & { sourceSave?: SourceSaveCapability };
+		return { ...next, sourceSave: disabledSourceSave("converted-source") };
 	}
 	if (options.sourceSaveFilePath) {
 		const sourcePath = resolveExistingSourceSaveFile("single-file", options.sourceSaveFilePath);
@@ -175,10 +191,10 @@ function applyDocOptions<T extends Record<string, unknown>>(
 			: createSourceSaveCapability("single-file", data.filepath);
 		if (sourcePath && doc.enabled && sourcePath === doc.path) {
 			options.onSourceDocumentServed?.(doc.path);
-			return { ...next, sourceSave: doc } as T & { sourceSave?: SourceSaveCapability };
+			return { ...next, sourceSave: doc };
 		}
 	}
-	if (!options.sourceSaveFolderPath) return next as T & { sourceSave?: SourceSaveCapability };
+	if (!options.sourceSaveFolderPath) return next;
 	const sourceSave = sourceSnapshot
 		? createSourceSaveCapabilityFromSnapshot("folder-file", data.filepath, sourceSnapshot, options.sourceSaveFolderPath)
 		: createSourceSaveCapability("folder-file", data.filepath, options.sourceSaveFolderPath);
@@ -186,10 +202,10 @@ function applyDocOptions<T extends Record<string, unknown>>(
 	return {
 		...next,
 		sourceSave,
-	} as T & { sourceSave?: SourceSaveCapability };
+	};
 }
 
-function docJson(data: Record<string, unknown>, options?: HandleDocOptions, sourceSnapshot?: SourceFileSnapshot): Response {
+function docJson(data: DocumentPayload, options?: HandleDocOptions, sourceSnapshot?: SourceFileSnapshot): Response {
 	return Response.json(applyDocOptions(data, options, sourceSnapshot));
 }
 
@@ -377,17 +393,18 @@ export async function handleDocExists(req: Request, options?: HandleDocExistsOpt
 	} catch {
 		return Response.json({ error: "Invalid JSON" }, { status: 400 });
 	}
-	const paths = (body as { paths?: unknown })?.paths;
-	if (!Array.isArray(paths) || !paths.every((p) => typeof p === "string")) {
+	const parsed = Schema.decodeUnknownOption(DocExistsRequestSchema)(body);
+	if (Option.isNone(parsed)) {
 		return Response.json({ error: "Expected { paths: string[] }" }, { status: 400 });
 	}
+	const request: DocExistsRequest = parsed.value;
+	const { paths, base } = request;
 	if (paths.length > 500) {
 		return Response.json({ error: "Too many paths (max 500)" }, { status: 400 });
 	}
 	const allowedRoots = getAllowedRootPaths(options);
-	const baseRaw = (body as { base?: unknown })?.base;
-	const baseDir = typeof baseRaw === "string" && baseRaw.length > 0
-		? getTrustedBaseDir(baseRaw, allowedRoots)
+	const baseDir = base && base.length > 0
+		? getTrustedBaseDir(base, allowedRoots)
 		: null;
 	const results: Record<
 		string,
@@ -398,7 +415,7 @@ export async function handleDocExists(req: Request, options?: HandleDocExistsOpt
 	> = {};
 
 	await Promise.all(
-		(paths as string[]).map(async (p) => {
+		paths.map(async (p) => {
 			const cleanP = parseCodePath(p).filePath;
 			if (isAbsoluteUserPath(cleanP) && !isWithinAllowedRoots(resolveUserPath(cleanP), allowedRoots)) {
 				results[p] = { status: "missing" };

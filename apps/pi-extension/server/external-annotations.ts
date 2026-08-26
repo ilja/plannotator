@@ -16,8 +16,9 @@ import {
 	HEARTBEAT_INTERVAL_MS,
 	type StorableAnnotation,
 	type ExternalAnnotationEvent,
+	decodeExternalAnnotationPatch,
 } from "../generated/external-annotation.js";
-import { json, parseBody } from "./helpers.js";
+import { json, parseBody, toWebRequest, type ParsedRequestBody } from "./helpers.js";
 
 // ---------------------------------------------------------------------------
 // Route prefix
@@ -50,7 +51,7 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 
 	return {
 		/** Push annotations directly into the store (bypasses HTTP, reuses same validation). */
-		addAnnotations(body: unknown): { ids: string[] } | { error: string } {
+		addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
 			const parsed = transform(body);
 			if ("error" in parsed) return { error: parsed.error };
 			const created = store.add(parsed.annotations);
@@ -147,8 +148,15 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 					return true;
 				}
 				try {
-					const body = await parseBody(req);
-					const updated = store.update(id, body as Partial<StorableAnnotation>);
+					const patch = decodeExternalAnnotationPatch(
+						mode,
+						await toWebRequest(req).json(),
+					);
+					if (!patch) {
+						json(res, { error: "Invalid JSON" }, 400);
+						return true;
+					}
+					const updated = store.update(id, patch);
 					if (!updated) {
 						json(res, { error: "Not found" }, 404);
 						return true;

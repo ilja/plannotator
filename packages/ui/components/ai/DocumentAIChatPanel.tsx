@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AIChatEntry, PendingPermission } from '../../hooks/useAIChat';
 import type { AIProviderOption } from '../../utils/aiProvider';
+import type { AIJsonObject } from '@plannotator/ai';
 import { formatRelativeTime, renderChatMarkdown } from '../../utils/aiChatFormat';
 import { OverlayScrollArea } from '../OverlayScrollArea';
 import { SparklesIcon } from '../SparklesIcon';
@@ -24,23 +25,23 @@ function truncate(text: string, max = 180): string {
   return `${text.slice(0, max).trimEnd()}...`;
 }
 
-function formatToolInput(toolName: string, input: Record<string, unknown>): string | null {
+function formatToolInput(toolName: string, input: AIJsonObject): string | null {
   if (!input || Object.keys(input).length === 0) return null;
 
-  if (toolName === 'Bash' && typeof input.command === 'string') {
+  if (toolName === 'Bash' && input.command !== undefined && input.command !== null && input.command === String(input.command)) {
     return input.command;
   }
-  if ((toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') && typeof input.file_path === 'string') {
+  if ((toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') && input.file_path !== undefined && input.file_path !== null && input.file_path === String(input.file_path)) {
     return input.file_path;
   }
-  if (toolName === 'Glob' && typeof input.pattern === 'string') {
+  if (toolName === 'Glob' && input.pattern !== undefined && input.pattern !== null && input.pattern === String(input.pattern)) {
     return input.pattern;
   }
-  if (toolName === 'Grep' && typeof input.pattern === 'string') {
-    const path = typeof input.path === 'string' ? ` in ${input.path}` : '';
+  if (toolName === 'Grep' && input.pattern !== undefined && input.pattern !== null && input.pattern === String(input.pattern)) {
+    const path = input.path !== undefined && input.path !== null && input.path === String(input.path) ? ` in ${input.path}` : '';
     return `${input.pattern}${path}`;
   }
-  if ((toolName === 'WebFetch' || toolName === 'WebSearch') && typeof input.url === 'string') {
+  if ((toolName === 'WebFetch' || toolName === 'WebSearch') && input.url !== undefined && input.url !== null && input.url === String(input.url)) {
     return input.url;
   }
 

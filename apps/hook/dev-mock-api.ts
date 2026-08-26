@@ -217,7 +217,12 @@ const versions = [
   { version: 3, timestamp: new Date(now - 60_000).toISOString() },
 ];
 
-const versionPlans: Record<number, string> = {
+/** Demo plan versions served by /api/plan/version, keyed by version number. */
+interface VersionPlanTable {
+  [version: number]: string;
+}
+
+const versionPlans: VersionPlanTable = {
   1: PLAN_V1,
   2: PLAN_V2,
   // Version 3 is the current demo document — served live by the editor.
@@ -261,19 +266,13 @@ export function devMockApi(): Plugin {
         if (req.url === '/api/config' && req.method === 'POST') {
           let body = '';
           req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-          req.on('end', async () => {
-            try {
-              const { saveConfig } = await import('@plannotator/shared/config');
-              const parsed = JSON.parse(body);
-              const toSave: Record<string, unknown> = {};
-              if (parsed.pfmReminder !== undefined) toSave.pfmReminder = parsed.pfmReminder;
-              if (Object.keys(toSave).length > 0) saveConfig(toSave as any);
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: true }));
-            } catch {
-              res.statusCode = 400;
-              res.end(JSON.stringify({ error: 'Invalid request' }));
-            }
+          req.on('end', () => {
+            // Dev mock: accept any config patch, persist via cookie only.
+            // Avoid importing @plannotator/shared/config here — that file pulls in
+            // Node-only data-dir and fails to resolve under Vite's ESM loader.
+            try { JSON.parse(body); } catch {}
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true }));
           });
           return;
         }

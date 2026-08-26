@@ -25,7 +25,7 @@ interface SidebarTabsProps {
 }
 
 export const SidebarTabs: React.FC<SidebarTabsProps> = ({
-  activeTab,
+  activeTab: _activeTab,
   onToggleTab,
   showFilesTab,
   showMessagesTab,

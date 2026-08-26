@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { Option, Schema } from "effect";
 import {
   type DiffResult,
   type DiffType,
@@ -292,17 +293,27 @@ function parseJjResolvedBookmarks(value: string): string[] {
     const remote: string[] = [];
 
     for (const bookmark of parsed) {
-      if (typeof bookmark === "string") {
-        local.push(bookmark);
+      const bookmarkString = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.String)(bookmark),
+      );
+      if (bookmarkString !== undefined) {
+        local.push(bookmarkString);
         continue;
       }
 
-      if (!bookmark || typeof bookmark !== "object") continue;
+      const bookmarkRecord = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(bookmark),
+      );
+      if (!bookmarkRecord) continue;
 
-      const name = typeof bookmark.name === "string" ? bookmark.name : null;
+      const name =
+        Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(bookmarkRecord.name)) ??
+        null;
       if (!name) continue;
 
-      const remoteName = typeof bookmark.remote === "string" ? bookmark.remote : null;
+      const remoteName =
+        Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(bookmarkRecord.remote)) ??
+        null;
       if (remoteName) {
         remote.push(`${name}@${remoteName}`);
         continue;
@@ -414,8 +425,8 @@ function splitJjTemplateFields(line: string): [string, string] | null {
 
 function parseSerializedJjString(value: string): string | null {
   try {
-    const parsed = JSON.parse(value);
-    return typeof parsed === "string" ? parsed : null;
+    const parsed: unknown = JSON.parse(value);
+    return Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(parsed)) ?? null;
   } catch {
     return null;
   }

@@ -27,12 +27,16 @@ import {
   type AtomicCodeMirrorEditorHandle,
 } from '@atomic-editor/editor';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 const CORPUS_DIR = join(homedir(), '.plannotator', 'history');
 const CORPUS_SAMPLE_SIZE = 150;
 const MAX_FILE_BYTES = 64 * 1024;
 
-const FIXTURES: Record<string, string> = {
+interface Fixtures {
+  [key: string]: string;
+}
+
+const FIXTURES: Fixtures = {
   'pfm-kitchen-sink': `---
 title: Spike Plan
 tags: [a, b]
@@ -109,7 +113,11 @@ async function mountAndRead(markdown: string): Promise<string> {
   host.style.width = '600px';
   host.style.height = '400px';
   document.body.appendChild(host);
-  const handleRef: { current: AtomicCodeMirrorEditorHandle | null } = { current: null };
+  interface HandleRef {
+    current: AtomicCodeMirrorEditorHandle | null;
+  }
+
+  const handleRef: HandleRef = { current: null };
   const root = createRoot(host);
   await act(async () => {
     root.render(

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deleteDraft, getDraftGeneration, loadDraft, saveDraft } from "./draft";
+import { deleteDraft, getDraftDir, getDraftGeneration, loadDraft, saveDraft } from "./draft";
 
 const KEY = "draft-generation-test";
 
@@ -22,6 +22,81 @@ afterEach(() => {
 });
 
 describe("draft generation invalidation", () => {
+  test("rejects malformed draft roots", () => {
+    for (const contents of ["not json", "null", "[]", '"draft"']) {
+      writeFileSync(join(getDraftDir(), `${KEY}.json`), contents, "utf-8");
+
+      expect(loadDraft(KEY)).toBeNull();
+      expect(getDraftGeneration(KEY)).toBeNull();
+    }
+  });
+
+  test("ignores malformed tombstone roots", () => {
+    for (const contents of ["not json", "null", "[]", '"tombstone"']) {
+      writeFileSync(join(getDraftDir(), `${KEY}.deleted.json`), contents, "utf-8");
+
+      expect(getDraftGeneration(KEY)).toBeNull();
+    }
+  });
+
+  test("treats malformed tombstone generation metadata as absent", () => {
+    writeFileSync(
+      join(getDraftDir(), `${KEY}.deleted.json`),
+      JSON.stringify({ draftGeneration: "two", extraField: { retained: true } }),
+      "utf-8",
+    );
+
+    expect(saveDraft(KEY, { annotations: ["fresh"], draftGeneration: 2 })).toBe(true);
+    expect(loadDraft(KEY)).toEqual({ annotations: ["fresh"], draftGeneration: 2 });
+  });
+
+  test("keeps an object draft when its generation metadata is malformed", () => {
+    writeFileSync(
+      join(getDraftDir(), `${KEY}.json`),
+      JSON.stringify({ annotations: ["kept"], draftGeneration: "three", extraField: { retained: true } }),
+      "utf-8",
+    );
+
+    expect(getDraftGeneration(KEY)).toBeNull();
+    expect(loadDraft(KEY)).toEqual({
+      annotations: ["kept"],
+      draftGeneration: "three",
+      extraField: { retained: true },
+    });
+
+    writeFileSync(
+      join(getDraftDir(), `${KEY}.deleted.json`),
+      JSON.stringify({ draftGeneration: 4 }),
+      "utf-8",
+    );
+
+    expect(loadDraft(KEY)).toEqual({
+      annotations: ["kept"],
+      draftGeneration: "three",
+      extraField: { retained: true },
+    });
+  });
+
+  test("does not overwrite a valid draft with a non-object save payload", () => {
+    expect(saveDraft(KEY, { annotations: ["kept"] })).toBe(true);
+
+    expect(saveDraft(KEY, ["not", "a", "draft"])).toBe(false);
+    expect(saveDraft(KEY, null)).toBe(false);
+    expect(loadDraft(KEY)).toEqual({ annotations: ["kept"] });
+  });
+
+  test("recovers from a corrupt draft file through the tombstone lifecycle", () => {
+    writeFileSync(join(getDraftDir(), `${KEY}.json`), "not json", "utf-8");
+
+    expect(loadDraft(KEY)).toBeNull();
+
+    deleteDraft(KEY, 2);
+
+    expect(saveDraft(KEY, { annotations: ["stale"], draftGeneration: 2 })).toBe(false);
+    expect(saveDraft(KEY, { annotations: ["fresh"], draftGeneration: 3 })).toBe(true);
+    expect(loadDraft(KEY)).toEqual({ annotations: ["fresh"], draftGeneration: 3 });
+  });
+
   test("ignores stale saves that arrive after a newer delete", () => {
     deleteDraft(KEY, 2);
 

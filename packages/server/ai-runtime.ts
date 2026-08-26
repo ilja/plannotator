@@ -31,6 +31,8 @@ export async function createAIRuntime(options: CreateAIRuntimeOptions = {}): Pro
     const rawPiPath = Bun.which("pi");
     if (rawPiPath) {
       const piPath = resolveWindowsCommandShim(rawPiPath);
+      // SAFETY: type \"pi-sdk\" addresses the pi-sdk provider whose PiSDKConfig declares the
+      // optional piExecutablePath; the remaining PiSDKConfig fields are all optional.
       const provider = await createProvider({
         type: "pi-sdk",
         cwd,

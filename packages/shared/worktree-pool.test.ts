@@ -3,7 +3,12 @@ import type { ReviewGitRuntime } from "./review-core";
 import type { PRMetadata } from "./pr-types";
 import { createWorktreePool } from "./worktree-pool";
 
-function fakeRuntime(): { runtime: ReviewGitRuntime; commands: string[][] } {
+interface FakeRuntimeResult {
+	readonly runtime: ReviewGitRuntime;
+	readonly commands: string[][];
+}
+
+function fakeRuntime(): FakeRuntimeResult {
   const commands: string[][] = [];
   const runtime: ReviewGitRuntime = {
     async runGit(args) {
@@ -165,7 +170,7 @@ describe("worktree-pool", () => {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  let reject!: (err: unknown) => void;
+  let reject!: (err: any) => void;
   const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
   return { promise, resolve, reject };
 }

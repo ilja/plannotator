@@ -202,6 +202,7 @@ function walkFiles(
 	ignoredDirs: string[],
 	fileMatcher: (name: string) => boolean,
 ): void {
+	// SAFETY: readdirSync with withFileTypes:true always returns Dirent[]; Node types include string[] fallback
 	const entries = readdirSync(dir, { withFileTypes: true }) as Dirent[];
 	for (const entry of entries) {
 		if (entry.isDirectory()) {

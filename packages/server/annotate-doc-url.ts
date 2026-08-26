@@ -1,10 +1,15 @@
 import { dirname } from "path";
 
+export interface AnnotateDocSessionParamsResult {
+  url: string;
+  changed: boolean;
+}
+
 export function applyAnnotateDocSessionParams(
   requestUrl: string,
   sourceFilePath: string,
   convertHtml: boolean,
-): { url: string; changed: boolean } {
+): AnnotateDocSessionParamsResult {
   const docUrl = new URL(requestUrl);
   let changed = false;
 

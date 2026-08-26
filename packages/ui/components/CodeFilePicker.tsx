@@ -24,6 +24,7 @@ export const CodeFilePicker: React.FC<{
 		});
 	}, [anchorEl]);
 
+	// SAFETY: popoverRef is a div ref, HTMLElement is the dismiss hook's expected element type
 	useDismissOnOutsideAndEscape({
 		enabled: true,
 		ref: popoverRef as React.RefObject<HTMLElement>,

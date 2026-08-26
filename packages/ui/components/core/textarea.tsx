@@ -2,6 +2,7 @@ import React from 'react';
 
 export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
+// SAFETY: fieldSizing is valid CSSProperties; React typing is closed
 const fieldSizing = { fieldSizing: 'content' } as React.CSSProperties;
 
 function cx(...classes: Array<string | false | null | undefined>): string {

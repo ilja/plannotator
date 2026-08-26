@@ -27,11 +27,13 @@ function hasImageExtension(filePath: string): boolean {
   return ALLOWED_IMAGE_EXTENSIONS.has(getExtension(filePath));
 }
 
-export function validateImagePath(rawPath: string): {
+export interface ImagePathValidation {
   valid: boolean;
   resolved: string;
   error?: string;
-} {
+}
+
+export function validateImagePath(rawPath: string): ImagePathValidation {
   const resolved = resolve(rawPath);
 
   if (!hasImageExtension(resolved)) {
@@ -45,11 +47,13 @@ export function validateImagePath(rawPath: string): {
   return { valid: true, resolved };
 }
 
-export function validateUploadExtension(fileName: string): {
+export interface UploadExtensionValidation {
   valid: boolean;
   ext: string;
   error?: string;
-} {
+}
+
+export function validateUploadExtension(fileName: string): UploadExtensionValidation {
   const ext = getExtension(fileName) || "png";
 
   if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) {

@@ -16,12 +16,9 @@ import { join, resolve as resolvePath } from "node:path";
 
 import { json, parseBody } from "./helpers";
 import type { IncomingMessage } from "node:http";
+import { Schema } from "effect";
 
-import {
-	type VaultNode,
-	buildFileTree,
-	isFileBrowserExcludedPath,
-} from "../generated/reference-common.js";
+import {buildFileTree, isFileBrowserExcludedPath} from "../generated/reference-common.js";
 import {
 	filterWorkspaceStatusForDirectory,
 	getWorkspaceStatusForDirectory,
@@ -76,7 +73,7 @@ function getAllowedRootPaths(options?: { rootPath?: string; rootPaths?: string[]
 		: [options?.rootPath ?? process.cwd()];
 	const roots: string[] = [];
 	for (const root of rawRoots) {
-		if (typeof root !== "string" || root.length === 0) continue;
+		if (root.length === 0) continue;
 		const resolved = resolveUserPath(root);
 		if (!roots.includes(resolved)) roots.push(resolved);
 	}
@@ -157,29 +154,30 @@ function resolveMarkdownFileFromAllowedRoots(input: string, roots: string[]): Ro
 	return { kind: "not_found", input };
 }
 
-function applyDocOptions<T extends Record<string, unknown>>(
-	data: T,
+interface DocPayload {
+	markdown?: string;
+	rawHtml?: string;
+	filepath: string;
+	renderAs?: "markdown" | "html";
+	isConverted?: boolean;
+}
+
+type DocPayloadWithSourceSave = DocPayload & { sourceSave?: SourceSaveCapability };
+
+function applyDocOptions(
+	data: DocPayload,
 	options: HandleDocOptions = {},
 	sourceSnapshot?: SourceFileSnapshot,
-): T & { sourceSave?: SourceSaveCapability } {
-	const next: Record<string, unknown> = { ...data };
-	if (
-		typeof next.rawHtml === "string" &&
-		typeof next.filepath === "string" &&
-		options.rewriteHtml
-	) {
+): DocPayloadWithSourceSave {
+	const next: DocPayload = { ...data };
+	if (next.rawHtml !== undefined && options.rewriteHtml) {
 		next.rawHtml = options.rewriteHtml(next.rawHtml, next.filepath);
 	}
-	if (typeof data.filepath !== "string") {
-		return options.sourceSaveFolderPath || options.sourceSaveFilePath
-			? { ...next, sourceSave: disabledSourceSave("not-local-file") } as T & { sourceSave?: SourceSaveCapability }
-			: next as T & { sourceSave?: SourceSaveCapability };
-	}
 	if (data.renderAs === "html") {
-		return { ...next, sourceSave: disabledSourceSave("html-render") } as T & { sourceSave?: SourceSaveCapability };
+		return { ...next, sourceSave: disabledSourceSave("html-render") };
 	}
 	if (data.isConverted === true) {
-		return { ...next, sourceSave: disabledSourceSave("converted-source") } as T & { sourceSave?: SourceSaveCapability };
+		return { ...next, sourceSave: disabledSourceSave("converted-source") };
 	}
 	if (options.sourceSaveFilePath) {
 		const sourcePath = resolveExistingSourceSaveFile("single-file", options.sourceSaveFilePath);
@@ -188,10 +186,10 @@ function applyDocOptions<T extends Record<string, unknown>>(
 			: createSourceSaveCapability("single-file", data.filepath);
 		if (sourcePath && doc.enabled && sourcePath === doc.path) {
 			options.onSourceDocumentServed?.(doc.path);
-			return { ...next, sourceSave: doc } as T & { sourceSave?: SourceSaveCapability };
+			return { ...next, sourceSave: doc };
 		}
 	}
-	if (!options.sourceSaveFolderPath) return next as T & { sourceSave?: SourceSaveCapability };
+	if (!options.sourceSaveFolderPath) return next;
 	const sourceSave = sourceSnapshot
 		? createSourceSaveCapabilityFromSnapshot("folder-file", data.filepath, sourceSnapshot, options.sourceSaveFolderPath)
 		: createSourceSaveCapability("folder-file", data.filepath, options.sourceSaveFolderPath);
@@ -199,12 +197,12 @@ function applyDocOptions<T extends Record<string, unknown>>(
 	return {
 		...next,
 		sourceSave,
-	} as T & { sourceSave?: SourceSaveCapability };
+	};
 }
 
 function jsonDoc(
 	res: Res,
-	data: Record<string, unknown>,
+	data: DocPayload,
 	options?: HandleDocOptions,
 	status?: number,
 	sourceSnapshot?: SourceFileSnapshot,
@@ -218,7 +216,7 @@ const FILE_BROWSER_EXTENSIONS = /\.(mdx?|txt|html?)$/i;
 function walkMarkdownFiles(dir: string, root: string, results: string[], extensions: RegExp = FILE_BROWSER_EXTENSIONS): void {
 	let entries: Dirent[];
 	try {
-		entries = readdirSync(dir, { withFileTypes: true }) as Dirent[];
+		entries = readdirSync(dir, { withFileTypes: true });
 	} catch {
 		return;
 	}
@@ -418,21 +416,26 @@ export async function handleDocRequest(res: Res, url: URL, options: HandleDocOpt
  * Batch existence check for code-file paths the renderer wants to linkify.
  * POST /api/doc/exists with { paths: string[] }.
  */
+const DocExistsRequestSchema = Schema.Struct({
+	paths: Schema.Array(Schema.String),
+	base: Schema.optionalKey(Schema.String),
+});
+
 export async function handleDocExistsRequest(res: Res, req: IncomingMessage, options?: HandleDocExistsOptions): Promise<void> {
-	const body = await parseBody(req);
-	const paths = (body as { paths?: unknown }).paths;
-	if (!Array.isArray(paths) || !paths.every((p) => typeof p === "string")) {
+	let request: Schema.Schema.Type<typeof DocExistsRequestSchema>;
+	try {
+		request = Schema.decodeUnknownSync(DocExistsRequestSchema)(await parseBody(req));
+	} catch {
 		json(res, { error: "Expected { paths: string[] }" }, 400);
 		return;
 	}
-	if (paths.length > 500) {
+	if (request.paths.length > 500) {
 		json(res, { error: "Too many paths (max 500)" }, 400);
 		return;
 	}
 	const allowedRoots = getAllowedRootPaths(options);
-	const baseRaw = (body as { base?: unknown }).base;
-	const baseDir = typeof baseRaw === "string" && baseRaw.length > 0
-		? getTrustedBaseDir(baseRaw, allowedRoots)
+	const baseDir = request.base && request.base.length > 0
+		? getTrustedBaseDir(request.base, allowedRoots)
 		: null;
 	const results: Record<
 		string,
@@ -443,7 +446,7 @@ export async function handleDocExistsRequest(res: Res, req: IncomingMessage, opt
 	> = {};
 
 	await Promise.all(
-		(paths as string[]).map(async (p) => {
+		request.paths.map(async (p) => {
 			const cleanP = parseCodePath(p).filePath;
 			if (isAbsoluteUserPath(cleanP) && !isWithinAllowedRoots(resolveUserPath(cleanP), allowedRoots)) {
 				results[p] = { status: "missing" };

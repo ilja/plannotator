@@ -11,6 +11,7 @@ import type {
   SelectedLineRange,
 } from '@pierre/diffs';
 import { CodeView, type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
+import type { File, FileDiff } from '@pierre/diffs';
 import type { DiffTokenEventBaseProps } from '@pierre/diffs';
 import type {
   CodeAnnotation,
@@ -28,6 +29,7 @@ import { buildFileTree, getVisualFileOrder } from '../utils/buildFileTree';
 import { buildCodeNavRequest } from '../utils/buildCodeNavRequest';
 import { getDiffSelection, getLineNumberFromNode, getSideFromNode } from '../utils/diffSelection';
 import { isContentConsistentWithPatch } from '../utils/patchConsistency';
+import { loadFileContentResponse } from '../utils/file-content-response';
 import { ToolbarHost, type ToolbarHostHandle } from './ToolbarHost';
 import { FileHeader } from './FileHeader';
 import { FileCommentBanner } from './FileCommentBanner';
@@ -941,8 +943,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     if (base) params.set('base', base);
 
     fetch(`/api/file-content?${params}`, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { oldContent: string | null; newContent: string | null } | null) => {
+      .then(loadFileContentResponse)
+      .then((data) => {
         if (isStale()) return;
         if (!data || (data.oldContent == null && data.newContent == null)) {
           // No content available (e.g. demo mode / binary): mark done so we do
@@ -1065,7 +1067,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const handlePostRender = useStableCallback(
     (
       node: HTMLElement,
-      _instance: unknown,
+      _instance: File<DiffAnnotationMetadata> | FileDiff<DiffAnnotationMetadata>,
       phase: PostRenderPhase,
       context: CodeViewItem<DiffAnnotationMetadata>,
     ) => {
@@ -1655,9 +1657,9 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // composedPath()[0] pierces shadow DOM: window-level e.target retargets
       // to the shadow HOST (e.g. <diffs-container>), which would hide a
       // typeable element living inside a shadow root from this guard.
-      const el = (e.composedPath?.()[0] ?? e.target) as HTMLElement | null;
+      const el = e.composedPath?.()[0] ?? e.target;
       if (
-        el &&
+        el instanceof HTMLElement &&
         (el.tagName === 'INPUT' ||
           el.tagName === 'TEXTAREA' ||
           el.tagName === 'SELECT' ||
@@ -1893,6 +1895,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
         handleLineSelectionEnd(range, context.item);
       },
       renderGutterUtility(getHoveredLine, context) {
+        // SAFETY: CodeView resolves the renderGutterUtility overload to the
+        // file-item variant (hover row = { lineNumber }), but this gutter slot
+        // only renders diff items, whose hover row is exactly
+        // { lineNumber, side } — i.e. HoveredDiffLine.
         return renderGutterUtility(getHoveredLine as () => HoveredDiffLine | undefined, context);
       },
       // P7: token code navigation. CodeView appends the owning-item context as

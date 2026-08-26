@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { Option, Schema } from "effect";
 import {
   buildAgentTerminalWsPath,
   type AgentTerminalAgent,
@@ -17,6 +18,18 @@ type AgentTerminalSocketData = {
 };
 
 const MAX_PENDING_MESSAGES = 100;
+const SIDECAR_READINESS_ERROR = "Agent terminal sidecar did not report a WebSocket URL.";
+
+const AgentTerminalSidecarReadinessSchema = Schema.Union([
+  Schema.Struct({
+    ok: Schema.Literal(true),
+    wsUrl: Schema.NonEmptyString,
+  }),
+  Schema.Struct({
+    ok: Schema.Literal(false),
+    error: Schema.optionalKey(Schema.String),
+  }),
+]);
 
 type WebTuiCore = typeof import("@plannotator/webtui/core");
 
@@ -149,7 +162,7 @@ export async function createBunAgentTerminalBridge(args: {
         });
       },
       message(ws, raw) {
-        const payload = typeof raw === "string" ? raw : raw.toString("utf8");
+        const payload = Buffer.isBuffer(raw) ? raw.toString("utf8") : raw;
         const upstream = ws.data.upstream;
         if (upstream?.readyState === WebSocket.OPEN) {
           upstream.send(payload);
@@ -259,13 +272,10 @@ async function startNodeAgentTerminalSidecar(
 
   try {
     const line = await withTimeout(readFirstLine(proc.stdout), 5_000);
-    const ready = JSON.parse(line) as { ok?: boolean; wsUrl?: string; error?: string };
-    if (!ready.ok || !ready.wsUrl) {
-      throw new Error(ready.error ?? "Agent terminal sidecar did not report a WebSocket URL.");
-    }
+    const wsUrl = parseAgentTerminalReadyLine(line);
     let didDispose = false;
     return {
-      wsUrl: ready.wsUrl,
+      wsUrl,
       exited: proc.exited.then(() => {}, () => {}),
       dispose() {
         if (didDispose) return;
@@ -277,6 +287,19 @@ async function startNodeAgentTerminalSidecar(
     proc.kill();
     throw err;
   }
+}
+
+export function parseAgentTerminalReadyLine(line: string): string {
+  const input: unknown = JSON.parse(line);
+  return Option.match(Schema.decodeUnknownOption(AgentTerminalSidecarReadinessSchema)(input), {
+    onNone: () => {
+      throw new Error(SIDECAR_READINESS_ERROR);
+    },
+    onSome: (readiness) => {
+      if (!readiness.ok) throw new Error(readiness.error ?? SIDECAR_READINESS_ERROR);
+      return readiness.wsUrl;
+    },
+  });
 }
 
 async function readFirstLine(stream: ReadableStream<Uint8Array> | null): Promise<string> {
@@ -308,18 +331,15 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-function toWebSocketPayload(data: unknown): string | ArrayBuffer {
-  if (typeof data === "string") return data;
+function toWebSocketPayload(data: string | ArrayBuffer | Uint8Array | Buffer): string | ArrayBuffer {
+  if (Buffer.isBuffer(data)) return Uint8Array.from(data).buffer;
   if (data instanceof ArrayBuffer) return data;
-  if (Buffer.isBuffer(data)) {
-    return Uint8Array.from(data).buffer;
-  }
   if (data instanceof Uint8Array) {
     return data.buffer instanceof ArrayBuffer
       ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
       : Uint8Array.from(data).buffer;
   }
-  return String(data);
+  return data;
 }
 
 function isAllowedOrigin(req: Request): boolean {
@@ -343,8 +363,12 @@ function listAgents(core: WebTuiCore): AgentTerminalAgent[] {
   });
 }
 
+interface AgentDisplayNameOverrides {
+  [agentId: string]: string;
+}
+
 function formatAgentName(id: string): string {
-  const overrides: Record<string, string> = {
+  const overrides: AgentDisplayNameOverrides = {
     amp: "Amp",
     claude: "Claude",
     codex: "Codex",

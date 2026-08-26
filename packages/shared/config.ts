@@ -9,6 +9,7 @@ import { join } from "path";
 import { getPlannotatorDataDir } from "./data-dir";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { execSync } from "child_process";
+import { Option, Schema } from "effect";
 
 export type DefaultDiffType = 'uncommitted' | 'unstaged' | 'staged' | 'merge-base' | 'all';
 export type DiffLineBgIntensity = 'subtle' | 'normal' | 'strong';
@@ -43,7 +44,12 @@ export interface CCLabelConfig {
   blocking: boolean;
 }
 
-export type PromptSectionOverrides = Record<string, string | undefined>;
+const ConfigJson = Schema.Json;
+type ConfigJson = Schema.Schema.Type<typeof ConfigJson>;
+const ConfigRecord = Schema.Record(Schema.String, ConfigJson);
+type ConfigRecord = Schema.Schema.Type<typeof ConfigRecord>;
+
+export type PromptSectionOverrides = Record<string, ConfigJson | undefined>;
 
 export type PromptRuntime =
   | "claude-code"
@@ -57,7 +63,7 @@ export type PromptRuntime =
   | "gemini-cli";
 
 interface PromptSectionConfig {
-  [key: string]: string | Partial<Record<PromptRuntime, PromptSectionOverrides>> | undefined;
+  [key: string]: ConfigJson | Partial<Record<PromptRuntime, PromptSectionOverrides>> | undefined;
   runtimes?: Partial<Record<PromptRuntime, PromptSectionOverrides>>;
 }
 
@@ -87,7 +93,7 @@ export function mergePromptConfig(
 ): PromptConfig | undefined {
   if (!current && !partial) return undefined;
 
-  const result: Record<string, any> = { ...current, ...partial };
+  const result: PromptConfig = { ...current, ...partial };
 
   for (const section of PROMPT_SECTIONS) {
     const cur = current?.[section];
@@ -103,7 +109,7 @@ export function mergePromptConfig(
     }
   }
 
-  return result as PromptConfig;
+  return result;
 }
 
 export interface PlannotatorConfig {
@@ -146,6 +152,218 @@ export interface PlannotatorConfig {
 
 const CONFIG_DIR = getPlannotatorDataDir();
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+const ConfigString = Schema.String;
+const ConfigBoolean = Schema.Boolean;
+const ConfigNumber = Schema.Number;
+const ConfigDiffType = Schema.Literals(["uncommitted", "unstaged", "staged", "merge-base", "all", "branch"]);
+const ConfigShare = Schema.Literals(["enabled", "disabled"]);
+const ConfigDiffStyle = Schema.Literals(["split", "unified"]);
+const ConfigOverflow = Schema.Literals(["scroll", "wrap"]);
+const ConfigDiffIndicators = Schema.Literals(["bars", "classic", "none"]);
+const ConfigLineDiffType = Schema.Literals(["word-alt", "word", "char", "none"]);
+const ConfigLineBgIntensity = Schema.Literals(["subtle", "normal", "strong"]);
+
+type ConfigPropertyTarget =
+  | ConfigRecord
+  | PlannotatorConfig
+  | DiffOptions
+  | AnnotationOptions
+  | CCLabelConfig
+  | PromptConfig
+  | PromptSectionConfig
+  | PromptSectionOverrides
+  | Record<string, PromptSectionOverrides | undefined>;
+
+function decodeConfigRecord(value: ConfigJson | undefined): ConfigRecord | undefined {
+  return Schema.is(ConfigRecord)(value) ? value : undefined;
+}
+
+function defineConfigProperty<Value>(target: ConfigPropertyTarget, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function copyConfigProperties(target: ConfigPropertyTarget, record: ConfigRecord): void {
+  for (const [key, value] of Object.entries(record)) {
+    defineConfigProperty(target, key, value);
+  }
+}
+
+function decodeConfigString(value: ConfigJson | undefined): string | undefined {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigString)(value));
+}
+
+function decodeConfigBoolean(value: ConfigJson | undefined): boolean | undefined {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigBoolean)(value));
+}
+
+function decodeConfigNumber(value: ConfigJson | undefined): number | undefined {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(ConfigNumber)(value));
+}
+
+function decodeDiffOptions(value: ConfigJson | undefined): DiffOptions | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: DiffOptions = {};
+  copyConfigProperties(result, record);
+  const diffStyle = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffStyle)(record.diffStyle));
+  const overflow = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigOverflow)(record.overflow));
+  const diffIndicators = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffIndicators)(record.diffIndicators));
+  const lineDiffType = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigLineDiffType)(record.lineDiffType));
+  const showLineNumbers = decodeConfigBoolean(record.showLineNumbers);
+  const showDiffBackground = decodeConfigBoolean(record.showDiffBackground);
+  const fontFamily = decodeConfigString(record.fontFamily);
+  const fontSize = decodeConfigString(record.fontSize);
+  const tabSize = decodeConfigNumber(record.tabSize);
+  const hideWhitespace = decodeConfigBoolean(record.hideWhitespace);
+  const expandUnchanged = decodeConfigBoolean(record.expandUnchanged);
+  const defaultDiffType = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffType)(record.defaultDiffType));
+  const lineBgIntensity = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigLineBgIntensity)(record.lineBgIntensity));
+
+  delete result.diffStyle;
+  delete result.overflow;
+  delete result.diffIndicators;
+  delete result.lineDiffType;
+  delete result.showLineNumbers;
+  delete result.showDiffBackground;
+  delete result.fontFamily;
+  delete result.fontSize;
+  delete result.tabSize;
+  delete result.hideWhitespace;
+  delete result.expandUnchanged;
+  delete result.defaultDiffType;
+  delete result.lineBgIntensity;
+
+  if (diffStyle !== undefined) result.diffStyle = diffStyle;
+  if (overflow !== undefined) result.overflow = overflow;
+  if (diffIndicators !== undefined) result.diffIndicators = diffIndicators;
+  if (lineDiffType !== undefined) result.lineDiffType = lineDiffType;
+  if (showLineNumbers !== undefined) result.showLineNumbers = showLineNumbers;
+  if (showDiffBackground !== undefined) result.showDiffBackground = showDiffBackground;
+  if (fontFamily !== undefined) result.fontFamily = fontFamily;
+  if (fontSize !== undefined) result.fontSize = fontSize;
+  if (tabSize !== undefined) result.tabSize = tabSize;
+  if (hideWhitespace !== undefined) result.hideWhitespace = hideWhitespace;
+  if (expandUnchanged !== undefined) result.expandUnchanged = expandUnchanged;
+  if (defaultDiffType !== undefined) result.defaultDiffType = defaultDiffType === "branch" ? "merge-base" : defaultDiffType;
+  if (lineBgIntensity !== undefined) result.lineBgIntensity = lineBgIntensity;
+
+  return result;
+}
+
+function decodeAnnotationOptions(value: ConfigJson | undefined): AnnotationOptions | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: AnnotationOptions = {};
+  copyConfigProperties(result, record);
+  const proseFontFamily = decodeConfigString(record.proseFontFamily);
+  const proseFontSize = decodeConfigString(record.proseFontSize);
+  const codeFontFamily = decodeConfigString(record.codeFontFamily);
+  const codeFontSize = decodeConfigString(record.codeFontSize);
+
+  delete result.proseFontFamily;
+  delete result.proseFontSize;
+  delete result.codeFontFamily;
+  delete result.codeFontSize;
+
+  if (proseFontFamily !== undefined) result.proseFontFamily = proseFontFamily;
+  if (proseFontSize !== undefined) result.proseFontSize = proseFontSize;
+  if (codeFontFamily !== undefined) result.codeFontFamily = codeFontFamily;
+  if (codeFontSize !== undefined) result.codeFontSize = codeFontSize;
+
+  return result;
+}
+
+function decodeConventionalLabels(value: ConfigJson | undefined): CCLabelConfig[] | null | undefined {
+  if (value === null) return null;
+  const labels = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Array(ConfigJson))(value));
+  if (!labels) return undefined;
+
+  return labels.flatMap((label): CCLabelConfig[] => {
+    const record = decodeConfigRecord(label);
+    if (!record) return [];
+    const labelValue = decodeConfigString(record.label);
+    const display = decodeConfigString(record.display);
+    const blocking = decodeConfigBoolean(record.blocking);
+    if (labelValue === undefined || display === undefined || blocking === undefined) return [];
+
+    const decodedLabel: CCLabelConfig = { label: labelValue, display, blocking };
+    copyConfigProperties(decodedLabel, record);
+    defineConfigProperty(decodedLabel, "label", labelValue);
+    defineConfigProperty(decodedLabel, "display", display);
+    defineConfigProperty(decodedLabel, "blocking", blocking);
+    return [decodedLabel];
+  });
+}
+
+function decodePromptRuntimes(
+  value: ConfigJson | undefined,
+  fields: readonly string[],
+): Record<string, PromptSectionOverrides | undefined> | undefined {
+  const runtimes = decodeConfigRecord(value);
+  if (!runtimes) return undefined;
+
+  const result: Record<string, PromptSectionOverrides | undefined> = {};
+  for (const [runtime, overrides] of Object.entries(runtimes)) {
+    const record = decodeConfigRecord(overrides);
+    if (!record) continue;
+
+    const decodedOverrides: PromptSectionOverrides = {};
+    copyConfigProperties(decodedOverrides, record);
+    for (const field of fields) {
+      delete decodedOverrides[field];
+      const decoded = decodeConfigString(record[field]);
+      if (decoded !== undefined) defineConfigProperty(decodedOverrides, field, decoded);
+    }
+    defineConfigProperty(result, runtime, decodedOverrides);
+  }
+  return result;
+}
+
+function decodePromptSection(value: ConfigJson | undefined, fields: readonly string[]): PromptSectionConfig | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: PromptSectionConfig = {};
+  copyConfigProperties(result, record);
+  for (const field of fields) {
+    delete result[field];
+    const decoded = decodeConfigString(record[field]);
+    if (decoded !== undefined) defineConfigProperty(result, field, decoded);
+  }
+
+  delete result.runtimes;
+  const runtimes = decodePromptRuntimes(record.runtimes, fields);
+  if (runtimes !== undefined) defineConfigProperty(result, "runtimes", runtimes);
+
+  return result;
+}
+
+function decodePrompts(value: ConfigJson | undefined): PromptConfig | undefined {
+  const record = decodeConfigRecord(value);
+  if (!record) return undefined;
+
+  const result: PromptConfig = {};
+  copyConfigProperties(result, record);
+  const review = decodePromptSection(record.review, ["approved", "denied"]);
+  const plan = decodePromptSection(record.plan, ["approved", "approvedWithNotes", "autoApproved", "denied"]);
+  const annotate = decodePromptSection(record.annotate, ["fileFeedback", "messageFeedback", "approved"]);
+
+  delete result.review;
+  delete result.plan;
+  delete result.annotate;
+  if (review !== undefined) defineConfigProperty(result, "review", review);
+  if (plan !== undefined) defineConfigProperty(result, "plan", plan);
+  if (annotate !== undefined) defineConfigProperty(result, "annotate", annotate);
+
+  return result;
+}
 
 /**
  * Load config from ~/.plannotator/config.json.
@@ -155,8 +373,47 @@ export function loadConfig(): PlannotatorConfig {
   try {
     if (!existsSync(CONFIG_PATH)) return {};
     const raw = readFileSync(CONFIG_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null ? parsed : {};
+    const parsed: unknown = JSON.parse(raw);
+    const json = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigJson)(parsed));
+    const record = decodeConfigRecord(json);
+    if (!record) return {};
+
+    const config: PlannotatorConfig = {};
+    copyConfigProperties(config, record);
+    const displayName = decodeConfigString(record.displayName);
+    const diffOptions = decodeDiffOptions(record.diffOptions);
+    const annotationOptions = decodeAnnotationOptions(record.annotationOptions);
+    const prompts = decodePrompts(record.prompts);
+    const conventionalComments = decodeConfigBoolean(record.conventionalComments);
+    const conventionalLabels = decodeConventionalLabels(record.conventionalLabels);
+    const jina = decodeConfigBoolean(record.jina);
+    const pfmReminder = decodeConfigBoolean(record.pfmReminder);
+    const glimpse = decodeConfigBoolean(record.glimpse);
+    const share = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigShare)(record.share));
+
+    delete config.displayName;
+    delete config.diffOptions;
+    delete config.annotationOptions;
+    delete config.prompts;
+    delete config.conventionalComments;
+    delete config.conventionalLabels;
+    delete config.jina;
+    delete config.pfmReminder;
+    delete config.glimpse;
+    delete config.share;
+
+    if (displayName !== undefined) config.displayName = displayName;
+    if (diffOptions !== undefined) config.diffOptions = diffOptions;
+    if (annotationOptions !== undefined) config.annotationOptions = annotationOptions;
+    if (prompts !== undefined) config.prompts = prompts;
+    if (conventionalComments !== undefined) config.conventionalComments = conventionalComments;
+    if (conventionalLabels !== undefined) config.conventionalLabels = conventionalLabels;
+    if (jina !== undefined) config.jina = jina;
+    if (pfmReminder !== undefined) config.pfmReminder = pfmReminder;
+    if (glimpse !== undefined) config.glimpse = glimpse;
+    if (share !== undefined) config.share = share;
+
+    return config;
   } catch (e) {
     process.stderr.write(`[plannotator] Warning: failed to read config.json: ${e}\n`);
     return {};
@@ -164,10 +421,58 @@ export function loadConfig(): PlannotatorConfig {
 }
 
 /**
+ * Partial config accepted from the config update endpoint. Decode the request
+ * body with this schema at the HTTP boundary; saveConfig takes the result.
+ */
+export const ConfigPatch = Schema.Struct({
+  pfmReminder: Schema.optionalKey(Schema.Boolean),
+  displayName: Schema.optionalKey(Schema.String),
+  conventionalComments: Schema.optionalKey(Schema.Boolean),
+  diffOptions: Schema.optionalKey(
+    Schema.Struct({
+      diffStyle: Schema.optionalKey(Schema.Literals(["split", "unified"])),
+      overflow: Schema.optionalKey(Schema.Literals(["scroll", "wrap"])),
+      diffIndicators: Schema.optionalKey(Schema.Literals(["bars", "classic", "none"])),
+      lineDiffType: Schema.optionalKey(Schema.Literals(["word-alt", "word", "char", "none"])),
+      showLineNumbers: Schema.optionalKey(Schema.Boolean),
+      showDiffBackground: Schema.optionalKey(Schema.Boolean),
+      fontFamily: Schema.optionalKey(Schema.String),
+      fontSize: Schema.optionalKey(Schema.String),
+      tabSize: Schema.optionalKey(Schema.Number),
+      hideWhitespace: Schema.optionalKey(Schema.Boolean),
+      expandUnchanged: Schema.optionalKey(Schema.Boolean),
+      defaultDiffType: Schema.optionalKey(Schema.Literals(["uncommitted", "unstaged", "staged", "merge-base", "all"])),
+      lineBgIntensity: Schema.optionalKey(Schema.Literals(["subtle", "normal", "strong"])),
+    }),
+  ),
+  annotationOptions: Schema.optionalKey(
+    Schema.Struct({
+      proseFontFamily: Schema.optionalKey(Schema.String),
+      proseFontSize: Schema.optionalKey(Schema.String),
+      codeFontFamily: Schema.optionalKey(Schema.String),
+      codeFontSize: Schema.optionalKey(Schema.String),
+    }),
+  ),
+  conventionalLabels: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Array(
+        Schema.Struct({
+          label: Schema.String,
+          display: Schema.String,
+          blocking: Schema.Boolean,
+        }),
+      ),
+    ),
+  ),
+});
+
+export type ConfigPatch = Schema.Schema.Type<typeof ConfigPatch>;
+
+/**
  * Save config by merging partial values into the existing file.
  * Creates ~/.plannotator/ directory if needed.
  */
-export function saveConfig(partial: Partial<PlannotatorConfig>): void {
+export function saveConfig(partial: Partial<PlannotatorConfig> | ConfigPatch): void {
   try {
     const current = loadConfig();
     const mergedDiffOptions = (current.diffOptions || partial.diffOptions)
@@ -176,7 +481,10 @@ export function saveConfig(partial: Partial<PlannotatorConfig>): void {
     const mergedAnnotationOptions = (current.annotationOptions || partial.annotationOptions)
       ? { ...current.annotationOptions, ...partial.annotationOptions }
       : undefined;
-    const mergedPrompts = mergePromptConfig(current.prompts, partial.prompts);
+    const mergedPrompts = mergePromptConfig(
+      current.prompts,
+      "prompts" in partial ? partial.prompts : undefined,
+    );
     const merged = {
       ...current,
       ...partial,
@@ -204,18 +512,20 @@ export function detectGitUser(): string | null {
   }
 }
 
+interface ServerConfigPayload {
+  readonly displayName?: string;
+  readonly diffOptions?: DiffOptions;
+  readonly annotationOptions?: AnnotationOptions;
+  readonly gitUser?: string;
+  readonly conventionalComments?: boolean;
+  readonly conventionalLabels?: CCLabelConfig[] | null;
+}
+
 /**
  * Build the serverConfig payload for API responses.
  * Reads config.json fresh each call so the response reflects the latest file on disk.
  */
-export function getServerConfig(gitUser: string | null): {
-  displayName?: string;
-  diffOptions?: DiffOptions;
-  annotationOptions?: AnnotationOptions;
-  gitUser?: string;
-  conventionalComments?: boolean;
-  conventionalLabels?: CCLabelConfig[] | null;
-} {
+export function getServerConfig(gitUser: string | null): ServerConfigPayload {
   const cfg = loadConfig();
   return {
     displayName: cfg.displayName,
@@ -231,7 +541,7 @@ export function getServerConfig(gitUser: string | null): {
  * Read the user's preferred default diff type from config, falling back to 'unstaged'.
  */
 export function resolveDefaultDiffType(cfg?: PlannotatorConfig): DefaultDiffType {
-  const v = cfg?.diffOptions?.defaultDiffType as string | undefined;
+  const v: string | undefined = cfg?.diffOptions?.defaultDiffType;
   if (v === 'branch') return 'merge-base';
   return v === 'uncommitted' || v === 'unstaged' || v === 'staged' || v === 'merge-base' || v === 'all' ? v : 'unstaged';
 }

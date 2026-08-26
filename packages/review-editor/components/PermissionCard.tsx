@@ -8,17 +8,34 @@
  */
 import React, { useState } from 'react';
 
+/** JSON-serializable values that tool-input arguments can carry. */
+type ToolInputValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly ToolInputValue[]
+  | { [key: string]: ToolInputValue };
+
+interface ToolInput {
+  [key: string]: ToolInputValue;
+}
+
 interface PermissionCardProps {
   requestId: string;
   toolName: string;
-  toolInput: Record<string, unknown>;
+  toolInput: ToolInput;
   title?: string;
   displayName?: string;
   description?: string;
   onRespond: (requestId: string, allow: boolean) => void;
 }
 
-const TOOL_ICONS: Record<string, string> = {
+interface ToolIconMap {
+  [tool: string]: string;
+}
+
+const TOOL_ICONS: ToolIconMap = {
   Bash: '$ ',
   Read: '',
   Write: '',
@@ -29,18 +46,26 @@ const TOOL_ICONS: Record<string, string> = {
   WebFetch: '',
 };
 
-function formatToolInput(toolName: string, input: Record<string, unknown>): string {
-  if (toolName === 'Bash' && typeof input.command === 'string') {
-    return input.command;
+/** Read one textual tool argument; undefined when the field is absent or not a string. */
+function toolArgument(input: ToolInput, key: string): string | undefined {
+  const value = input[key];
+  const textual = String(value);
+  return value === textual ? textual : undefined;
+}
+
+/** One-line preview of a permission request's tool arguments. */
+export function formatToolInput(toolName: string, input: ToolInput): string {
+  if (toolName === 'Bash') {
+    const command = toolArgument(input, 'command');
+    if (command !== undefined) return command;
   }
-  if ((toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') && typeof input.file_path === 'string') {
-    return input.file_path;
+  if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
+    const filePath = toolArgument(input, 'file_path');
+    if (filePath !== undefined) return filePath;
   }
-  if (toolName === 'Glob' && typeof input.pattern === 'string') {
-    return input.pattern;
-  }
-  if (toolName === 'Grep' && typeof input.pattern === 'string') {
-    return input.pattern;
+  if (toolName === 'Glob' || toolName === 'Grep') {
+    const pattern = toolArgument(input, 'pattern');
+    if (pattern !== undefined) return pattern;
   }
   return JSON.stringify(input).slice(0, 100);
 }

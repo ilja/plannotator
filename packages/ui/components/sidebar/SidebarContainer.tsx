@@ -54,7 +54,7 @@ interface SidebarContainerProps {
 export const SidebarContainer: React.FC<SidebarContainerProps> = ({
   activeTab,
   onTabChange,
-  onClose,
+  onClose: _onClose,
   width,
   showAgentTerminalButton,
   isAgentTerminalOpen,

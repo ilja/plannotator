@@ -11,22 +11,31 @@
  * via a debounced POST /api/config.
  */
 
-import { SETTINGS, type SettingName, type SettingsMap } from './settings';
+import type { ConfigPatch } from '@plannotator/shared/config';
+import {
+  decodeUiServerConfig,
+  SETTINGS,
+  type SettingDef,
+  type SettingName,
+  type SettingsMap,
+} from './settings';
 
 type Listener = () => void;
 
-/** Deep-merge source into target, recursing into plain objects. */
-function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): void {
-  for (const key of Object.keys(source)) {
-    if (
-      typeof target[key] === 'object' && target[key] !== null && !Array.isArray(target[key]) &&
-      typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])
-    ) {
-      deepMerge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
-    } else {
-      target[key] = source[key];
-    }
-  }
+function mergeConfigPatches(current: ConfigPatch, patch: ConfigPatch): ConfigPatch {
+  const diffOptions = current.diffOptions || patch.diffOptions
+    ? { ...current.diffOptions, ...patch.diffOptions }
+    : undefined;
+  const annotationOptions = current.annotationOptions || patch.annotationOptions
+    ? { ...current.annotationOptions, ...patch.annotationOptions }
+    : undefined;
+
+  return {
+    ...current,
+    ...patch,
+    ...(diffOptions && { diffOptions }),
+    ...(annotationOptions && { annotationOptions }),
+  };
 }
 
 /** Infer the value type from a SettingDef */
@@ -34,26 +43,31 @@ type SettingValue<K extends SettingName> = SettingsMap[K] extends { defaultValue
   ? D extends (...args: unknown[]) => infer R ? R : D
   : never;
 
-class ConfigStore {
+function resolveDefaultValue<Value>(definition: SettingDef<Value>): Value {
+  return definition.defaultValue instanceof Function
+    ? definition.defaultValue()
+    : definition.defaultValue;
+}
+
+export class ConfigStore {
   private values = new Map<string, unknown>();
   private listeners = new Set<Listener>();
   private version = 0;
-  private pendingServerWrites: Record<string, unknown> = {};
+  private pendingServerWrites: ConfigPatch = {};
   private serverSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // Eagerly resolve all settings from synchronous sources (cookie > default).
     // The store is safe to read from the moment it's created.
     for (const [name, def] of Object.entries(SETTINGS)) {
-      const fromCookie = def.fromCookie();
-      const defaultVal = typeof def.defaultValue === 'function'
-        ? (def.defaultValue as () => unknown)()
-        : def.defaultValue;
+      const definition: SettingDef<unknown> = def;
+      const fromCookie = definition.fromCookie();
+      const defaultVal = resolveDefaultValue(definition);
       const resolved = fromCookie ?? defaultVal;
       this.values.set(name, resolved);
       // Persist generated defaults to cookie so the value is stable across calls
       if (fromCookie === undefined) {
-        def.toCookie(resolved as never);
+        definition.toCookie(resolved);
       }
     }
   }
@@ -65,15 +79,15 @@ class ConfigStore {
    * Server values take precedence over the cookie/default already resolved
    * by the constructor. Settings without a server value are left untouched.
    */
-  init(serverConfig?: Record<string, unknown>): void {
-    if (serverConfig) {
-      for (const [name, def] of Object.entries(SETTINGS)) {
-        if (def.serverKey && def.fromServer) {
-          const fromServer = def.fromServer(serverConfig);
-          if (fromServer !== undefined) {
-            this.values.set(name, fromServer);
-            def.toCookie(fromServer as never);
-          }
+  init<Input>(serverConfig?: Input): void {
+    const decodedServerConfig = decodeUiServerConfig(serverConfig);
+    for (const [name, def] of Object.entries(SETTINGS)) {
+      const definition: SettingDef<unknown> = def;
+      if (definition.serverKey && definition.fromServer) {
+        const fromServer = definition.fromServer(decodedServerConfig);
+        if (fromServer !== undefined) {
+          this.values.set(name, fromServer);
+          definition.toCookie(fromServer);
         }
       }
     }
@@ -82,17 +96,21 @@ class ConfigStore {
 
   /** Get a resolved config value. Works outside React. */
   get<K extends SettingName>(key: K): SettingValue<K> {
+    // SAFETY: values map stores SettingValue<K> per SETTINGS — cast is typed retrieval
     return this.values.get(key) as SettingValue<K>;
   }
 
   /** Set a config value. Writes cookie (sync), queues server write-back if applicable. */
   set<K extends SettingName>(key: K, value: SettingValue<K>): void {
-    const def = SETTINGS[key];
+    const def: SettingDef<unknown> = SETTINGS[key];
     this.values.set(key, value);
-    def.toCookie(value as never);
+    def.toCookie(value);
 
     if (def.serverKey && def.toServer) {
-      deepMerge(this.pendingServerWrites, def.toServer(value as never) as Record<string, unknown>);
+      this.pendingServerWrites = mergeConfigPatches(
+        this.pendingServerWrites,
+        def.toServer(value),
+      );
       this.scheduleServerSync();
     }
 

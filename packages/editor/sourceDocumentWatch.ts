@@ -1,3 +1,5 @@
+import { Option, Schema } from 'effect';
+
 /** The EventSource transport surface required by the source document watcher. */
 export interface SourceDocumentWatchEventSource {
   onmessage: ((event: MessageEvent<string>) => void) | null;
@@ -18,21 +20,16 @@ function watchedDirectory(directory: string | undefined, directories: readonly s
   return directory === undefined || directories.includes(directory);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+const WatchEventSchema = Schema.Struct({
+  type: Schema.Literals(['ready', 'changed']),
+  dirPath: Schema.optionalKey(Schema.String),
+});
 
-function parseWatchEvent(data: string): { type: 'ready' | 'changed'; dirPath?: string } | null {
+type WatchEvent = Schema.Schema.Type<typeof WatchEventSchema>;
+
+function parseWatchEvent(data: string): WatchEvent | null {
   try {
-    const value: unknown = JSON.parse(data);
-    if (!isRecord(value)) return null;
-    const record = value;
-    if (record.type !== 'ready' && record.type !== 'changed') return null;
-    if (record.dirPath !== undefined && typeof record.dirPath !== 'string') return null;
-    return {
-      type: record.type,
-      ...(typeof record.dirPath === 'string' ? { dirPath: record.dirPath } : {}),
-    };
+    return Option.getOrUndefined(Schema.decodeUnknownOption(WatchEventSchema)(JSON.parse(data)));
   } catch {
     return null;
   }
@@ -46,7 +43,7 @@ export function createSourceDocumentWatch(options: SourceDocumentWatchOptions): 
   const debounceMs = options.debounceMs ?? 120;
   const reconnectDelayMs = options.reconnectDelayMs ?? 1000;
   const eventSourceFactory = options.eventSourceFactory
-    ?? (typeof EventSource === 'undefined' ? undefined : (url: string) => new EventSource(url));
+    ?? (globalThis.EventSource === undefined ? undefined : (url: string) => new EventSource(url));
   if (!eventSourceFactory) return () => undefined;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;

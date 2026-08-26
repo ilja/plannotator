@@ -2,20 +2,170 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { Schema } from "effect";
+
+interface StderrCapture {
+  writes: string[];
+  restore: () => void;
+}
 import {
+  handleAgents,
+  handleDraftLoad,
+  handleDraftSave,
   handleSaveNotes,
+  handleUpload,
   handleServerReady,
   isCodexDesktopHost,
   writeServerReadyMetadata,
 } from "./shared-handlers";
 
-function saveNotesRequest(body: unknown): Request {
+type JsonRequestBody = Schema.Schema.Type<typeof Schema.Json>;
+
+function saveNotesRequest(body: JsonRequestBody): Request {
   return new Request("http://localhost/api/save-notes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
+
+type StderrChunk = string | Uint8Array;
+
+function captureStderrWrites(): StderrCapture {
+  const writes: string[] = [];
+  const original = process.stderr.write;
+  const writeMock: typeof process.stderr.write = (chunk: StderrChunk) => {
+    writes.push(String(chunk));
+    return true;
+  };
+  process.stderr.write = writeMock;
+  return {
+    writes,
+    restore: () => {
+      process.stderr.write = original;
+    },
+  };
+}
+
+describe("handleUpload", () => {
+  test("treats a missing file field as a bad request", async () => {
+    const response = await handleUpload(new Request("http://localhost/api/upload", { method: "POST", body: new FormData() }));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe("No file provided");
+  });
+
+  test("treats a string file field as a missing file", async () => {
+    const formData = new FormData();
+    formData.set("file", "not a file");
+
+    const response = await handleUpload(new Request("http://localhost/api/upload", { method: "POST", body: formData }));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe("No file provided");
+  });
+
+});
+
+describe("handleAgents", () => {
+  test("retains valid primary agents while filtering malformed entries", async () => {
+    const response = await handleAgents({
+      app: {
+        agents: async () => ({
+          data: [
+            { name: "review", mode: "primary", description: "Review code" },
+            { name: 42, mode: "primary" },
+            null,
+            { name: "hidden", mode: "primary", hidden: true },
+            { name: "annotate", mode: "primary" },
+            { name: "build", mode: "subagent" },
+          ],
+        }),
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      agents: [
+        { id: "review", name: "review", description: "Review code" },
+        { id: "annotate", name: "annotate" },
+      ],
+    });
+  });
+
+  test("uses the empty-agent fallback when the SDK response data is null", async () => {
+    const response = await handleAgents({
+      app: {
+        agents: async () => ({ data: null }),
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ agents: [] });
+  });
+
+  test("returns the existing error fallback when the SDK response data is not an array", async () => {
+    const response = await handleAgents({
+      app: {
+        agents: async () => ({ data: "malformed" }),
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      agents: [],
+      error: "Failed to fetch agents",
+    });
+  });
+});
+
+describe("handleDraftSave", () => {
+  test("rejects non-object JSON without overwriting a valid draft", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "plannotator-draft-boundary-"));
+    const previousDataDir = process.env.PLANNOTATOR_DATA_DIR;
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+
+    try {
+      const initial = await handleDraftSave(
+        new Request("http://localhost/api/draft", {
+          method: "POST",
+          body: JSON.stringify({ annotations: [{ id: "initial" }] }),
+        }),
+        "draft-boundary",
+      );
+      expect(initial.status).toBe(200);
+
+      const malformed = await handleDraftSave(
+        new Request("http://localhost/api/draft", {
+          method: "POST",
+          body: JSON.stringify([]),
+        }),
+        "draft-boundary",
+      );
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid draft" });
+      expect(await handleDraftLoad("draft-boundary").json()).toEqual({
+        annotations: [{ id: "initial" }],
+      });
+
+      const valid = await handleDraftSave(
+        new Request("http://localhost/api/draft", {
+          method: "POST",
+          body: JSON.stringify({ annotations: [{ id: "updated" }] }),
+        }),
+        "draft-boundary",
+      );
+      expect(valid.status).toBe(200);
+      expect(await handleDraftLoad("draft-boundary").json()).toEqual({
+        annotations: [{ id: "updated" }],
+      });
+    } finally {
+      if (previousDataDir === undefined) delete process.env.PLANNOTATOR_DATA_DIR;
+      else process.env.PLANNOTATOR_DATA_DIR = previousDataDir;
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("handleSaveNotes", () => {
   test("saves to an Obsidian vault and returns JSON success", async () => {
@@ -48,6 +198,67 @@ describe("handleSaveNotes", () => {
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(json).toHaveProperty("ok", true);
+    expect(json.results).toEqual({});
+  });
+
+  test("returns a 400 JSON error for a non-object request body", async () => {
+    const response = await handleSaveNotes(saveNotesRequest("not a save-notes object"));
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(await response.json()).toEqual({ error: "Invalid JSON" });
+  });
+
+  test("saves a valid target when another requested target is malformed", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "plannotator-save-notes-"));
+    try {
+      const response = await handleSaveNotes(
+        saveNotesRequest({
+          obsidian: {
+            vaultPath: tmpDir,
+            folder: "plannotator",
+            plan: "# Test Plan\n\nContent here",
+          },
+          bear: { customTags: "plannotator" },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.results.obsidian).toHaveProperty("success", true);
+      expect(json.results.bear).toEqual({
+        success: false,
+        error: "Invalid Bear save configuration",
+      });
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("reports malformed Obsidian and Octarine target configurations", async () => {
+    for (const [target, config, error] of [
+      ["obsidian", { folder: "plannotator", plan: "# Test Plan" }, "Invalid Obsidian save configuration"],
+      ["octarine", { workspace: "workspace", folder: "plannotator" }, "Invalid Octarine save configuration"],
+    ] as const) {
+      const response = await handleSaveNotes(saveNotesRequest({ [target]: config }));
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.results[target]).toEqual({ success: false, error });
+    }
+  });
+
+  test("keeps schema-valid empty strings omitted by existing save gates", async () => {
+    const response = await handleSaveNotes(
+      saveNotesRequest({
+        obsidian: { vaultPath: "", folder: "", plan: "" },
+        bear: { plan: "" },
+        octarine: { plan: "", workspace: "", folder: "" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
     expect(json.results).toEqual({});
   });
 
@@ -141,32 +352,22 @@ describe("handleServerReady", () => {
   // regardless of URL sharing — otherwise a sharing-disabled remote user is left
   // with no URL and the agent hangs waiting on the review.
   test("prints the reachable URL to stderr for a remote session", async () => {
-    const writes: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
+    const { writes, restore } = captureStderrWrites();
     try {
       await handleServerReady("http://localhost:19432", true, 19432, {
         skipBrowserOpen: true,
       });
     } finally {
-      (process.stderr as { write: unknown }).write = original;
+      restore();
     }
     expect(writes.join("")).toContain("http://localhost:19432");
   });
 
   test("does not print the URL for a local session when the browser opens", async () => {
-    const writes: string[] = [];
-    let opened = "";
-    const original = process.stderr.write.bind(process.stderr);
     const originalBundleIdentifier = process.env.__CFBundleIdentifier;
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
     process.env.__CFBundleIdentifier = "com.apple.Terminal";
+    const { writes, restore } = captureStderrWrites();
+    let opened = "";
     try {
       await handleServerReady("http://localhost:3000", false, 3000, {
         openBrowser: async (u: string) => {
@@ -175,7 +376,7 @@ describe("handleServerReady", () => {
         },
       });
     } finally {
-      (process.stderr as { write: unknown }).write = original;
+      restore();
       if (originalBundleIdentifier === undefined) {
         delete process.env.__CFBundleIdentifier;
       } else {
@@ -187,20 +388,15 @@ describe("handleServerReady", () => {
   });
 
   test("prints the URL for a local Codex Desktop session even when the browser opens", async () => {
-    const writes: string[] = [];
-    const originalWrite = process.stderr.write.bind(process.stderr);
     const originalBundleIdentifier = process.env.__CFBundleIdentifier;
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
     process.env.__CFBundleIdentifier = "com.openai.codex";
+    const { writes, restore } = captureStderrWrites();
     try {
       await handleServerReady("http://localhost:3000", false, 3000, {
         openBrowser: async () => true,
       });
     } finally {
-      (process.stderr as { write: unknown }).write = originalWrite;
+      restore();
       if (originalBundleIdentifier === undefined) {
         delete process.env.__CFBundleIdentifier;
       } else {
@@ -214,18 +410,13 @@ describe("handleServerReady", () => {
   // devcontainer with no display) must still surface the URL, or the agent
   // hangs at waitForDecision with the user having no link to visit.
   test("prints the URL for a local session when the browser fails to open", async () => {
-    const writes: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    (process.stderr as { write: unknown }).write = (chunk: unknown) => {
-      writes.push(String(chunk));
-      return true;
-    };
+    const { writes, restore } = captureStderrWrites();
     try {
       await handleServerReady("http://localhost:4000", false, 4000, {
         openBrowser: async () => false,
       });
     } finally {
-      (process.stderr as { write: unknown }).write = original;
+      restore();
     }
     expect(writes.join("")).toContain("http://localhost:4000");
   });

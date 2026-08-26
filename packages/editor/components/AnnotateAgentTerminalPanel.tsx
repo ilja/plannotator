@@ -42,6 +42,7 @@ import {
   RotateCcw,
   Settings as SettingsIcon,
 } from "lucide-react";
+import { Option, Schema } from "effect";
 import { useAnnotateAgentTerminalTheme } from "./annotateAgentTerminalTheme";
 
 export type AnnotateAgentTerminalPanelHandle = {
@@ -72,7 +73,7 @@ const DISPLAY_STORAGE_KEY = "plannotator-agent-terminal-display";
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 24;
 
-const DEFAULT_DISPLAY_SETTINGS: AgentTerminalDisplaySettings = {
+export const DEFAULT_DISPLAY_SETTINGS: AgentTerminalDisplaySettings = {
   fontFamily: "theme",
   fontSize: 14,
   fontWeight: "regular",
@@ -500,9 +501,9 @@ function buildAgentOnlySpawnOptions(options: PtySpawnOptions): PtySpawnOptions {
   return spawnOptions;
 }
 
-function normalizeTerminalDimension(value: unknown): number | undefined {
-  if (!Number.isInteger(value) || (value as number) <= 0) return undefined;
-  return Math.min(value as number, 1_000);
+export function normalizeTerminalDimension(value: number | undefined): number | undefined {
+  if (value === undefined || !Number.isInteger(value) || value <= 0) return undefined;
+  return Math.min(value, 1_000);
 }
 
 function formatExit(event: PtyExit): string {
@@ -560,7 +561,12 @@ function AgentTerminalDisplayPopover({
             <select
               value={settings.fontFamily}
               onChange={(event) =>
-                onChange({ fontFamily: event.target.value as AgentTerminalFontFamily })
+                onChange({
+                  fontFamily:
+                    Option.getOrUndefined(
+                      Schema.decodeUnknownOption(AgentTerminalFontFamilySchema)(event.target.value),
+                    ) ?? DEFAULT_DISPLAY_SETTINGS.fontFamily,
+                })
               }
               className="h-7 w-32 rounded-md border border-border bg-background px-2 text-[11px] text-foreground outline-none transition-colors focus:border-primary"
             >
@@ -680,7 +686,10 @@ function readDisplaySettings(): AgentTerminalDisplaySettings {
   const raw = getItem(DISPLAY_STORAGE_KEY);
   if (!raw) return DEFAULT_DISPLAY_SETTINGS;
   try {
-    return sanitizeDisplaySettings(JSON.parse(raw));
+    const serialized = Option.getOrUndefined(
+      Schema.decodeUnknownOption(SerializedDisplaySettingsSchema)(JSON.parse(raw)),
+    ) ?? {};
+    return sanitizeDisplaySettings(serialized);
   } catch {
     return DEFAULT_DISPLAY_SETTINGS;
   }
@@ -690,23 +699,32 @@ function writeDisplaySettings(settings: AgentTerminalDisplaySettings): void {
   setItem(DISPLAY_STORAGE_KEY, JSON.stringify(settings));
 }
 
-function sanitizeDisplaySettings(value: unknown): AgentTerminalDisplaySettings {
-  const partial = isRecord(value) ? value : {};
+const SerializedDisplaySettingsSchema = Schema.Record(Schema.String, Schema.Unknown);
+type SerializedDisplaySettings = Schema.Schema.Type<typeof SerializedDisplaySettingsSchema>;
+
+export const AgentTerminalFontFamilySchema = Schema.Literals(["theme", "system", "geist"]);
+export const AgentTerminalFontWeightSchema = Schema.Literals(["light", "regular", "medium"]);
+
+export function sanitizeDisplaySettings(value: SerializedDisplaySettings): AgentTerminalDisplaySettings {
+  const fontFamily = Option.getOrUndefined(
+    Schema.decodeUnknownOption(AgentTerminalFontFamilySchema)(value.fontFamily),
+  );
+  const fontSize = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.Number)(value.fontSize),
+  );
+  const fontWeight = Option.getOrUndefined(
+    Schema.decodeUnknownOption(AgentTerminalFontWeightSchema)(value.fontWeight),
+  );
+  const lineHeightRaw = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.Number)(value.lineHeight),
+  );
+  const lineHeight = lineHeightRaw ?? DEFAULT_DISPLAY_SETTINGS.lineHeight;
   return {
-    fontFamily: isFontFamily(partial.fontFamily)
-      ? partial.fontFamily
-      : DEFAULT_DISPLAY_SETTINGS.fontFamily,
-    fontSize: clampNumber(
-      typeof partial.fontSize === "number" ? partial.fontSize : DEFAULT_DISPLAY_SETTINGS.fontSize,
-      MIN_FONT_SIZE,
-      MAX_FONT_SIZE,
-    ),
-    fontWeight: isFontWeight(partial.fontWeight)
-      ? partial.fontWeight
-      : DEFAULT_DISPLAY_SETTINGS.fontWeight,
-    lineHeight: LINE_HEIGHT_OPTIONS.includes(partial.lineHeight as number)
-      ? (partial.lineHeight as number)
-      : DEFAULT_DISPLAY_SETTINGS.lineHeight,
+    fontFamily: fontFamily ?? DEFAULT_DISPLAY_SETTINGS.fontFamily,
+    fontSize: clampNumber(fontSize ?? DEFAULT_DISPLAY_SETTINGS.fontSize, MIN_FONT_SIZE, MAX_FONT_SIZE),
+    fontWeight: fontWeight ?? DEFAULT_DISPLAY_SETTINGS.fontWeight,
+    lineHeight:
+      LINE_HEIGHT_OPTIONS.includes(lineHeight) ? lineHeight : DEFAULT_DISPLAY_SETTINGS.lineHeight,
   };
 }
 
@@ -726,18 +744,6 @@ function resolveDisplayWeight(fontWeight: AgentTerminalFontWeight): {
     FONT_WEIGHT_OPTIONS.find((item) => item.value === fontWeight) ??
     FONT_WEIGHT_OPTIONS[1]
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isFontFamily(value: unknown): value is AgentTerminalFontFamily {
-  return typeof value === "string" && FONT_FAMILY_OPTIONS.some((item) => item.value === value);
-}
-
-function isFontWeight(value: unknown): value is AgentTerminalFontWeight {
-  return typeof value === "string" && FONT_WEIGHT_OPTIONS.some((item) => item.value === value);
 }
 
 function clampNumber(value: number, min: number, max: number): number {

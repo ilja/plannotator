@@ -98,7 +98,11 @@ const PLANNOTATOR_LIGHT_TERMINAL_THEME: AnnotateAgentTerminalTheme = {
 
 // Browser sessions read Plannotator's live CSS variables. These presets are only
 // fallback data for non-DOM startup paths where computed CSS is unavailable.
-const TERMINAL_THEME_PRESETS: Record<string, Partial<Record<TerminalThemeMode, AnnotateAgentTerminalTheme>>> = {
+interface TerminalThemePresets {
+  [presetName: string]: Partial<Record<TerminalThemeMode, AnnotateAgentTerminalTheme>>;
+}
+
+const TERMINAL_THEME_PRESETS: TerminalThemePresets = {
   plannotator: {
     dark: PLANNOTATOR_DARK_TERMINAL_THEME,
     light: PLANNOTATOR_LIGHT_TERMINAL_THEME,
@@ -561,7 +565,7 @@ function resolveActiveAnnotateAgentTerminalMode(
   colorTheme: string,
   resolvedMode: TerminalThemeMode,
 ): TerminalThemeMode {
-  const domMode = typeof document !== "undefined"
+  const domMode = globalThis.document !== undefined
     ? (document.documentElement.classList.contains("light") ? "light" : "dark")
     : resolvedMode;
   return resolveAnnotateAgentTerminalMode(colorTheme, domMode);
@@ -608,7 +612,7 @@ function readResolvedTerminalPalette(
   colorTheme: string,
 ): ResolvedTerminalPalette {
   const fallbackPalette = createFallbackTerminalPalette(colorTheme, mode);
-  if (typeof document === "undefined") return fallbackPalette;
+  if (globalThis.document === undefined) return fallbackPalette;
 
   const style = window.getComputedStyle(document.documentElement);
   const probe = document.createElement("span");
@@ -780,7 +784,7 @@ function mixResolvedColor(
   target: "black" | "white",
   fallback: string,
 ): string {
-  if (typeof document === "undefined") return fallback;
+  if (globalThis.document === undefined) return fallback;
 
   const probe = document.createElement("span");
   probe.setAttribute("aria-hidden", "true");

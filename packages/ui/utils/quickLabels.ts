@@ -5,6 +5,7 @@
  * so they persist across different port-based sessions.
  */
 
+import { Option, Schema } from 'effect';
 import { storage } from './storage';
 
 const STORAGE_KEY = 'plannotator-quick-labels';
@@ -18,7 +19,11 @@ export interface QuickLabel {
 }
 
 /** Inline styles for label colors (avoids Tailwind dynamic class purging) */
-export const LABEL_COLOR_MAP: Record<string, { bg: string; text: string; darkText: string }> = {
+interface LabelColorMap {
+  [key: string]: { bg: string; text: string; darkText: string };
+}
+
+export const LABEL_COLOR_MAP: LabelColorMap = {
   blue:   { bg: 'rgba(59,130,246,0.15)',  text: '#2563eb', darkText: '#60a5fa' },
   red:    { bg: 'rgba(239,68,68,0.15)',   text: '#dc2626', darkText: '#f87171' },
   orange: { bg: 'rgba(249,115,22,0.15)',  text: '#ea580c', darkText: '#fb923c' },
@@ -30,6 +35,17 @@ export const LABEL_COLOR_MAP: Record<string, { bg: string; text: string; darkTex
   cyan:   { bg: 'rgba(8,145,178,0.15)',   text: '#0891b2', darkText: '#22d3ee' },
   amber:  { bg: 'rgba(180,83,9,0.15)',    text: '#b45309', darkText: '#fbbf24' },
 };
+
+const QuickLabelSchema = Schema.Struct({
+  id: Schema.String,
+  emoji: Schema.String,
+  text: Schema.String,
+  color: Schema.String,
+  tip: Schema.optionalKey(Schema.String),
+});
+const QuickLabelItemsSchema = Schema.Array(Schema.Unknown);
+const decodeQuickLabel = Schema.decodeUnknownOption(QuickLabelSchema);
+const decodeQuickLabelItems = Schema.decodeUnknownOption(QuickLabelItemsSchema);
 
 export const DEFAULT_QUICK_LABELS: QuickLabel[] = [
   { id: 'clarify-this',            emoji: '❓', text: 'Clarify this',            color: 'yellow' },
@@ -44,15 +60,24 @@ export const DEFAULT_QUICK_LABELS: QuickLabel[] = [
   { id: 'nice-approach',           emoji: '👍', text: 'Nice approach',           color: 'green' },
 ];
 
-export function getQuickLabels(): QuickLabel[] {
-  const raw = storage.getItem(STORAGE_KEY);
-  if (!raw) return DEFAULT_QUICK_LABELS;
+export function decodeStoredQuickLabels(raw: string): QuickLabel[] {
   try {
-    const parsed = JSON.parse(raw) as QuickLabel[];
-    return parsed.length > 0 ? parsed : DEFAULT_QUICK_LABELS;
+    const items = Option.getOrNull(decodeQuickLabelItems(JSON.parse(raw)));
+    if (!items) return DEFAULT_QUICK_LABELS;
+    const labels: QuickLabel[] = [];
+    for (const item of items) {
+      const label = Option.getOrNull(decodeQuickLabel(item));
+      if (label) labels.push(label);
+    }
+    return labels.length > 0 ? labels : DEFAULT_QUICK_LABELS;
   } catch {
     return DEFAULT_QUICK_LABELS;
   }
+}
+
+export function getQuickLabels(): QuickLabel[] {
+  const raw = storage.getItem(STORAGE_KEY);
+  return raw ? decodeStoredQuickLabels(raw) : DEFAULT_QUICK_LABELS;
 }
 
 export function saveQuickLabels(labels: QuickLabel[]): void {
@@ -69,7 +94,12 @@ export function findLabelByText(annotationText: string): QuickLabel | undefined 
 }
 
 /** Get color styles for a label, respecting dark mode */
-export function getLabelColors(color: string): { bg: string; text: string } {
+interface LabelColors {
+  bg: string;
+  text: string;
+}
+
+export function getLabelColors(color: string): LabelColors {
   const colors = LABEL_COLOR_MAP[color];
   if (!colors) return { bg: 'rgba(128,128,128,0.15)', text: '#666' };
   const isDark = document.documentElement.classList.contains('dark');

@@ -198,7 +198,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     </div>
   );
 
-  if (typeof document === 'undefined') {
+  if (globalThis.document === undefined) {
     return content;
   }
 

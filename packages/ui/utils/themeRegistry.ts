@@ -577,6 +577,10 @@ export const BUILT_IN_THEMES: ThemeInfo[] = [
   },
 ];
 
+export function isKnownThemeId(themeId: string): boolean {
+  return BUILT_IN_THEMES.some(({ id }) => id === themeId);
+}
+
 export function resolveAppliedThemeMode(
   themeId: string,
   requestedMode: 'dark' | 'light',

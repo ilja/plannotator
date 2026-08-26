@@ -6,6 +6,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { release } from "node:os";
 import { delimiter, join } from "node:path";
 import { loadConfig, resolveUseGlimpse } from "../generated/config.js";
@@ -59,10 +60,12 @@ export function isRemoteSession(): boolean {
  * - Local sessions use random port
  * Returns { port, portSource } so caller can notify user if needed.
  */
-export function getServerPort(): {
+export interface ServerPortInfo {
 	port: number;
 	portSource: "env" | "remote-default" | "random";
-} {
+}
+
+export function getServerPort(): ServerPortInfo {
 	const envPort = process.env.PLANNOTATOR_PORT;
 	if (envPort) {
 		const parsed = parseInt(envPort, 10);
@@ -86,7 +89,7 @@ const RETRY_DELAY_MS = 500;
 
 export async function listenOnPort(
 	server: Server,
-): Promise<{ port: number; portSource: "env" | "remote-default" | "random" }> {
+): Promise<ServerPortInfo> {
 	const result = getServerPort();
 
 	for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -102,7 +105,14 @@ export async function listenOnPort(
 					},
 				);
 			});
-			const addr = server.address() as { port: number };
+			const address = server.address();
+			if (!address) {
+				throw new Error("Failed to resolve bound server address");
+			}
+			// SAFETY: this is the TCP listen callback (host from getServerHostname),
+			// so `server.address()` is the AddressInfo form, never the unix-socket
+			// path string.
+			const addr = address as AddressInfo;
 			return { port: addr.port, portSource: result.portSource };
 		} catch (err: unknown) {
 			const isAddressInUse =

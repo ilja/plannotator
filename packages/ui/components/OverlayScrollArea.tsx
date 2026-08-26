@@ -71,10 +71,11 @@ export const OverlayScrollArea = forwardRef<
     onReadyRef.current?.(node);
   }, []);
 
-  const Comp = element as ElementType;
+  const Comp = element;
   const mergedStyle: CSSProperties = { overflowX, overflowY, ...style };
 
   return (
+    // SAFETY: setEl is a callback ref for HTMLElement — Comp renders as div/main which are HTMLElements
     <Comp ref={setEl as React.Ref<HTMLElement>} style={mergedStyle} {...rest}>
       {children}
     </Comp>

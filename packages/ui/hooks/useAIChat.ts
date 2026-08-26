@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AIContext } from '@plannotator/ai';
+import type { AIContext, AIJsonObject } from '@plannotator/ai';
 import type { AIQuestion, AIResponse } from '../types';
 import { generateId } from '../utils/generateId';
+import {
+  decodeAIChatError,
+  decodeAIChatSessionId,
+  decodeAIChatStreamMessage,
+} from './aiChatStreamMessages';
 
 export interface AIChatEntry {
   question: AIQuestion;
@@ -11,7 +16,7 @@ export interface AIChatEntry {
 export interface PendingPermission {
   requestId: string;
   toolName: string;
-  toolInput: Record<string, unknown>;
+  toolInput: AIJsonObject;
   title?: string;
   displayName?: string;
   description?: string;
@@ -84,7 +89,7 @@ function createThread(title = 'Chat'): AIChatThread {
 }
 
 function createAbortError(message: string): Error {
-  if (typeof DOMException !== 'undefined') {
+  if (globalThis.DOMException !== undefined) {
     return new DOMException(message, 'AbortError');
   }
   const err = new Error(message);
@@ -144,21 +149,22 @@ export function useAIChat({
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Failed to create AI session' }));
-        throw new Error(data.error || `HTTP ${res.status}`);
+        const error = decodeAIChatError(await res.json().catch(() => null));
+        throw new Error(error ?? `HTTP ${res.status}`);
       }
 
-      const data = await res.json() as { sessionId: string };
+      const sessionId = decodeAIChatSessionId(await res.json());
+      if (!sessionId) throw new Error('AI session response was malformed');
       if (signal.aborted || epoch !== sessionEpochRef.current) {
         fetch('/api/ai/abort', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: data.sessionId }),
+          body: JSON.stringify({ sessionId }),
         }).catch(() => {});
         throw createAbortError('AI session creation was superseded');
       }
-      setSessionId(data.sessionId);
-      return data.sessionId;
+      setSessionId(sessionId);
+      return sessionId;
     } finally {
       if (createRequestRef.current === requestId) {
         setIsCreatingSession(false);
@@ -222,8 +228,8 @@ export function useAIChat({
       });
 
       if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({ error: 'Query failed' }));
-        throw new Error(data.error || `HTTP ${res.status}`);
+        const error = decodeAIChatError(await res.json().catch(() => null));
+        throw new Error(error ?? `HTTP ${res.status}`);
       }
 
       const reader = res.body.getReader();
@@ -244,7 +250,8 @@ export function useAIChat({
           if (data === '[DONE]') continue;
 
           try {
-            const msg = JSON.parse(data);
+            const msg = decodeAIChatStreamMessage(JSON.parse(data));
+            if (!msg) continue;
 
             if (msg.type === 'text_delta') {
               updateMessages(prev =>

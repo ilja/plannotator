@@ -55,7 +55,7 @@ function isLocalUrl(url: string): boolean {
       hostname === "[::1]" ||
       hostname === "0.0.0.0" ||
       hostname.endsWith(".local") ||
-      /^127\./.test(hostname) ||
+      hostname.startsWith('127.') ||
       PRIVATE_IPV4.test(hostname)
     ) {
       return true;
@@ -261,7 +261,11 @@ async function fetchViaJina(url: string): Promise<string> {
   // Strip fragment (never sent to server) and encode for Jina's path-based API
   const cleanUrl = url.split("#")[0];
   const jinaUrl = `https://r.jina.ai/${cleanUrl}`;
-  const headers: Record<string, string> = {
+  interface JinaHeaders {
+    [key: string]: string;
+  }
+
+  const headers: JinaHeaders = {
     Accept: "text/plain",
   };
 

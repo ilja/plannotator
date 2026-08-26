@@ -191,7 +191,9 @@ describe("parseAnnotateArgs", () => {
   });
 
   test("nullish input is tolerated", () => {
-    expect(parseAnnotateArgs(undefined as unknown as string)).toEqual({
+    const raw: unknown = undefined;
+    // SAFETY: testing nullish tolerance; parseAnnotateArgs coalesces nullish to empty string via `raw ?? ""`.
+    expect(parseAnnotateArgs(raw as string)).toEqual({
       filePath: "",
       rawFilePath: "",
       gate: false,

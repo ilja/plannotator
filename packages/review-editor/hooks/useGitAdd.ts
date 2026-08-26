@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { readGitAddResponse } from '../utils/git-add-response';
 
 interface UseGitAddOptions {
   activeDiffBase: string;
@@ -41,9 +42,9 @@ export function useGitAdd({ activeDiffBase, onFileViewed }: UseGitAddOptions): U
         body: JSON.stringify({ filePath, undo: isUndo }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Failed' }));
-        throw new Error(data.error || 'Failed');
+      const result = await readGitAddResponse(res);
+      if (!result.ok) {
+        throw new Error(result.error);
       }
 
       setStagedFiles(prev => {

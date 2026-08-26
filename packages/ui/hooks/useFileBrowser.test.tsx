@@ -6,20 +6,29 @@ import { act } from "react";
 import { useFileBrowser, type UseFileBrowserReturn } from "./useFileBrowser";
 import type { VaultNode } from "../types";
 
-const hasDom = typeof document !== "undefined";
+const hasDom = globalThis.document !== undefined;
 const realFetch = globalThis.fetch;
 const realEventSource = globalThis.EventSource;
 
 class MockEventSource {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
   static instances: MockEventSource[] = [];
   onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  onopen: ((event: Event) => void) | null = null;
+  readyState = 0;
+  withCredentials = false;
   closed = false;
 
   constructor(public readonly url: string) {
     MockEventSource.instances.push(this);
   }
 
-  emit(data: unknown): void {
+  // SAFETY: data is untrusted vault data — any is intentional
+  emit(data: any): void {
+    // SAFETY: constructing MessageEvent from trusted JSON — cast to MessageEvent
     this.onmessage?.({ data: JSON.stringify(data) } as MessageEvent);
   }
 
@@ -28,7 +37,8 @@ class MockEventSource {
   }
 }
 
-function response(body: unknown, status = 200): Response {
+// SAFETY: body is untyped test fixture — any is intentional
+function response(body: any, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -38,41 +48,51 @@ function response(body: unknown, status = 200): Response {
 function installFetchResponses(responses: Response[]): string[] {
   const calls: string[] = [];
   const nextFetch = async () => responses.shift() ?? response({ error: "unexpected fetch" }, 500);
+  // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
     return nextFetch();
-  }) as unknown as typeof fetch;
+  }) as typeof fetch;
   return calls;
 }
 
-function installDeferredFetch(): {
+interface DeferredFetch {
   calls: string[];
   resolve: (response: Response) => void;
-} {
+}
+
+function installDeferredFetch(): DeferredFetch {
   const calls: string[] = [];
   let resolve: (response: Response) => void = () => {};
   const pending = new Promise<Response>((next) => {
     resolve = next;
   });
+  // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
     return pending;
-  }) as unknown as typeof fetch;
+  }) as typeof fetch;
   return { calls, resolve };
 }
 
 function installMockEventSource(): void {
   MockEventSource.instances = [];
-  globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+  // SAFETY: MockEventSource matches EventSource shape — cast to typeof EventSource
+  // SAFETY: MockEventSource matches EventSource shape — cast to typeof EventSource
+  // @ts-expect-error — MockEventSource is incomplete, intentionally suppressed
+  globalThis.EventSource = MockEventSource as typeof EventSource;
 }
 
-function deferred<T>(): {
+interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
-  reject: (reason?: unknown) => void;
-} {
+  // SAFETY: reason is untyped — any is intentional
+  reject: (reason?: any) => void;
+}
+
+function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
+  let reject!: (reason?: any) => void;
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
@@ -80,7 +100,11 @@ function deferred<T>(): {
   return { promise, resolve, reject };
 }
 
-function Harness({ resultRef }: { resultRef: { current: UseFileBrowserReturn | null } }) {
+interface HarnessProps {
+  resultRef: { current: UseFileBrowserReturn | null };
+}
+
+function Harness({ resultRef }: HarnessProps) {
   resultRef.current = useFileBrowser();
   return null;
 }
@@ -91,7 +115,11 @@ async function mountHook(): Promise<{
 }> {
   const host = document.createElement("div");
   document.body.appendChild(host);
-  const resultRef: { current: UseFileBrowserReturn | null } = { current: null };
+  interface MountResultRef {
+    current: UseFileBrowserReturn | null;
+  }
+
+  const resultRef: MountResultRef = { current: null };
   let root: Root;
   await act(async () => {
     root = createRoot(host);
@@ -114,7 +142,9 @@ async function fetchTree(
   options?: { quiet?: boolean },
 ): Promise<void> {
   await act(async () => {
-    await (browser.fetchTree(dirPath, options) as unknown as Promise<void>);
+    // SAFETY: fetchTree returns void-like — cast to Promise<void>
+    // @ts-expect-error — fetchTree returns void, intentionally suppressed
+    await (browser.fetchTree(dirPath, options) as Promise<void>);
   });
 }
 
@@ -123,21 +153,73 @@ const tick = (ms: number) => act(async () => new Promise((resolve) => setTimeout
 afterEach(() => {
   globalThis.fetch = realFetch;
   if (realEventSource) globalThis.EventSource = realEventSource;
-  else delete (globalThis as Record<string, unknown>).EventSource;
+  else {
+    // SAFETY: globalThis is untyped in test — any is intentional
+    delete (globalThis as any).EventSource;
+  }
   MockEventSource.instances = [];
   if (hasDom) document.body.innerHTML = "";
 });
 
 describe("useFileBrowser", () => {
+  test.skipIf(!hasDom)("falls back when a failed response has a malformed error envelope", async () => {
+    const dirPath = "/tmp/plannotator-docs";
+    installFetchResponses([response({ error: 42 }, 500)]);
+
+    const session = await mountHook();
+    await fetchTree(session.result.current!, dirPath);
+
+    expect(session.result.current!.dirs[0]).toMatchObject({
+      path: dirPath,
+      isLoading: false,
+      error: "Failed to load",
+    });
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)("falls back when a failed response has invalid JSON", async () => {
+    const dirPath = "/tmp/plannotator-docs";
+    installFetchResponses([new Response("{", { status: 500 })]);
+
+    const session = await mountHook();
+    await fetchTree(session.result.current!, dirPath);
+
+    expect(session.result.current!.dirs[0]).toMatchObject({
+      path: dirPath,
+      isLoading: false,
+      error: "Failed to load",
+    });
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)("uses the existing connection failure path for malformed successful responses", async () => {
+    const dirPath = "/tmp/plannotator-docs";
+    installFetchResponses([response({ tree: {} })]);
+
+    const session = await mountHook();
+    await fetchTree(session.result.current!, dirPath);
+
+    expect(session.result.current!.dirs[0]).toMatchObject({
+      path: dirPath,
+      isLoading: false,
+      error: "Failed to connect to server",
+    });
+
+    await session.unmount();
+  });
+
   test.skipIf(!hasDom)("waits for the initial tree fetch before opening the live watcher", async () => {
     installMockEventSource();
     const dirPath = "/tmp/plannotator-docs";
     const pending = deferred<Response>();
     const calls: string[] = [];
+    // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       calls.push(String(input));
       return pending.promise;
-    }) as unknown as typeof fetch;
+    }) as typeof fetch;
 
     const session = await mountHook();
     await act(async () => {
@@ -170,10 +252,11 @@ describe("useFileBrowser", () => {
     const second = deferred<Response>();
     const pending = [first.promise, second.promise];
     const calls: string[] = [];
+    // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       calls.push(String(input));
       return pending.shift() ?? response({ error: "unexpected fetch" }, 500);
-    }) as unknown as typeof fetch;
+    }) as typeof fetch;
 
     const session = await mountHook();
     await act(async () => {
@@ -297,6 +380,34 @@ describe("useFileBrowser", () => {
     await tick(150);
     expect(calls).toHaveLength(2);
     expect(session.result.current!.dirs[0]?.tree).toEqual(reconnectedTree);
+
+    await session.unmount();
+  });
+
+  test.skipIf(!hasDom)("fans out malformed watch paths to every directory", async () => {
+    installMockEventSource();
+    const firstDir = "/tmp/plannotator-docs-a";
+    const secondDir = "/tmp/plannotator-docs-b";
+    const calls = installFetchResponses([
+      response({ tree: [] }),
+      response({ tree: [] }),
+      response({ tree: [] }),
+      response({ tree: [] }),
+    ]);
+
+    const session = await mountHook();
+    await act(async () => {
+      session.result.current!.fetchAll([firstDir, secondDir]);
+    });
+    await tick(0);
+
+    const source = MockEventSource.instances[0];
+    expect(source).toBeDefined();
+    expect(calls).toHaveLength(2);
+
+    source!.emit({ type: "changed", dirPath: 42 });
+    await tick(150);
+    expect(calls).toHaveLength(4);
 
     await session.unmount();
   });

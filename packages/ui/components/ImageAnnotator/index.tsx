@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Canvas } from './Canvas';
 import { Toolbar } from './Toolbar';
 import { renderStroke } from './utils';
-import type { Point, Stroke, Tool, AnnotatorState } from './types';
+import type {Point, AnnotatorState} from './types';
 import { DEFAULT_STATE } from './types';
 
 interface ImageAnnotatorProps {
@@ -41,8 +41,8 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept when typing in the name input
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT') {
+      const target = e.target;
+      if (target instanceof HTMLElement && target.tagName === 'INPUT') {
         if (e.key === 'Escape') {
           // Blur and let the next Escape close
           target.blur();

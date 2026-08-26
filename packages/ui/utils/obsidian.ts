@@ -6,6 +6,7 @@
  * across different ports used by the hook server.
  */
 
+import { Option, Schema } from 'effect';
 import { storage } from './storage';
 
 // Storage keys
@@ -32,6 +33,10 @@ export const DEFAULT_FILENAME_FORMAT = '{title} - {Mon} {D}, {YYYY} {h}-{mm}{amp
  */
 export type FilenameSeparator = 'space' | 'dash' | 'underscore';
 
+const decodeFilenameSeparator = Schema.decodeUnknownOption(
+  Schema.Literals(['space', 'dash', 'underscore']),
+);
+
 export interface ObsidianSettings {
   enabled: boolean;
   vaultPath: string;      // Selected vault path OR '__custom__' sentinel
@@ -53,7 +58,9 @@ export function getObsidianSettings(): ObsidianSettings {
     folder: storage.getItem(STORAGE_KEY_FOLDER) || DEFAULT_FOLDER,
     customPath: storage.getItem(STORAGE_KEY_CUSTOM_PATH) || undefined,
     filenameFormat: storage.getItem(STORAGE_KEY_FILENAME_FORMAT) || undefined,
-    filenameSeparator: (storage.getItem(STORAGE_KEY_FILENAME_SEPARATOR) as FilenameSeparator) || 'space',
+    filenameSeparator: Option.getOrUndefined(
+      decodeFilenameSeparator(storage.getItem(STORAGE_KEY_FILENAME_SEPARATOR)),
+    ) ?? 'space',
     autoSave: storage.getItem(STORAGE_KEY_AUTOSAVE) === 'true',
     vaultBrowserEnabled: storage.getItem(STORAGE_KEY_VAULT_BROWSER) === 'true',
   };

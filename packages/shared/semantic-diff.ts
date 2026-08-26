@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { Option, Schema } from "effect";
 import { getPlannotatorDataDir } from "./data-dir";
 import type {
   SemanticDiffAvailability,
@@ -278,20 +279,25 @@ export async function getSemanticDiffAvailability(
   };
 }
 
-function valueAsNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+const SummaryRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+type SummaryRecord = Schema.Schema.Type<typeof SummaryRecordSchema>;
+const FiniteNumberSchema = Schema.Finite;
+
+function valueAsNumber(value: any): number | null {
+  const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(FiniteNumberSchema)(value));
+  return decoded ?? null;
 }
 
-function valueAsString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
+function valueAsString(value: any): string | null {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(value)) ?? null;
 }
 
-function valueAsBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
+function valueAsBoolean(value: any): boolean | null {
+  return Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Boolean)(value)) ?? null;
 }
 
-function summaryFromJson(value: unknown): SemanticDiffSummary {
-  const summary = value && typeof value === "object" ? value as Record<string, unknown> : {};
+function summaryFromJson(value: any): SemanticDiffSummary {
+  const summary: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
   return {
     fileCount: valueAsNumber(summary.fileCount) ?? 0,
     added: valueAsNumber(summary.added) ?? 0,
@@ -306,9 +312,9 @@ function summaryFromJson(value: unknown): SemanticDiffSummary {
   };
 }
 
-function changeFromJson(value: unknown): SemanticDiffChange | null {
-  if (!value || typeof value !== "object") return null;
-  const change = value as Record<string, unknown>;
+function changeFromJson(value: any): SemanticDiffChange | null {
+  if (!(value instanceof Object)) return null;
+  const change: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
   const changeType = valueAsString(change.changeType);
   const entityType = valueAsString(change.entityType);
   const entityName = valueAsString(change.entityName);
@@ -331,9 +337,9 @@ function changeFromJson(value: unknown): SemanticDiffChange | null {
   };
 }
 
-function binaryChangeFromJson(value: unknown): SemanticDiffBinaryChange | null {
-  if (!value || typeof value !== "object") return null;
-  const change = value as Record<string, unknown>;
+function binaryChangeFromJson(value: any): SemanticDiffBinaryChange | null {
+  if (!(value instanceof Object)) return null;
+  const change: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
   const filePath = valueAsString(change.filePath);
   if (!filePath) return null;
   return {
@@ -358,7 +364,7 @@ export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): Semanti
     };
   }
 
-  if (!parsed || typeof parsed !== "object") {
+  if (!(parsed instanceof Object)) {
     return {
       status: "error",
       reason: "invalid-json-shape",
@@ -368,7 +374,7 @@ export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): Semanti
     };
   }
 
-  const payload = parsed as Record<string, unknown>;
+  const payload: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(parsed)) ?? {};
   const changes = Array.isArray(payload.changes)
     ? payload.changes.map(changeFromJson).filter((change): change is SemanticDiffChange => !!change)
     : [];
@@ -439,7 +445,7 @@ export class SemanticDiffResponseCache {
 
     if (!this.cache.has(cacheKey) && this.cache.size >= this.maxEntries) {
       const oldestKey = this.cache.keys().next().value;
-      if (typeof oldestKey === "string") {
+      if (oldestKey !== undefined) {
         this.cache.delete(oldestKey);
       }
     }

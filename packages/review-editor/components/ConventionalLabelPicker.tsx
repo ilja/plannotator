@@ -1,5 +1,10 @@
 import React, { useCallback } from 'react';
 import type { ConventionalLabel, ConventionalDecoration } from '@plannotator/ui/types';
+import {
+  decodeConventionalLabelEntryFields,
+  decodeConventionalLabelJsonArray,
+  decodeConventionalLabelString,
+} from '@plannotator/ui/utils/conventionalLabelDecoding';
 
 /** Semantic tone — maps to theme CSS variables, not arbitrary hex */
 type SemanticTone = 'danger' | 'warn' | 'success' | 'info' | 'neutral';
@@ -35,23 +40,24 @@ export const CONVENTIONAL_LABELS: LabelDef[] = [
 
 /** Resolve which labels to show based on user config (null = all defaults; empty array = user cleared all) */
 export function getEnabledLabels(configJson: string | null): LabelDef[] {
-  if (!configJson) return CONVENTIONAL_LABELS;
-  try {
-    const parsed = JSON.parse(configJson) as Array<Record<string, unknown>>;
-    if (!Array.isArray(parsed)) return CONVENTIONAL_LABELS;
-    return parsed.map(cfg => {
-      const builtIn = CONVENTIONAL_LABELS.find(l => l.label === cfg.label);
-      return {
-        label: cfg.label as ConventionalLabel,
-        display: cfg.display as string,
-        tone: builtIn?.tone || 'neutral',
-        showBlockingToggle: cfg.blocking === true || cfg.blocking === 'true',
-        hint: builtIn?.hint || (cfg.display as string),
-      };
-    });
-  } catch {
-    return CONVENTIONAL_LABELS;
-  }
+  const configuredLabels = decodeConventionalLabelJsonArray(configJson);
+  if (!configuredLabels) return CONVENTIONAL_LABELS;
+
+  return configuredLabels.flatMap((entry) => {
+    const fields = decodeConventionalLabelEntryFields(entry);
+    const label = decodeConventionalLabelString(fields?.label);
+    const display = decodeConventionalLabelString(fields?.display);
+    if (label === undefined || display === undefined) return [];
+
+    const builtIn = CONVENTIONAL_LABELS.find((candidate) => candidate.label === label);
+    return [{
+      label,
+      display,
+      tone: builtIn?.tone || 'neutral',
+      showBlockingToggle: fields?.blocking === true || fields?.blocking === 'true',
+      hint: builtIn?.hint || display,
+    }];
+  });
 }
 
 interface ConventionalLabelPickerProps {

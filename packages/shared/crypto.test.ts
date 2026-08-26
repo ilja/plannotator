@@ -11,7 +11,9 @@ import { deflateSync, inflateSync } from "bun";
 
 // Bun's test runner doesn't have CompressionStream (browser API).
 // Use Bun's native zlib for the same deflate-raw + base64url pipeline.
-function compress(data: unknown): string {
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function compress(data: JsonValue): string {
   const json = JSON.stringify(data);
   const compressed = deflateSync(new TextEncoder().encode(json));
   let binary = "";
@@ -21,12 +23,13 @@ function compress(data: unknown): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-function decompress(b64: string): unknown {
+function decompress(b64: string): JsonValue {
   const base64 = b64.replace(/-/g, "+").replace(/_/g, "/");
   const binary = atob(base64);
   const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
   const decompressed = inflateSync(bytes);
-  return JSON.parse(new TextDecoder().decode(decompressed));
+  const parsed: JsonValue = JSON.parse(new TextDecoder().decode(decompressed));
+  return parsed;
 }
 
 const PASTE_API = "https://plannotator-paste.plannotator.workers.dev";
@@ -123,7 +126,7 @@ describe("live paste service E2E", () => {
       body: JSON.stringify({ data: ciphertext }),
     });
     expect(postRes.status).toBe(201);
-    const { id } = (await postRes.json()) as { id: string };
+    const { id }: { id: string } = await postRes.json();
     expect(id).toMatch(/^[A-Za-z0-9]{8}$/);
 
     // 4. Retrieve
@@ -133,7 +136,7 @@ describe("live paste service E2E", () => {
     // Verify Cache-Control header
     expect(getRes.headers.get("cache-control")).toBe("private, no-store");
 
-    const { data: storedData } = (await getRes.json()) as { data: string };
+    const { data: storedData }: { data: string } = await getRes.json();
 
     // 5. Verify server stores only ciphertext (not readable plan data)
     expect(storedData).toBe(ciphertext);
@@ -156,10 +159,10 @@ describe("live paste service E2E", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: ciphertext }),
     });
-    const { id } = (await postRes.json()) as { id: string };
+    const { id }: { id: string } = await postRes.json();
 
     const getRes = await fetch(`${PASTE_API}/api/paste/${id}`);
-    const { data } = (await getRes.json()) as { data: string };
+    const { data }: { data: string } = await getRes.json();
 
     // Data is opaque — cannot be decompressed without decryption
     expect(() => decompress(data)).toThrow();

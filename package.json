@@ -2,6 +2,7 @@
   "name": "plannotator",
   "version": "0.21.2",
   "private": true,
+  "type": "module",
   "description": "Pi review and annotation surfaces for Plannotator",
   "author": "backnotprop",
   "license": "MIT OR Apache-2.0",

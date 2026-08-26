@@ -8,7 +8,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import {basename} from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -78,7 +78,7 @@ function sessionOpenedMessage(label: string, url: string): string {
 		: `${label}. You can keep chatting while it runs.`;
 }
 
-function reportBackgroundError(ctx: ExtensionContext, message: string, err: unknown, origin?: PiSessionIdentity): void {
+function reportBackgroundError(ctx: ExtensionContext, message: string, err: Error, origin?: PiSessionIdentity): void {
 	const detail = getStartupErrorMessage(err);
 	console.error(`${message}: ${detail}`);
 	safeNotify(ctx, `${message}: ${detail}`, "error", origin);
@@ -115,7 +115,7 @@ function shouldAnchorLastMessageFeedback(ctx: ExtensionContext, entryId: string,
 	}
 }
 
-function reportCurrentSessionSendFailure(errorMessage: string, err: unknown, origin: PiSessionIdentity): void {
+function reportCurrentSessionSendFailure(errorMessage: string, err: Error, origin: PiSessionIdentity): void {
 	const detail = getStartupErrorMessage(err);
 	console.error(`${errorMessage}: ${detail}`);
 	notifyCurrentPiSession(`${errorMessage}: ${detail}`, "error", origin);
@@ -230,15 +230,15 @@ export default function plannotator(pi: ExtensionAPI): void {
 								origin,
 							);
 						} catch (err) {
-							reportBackgroundError(ctx, "Plannotator code review feedback could not be sent", err, origin);
+							reportBackgroundError(ctx, "Plannotator code review feedback could not be sent", err instanceof Error ? err : new Error(String(err)), origin);
 						}
 					})
 					.catch((err) => {
-						reportBackgroundError(ctx, "Plannotator code review session failed", err, origin);
+						reportBackgroundError(ctx, "Plannotator code review session failed", err instanceof Error ? err : new Error(String(err)), origin);
 					});
 			} catch (err) {
 				ctx.ui.notify(
-					`Failed to start code review UI: ${getStartupErrorMessage(err)}`,
+					`Failed to start code review UI: ${getStartupErrorMessage(err instanceof Error ? err : new Error(String(err)))}`,
 					"error",
 				);
 			}
@@ -390,15 +390,15 @@ export default function plannotator(pi: ExtensionAPI): void {
 								origin,
 							);
 						} catch (err) {
-							reportBackgroundError(ctx, "Plannotator annotation feedback could not be sent", err, origin);
+							reportBackgroundError(ctx, "Plannotator annotation feedback could not be sent", err instanceof Error ? err : new Error(String(err)), origin);
 						}
 					})
 					.catch((err) => {
-						reportBackgroundError(ctx, "Plannotator annotation session failed", err, origin);
+						reportBackgroundError(ctx, "Plannotator annotation session failed", err instanceof Error ? err : new Error(String(err)), origin);
 					});
 			} catch (err) {
 				ctx.ui.notify(
-					`Failed to start annotation UI: ${getStartupErrorMessage(err)}`,
+					`Failed to start annotation UI: ${getStartupErrorMessage(err instanceof Error ? err : new Error(String(err)))}`,
 					"error",
 				);
 			}
@@ -470,15 +470,15 @@ export default function plannotator(pi: ExtensionAPI): void {
 								origin,
 							);
 						} catch (err) {
-							reportBackgroundError(ctx, "Plannotator message annotation feedback could not be sent", err, origin);
+							reportBackgroundError(ctx, "Plannotator message annotation feedback could not be sent", err instanceof Error ? err : new Error(String(err)), origin);
 						}
 					})
 					.catch((err) => {
-						reportBackgroundError(ctx, "Plannotator message annotation session failed", err, origin);
+						reportBackgroundError(ctx, "Plannotator message annotation session failed", err instanceof Error ? err : new Error(String(err)), origin);
 					});
 			} catch (err) {
 				ctx.ui.notify(
-					`Failed to start annotation UI: ${getStartupErrorMessage(err)}`,
+					`Failed to start annotation UI: ${getStartupErrorMessage(err instanceof Error ? err : new Error(String(err)))}`,
 					"error",
 				);
 			}

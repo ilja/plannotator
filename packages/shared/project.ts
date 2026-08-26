@@ -13,7 +13,7 @@
  * - trim to reasonable length
  */
 export function sanitizeTag(name: string): string | null {
-  if (!name || typeof name !== "string") return null;
+  if (!name) return null;
 
   const sanitized = name
     .toLowerCase()
@@ -31,7 +31,7 @@ export function sanitizeTag(name: string): string | null {
  * Extract repo name from a git root path
  */
 export function extractRepoName(gitRootPath: string): string | null {
-  if (!gitRootPath || typeof gitRootPath !== "string") return null;
+  if (!gitRootPath) return null;
 
   const trimmed = gitRootPath.trim().replace(/\/+$/, ""); // remove trailing slashes
   const parts = trimmed.split("/");
@@ -44,7 +44,7 @@ export function extractRepoName(gitRootPath: string): string | null {
  * Extract directory name from a path
  */
 export function extractDirName(path: string): string | null {
-  if (!path || typeof path !== "string") return null;
+  if (!path) return null;
 
   const trimmed = path.trim().replace(/\/+$/, "");
   if (trimmed === "" || trimmed === "/") return null;

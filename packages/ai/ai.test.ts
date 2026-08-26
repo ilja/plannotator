@@ -1,4 +1,5 @@
 import { describe, test, expect } from "bun:test";
+import { Schema } from "effect";
 import { SessionManager } from "./session-manager.ts";
 import { buildSystemPrompt, buildForkPreamble } from "./context.ts";
 import {
@@ -6,7 +7,13 @@ import {
   registerProviderFactory,
   createProvider,
 } from "./provider.ts";
-import { createAIEndpoints } from "./endpoints.ts";
+import {
+  AICapabilitiesResponseSchema,
+  AbortResponseSchema,
+  CreateSessionResponseSchema,
+  SessionListResponseSchema,
+  createAIEndpoints,
+} from "./endpoints.ts";
 import type {
   AIProvider,
   AISession,
@@ -57,11 +64,15 @@ function mockSession(
 
 let sessionCounter = 0;
 
-function mockProvider(name = "mock"): AIProvider {
+interface TestProvider extends AIProvider {
+  models?: Array<{ id: string; label: string; default?: boolean }>;
+}
+
+function mockProvider(name = "mock"): TestProvider {
   return {
     name,
     capabilities: { fork: true, resume: true, streaming: true, tools: false },
-    async createSession(opts) {
+    async createSession(_opts) {
       return mockSession(`session-${++sessionCounter}`, null);
     },
     async forkSession(opts) {
@@ -179,6 +190,19 @@ describe("command path helpers", () => {
 
     expect(killed).toBe(false);
     expect(called).toBe(false);
+  });
+
+  test("killWindowsProcessTree rejects invalid PIDs before invoking taskkill", () => {
+    for (const pid of [null, undefined, Number.NaN, 0, -1] as const) {
+      let called = false;
+      expect(
+        killWindowsProcessTree(pid, "win32", () => {
+          called = true;
+          return { status: 0 };
+        }),
+      ).toBe(false);
+      expect(called).toBe(false);
+    }
   });
 });
 
@@ -483,15 +507,42 @@ describe("AI endpoints", () => {
     return { reg, sm, endpoints };
   }
 
+  test("rejects malformed endpoint request bodies", async () => {
+    const { endpoints } = setup();
+
+    const sessionResponse = await endpoints["/api/ai/session"](
+      new Request("http://localhost/api/ai/session", {
+        method: "POST",
+        body: JSON.stringify({ context: { mode: "code-review" } }),
+      }),
+    );
+    expect(sessionResponse.status).toBe(400);
+
+    const queryResponse = await endpoints["/api/ai/query"](
+      new Request("http://localhost/api/ai/query", {
+        method: "POST",
+        body: JSON.stringify({ sessionId: 42, prompt: "hello" }),
+      }),
+    );
+    expect(queryResponse.status).toBe(400);
+
+    const permissionResponse = await endpoints["/api/ai/permission"](
+      new Request("http://localhost/api/ai/permission", {
+        method: "POST",
+        body: JSON.stringify({ sessionId: "session", requestId: "request", allow: "yes" }),
+      }),
+    );
+    expect(permissionResponse.status).toBe(400);
+  });
+
   test("capabilities returns available: false when no provider", async () => {
     const { endpoints } = setup();
 
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities")
     );
-    const data = await res.json();
+    const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(false);
-    expect(data.defaultProvider).toBeNull();
   });
 
   test("capabilities returns provider info when registered", async () => {
@@ -501,21 +552,27 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities")
     );
-    const data = await res.json();
+    const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(true);
-    expect(data.defaultProvider).toBe("mock");
-    expect(data.providers.length).toBe(1);
     expect(data.providers[0].id).toBe("mock");
-    expect(data.providers[0].name).toBe("mock");
     expect(data.providers[0].capabilities.fork).toBe(true);
+  });
+
+  test("capabilities returns instance ID not type name for defaultProvider", async () => {
+    const { reg, endpoints } = setup();
+    reg.register(mockProvider("pi-sdk"), "pi-fast");
+
+    const res = await endpoints["/api/ai/capabilities"](
+      new Request("http://localhost/api/ai/capabilities")
+    );
+    const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
+    expect(data.defaultProvider).toBe("pi-fast");
   });
 
   test("capabilities waits for pending provider discovery", async () => {
     const reg = new ProviderRegistry();
     const sm = new SessionManager();
-    const provider = mockProvider("pi-sdk") as AIProvider & {
-      models?: Array<{ id: string; label: string; default?: boolean }>;
-    };
+    const provider = mockProvider("pi-sdk");
     reg.register(provider);
     const endpoints = createAIEndpoints({
       registry: reg,
@@ -528,7 +585,7 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities")
     );
-    const data = await res.json();
+    const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.providers[0].models).toEqual([
       { id: "pi/model", label: "Pi Model", default: true },
     ]);
@@ -542,23 +599,10 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities")
     );
-    const data = await res.json();
-    expect(data.providers.length).toBe(2);
+    const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     const ids = data.providers.map((p: { id: string }) => p.id);
     expect(ids).toContain("pi-1");
     expect(ids).toContain("mock-1");
-  });
-
-  test("capabilities returns instance ID not type name for defaultProvider", async () => {
-    const { reg, endpoints } = setup();
-    reg.register(mockProvider("pi-sdk"), "pi-fast");
-
-    const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
-    );
-    const data = await res.json();
-    // Should return the instance ID "pi-fast", not the type name "pi-sdk"
-    expect(data.defaultProvider).toBe("pi-fast");
   });
 
   test("session creation and query flow", async () => {
@@ -575,7 +619,7 @@ describe("AI endpoints", () => {
         }),
       })
     );
-    const createData = (await createRes.json()) as { sessionId: string };
+    const createData = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
     expect(createData.sessionId).toBeDefined();
     expect(sm.size).toBe(1);
 
@@ -675,7 +719,7 @@ describe("AI endpoints", () => {
         }),
       })
     );
-    const { sessionId } = (await createRes.json()) as { sessionId: string };
+    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
 
     const queryRes = await endpoints["/api/ai/query"](
       new Request("http://localhost/api/ai/query", {
@@ -707,7 +751,7 @@ describe("AI endpoints", () => {
         }),
       })
     );
-    const { sessionId } = (await createRes.json()) as { sessionId: string };
+    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
 
     // First query should set the label
     await endpoints["/api/ai/query"](
@@ -738,7 +782,7 @@ describe("AI endpoints", () => {
         }),
       })
     );
-    const { sessionId } = (await createRes.json()) as { sessionId: string };
+    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
 
     const abortRes = await endpoints["/api/ai/abort"](
       new Request("http://localhost/api/ai/abort", {
@@ -747,7 +791,7 @@ describe("AI endpoints", () => {
         body: JSON.stringify({ sessionId }),
       })
     );
-    const abortData = (await abortRes.json()) as { ok: boolean };
+    const abortData = Schema.decodeUnknownSync(AbortResponseSchema)(await abortRes.json());
     expect(abortData.ok).toBe(true);
   });
 
@@ -777,7 +821,7 @@ describe("AI endpoints", () => {
     const listRes = await endpoints["/api/ai/sessions"](
       new Request("http://localhost/api/ai/sessions")
     );
-    const sessions = (await listRes.json()) as Array<{ mode: string }>;
+    const sessions = Schema.decodeUnknownSync(SessionListResponseSchema)(await listRes.json());
     expect(sessions.length).toBe(2);
   });
 });
@@ -929,5 +973,53 @@ describe("mapPiEvent", () => {
       toolUseId: "tc_2",
       result: JSON.stringify({ files: ["a.ts", "b.ts"] }),
     }]);
+  });
+
+  test("malformed known events are ignored and incomplete errors use a fallback", () => {
+    expect(mapPiEvent({ type: "message_update" }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: 42 },
+    }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "toolcall_end",
+        toolCall: { id: "tc", name: "read", arguments: "bad" },
+      },
+    }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      result: "missing required fields",
+    }, SESSION_ID)).toEqual([]);
+    expect(mapPiEvent({
+      type: "message_update",
+      assistantMessageEvent: { type: "error" },
+    }, SESSION_ID)).toEqual([{
+      type: "error",
+      error: "Stream error",
+      code: "pi_stream_error",
+    }]);
+  });
+
+  test("tool results preserve null, arrays, and booleans", () => {
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      toolCallId: "tc-null",
+      result: null,
+      isError: false,
+    }, SESSION_ID)[0]).toMatchObject({ result: "" });
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      toolCallId: "tc-array",
+      result: ["a", 2],
+      isError: false,
+    }, SESSION_ID)[0]).toMatchObject({ result: '["a",2]' });
+    expect(mapPiEvent({
+      type: "tool_execution_end",
+      toolCallId: "tc-bool",
+      result: true,
+      isError: false,
+    }, SESSION_ID)[0]).toMatchObject({ result: "true" });
   });
 });

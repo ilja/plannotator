@@ -4,9 +4,105 @@
  * All functions use the `gh` CLI via the PRRuntime abstraction.
  */
 
+import { Option, Schema } from "effect";
 import type { PRRuntime, PRMetadata, PRContext, PRReviewThread, PRThreadComment, PRReviewFileComment, CommandResult, PRStackTree, PRStackNode, PRListItem } from "./pr-types";
 import { encodeApiFilePath } from "./pr-types";
 import { parsePaginatedArray } from "./cli-pagination";
+
+const RawGhPRViewSchema = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  author: Schema.Struct({ login: Schema.String }),
+  baseRefName: Schema.String,
+  headRefName: Schema.String,
+  baseRefOid: Schema.String,
+  headRefOid: Schema.String,
+  url: Schema.String,
+  changedFiles: Schema.optionalKey(Schema.Unknown),
+});
+const decodeRawGhPRViewJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGhPRViewSchema),
+);
+const RawGhPRContextSchema = Schema.Record(Schema.String, Schema.Unknown);
+type RawGhPRContext = Schema.Schema.Type<typeof RawGhPRContextSchema>;
+const decodeRawGhPRContextJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGhPRContextSchema),
+);
+
+const GhPRListItemSchema = Schema.Struct({
+  number: Schema.Number,
+  title: Schema.String,
+  author: Schema.Struct({ login: Schema.String }),
+  url: Schema.String,
+  baseRefName: Schema.String,
+  state: Schema.Literals(["OPEN", "MERGED", "CLOSED"]),
+});
+const decodeGhPRListJson = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Array(Schema.Unknown)),
+);
+const decodeGhPRListItem = Schema.decodeUnknownOption(GhPRListItemSchema);
+
+const GhViewedFileNodeSchema = Schema.Struct({
+  path: Schema.String,
+  viewerViewedState: Schema.Literals(["VIEWED", "UNVIEWED", "DISMISSED"]),
+});
+const GhViewedFilesResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    repository: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+      pullRequest: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+        files: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+          nodes: Schema.Array(Schema.Unknown),
+          pageInfo: Schema.Struct({
+            hasNextPage: Schema.Boolean,
+            endCursor: Schema.NullOr(Schema.String),
+          }),
+        }))),
+      }))),
+    }))),
+  }))),
+  errors: Schema.optionalKey(Schema.Array(Schema.Struct({ message: Schema.String }))),
+});
+const decodeGhViewedFilesJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(GhViewedFilesResponseSchema),
+);
+const decodeGhViewedFileNode = Schema.decodeUnknownOption(GhViewedFileNodeSchema);
+
+const GhReviewThreadCommentSchema = Schema.Struct({
+  id: Schema.String,
+  body: Schema.String,
+  author: Schema.optionalKey(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
+  createdAt: Schema.String,
+  url: Schema.String,
+  diffHunk: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const GhReviewThreadSchema = Schema.Struct({
+  id: Schema.String,
+  isResolved: Schema.Boolean,
+  isOutdated: Schema.Boolean,
+  path: Schema.String,
+  line: Schema.NullOr(Schema.Number),
+  startLine: Schema.NullOr(Schema.Number),
+  diffSide: Schema.NullOr(Schema.Literals(["LEFT", "RIGHT"])),
+  comments: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    nodes: Schema.optionalKey(Schema.Array(Schema.Unknown)),
+  }))),
+});
+const GhReviewThreadsResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    repository: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+      pullRequest: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+        reviewThreads: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+          nodes: Schema.optionalKey(Schema.Array(Schema.Unknown)),
+        }))),
+      }))),
+    }))),
+  }))),
+});
+const decodeGhReviewThreadsJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(GhReviewThreadsResponseSchema),
+);
+const decodeGhReviewThread = Schema.decodeUnknownOption(GhReviewThreadSchema);
+const decodeGhReviewThreadComment = Schema.decodeUnknownOption(GhReviewThreadCommentSchema);
 
 // GitHub-specific PRRef shape (used internally)
 interface GhPRRef {
@@ -61,6 +157,21 @@ export async function getGhUser(runtime: PRRuntime, host: string): Promise<strin
 // --- Fetch PR ---
 
 /** Shape of each entry from the GitHub pulls files API (fields we use) */
+export const GitHubFileEntrySchema = Schema.Struct({
+  filename: Schema.String,
+  previous_filename: Schema.optionalKey(Schema.String),
+  status: Schema.Literals([
+    "added",
+    "removed",
+    "modified",
+    "renamed",
+    "copied",
+    "changed",
+    "unchanged",
+  ]),
+  patch: Schema.optionalKey(Schema.String),
+});
+
 export interface GitHubFileEntry {
   filename: string;
   previous_filename?: string;
@@ -68,11 +179,16 @@ export interface GitHubFileEntry {
   patch?: string;
 }
 
+const decodeGitHubFileEntry = Schema.decodeUnknownOption(GitHubFileEntrySchema);
+const decodeGitHubFileEntryForPagination = <Input>(value: Input) =>
+  Option.getOrUndefined(decodeGitHubFileEntry(value));
+
 // Git only C-quotes paths containing quotes, backslashes, or control chars —
 // bare spaces stay raw. Downstream parsers (our diff-paths regex branch,
 // Pierre's filename regexes, code-nav's extractChangedFiles) expect git's
 // exact shape; over-quoting makes them misparse or silently drop files.
 function needsGitQuoting(p: string): boolean {
+  // eslint-disable-next-line no-control-regex -- intentionally checks for control characters in git paths
   return /["\\\u0000-\u001F]/.test(p);
 }
 function headerPathToken(side: "a" | "b", p: string): string {
@@ -181,6 +297,11 @@ export async function fetchGhPR(
     );
   }
 
+  const raw = Option.getOrUndefined(decodeRawGhPRViewJson(viewResult.stdout));
+  if (!raw) {
+    throw new Error("Failed to fetch PR metadata: Invalid response");
+  }
+
   // Resolve the patch. Primary: `gh pr diff` — one server-rendered document,
   // perfect fidelity. GitHub refuses to render it for very large PRs (406 /
   // "diff exceeded the maximum number of lines"); in that case fetch the same
@@ -200,7 +321,14 @@ export async function fetchGhPR(
       const filesErr = filesResult.stderr.trim() || `exit code ${filesResult.exitCode}`;
       throw new Error(`Failed to fetch PR diff (pr diff: ${diffErr}; files API: ${filesErr}).`);
     }
-    const fileEntries = parsePaginatedArray<GitHubFileEntry>(filesResult.stdout);
+    const parsedFiles = parsePaginatedArray(filesResult.stdout, decodeGitHubFileEntryForPagination);
+    const fileEntries = parsedFiles.items;
+    if (parsedFiles.rejected > 0) {
+      console.error(
+        `Warning: GitHub files API returned ${parsedFiles.rejected} malformed file entr${parsedFiles.rejected === 1 ? "y" : "ies"}; the review is missing the remainder.`,
+      );
+      patchIncomplete = true;
+    }
     rawPatch = reconstructGhPatch(fileEntries);
     if (!rawPatch.trim()) {
       throw new Error(
@@ -209,8 +337,10 @@ export async function fetchGhPR(
     }
     // The files API silently caps at 3000 files — never present a truncated
     // review as complete.
-    const expectedFiles = (JSON.parse(viewResult.stdout) as { changedFiles?: number }).changedFiles;
-    if (typeof expectedFiles === "number" && fileEntries.length < expectedFiles) {
+    const expectedFiles = Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.Natural)(raw.changedFiles),
+    );
+    if (expectedFiles !== undefined && fileEntries.length < expectedFiles) {
       console.error(
         `Warning: PR reports ${expectedFiles} changed files but the GitHub files API returned ${fileEntries.length} (the API caps at 3000). The review is missing the remainder.`,
       );
@@ -224,17 +354,6 @@ export async function fetchGhPR(
       patchIncomplete = true;
     }
   }
-
-  const raw = JSON.parse(viewResult.stdout) as {
-    id: string;
-    title: string;
-    author: { login: string };
-    baseRefName: string;
-    headRefName: string;
-    baseRefOid: string;
-    headRefOid: string;
-    url: string;
-  };
 
   // Fetch the merge-base SHA — the common ancestor commit GitHub uses to compute the PR diff.
   // baseSha (baseRefOid) is the tip of the base branch, which may have moved since the branch point.
@@ -283,55 +402,94 @@ const GH_CONTEXT_FIELDS = [
   "statusCheckRollup", "closingIssuesReferences",
 ].join(",");
 
-function parseGhPRContext(raw: Record<string, unknown>): PRContext {
-  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  const str = (v: unknown): string => (typeof v === "string" ? v : "");
-  const login = (v: unknown): string =>
-    typeof v === "object" && v !== null && "login" in v
-      ? String((v as { login: unknown }).login || "")
-      : "";
+interface GhReviewBase {
+  readonly id: string;
+  readonly author: string;
+  readonly state: string;
+  readonly body: string;
+  readonly submittedAt: string;
+  url?: string;
+}
 
+function parseGhPRContext(raw: RawGhPRContext): PRContext {
   return {
-    body: str(raw.body),
-    state: str(raw.state),
+    body: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.body)) ?? "",
+    state: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.state)) ?? "",
     isDraft: raw.isDraft === true,
-    labels: arr(raw.labels).map((l: any) => ({
-      name: str(l?.name),
-      color: str(l?.color),
-    })),
-    reviewDecision: str(raw.reviewDecision),
-    mergeable: str(raw.mergeable),
-    mergeStateStatus: str(raw.mergeStateStatus),
-    comments: arr(raw.comments).map((c: any) => ({
-      id: str(c?.id),
-      author: login(c?.author),
-      body: str(c?.body),
-      createdAt: str(c?.createdAt),
-      url: str(c?.url),
-    })),
-    reviews: arr(raw.reviews).map((r: any) => ({
-      id: str(r?.id),
-      author: login(r?.author),
-      state: str(r?.state),
-      body: str(r?.body),
-      submittedAt: str(r?.submittedAt),
-      ...(r?.url ? { url: str(r.url) } : {}),
-    })),
-    reviewThreads: [],  // populated via GraphQL after initial fetch
-    checks: arr(raw.statusCheckRollup).map((c: any) => ({
-      name: str(c?.name),
-      status: str(c?.status),
-      conclusion: typeof c?.conclusion === "string" ? c.conclusion : null,
-      workflowName: str(c?.workflowName),
-      detailsUrl: str(c?.detailsUrl),
-    })),
-    linkedIssues: arr(raw.closingIssuesReferences).map((i: any) => ({
-      number: typeof i?.number === "number" ? i.number : 0,
-      url: str(i?.url),
-      repo: i?.repository
-        ? `${login(i.repository.owner)}/${str(i.repository.name)}`
-        : "",
-    })),
+    labels: (Array.isArray(raw.labels) ? raw.labels : []).map((l) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(l),
+      );
+      return {
+        name: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.name)) ?? "",
+        color: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.color)) ?? "",
+      };
+    }),
+    reviewDecision: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.reviewDecision)) ?? "",
+    mergeable: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.mergeable)) ?? "",
+    mergeStateStatus: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(raw.mergeStateStatus)) ?? "",
+    comments: (Array.isArray(raw.comments) ? raw.comments : []).map((c) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(c),
+      );
+      const authorRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(rec?.author),
+      );
+      return {
+        id: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.id)) ?? "",
+        author: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(authorRec?.login)) ?? "",
+        body: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.body)) ?? "",
+        createdAt: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.createdAt)) ?? "",
+        url: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url)) ?? "",
+      };
+    }),
+    reviews: (Array.isArray(raw.reviews) ? raw.reviews : []).map((r) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(r),
+      );
+      const authorRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(rec?.author),
+      );
+      const base: GhReviewBase = {
+        id: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.id)) ?? "",
+        author: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(authorRec?.login)) ?? "",
+        state: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.state)) ?? "",
+        body: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.body)) ?? "",
+        submittedAt: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.submittedAt)) ?? "",
+      };
+      const urlVal = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url));
+      if (urlVal) base.url = urlVal;
+      return base;
+    }),
+    reviewThreads: [], // populated via GraphQL after initial fetch
+    checks: (Array.isArray(raw.statusCheckRollup) ? raw.statusCheckRollup : []).map((c) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(c),
+      );
+      return {
+        name: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.name)) ?? "",
+        status: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.status)) ?? "",
+        conclusion: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.conclusion)) ?? null,
+        workflowName: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.workflowName)) ?? "",
+        detailsUrl: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.detailsUrl)) ?? "",
+      };
+    }),
+    linkedIssues: (Array.isArray(raw.closingIssuesReferences) ? raw.closingIssuesReferences : []).map((i) => {
+      const rec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(i),
+      );
+      const repoRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(rec?.repository),
+      );
+      const ownerRec = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(repoRec?.owner),
+      );
+      return {
+        number: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(rec?.number)) ?? 0,
+        url: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url)) ?? "",
+        repo: repoRec ? `${Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(ownerRec?.login)) ?? ""}/${Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(repoRec?.name)) ?? ""}` : "",
+      };
+    }),
   };
 }
 
@@ -353,7 +511,10 @@ export async function fetchGhPRContext(
     );
   }
 
-  const raw = JSON.parse(result.stdout) as Record<string, unknown>;
+  const raw = Option.getOrUndefined(decodeRawGhPRContextJson(result.stdout));
+  if (!raw) {
+    throw new Error("Failed to fetch PR context: Invalid response");
+  }
   const context = parseGhPRContext(raw);
 
   // Fetch inline review threads via GraphQL (parallel-safe, non-blocking failure)
@@ -412,29 +573,42 @@ async function fetchGhReviewThreads(
 
   if (result.exitCode !== 0) return [];
 
-  const data = JSON.parse(result.stdout);
-  const threads = data?.data?.repository?.pullRequest?.reviewThreads?.nodes;
-  if (!Array.isArray(threads)) return [];
+  const response = Option.getOrUndefined(decodeGhReviewThreadsJson(result.stdout));
+  const threads = response?.data?.repository?.pullRequest?.reviewThreads?.nodes;
+  if (!threads) return [];
 
-  return threads.map((t: any): PRReviewThread => ({
-    id: String(t.id ?? ''),
-    isResolved: t.isResolved === true,
-    isOutdated: t.isOutdated === true,
-    path: String(t.path ?? ''),
-    line: typeof t.line === 'number' ? t.line : null,
-    startLine: typeof t.startLine === 'number' ? t.startLine : null,
-    diffSide: t.diffSide === 'LEFT' || t.diffSide === 'RIGHT' ? t.diffSide : null,
-    comments: Array.isArray(t.comments?.nodes)
-      ? t.comments.nodes.map((c: any): PRThreadComment => ({
-          id: String(c.id ?? ''),
-          author: c.author?.login ? String(c.author.login) : '',
-          body: String(c.body ?? ''),
-          createdAt: String(c.createdAt ?? ''),
-          url: String(c.url ?? ''),
-          ...(c.diffHunk ? { diffHunk: String(c.diffHunk) } : {}),
-        }))
-      : [],
-  }));
+  const decodedThreads: PRReviewThread[] = [];
+  for (const rawThread of threads) {
+    const decodedThread = Option.getOrUndefined(decodeGhReviewThread(rawThread));
+    if (!decodedThread) continue;
+
+    const comments: PRThreadComment[] = [];
+    for (const rawComment of decodedThread.comments?.nodes ?? []) {
+      const decodedComment = Option.getOrUndefined(decodeGhReviewThreadComment(rawComment));
+      if (!decodedComment) continue;
+      const comment: PRThreadComment = {
+        id: decodedComment.id,
+        author: decodedComment.author?.login ?? "",
+        body: decodedComment.body,
+        createdAt: decodedComment.createdAt,
+        url: decodedComment.url,
+      };
+      if (decodedComment.diffHunk) comment.diffHunk = decodedComment.diffHunk;
+      comments.push(comment);
+    }
+
+    decodedThreads.push({
+      id: decodedThread.id,
+      isResolved: decodedThread.isResolved,
+      isOutdated: decodedThread.isOutdated,
+      path: decodedThread.path,
+      line: decodedThread.line,
+      startLine: decodedThread.startLine,
+      diffSide: decodedThread.diffSide,
+      comments,
+    });
+  }
+  return decodedThreads;
 }
 
 // --- File Content ---
@@ -519,19 +693,8 @@ export async function fetchGhPRViewedFiles(
       );
     }
 
-    const data = JSON.parse(res.stdout) as {
-      data?: {
-        repository?: {
-          pullRequest?: {
-            files?: {
-              nodes: Array<{ path: string; viewerViewedState: string }>;
-              pageInfo: { hasNextPage: boolean; endCursor: string | null };
-            };
-          };
-        };
-      };
-      errors?: Array<{ message: string }>;
-    };
+    const data = Option.getOrUndefined(decodeGhViewedFilesJson(res.stdout));
+    if (!data) throw new Error("Failed to fetch PR viewed files: Invalid response");
 
     if (data.errors?.length) {
       throw new Error(`GraphQL error: ${data.errors[0].message}`);
@@ -540,7 +703,9 @@ export async function fetchGhPRViewedFiles(
     const files = data.data?.repository?.pullRequest?.files;
     if (!files) break;
 
-    for (const node of files.nodes) {
+    for (const rawNode of files.nodes) {
+      const node = Option.getOrUndefined(decodeGhViewedFileNode(rawNode));
+      if (!node) continue;
       // VIEWED = explicitly marked as viewed
       // DISMISSED = was viewed but new commits arrived (still "was reviewed")
       result[node.path] = node.viewerViewedState === "VIEWED" || node.viewerViewedState === "DISMISSED";
@@ -635,7 +800,28 @@ export async function submitGhPRReview(
 
 // --- Stack Tree (GraphQL) ---
 
-type StackPRNode = { number: number; title: string; url: string; baseRefName: string; headRefName: string; state: string };
+const StackPRNodeSchema = Schema.Struct({
+  number: Schema.Number,
+  title: Schema.String,
+  url: Schema.String,
+  baseRefName: Schema.String,
+  headRefName: Schema.String,
+  state: Schema.Literals(["OPEN", "MERGED", "CLOSED"]),
+});
+const StackPRResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    repository: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+      pullRequests: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+        nodes: Schema.Array(Schema.Unknown),
+      }))),
+    }))),
+  }))),
+});
+const decodeStackPRResponseJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(StackPRResponseSchema),
+);
+const decodeStackPRNode = Schema.decodeUnknownOption(StackPRNodeSchema);
+type StackPRNode = Schema.Schema.Type<typeof StackPRNodeSchema>;
 
 function stackPRQuery(kind: "head" | "base"): string {
   const varName = kind === "head" ? "headRefName" : "baseRefName";
@@ -665,9 +851,16 @@ async function queryPRsByRef(
     "-f", `${varName}=${refName}`,
   ]));
   if (result.exitCode !== 0) return [];
-  const data = JSON.parse(result.stdout);
-  const prs = data?.data?.repository?.pullRequests?.nodes;
-  return Array.isArray(prs) ? prs : [];
+  const response = Option.getOrUndefined(decodeStackPRResponseJson(result.stdout));
+  const nodes = response?.data?.repository?.pullRequests?.nodes;
+  if (!nodes) return [];
+
+  const prs: StackPRNode[] = [];
+  for (const rawNode of nodes) {
+    const node = Option.getOrUndefined(decodeStackPRNode(rawNode));
+    if (node) prs.push(node);
+  }
+  return prs;
 }
 
 /**
@@ -710,6 +903,7 @@ export async function fetchGhPRStack(
     }
 
     const pr = prs[0];
+    // SAFETY: pr.state is MERGED/CLOSED/OPEN from GitHub GraphQL; mapping to PRStackNode state is exhaustive
     ancestors.push({
       branch: pr.headRefName,
       number: pr.number,
@@ -717,7 +911,7 @@ export async function fetchGhPRStack(
       url: pr.url,
       isCurrent: false,
       isDefaultBranch: false,
-      state: (pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : 'open') as PRStackNode['state'],
+      state: pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open",
     });
     nextHead = pr.baseRefName;
   }
@@ -731,6 +925,7 @@ export async function fetchGhPRStack(
     if (prs.length === 0) break;
 
     const pr = prs[0];
+    // SAFETY: pr.state is MERGED/CLOSED/OPEN from GitHub GraphQL; mapping to PRStackNode state is exhaustive
     descendants.push({
       branch: pr.headRefName,
       number: pr.number,
@@ -738,7 +933,7 @@ export async function fetchGhPRStack(
       url: pr.url,
       isCurrent: false,
       isDefaultBranch: false,
-      state: (pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : 'open') as PRStackNode['state'],
+      state: pr.state === "MERGED" ? "merged" : pr.state === "CLOSED" ? "closed" : "open",
     });
     nextBase = pr.headRefName;
   }
@@ -770,22 +965,21 @@ export async function fetchGhPRList(
 
   if (result.exitCode !== 0) return [];
 
-  const raw = JSON.parse(result.stdout) as Array<{
-    number: number;
-    title: string;
-    author: { login: string };
-    url: string;
-    baseRefName: string;
-    state: string;
-  }>;
-
-  return raw.map((pr) => ({
-    id: String(pr.number),
-    number: pr.number,
-    title: pr.title,
-    author: pr.author.login,
-    url: pr.url,
-    baseBranch: pr.baseRefName,
-    state: (pr.state === "OPEN" ? "open" : pr.state === "MERGED" ? "merged" : "closed") as PRListItem["state"],
-  }));
+  const raw = decodeGhPRListJson(result.stdout);
+  const items: PRListItem[] = [];
+  for (const rawEntry of raw) {
+    const pr = Option.getOrUndefined(decodeGhPRListItem(rawEntry));
+    if (!pr) continue;
+    const state = pr.state === "OPEN" ? "open" : pr.state === "MERGED" ? "merged" : "closed";
+    items.push({
+      id: String(pr.number),
+      number: pr.number,
+      title: pr.title,
+      author: pr.author.login,
+      url: pr.url,
+      baseBranch: pr.baseRefName,
+      state,
+    });
+  }
+  return items;
 }

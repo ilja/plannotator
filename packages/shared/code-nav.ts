@@ -5,11 +5,7 @@
  * CodeNavRuntime implementation to run subprocess commands.
  */
 
-function validateFilePath(filePath: string): void {
-  if (filePath.includes("..") || filePath.startsWith("/")) {
-    throw new Error("Invalid file path");
-  }
-}
+import { Option, Schema } from "effect";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +16,14 @@ export interface CodeNavRequest {
   filePath: string;
   line: number;
   charStart: number;
+  side: "old" | "new";
+  language?: string;
+}
+
+/** Validated fields used by search-based code navigation. */
+export interface CodeNavResolveRequest {
+  symbol: string;
+  filePath: string;
   side: "old" | "new";
   language?: string;
 }
@@ -50,6 +54,59 @@ export interface CodeNavRuntime {
   ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
+/** HTTP request fields required to resolve code navigation. */
+const CodeNavSymbolSchema = Schema.String.pipe(
+  Schema.check(Schema.makeFilter((symbol) =>
+    symbol.trim() ? undefined : "symbol must be nonempty after trimming",
+  )),
+);
+
+/** HTTP file path that remains within the review workspace. */
+const CodeNavFilePathSchema = Schema.String.pipe(
+  Schema.check(Schema.makeFilter((filePath) => {
+    if (!filePath.trim()) return "filePath must be nonempty after trimming";
+    return filePath.includes("..") || filePath.startsWith("/")
+      ? "filePath must be a safe relative path"
+      : undefined;
+  })),
+);
+
+/** Code navigation request accepted at the HTTP boundary. Legacy cursor fields remain unvalidated. */
+export const CodeNavRequestSchema = Schema.Struct({
+  symbol: CodeNavSymbolSchema,
+  filePath: CodeNavFilePathSchema,
+  side: Schema.Literals(["old", "new"]),
+  line: Schema.optionalKey(Schema.Unknown),
+  charStart: Schema.optionalKey(Schema.Unknown),
+  language: Schema.optionalKey(Schema.Unknown),
+});
+
+/** Code navigation result location returned by the HTTP endpoint. */
+const CodeNavLocationSchema = Schema.Struct({
+  kind: Schema.Literals(["definition", "reference"]),
+  confidence: Schema.Literals(["likely", "possible"]),
+  filePath: Schema.String,
+  line: Schema.Number,
+  column: Schema.Number,
+  snippet: Schema.String,
+});
+
+/** Complete successful code navigation response returned by the HTTP endpoint. */
+export const CodeNavResponseSchema = Schema.Struct({
+  backend: Schema.Literals(["search", "unavailable"]),
+  complete: Schema.Boolean,
+  definitions: Schema.Array(CodeNavLocationSchema),
+  references: Schema.Array(CodeNavLocationSchema),
+  stats: Schema.Struct({ elapsedMs: Schema.Number, capped: Schema.Boolean }),
+  searchScope: Schema.Literal("head"),
+});
+
+/** Decode an untrusted code navigation HTTP request. */
+export const decodeCodeNavRequest = Schema.decodeUnknownOption(CodeNavRequestSchema);
+
+/** Decode an untrusted successful code navigation HTTP response. */
+export const decodeCodeNavResponse = Schema.decodeUnknownOption(CodeNavResponseSchema);
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -70,7 +127,11 @@ const CODE_NAV_IGNORED_GLOBS = [
   ".pytest_cache",
 ];
 
-const RG_TYPE_MAP: Record<string, string> = {
+interface RgTypeMap {
+  readonly [language: string]: string;
+}
+
+const RG_TYPE_MAP: RgTypeMap = {
   typescript: "ts",
   javascript: "js",
   python: "py",
@@ -190,12 +251,23 @@ export function buildRgArgs(symbol: string, language?: string): string[] {
 // rg JSON output parsing
 // ---------------------------------------------------------------------------
 
-interface RgMatchData {
-  path: { text: string };
-  lines: { text: string };
-  line_number: number;
-  submatches: Array<{ start: number; end: number }>;
-}
+const RgMatchRecordSchema = Schema.Struct({
+  type: Schema.Literal("match"),
+  data: Schema.Struct({
+    path: Schema.Struct({ text: Schema.String }),
+    lines: Schema.Struct({ text: Schema.String }),
+    line_number: Schema.Number,
+    submatches: Schema.optionalKey(Schema.Unknown),
+  }),
+});
+
+const RgSubmatchSchema = Schema.Struct({ start: Schema.Number });
+
+const decodeRgMatchRecordLine = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RgMatchRecordSchema),
+);
+
+const decodeRgSubmatch = Schema.decodeUnknownOption(RgSubmatchSchema);
 
 const PARSE_CAP = 500;
 
@@ -211,18 +283,15 @@ export function parseRgJsonOutput(
     if (locations.length >= PARSE_CAP) break;
     if (!line.trim()) continue;
 
-    let parsed: { type: string; data: RgMatchData };
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-
-    if (parsed.type !== "match") continue;
+    const parsed = Option.getOrUndefined(decodeRgMatchRecordLine(line));
+    if (!parsed) continue;
 
     const d = parsed.data;
     const snippet = d.lines.text.trimEnd();
-    const column = d.submatches?.[0]?.start ?? 0;
+    const firstSubmatch = Array.isArray(d.submatches)
+      ? d.submatches[0]
+      : undefined;
+    const column = Option.getOrUndefined(decodeRgSubmatch(firstSubmatch))?.start ?? 0;
     const kind = classifyMatch(snippet, symbol, language);
     const filePath = d.path.text.startsWith("./")
       ? d.path.text.slice(2)
@@ -276,6 +345,12 @@ export function classifyMatch(
 // Ranking
 // ---------------------------------------------------------------------------
 
+interface RankedCodeNavResult {
+  readonly definitions: CodeNavLocation[];
+  readonly references: CodeNavLocation[];
+  readonly capped: boolean;
+}
+
 export function rankLocations(
   locations: CodeNavLocation[],
   context: {
@@ -284,7 +359,7 @@ export function rankLocations(
     isTestFile: boolean;
   },
   cap = 50,
-): { definitions: CodeNavLocation[]; references: CodeNavLocation[]; capped: boolean } {
+): RankedCodeNavResult {
   const capped = locations.length > cap;
   const changedSet = new Set(context.changedFiles);
 
@@ -333,24 +408,31 @@ export function extractChangedFiles(patch: string | null): string[] {
 // Validation
 // ---------------------------------------------------------------------------
 
-export function validateCodeNavRequest(
-  body: unknown,
-): string | null {
-  if (!body || typeof body !== "object") return "Invalid request body";
-  const b = body as Record<string, unknown>;
+interface CodeNavRequestValidationBody {
+  readonly symbol?: unknown;
+  readonly filePath?: unknown;
+  readonly side?: unknown;
+}
 
-  if (typeof b.symbol !== "string" || !b.symbol.trim()) {
+export function validateCodeNavRequest(
+  body: CodeNavRequestValidationBody | null,
+): string | null {
+  if (!body) return "Invalid request body";
+  const symbol = Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavSymbolSchema)(body.symbol));
+  if (!symbol) {
     return "Missing or empty symbol";
   }
-  if (typeof b.filePath !== "string" || !b.filePath.trim()) {
+  const filePath = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(body.filePath));
+  if (!filePath || !filePath.trim()) {
     return "Missing filePath";
   }
-  try {
-    validateFilePath(b.filePath as string);
-  } catch {
+  if (!Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavFilePathSchema)(filePath))) {
     return "Invalid filePath";
   }
-  if (b.side !== "old" && b.side !== "new") {
+  const side = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.Literals(["old", "new"]))(body.side),
+  );
+  if (!side) {
     return "side must be 'old' or 'new'";
   }
 
@@ -365,7 +447,7 @@ let rgAvailable: boolean | null = null;
 
 export async function resolveCodeNav(
   runtime: CodeNavRuntime,
-  request: CodeNavRequest,
+  request: CodeNavResolveRequest,
   cwd: string,
   changedFiles: string[],
 ): Promise<CodeNavResponse> {

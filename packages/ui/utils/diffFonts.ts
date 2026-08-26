@@ -5,7 +5,11 @@
  * selects a custom diff font. Each font is loaded at most once.
  */
 
-const FONT_URLS: Record<string, string> = {
+interface FontUrls {
+  [key: string]: string;
+}
+
+const FONT_URLS: FontUrls = {
   'Red Hat Mono': 'https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@300..700&display=swap',
   'Fira Code': 'https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap',
   'Atkinson Hyperlegible Mono': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@200..700&display=swap',
@@ -15,6 +19,10 @@ const FONT_URLS: Record<string, string> = {
   'Inconsolata': 'https://fonts.googleapis.com/css2?family=Inconsolata:wght@300..700&display=swap',
   'Roboto Mono': 'https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300..700&display=swap',
   'Hack': 'https://cdn.jsdelivr.net/npm/hack-font@3/build/web/hack.css',
+};
+
+const PROSE_FONT_URLS: FontUrls = {
+  'Atkinson Hyperlegible': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap',
 };
 
 export const CODE_FONT_OPTIONS = [
@@ -47,4 +55,21 @@ export function loadCodeFont(fontFamily: string, datasetKey = 'codeFont'): void 
 
 export function loadDiffFont(fontFamily: string): void {
   loadCodeFont(fontFamily, 'diffFont');
+}
+
+export function loadProseFont(fontFamily: string): void {
+  if (!fontFamily || loaded.has(fontFamily)) return;
+  const url = PROSE_FONT_URLS[fontFamily];
+  if (!url) return;
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = url;
+  link.dataset['proseFont'] = fontFamily;
+  document.head.appendChild(link);
+  loaded.add(fontFamily);
+}
+
+export function getFontUrl(fontFamily: string): string | undefined {
+  return FONT_URLS[fontFamily] ?? PROSE_FONT_URLS[fontFamily];
 }

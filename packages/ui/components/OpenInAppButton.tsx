@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check, Copy, MoreHorizontal } from 'lucide-react';
 import { AppIcon } from './icons/AppIcon';
+import { loadOpenInApps, type OpenInAppsResponse } from '../utils/openInAppsResponse';
+import { readOpenInResponse } from '../utils/openInResponse';
 import { getLastOpenInApp, setLastOpenInApp } from '../utils/storage';
-import type { OpenInKind } from '@plannotator/shared/open-in-apps';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -26,12 +27,7 @@ import {
  * nothing when there is neither an app to open nor a diff to copy.
  */
 
-interface DetectedApp {
-  id: string;
-  label: string;
-  kind: OpenInKind;
-  icon: string;
-}
+type DetectedApp = OpenInAppsResponse['apps'][number];
 
 interface OpenInAppButtonProps {
   filePath: string | null | undefined;
@@ -49,28 +45,8 @@ interface OpenInAppButtonProps {
 }
 
 // The host app catalog is static for the session, but the all-files view
-// renders one OpenInAppButton per file — so fetch /api/open-in/apps once and
-// share the promise across every instance instead of N identical requests.
-interface OpenInAppsResponse {
-  available: boolean;
-  apps: DetectedApp[];
-}
-let openInAppsPromise: Promise<OpenInAppsResponse> | null = null;
-function loadOpenInApps(): Promise<OpenInAppsResponse> {
-  if (!openInAppsPromise) {
-    openInAppsPromise = fetch('/api/open-in/apps')
-      .then((r) => r.json())
-      .then((data: OpenInAppsResponse) => ({
-        available: !!data.available,
-        apps: Array.isArray(data.apps) ? data.apps : [],
-      }))
-      .catch(() => {
-        openInAppsPromise = null; // don't memoize failure — let the next mount retry
-        return { available: false, apps: [] };
-      });
-  }
-  return openInAppsPromise;
-}
+// renders one OpenInAppButton per file — so the shared loader fetches once and
+// shares the promise across every instance instead of making N identical requests.
 
 export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
   filePath,
@@ -142,11 +118,11 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath, base: base ?? null, appId }),
       });
-      const data = (await res.json().catch(() => null)) as
-        | { ok: boolean; error?: string }
-        | null;
-      if (!res.ok || !data || data.ok === false) {
-        flashError(data?.error || 'Failed to open');
+      const data = await readOpenInResponse(res);
+      if (!data) {
+        flashError('Failed to open');
+      } else if (data.ok === false) {
+        flashError(data.error || 'Failed to open');
       }
     } catch {
       flashError('Failed to open');

@@ -5,8 +5,8 @@ import { isCodeFilePath, isCodeFilePathStrict, CODE_PATH_BARE_REGEX, parseCodePa
 import { transformPlainText } from "../utils/inlineTransforms";
 import { getImageSrc } from "./ImageThumbnail";
 import { useCodePathValidation, type CodePathValidationContextValue } from "./CodePathValidationContext";
-import type { ValidationEntry } from "../hooks/useValidatedCodePaths";
 import { CodeFilePicker } from "./CodeFilePicker";
+import { decodeCodeFileSuccessResponse } from "../hooks/codeFileResponse";
 
 const inlineCodeTypographyStyle: React.CSSProperties = {
   fontFamily: 'var(--annotation-code-font-family, var(--font-mono))',
@@ -31,18 +31,20 @@ function gateCodePath(
   // extractor intentionally excluded it (e.g., inside an HTML comment or
   // fenced code block). Demote rather than optimistically linking.
   if (!entry) return { render: 'plain' };
-  switch ((entry as ValidationEntry).status) {
-    case 'found':       return { render: 'link', resolved: (entry as Extract<ValidationEntry, { status: 'found' }>).resolved };
-    case 'ambiguous':   return { render: 'ambiguous-link', matches: (entry as Extract<ValidationEntry, { status: 'ambiguous' }>).matches };
+  switch (entry.status) {
+    case 'found':       return { render: 'link', resolved: entry.resolved };
+    case 'ambiguous':   return { render: 'ambiguous-link', matches: entry.matches };
     case 'unavailable': return { render: 'link' };
     case 'missing':     return { render: 'plain' };
     default:            return { render: 'link' }; // unknown status — degrade to optimistic
   }
 }
 
+interface LanguageMap { [key: string]: string; }
+
 function extToLanguage(filepath: string): string | undefined {
   const ext = filepath.split('.').pop()?.toLowerCase();
-  const map: Record<string, string> = {
+  const map: LanguageMap = {
     ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
     py: 'python', rb: 'ruby', rs: 'rust', go: 'go', java: 'java',
     css: 'css', scss: 'scss', json: 'json', yml: 'yaml', yaml: 'yaml',
@@ -157,8 +159,9 @@ const CodeFileLink: React.FC<{
         const params = new URLSearchParams({ path: candidate });
         if (baseDir) params.set('base', baseDir);
         const res = await fetch(`/api/doc?${params}`);
-        const data = await res.json();
-        if (data.contents) setHoverPreview({ contents: data.contents, filepath: data.filepath ?? candidate });
+        if (!res.ok) return;
+        const data = decodeCodeFileSuccessResponse(await res.json());
+        if (data?.contents) setHoverPreview({ contents: data.contents, filepath: data.filepath });
       } catch {}
     }, 150);
   }, [candidate, hasLineRef, gate.render, cancelHide, baseDir]);
@@ -220,8 +223,8 @@ const CodeFileLink: React.FC<{
       >
         {display}
         <CodeFileIcon />
-        {isAmbiguous && (
-          <sup className="text-[0.6rem] opacity-70 -ml-0.5">{(gate as { matches: string[] }).matches.length}</sup>
+        {gate.render === 'ambiguous-link' && (
+          <sup className="text-[0.6rem] opacity-70 -ml-0.5">{gate.matches.length}</sup>
         )}
       </code>
       {hoverPreview && hasLineRef && (
@@ -235,10 +238,10 @@ const CodeFileLink: React.FC<{
           onMouseLeave={handlePreviewLeave}
         />
       )}
-      {pickerOpen && isAmbiguous && (
+      {pickerOpen && gate.render === 'ambiguous-link' && (
         <CodeFilePicker
           anchorEl={anchorRef.current}
-          matches={(gate as { matches: string[] }).matches}
+          matches={gate.matches}
           onPick={(path) => { setPickerOpen(false); onOpenCodeFile(path + lineSuffix); }}
           onDismiss={() => setPickerOpen(false)}
         />
@@ -419,7 +422,7 @@ export const InlineMarkdown: React.FC<{
     }
 
     // Backslash escaping: \. \* \_ \` \[ \~ etc. — emit literal char, hide backslash
-    match = remaining.match(/^\\([\\*_`\[\]~!.()\-#>+|{}&])/);
+    match = remaining.match(/^\\([\\*_`[\]~!.()\-#>+|{}&])/);
     if (match) {
       parts.push(match[1]);
       remaining = remaining.slice(2);
@@ -980,7 +983,7 @@ export const InlineMarkdown: React.FC<{
     // `h` mid-word (e.g. ":heart:", "hello"), and splitting on it breaks
     // multi-char patterns like emoji shortcodes. Bare URLs are instead
     // detected inline via emitPlainTextWithBareUrls() below.
-    const nextSpecial = remaining.slice(1).search(/[\*_`\[!~\\<#@]/);
+    const nextSpecial = remaining.slice(1).search(/[*_`[!~\\<#@]/);
     const plainText = nextSpecial === -1 ? remaining : remaining.slice(0, nextSpecial + 1);
     emitPlainTextWithBareUrls(plainText, previousChar, parts, () => key++, onOpenCodeFile, validation, imageBaseDir);
     previousChar = plainText[plainText.length - 1] || previousChar;

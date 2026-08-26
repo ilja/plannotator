@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import type {
-  SemanticDiffBinaryChange,
-  SemanticDiffChange,
-  SemanticDiffResponse,
+import {
+  decodeSemanticDiffResponse,
+  type SemanticDiffBinaryChange,
+  type SemanticDiffChange,
+  type SemanticDiffResponse,
 } from '@plannotator/shared/semantic-diff-types';
 import { useReviewState } from '../ReviewStateContext';
 import {
@@ -39,7 +40,12 @@ function formatLoadError(error: SemanticDiffErrorResponse | Error): string {
   return error.message || 'Semantic diff failed.';
 }
 
-function splitFilePath(filePath: string): { dir: string; name: string } {
+interface SplitFilePath {
+  dir: string;
+  name: string;
+}
+
+function splitFilePath(filePath: string): SplitFilePath {
   const lastSlash = filePath.lastIndexOf('/');
   if (lastSlash === -1) return { dir: '', name: filePath };
   return { dir: filePath.slice(0, lastSlash + 1), name: filePath.slice(lastSlash + 1) };
@@ -66,9 +72,10 @@ export function ReviewSemanticDiffPanel() {
     setLoadState({ status: 'loading' });
 
     fetch('/api/semantic-diff', { signal: controller.signal })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) throw new Error('Semantic diff failed');
-        return res.json() as Promise<SemanticDiffResponse>;
+        const data: unknown = await res.json();
+        return decodeSemanticDiffResponse(data);
       })
       .then((data) => {
         if (controller.signal.aborted) return;

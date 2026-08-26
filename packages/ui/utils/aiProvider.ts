@@ -6,12 +6,19 @@
  * random port, and localStorage is scoped by origin including port.
  */
 
+import { Option, Schema } from 'effect';
 import { storage } from './storage';
-import { AGENT_CONFIG, getAgentAIProviderTypes, type Origin } from '@plannotator/shared/agents';
+import { AGENT_ORIGINS, getAgentAIProviderTypes, type Origin } from '@plannotator/shared/agents';
 
 const PROVIDER_KEY = 'plannotator-ai-provider';
 const MODELS_KEY = 'plannotator-ai-models';
 const PROVIDER_BY_ORIGIN_KEY = 'plannotator-ai-provider-by-origin';
+
+const StoredRecordSchema = Schema.Record(Schema.String, Schema.Json);
+const OriginSchema = Schema.Literals(AGENT_ORIGINS);
+const decodeStoredRecordSchema = Schema.decodeUnknownOption(StoredRecordSchema);
+const decodeString = Schema.decodeUnknownOption(Schema.String);
+const decodeOrigin = Schema.decodeUnknownOption(OriginSchema);
 
 export interface AIProviderModel {
   id: string;
@@ -58,35 +65,49 @@ export function originHasDedicatedAIProvider(origin: Origin | null | undefined):
   return getAgentAIProviderTypes(origin).includes('pi-sdk');
 }
 
+function decodeStoredRecord(raw: string) {
+  try {
+    return Option.getOrNull(decodeStoredRecordSchema(JSON.parse(raw)));
+  } catch {
+    return null;
+  }
+}
+
+export function decodePreferredModels(raw: string) {
+  const record = decodeStoredRecord(raw);
+  if (!record) return {};
+  const preferredModels: Record<string, string> = {};
+  for (const [providerId, value] of Object.entries(record)) {
+    const modelId = Option.getOrNull(decodeString(value));
+    if (modelId !== null) preferredModels[providerId] = modelId;
+  }
+  return preferredModels;
+}
+
+export function decodeProviderByOrigin(raw: string) {
+  const record = decodeStoredRecord(raw);
+  if (!record) return {};
+  const providerByOrigin: Partial<Record<Origin, string>> = {};
+  for (const [key, value] of Object.entries(record)) {
+    const origin = Option.getOrNull(decodeOrigin(key));
+    const providerId = Option.getOrNull(decodeString(value));
+    if (origin !== null && providerId !== null) providerByOrigin[origin] = providerId;
+  }
+  return providerByOrigin;
+}
+
 /**
  * Get current AI provider settings from storage
  */
 export function getAIProviderSettings(): AIProviderSettings {
   const providerId = storage.getItem(PROVIDER_KEY) || null;
-  let preferredModels: Record<string, string> = {};
-  let providerByOrigin: Partial<Record<Origin, string>> = {};
-  try {
-    const raw = storage.getItem(MODELS_KEY);
-    if (raw) preferredModels = JSON.parse(raw);
-  } catch {
-    // Invalid JSON — start fresh
-  }
-  try {
-    const raw = storage.getItem(PROVIDER_BY_ORIGIN_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        for (const [origin, value] of Object.entries(parsed)) {
-          if (origin in AGENT_CONFIG && typeof value === 'string') {
-            providerByOrigin[origin as Origin] = value;
-          }
-        }
-      }
-    }
-  } catch {
-    // Invalid JSON — start fresh
-  }
-  return { providerId, preferredModels, providerByOrigin };
+  const preferredModels = storage.getItem(MODELS_KEY);
+  const providerByOrigin = storage.getItem(PROVIDER_BY_ORIGIN_KEY);
+  return {
+    providerId,
+    preferredModels: preferredModels ? decodePreferredModels(preferredModels) : {},
+    providerByOrigin: providerByOrigin ? decodeProviderByOrigin(providerByOrigin) : {},
+  };
 }
 
 /**

@@ -16,7 +16,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ onPreview, compact }) => {
       <div className={compact ? 'flex items-center gap-3 mb-2' : 'space-y-2'}>
         {!compact && <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Mode</label>}
         <div className="flex gap-1">
-          {(['dark', 'light', 'system'] as Mode[]).map(m => {
+          {(['dark', 'light', 'system'] satisfies Mode[]).map((m) => {
             const isActive = mode === m;
             return (
               <button

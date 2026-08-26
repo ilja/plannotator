@@ -521,5 +521,6 @@ export function resolveInitialDiffType(
   }
 
   const fallback = gitContext.diffOptions[0]?.id;
-  return fallback ? fallback as DiffType : configuredDiffType;
+  // SAFETY: fallback is DiffType id from gitContext.diffOptions[0]?.id; string id is validated by diffOptions membership above
+  return fallback ? (fallback as DiffType) : configuredDiffType;
 }

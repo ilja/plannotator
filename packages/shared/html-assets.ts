@@ -3,7 +3,11 @@ import * as parse5 from "parse5";
 
 export const HTML_ASSET_ROUTE_PREFIX = "/api/html-assets";
 
-const CONTENT_TYPES_BY_EXT: Record<string, string> = {
+interface ContentTypeMap {
+  readonly [ext: string]: string;
+}
+
+const CONTENT_TYPES_BY_EXT: ContentTypeMap = {
   ".apng": "image/apng",
   ".avif": "image/avif",
   ".css": "text/css; charset=utf-8",
@@ -65,7 +69,11 @@ export function rewriteHtmlAssetReferences(
   const tree = looksLikeFullDocument(html)
     ? parse5.parse(html)
     : parse5.parseFragment(html);
-  visit(tree as unknown as HtmlNode, (node) => rewriteNodeAssetReferences(node, assetUrlFor));
+  // SAFETY: parse5's Document/DocumentFragment is a superset of HtmlNode's
+  // tagName/attrs/childNodes/value subset used by rewriteNodeAssetReferences.
+  visit(tree as HtmlNode, (node) => rewriteNodeAssetReferences(node, assetUrlFor));
+  // SAFETY: parse5.serialize is typed for Document; our HtmlNode walk preserves the
+  // valid Document shape, so the serialize call is sound.
   return parse5.serialize(tree as never);
 }
 
@@ -179,7 +187,7 @@ function rewriteStyleAttr(node: HtmlNode, assetUrlFor: HtmlAssetUrlMapper): void
 
 function rewriteStyleContent(node: HtmlNode, assetUrlFor: HtmlAssetUrlMapper): void {
   for (const child of node.childNodes ?? []) {
-    if (typeof child.value === "string") {
+    if (child.value !== undefined) {
       child.value = rewriteCssAssetReferences(child.value, assetUrlFor);
     }
   }
@@ -261,7 +269,12 @@ function shouldSkipUrl(value: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(value);
 }
 
-function splitPathSuffix(value: string): { path: string; suffix: string } {
+interface PathSuffix {
+  readonly path: string;
+  readonly suffix: string;
+}
+
+function splitPathSuffix(value: string): PathSuffix {
   const queryIndex = value.indexOf("?");
   const hashIndex = value.indexOf("#");
   let splitAt = -1;
@@ -296,6 +309,7 @@ function normalizeDecodedLocalAssetPath(value: string): string | null {
     normalized.startsWith("../") ||
     normalized.startsWith("/") ||
     normalized.includes("\0") ||
+    // eslint-disable-next-line no-control-regex -- intentionally validates that paths do not contain control characters
     /[\u0000-\u001f]/u.test(normalized)
   ) {
     return null;

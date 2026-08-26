@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+import { Option, Schema } from "effect";
 
 export type WorkspaceFileStatus =
 	| "modified"
@@ -65,7 +66,7 @@ function runGit(cwd: string, args: string[]): GitResult {
 	});
 	if (result.error) return { ok: false, error: result.error.message };
 	if (result.status !== 0) {
-		const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+		const stderr = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(result.stderr))?.trim() ?? "";
 		return { ok: false, error: stderr || `git exited with status ${result.status ?? "unknown"}` };
 	}
 	return { ok: true, stdout: result.stdout ?? "" };

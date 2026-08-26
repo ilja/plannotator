@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { extractCandidateCodePaths } from "@plannotator/shared/extract-code-paths";
+import {
+	decodeCodePathValidationResponse,
+	type ValidationEntry,
+} from "./codePathValidationResponse";
 
-export type ValidationEntry =
-	| { status: "found"; resolved: string }
-	| { status: "ambiguous"; matches: string[] }
-	| { status: "missing" }
-	| { status: "unavailable" };
+export type { ValidationEntry } from "./codePathValidationResponse";
 
 export type ValidatedMap = Map<string, ValidationEntry>;
 
@@ -58,15 +58,9 @@ export function useValidatedCodePaths(
 					setReady(true);
 					return;
 				}
-				const data = (await res.json()) as {
-					results: Record<string, ValidationEntry>;
-				};
+				const data: unknown = await res.json();
 				if (cancelled) return;
-				const next: ValidatedMap = new Map();
-				for (const [k, v] of Object.entries(data.results ?? {})) {
-					next.set(k, v);
-				}
-				setValidated(next);
+				setValidated(decodeCodePathValidationResponse(data));
 				setReady(true);
 			} catch {
 				if (!cancelled) setReady(true);

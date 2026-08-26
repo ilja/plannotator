@@ -10,7 +10,7 @@ interface CodeBlockProps {
   isHovered: boolean;
 }
 
-export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, isHovered }) => {
+export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, isHovered: _isHovered }) => {
   const [copied, setCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLElement>(null);

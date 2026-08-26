@@ -2,10 +2,10 @@ import { spawn } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import os from "node:os";
-import { basename, resolve as resolvePath } from "node:path";
+import {basename} from "node:path";
 
 import { contentHash, deleteDraft } from "../generated/draft.js";
-import { loadConfig, saveConfig, detectGitUser, getServerConfig, resolveSharingEnabled } from "../generated/config.js";
+import { ConfigPatch, loadConfig, saveConfig, detectGitUser, getServerConfig, resolveSharingEnabled } from "../generated/config.js";
 
 export type {
 	DiffOption,
@@ -19,17 +19,9 @@ import {
 	getMRNumberLabel,
 	isSameProject,
 	type PRMetadata,
-	type PRReviewFileComment,
 	prRefFromMetadata,
 } from "../generated/pr-types.js";
-import {
-	type DiffType,
-	type GitContext,
-	getFileContentsForDiff as getFileContentsForDiffCore,
-	parseWorktreeDiffType,
-	resolveBaseBranch,
-	validateFilePath,
-} from "../generated/review-core.js";
+import {type DiffType, type GitContext, getFileContentsForDiff as getFileContentsForDiffCore, resolveBaseBranch, validateFilePath} from "../generated/review-core.js";
 import {
 	checkoutPRHead,
 	getPRDiffScopeOptions,
@@ -45,16 +37,29 @@ import {
 import type { WorktreePool } from "../generated/worktree-pool.js";
 
 import { createEditorAnnotationHandler } from "./annotations.js";
+import { Option, Schema } from "effect";
 import { createExternalAnnotationHandler } from "./external-annotations.js";
 import {
 	handleDraftRequest,
 	handleFavicon,
 	handleImageRequest,
-	readDraftGenerationFromBody,
 	readDraftGenerationFromUrl,
 	handleUploadRequest,
 } from "./handlers.js";
-import { html, json, parseBody, requestUrl } from "./helpers.js";
+import { html, json, parseBody, parseStrictBody, requestUrl, toWebRequest } from "./helpers.js";
+import {
+	CodeNavRequestSchema,
+	DiffSwitchRequestSchema,
+	DiffTypeSchema,
+	decodeFeedbackRequest,
+	GitAddRequestSchema,
+	OpenInRequestSchema,
+	PrActionRequestSchema,
+	PrDiffScopeRequestSchema,
+	PrSwitchRequestSchema,
+	PrViewedRequestSchema,
+	WorkspaceDiffTypeSchema,
+} from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -78,7 +83,6 @@ import {
 	type WorkspaceDiffType,
 } from "../generated/review-workspace.js";
 import {
-	type CodeNavRequest,
 	type CodeNavRuntime,
 	resolveCodeNav,
 	validateCodeNavRequest,
@@ -159,7 +163,7 @@ export interface ReviewServerResult {
 	waitForDecision: () => Promise<{
 		approved: boolean;
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 	}>;
 	stop: () => void;
@@ -280,13 +284,13 @@ export async function startReviewServer(options: {
 	let resolveDecision!: (result: {
 		approved: boolean;
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 	}) => void;
 	const decisionPromise = new Promise<{
 		approved: boolean;
 		feedback: string;
-		annotations: unknown[];
+		annotations: readonly unknown[];
 		exit?: boolean;
 	}>((resolve) => {
 		resolveDecision = resolve;
@@ -305,7 +309,14 @@ export async function startReviewServer(options: {
 
 	let currentPatch = options.rawPatch;
 	let currentGitRef = options.gitRef;
-	let currentDiffType: DiffType | WorkspaceDiffType = options.diffType || workspace?.diffType || "uncommitted";
+	const initialDiffType = workspace
+		? Option.getOrUndefined(
+				Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(options.diffType ?? workspace.diffType),
+			) ?? workspace.diffType
+		: Option.getOrUndefined(
+				Schema.decodeUnknownOption(DiffTypeSchema)(options.diffType ?? "uncommitted"),
+			) ?? "uncommitted";
+	let currentDiffType: DiffType | WorkspaceDiffType = initialDiffType;
 	let currentError = options.error;
 	let currentHideWhitespace = loadConfig().diffOptions?.hideWhitespace ?? false;
 	let originalPRPatch = options.rawPatch;
@@ -331,6 +342,10 @@ export async function startReviewServer(options: {
 	// files change mid-review. Best-effort: null = "cannot fingerprint" and is
 	// reported fresh, never stale.
 	let currentFingerprint: string | null = null;
+	function getCurrentVcsDiffType(): DiffType | null {
+		return Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(currentDiffType)) ?? null;
+	}
+
 	const computeDiffFingerprint = async (): Promise<string | null> => {
 		try {
 			if (workspace) return await workspace.getFingerprint();
@@ -353,8 +368,10 @@ export async function startReviewServer(options: {
 				return await getPRFullStackFingerprint(reviewRuntime, prMeta, fullStackCwd);
 			}
 			if (!hasLocalAccess) return null;
+			const diffType = getCurrentVcsDiffType();
+			if (!diffType) return null;
 			return await getVcsDiffFingerprint(
-				currentDiffType as DiffType,
+				diffType,
 				currentBase,
 				options.gitContext?.cwd,
 				{ hideWhitespace: currentHideWhitespace },
@@ -394,7 +411,10 @@ export async function startReviewServer(options: {
 			if (poolPath) return poolPath;
 		}
 		if (options.agentCwd) return options.agentCwd;
-		return resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd) ?? process.cwd();
+		const diffType = getCurrentVcsDiffType();
+		return diffType
+			? resolveVcsCwd(diffType, options.gitContext?.cwd) ?? process.cwd()
+			: process.cwd();
 	}
 	// The current PR's local checkout if one is usable, else null. Mirrors the
 	// Bun review server's resolvePRLocalCwd: a pool entry that exists but isn't
@@ -417,7 +437,8 @@ export async function startReviewServer(options: {
 	function resolveOpenInRoot(): string | string[] {
 		if (workspace) return workspace.root;
 		if (options.worktreePool && prMeta) return resolvePRLocalCwd() ?? [];
-		return options.agentCwd ?? resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd) ?? process.cwd();
+		const diffType = getCurrentVcsDiffType();
+		return options.agentCwd ?? (diffType ? resolveVcsCwd(diffType, options.gitContext?.cwd) : undefined) ?? process.cwd();
 	}
 	const semanticDiffScratchCwd = getSemanticDiffScratchCwd();
 	function resolveSemanticDiffCwd(): string {
@@ -428,8 +449,11 @@ export async function startReviewServer(options: {
 		}
 		if (options.agentCwd) return options.agentCwd;
 		if (options.gitContext) {
-			const vcsCwd = resolveVcsCwd(currentDiffType as DiffType, options.gitContext.cwd);
-			if (vcsCwd) return vcsCwd;
+			const diffType = getCurrentVcsDiffType();
+			if (diffType) {
+				const vcsCwd = resolveVcsCwd(diffType, options.gitContext.cwd);
+				if (vcsCwd) return vcsCwd;
+			}
 			if (options.gitContext.cwd) return options.gitContext.cwd;
 		}
 		return semanticDiffScratchCwd;
@@ -459,11 +483,12 @@ export async function startReviewServer(options: {
 
 	async function getSemanticDiffAdvert() {
 		const availability = await getSemanticDiffAvailabilityForCwd(resolveSemanticDiffCwd());
-		return {
+		const advert = {
 			available: availability.available,
-			...(availability.semVersion ? { semVersion: availability.semVersion } : {}),
-			...(availability.semSource ? { semSource: availability.semSource } : {}),
 		};
+		if (availability.semVersion) Object.assign(advert, { semVersion: availability.semVersion });
+		if (availability.semSource) Object.assign(advert, { semSource: availability.semSource });
+		return advert;
 	}
 
 	async function getSemanticDiff(url: URL): Promise<SemanticDiffResponse> {
@@ -538,21 +563,23 @@ export async function startReviewServer(options: {
 			json(res, { apps: getAvailableOpenInApps() });
 		} else if (url.pathname === "/api/open-in" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { filePath?: unknown; appId?: unknown; base?: unknown };
-				if (typeof body.filePath !== "string" || !body.filePath) {
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(OpenInRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
 					json(res, { error: "Missing filePath" }, 400);
 					return;
 				}
 				const target = resolveOpenInTarget(
 					body.filePath,
-					typeof body.base === "string" ? body.base : null,
+					body.base ?? null,
 					resolveOpenInRoot,
 				);
 				if (!target) {
 					json(res, { error: "Path escapes review root" }, 400);
 					return;
 				}
-				const result = await openFileInApp(target, typeof body.appId === "string" ? body.appId : undefined);
+				const result = await openFileInApp(target, body.appId);
 				if (result.ok) {
 					json(res, { ok: true });
 				} else {
@@ -587,7 +614,9 @@ export async function startReviewServer(options: {
 			const fresh = probe == null || probe === baseline;
 			// The probe fingerprint lets the client distinguish "still the same
 			// staleness I dismissed" from "ANOTHER change landed since".
-			json(res, { fresh, ...(fresh ? {} : { fingerprint: probe }), ...prCwdAdvert });
+			const freshResponse = { fresh, ...prCwdAdvert };
+			if (!fresh) Object.assign(freshResponse, { fingerprint: probe });
+			json(res, freshResponse);
 		} else if (url.pathname === "/api/semantic-diff" && req.method === "GET") {
 			json(res, await getSemanticDiff(url));
 		} else if (url.pathname === "/api/diff/switch" && req.method === "POST") {
@@ -596,18 +625,29 @@ export async function startReviewServer(options: {
 				return;
 			}
 			try {
-				const body = await parseBody(req);
-				const newType = body.diffType as DiffType | WorkspaceDiffType;
-				if (!newType) {
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(DiffSwitchRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
 					json(res, { error: "Missing diffType" }, 400);
 					return;
 				}
-				if (typeof body.hideWhitespace === "boolean") {
+				const workspaceDiffType = Option.getOrUndefined(
+					Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(body.diffType),
+				);
+				const vcsDiffType = Option.getOrUndefined(
+					Schema.decodeUnknownOption(DiffTypeSchema)(body.diffType),
+				);
+				if (body.hideWhitespace !== undefined) {
 					currentHideWhitespace = body.hideWhitespace;
 				}
 				if (workspace) {
+					if (!workspaceDiffType) {
+						json(res, { error: "Invalid workspace diff type" }, 400);
+						return;
+					}
 					const snapshot = await workspace.rebuild({
-						diffType: newType,
+						diffType: workspaceDiffType,
 						hideWhitespace: currentHideWhitespace,
 					});
 					currentPatch = snapshot.rawPatch;
@@ -617,29 +657,31 @@ export async function startReviewServer(options: {
 					draftKey = contentHash(currentPatch);
 					captureDiffFingerprint();
 
-					json(res, {
+					const workspaceResponse = {
 						rawPatch: currentPatch,
 						gitRef: currentGitRef,
 						diffType: currentDiffType,
 						diffOptions: workspace.diffOptions,
 						hideWhitespace: currentHideWhitespace,
-						...(currentError ? { error: currentError } : {}),
 						semanticDiff: await getSemanticDiffAdvert(),
-					});
+					};
+					if (currentError) Object.assign(workspaceResponse, { error: currentError });
+					json(res, workspaceResponse);
+					return;
+				}
+				if (!vcsDiffType) {
+					json(res, { error: "Invalid diff type" }, 400);
 					return;
 				}
 				const detectedBase = detectedCompareTarget();
-				const base = resolveBaseBranch(
-					typeof body.base === "string" ? body.base : undefined,
-					detectedBase,
-				);
+				const base = resolveBaseBranch(body.base, detectedBase);
 				const defaultCwd = options.gitContext?.cwd;
-				const result = await runVcsDiff(newType as DiffType, base, defaultCwd, {
+				const result = await runVcsDiff(vcsDiffType, base, defaultCwd, {
 					hideWhitespace: currentHideWhitespace,
 				});
 				currentPatch = result.patch;
 				currentGitRef = result.label;
-				currentDiffType = newType;
+				currentDiffType = vcsDiffType;
 				currentBase = base;
 				baseEverSwitched = true;
 				currentError = result.error;
@@ -651,14 +693,14 @@ export async function startReviewServer(options: {
 				let updatedContext: GitContext | undefined;
 				if (options.gitContext) {
 					try {
-						const effectiveCwd = resolveVcsCwd(newType as DiffType, options.gitContext.cwd);
+						const effectiveCwd = resolveVcsCwd(vcsDiffType, options.gitContext.cwd);
 						updatedContext = await getVcsContext(effectiveCwd, sessionVcsType);
 					} catch {
 						/* best-effort */
 					}
 				}
 
-				json(res, {
+				const switchResponse = {
 					rawPatch: currentPatch,
 					gitRef: currentGitRef,
 					diffType: currentDiffType,
@@ -668,10 +710,11 @@ export async function startReviewServer(options: {
 					// didn't supply one and we fell back to detected default).
 					base: currentBase,
 					hideWhitespace: currentHideWhitespace,
-					...(updatedContext ? { gitContext: updatedContext } : {}),
-					...(currentError ? { error: currentError } : {}),
 					semanticDiff: await getSemanticDiffAdvert(),
-				});
+				};
+				if (updatedContext) Object.assign(switchResponse, { gitContext: updatedContext });
+				if (currentError) Object.assign(switchResponse, { error: currentError });
+				json(res, switchResponse);
 			} catch (err) {
 				const message = err instanceof Error ? err.message : "Failed to switch diff";
 				json(res, { error: message }, 500);
@@ -682,8 +725,10 @@ export async function startReviewServer(options: {
 				return;
 			}
 			try {
-				const body = await parseBody(req) as { scope?: PRDiffScope };
-				if (body.scope !== "layer" && body.scope !== "full-stack") {
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(PrDiffScopeRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
 					json(res, { error: "Invalid PR diff scope" }, 400);
 					return;
 				}
@@ -694,14 +739,15 @@ export async function startReviewServer(options: {
 				// newest state so the client converges on it.
 				const respondSuperseded = async () => {
 					const semanticDiff = await getSemanticDiffAdvert();
-					json(res, {
+					const supersededResponse = {
 						rawPatch: currentPatch,
 						gitRef: currentGitRef,
 						prDiffScope: currentPRDiffScope,
-						...(layerPatchIncomplete ? { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable } : {}),
-						...(currentError ? { error: currentError } : {}),
 						semanticDiff,
-					});
+					};
+					if (layerPatchIncomplete) Object.assign(supersededResponse, { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable });
+					if (currentError) Object.assign(supersededResponse, { error: currentError });
+					json(res, supersededResponse);
 				};
 
 				if (body.scope === "layer") {
@@ -753,14 +799,15 @@ export async function startReviewServer(options: {
 					// cache) resolves to the same key.
 					if (!layerPatchIncomplete) draftKey = contentHash(currentPatch);
 					captureDiffFingerprint();
-					json(res, {
+					const layerResponse = {
 						rawPatch: currentPatch,
 						gitRef: currentGitRef,
 						prDiffScope: currentPRDiffScope,
-						...(layerPatchIncomplete ? { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable } : {}),
-						...((currentError ?? upgradeError) ? { error: currentError ?? upgradeError } : {}),
 						semanticDiff: await getSemanticDiffAdvert(),
-					});
+					};
+					if (layerPatchIncomplete) Object.assign(layerResponse, { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable });
+					if (currentError ?? upgradeError) Object.assign(layerResponse, { error: currentError ?? upgradeError });
+					json(res, layerResponse);
 					return;
 				}
 
@@ -799,8 +846,10 @@ export async function startReviewServer(options: {
 				return json(res, { error: "Not in PR mode" }, 400);
 			}
 			try {
-				const body = (await parseBody(req)) as { url?: string };
-				if (!body?.url) return json(res, { error: "Missing PR URL" }, 400);
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(PrSwitchRequestSchema)(await parseBody(req)),
+				);
+				if (!body) return json(res, { error: "Missing PR URL" }, 400);
 				const newRef = parsePRUrl(body.url);
 				if (!newRef) return json(res, { error: "Invalid PR URL" }, 400);
 				if (!isSameProject(newRef, prRef!)) return json(res, { error: "Cannot switch to a PR in a different repository" }, 400);
@@ -864,7 +913,7 @@ export async function startReviewServer(options: {
 					branch: `${getMRLabel(pr.metadata)} ${getMRNumberLabel(pr.metadata)}`,
 				};
 
-				return json(res, {
+				const switchResponse = {
 					rawPatch: currentPatch,
 					gitRef: currentGitRef,
 					prMetadata: pr.metadata,
@@ -875,12 +924,13 @@ export async function startReviewServer(options: {
 					prStackTree,
 					prDiffScope: currentPRDiffScope,
 					prDiffScopeOptions,
-					...(layerPatchIncomplete ? { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable } : {}),
 					repoInfo,
-					...(switchedViewedFiles.length > 0 && { viewedFiles: switchedViewedFiles }),
-					...(currentError ? { error: currentError } : {}),
 					semanticDiff: await getSemanticDiffAdvert(),
-				});
+				};
+				if (layerPatchIncomplete) Object.assign(switchResponse, { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable });
+				if (switchedViewedFiles.length > 0) Object.assign(switchResponse, { viewedFiles: switchedViewedFiles });
+				if (currentError) Object.assign(switchResponse, { error: currentError });
+				return json(res, switchResponse);
 			} catch (err) {
 				return json(res, { error: err instanceof Error ? err.message : "Failed to switch PR" }, 500);
 			}
@@ -924,9 +974,15 @@ export async function startReviewServer(options: {
 				return;
 			}
 			try {
-				const body = await parseBody(req);
-				const fileComments = (body.fileComments as PRReviewFileComment[]) || [];
-				const targetPrUrl = body.targetPrUrl as string | undefined;
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(PrActionRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
+					json(res, { error: "Invalid PR action request" }, 400);
+					return;
+				}
+				const fileComments = [...(body.fileComments ?? [])];
+				const targetPrUrl = body.targetPrUrl;
 
 				let targetRef = prRef;
 				let targetHeadSha = prMeta.headSha;
@@ -950,8 +1006,8 @@ export async function startReviewServer(options: {
 				await submitPRReview(
 					targetRef,
 					targetHeadSha,
-					body.action as "approve" | "comment",
-					body.body as string,
+					body.action,
+					body.body,
 					fileComments,
 				);
 				console.error(`[pr-action] Success`);
@@ -976,12 +1032,18 @@ export async function startReviewServer(options: {
 				return;
 			}
 			try {
-				const body = await parseBody(req);
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(PrViewedRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
+					json(res, { error: "Invalid viewed request" }, 400);
+					return;
+				}
 				await markPRFilesViewed(
 					prRef,
 					prNodeId,
-					body.filePaths as string[],
-					body.viewed as boolean,
+					[...body.filePaths],
+					body.viewed,
 				);
 				json(res, { ok: true });
 			} catch (err) {
@@ -1061,8 +1123,13 @@ export async function startReviewServer(options: {
 					detectedBase,
 				);
 				const defaultCwd = options.gitContext?.cwd;
+				const diffType = getCurrentVcsDiffType();
+				if (!diffType) {
+					json(res, { error: "No local diff type available" }, 400);
+					return;
+				}
 				const result = await getVcsFileContentsForDiff(
-					currentDiffType as DiffType,
+					diffType,
 					base,
 					filePath,
 					oldPath,
@@ -1104,7 +1171,13 @@ export async function startReviewServer(options: {
 				return;
 			}
 			try {
-				const body = (await parseBody(req)) as unknown as CodeNavRequest;
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(CodeNavRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
+					json(res, { error: "Invalid request body" }, 400);
+					return;
+				}
 				const error = validateCodeNavRequest(body);
 				if (error) {
 					json(res, { error }, 400);
@@ -1141,11 +1214,14 @@ export async function startReviewServer(options: {
 			}
 		} else if (url.pathname === "/api/git-add" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { filePath?: unknown; undo?: boolean };
-				if (typeof body.filePath !== "string" || !body.filePath) {
+				const body = Option.getOrUndefined(
+					Schema.decodeUnknownOption(GitAddRequestSchema)(await parseBody(req)),
+				);
+				if (!body) {
 					json(res, { error: "Missing filePath" }, 400);
 					return;
 				}
+				const undo = body.undo === true;
 				try { validateFilePath(body.filePath); } catch {
 					json(res, { error: "Invalid path" }, 400);
 					return;
@@ -1153,7 +1229,7 @@ export async function startReviewServer(options: {
 
 				if (workspace) {
 					try {
-						await workspace.stageFile(body.filePath, body.undo);
+						await workspace.stageFile(body.filePath, undo);
 						json(res, { ok: true });
 					} catch (error) {
 						json(res, { error: error instanceof Error ? error.message : "Failed to stage file" }, 400);
@@ -1161,16 +1237,21 @@ export async function startReviewServer(options: {
 					return;
 				}
 
-				const stageCwd = resolveVcsCwd(currentDiffType as DiffType, options.gitContext?.cwd);
-				if (isPRMode || !(await canStageFiles(currentDiffType as DiffType, stageCwd))) {
+				const diffType = getCurrentVcsDiffType();
+				if (!diffType) {
+					json(res, { error: "Staging not available" }, 400);
+					return;
+				}
+				const stageCwd = resolveVcsCwd(diffType, options.gitContext?.cwd);
+				if (isPRMode || !(await canStageFiles(diffType, stageCwd))) {
 					json(res, { error: "Staging not available" }, 400);
 					return;
 				}
 
-				if (body.undo) {
-					await unstageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+				if (undo) {
+					await unstageFile(diffType, body.filePath, stageCwd);
 				} else {
-					await stageFile(currentDiffType as DiffType, body.filePath, stageCwd);
+					await stageFile(diffType, body.filePath, stageCwd);
 				}
 
 				json(res, { ok: true });
@@ -1179,12 +1260,8 @@ export async function startReviewServer(options: {
 			}
 		} else if (url.pathname === "/api/config" && req.method === "POST") {
 			try {
-				const body = (await parseBody(req)) as { displayName?: string; diffOptions?: Record<string, unknown>; conventionalComments?: boolean };
-				const toSave: Record<string, unknown> = {};
-				if (body.displayName !== undefined) toSave.displayName = body.displayName;
-				if (body.diffOptions !== undefined) toSave.diffOptions = body.diffOptions;
-				if (body.conventionalComments !== undefined) toSave.conventionalComments = body.conventionalComments;
-				if (Object.keys(toSave).length > 0) saveConfig(toSave as Parameters<typeof saveConfig>[0]);
+				const body = Schema.decodeUnknownSync(ConfigPatch)(await parseStrictBody(req));
+				if (Object.keys(body).length > 0) saveConfig(body);
 				json(res, { ok: true });
 			} catch {
 				json(res, { error: "Invalid request" }, 400);
@@ -1217,12 +1294,16 @@ export async function startReviewServer(options: {
 			json(res, { ok: true });
 		} else if (url.pathname === "/api/feedback" && req.method === "POST") {
 			try {
-				const body = await parseBody(req);
-				deleteDraft(draftKey, readDraftGenerationFromBody(body));
+				const request = decodeFeedbackRequest(await toWebRequest(req).json());
+				if (!request) {
+					json(res, { error: "Invalid request" }, 400);
+					return;
+				}
+				deleteDraft(draftKey, request.draftGeneration);
 				resolveDecision({
-					approved: (body.approved as boolean) ?? false,
-					feedback: (body.feedback as string) || "",
-					annotations: (body.annotations as unknown[]) || [],
+					approved: request.approved ?? false,
+					feedback: request.feedback ?? "",
+					annotations: request.annotations ?? [],
 				});
 				json(res, { ok: true });
 			} catch (err) {

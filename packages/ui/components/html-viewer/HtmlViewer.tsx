@@ -8,18 +8,24 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Option, Schema } from "effect";
 import type { Annotation, EditorMode, ImageAttachment, InputMethod } from "../../types";
 import { AnnotationType } from "../../types";
 import { getIdentity } from "../../utils/identity";
 import { AnnotationToolbar } from "../AnnotationToolbar";
 import { AttachmentsButton } from "../AttachmentsButton";
+import { getFontUrl } from "../../utils/diffFonts";
 import { CommentPopover, type CommentAskAIHandler } from "../CommentPopover";
 import { FloatingQuickLabelPicker } from "../FloatingQuickLabelPicker";
 import type { ViewerHandle } from "../Viewer";
 import { useHtmlAnnotation } from "./useHtmlAnnotation";
+import { postHtmlBridgeMessage } from "./bridgeMessages";
 import { ANNOTATION_HIGHLIGHT_CSS, BRIDGE_SCRIPT } from "./bridge-script";
 
 const PREFIX = "plannotator-bridge-";
+const decodeHtmlBridgeReadyMessage = Schema.decodeUnknownOption(Schema.Struct({
+  type: Schema.Literal(`${PREFIX}ready`),
+}));
 
 const THEME_TOKENS = [
   "--background",
@@ -50,9 +56,16 @@ const THEME_TOKENS = [
   "--radius",
 ] as const;
 
-function readThemeTokens(): Record<string, string> {
+interface ThemeTokens { [key: string]: string; }
+interface TypographyTokens { [key: string]: string; }
+
+function isStringValue(value: any): value is string {
+  return Object.prototype.toString.call(value) === "[object String]";
+}
+
+function readThemeTokens(): ThemeTokens {
   const style = getComputedStyle(document.documentElement);
-  const tokens: Record<string, string> = {};
+  const tokens: ThemeTokens = {};
   for (const key of THEME_TOKENS) {
     const val = style.getPropertyValue(key).trim();
     if (val) tokens[key] = val;
@@ -60,10 +73,10 @@ function readThemeTokens(): Record<string, string> {
   return tokens;
 }
 
-function readTypographyTokens(typographyStyle?: React.CSSProperties): Record<string, string> {
-  const tokens: Record<string, string> = {};
+function readTypographyTokens(typographyStyle?: React.CSSProperties): TypographyTokens {
+  const tokens: TypographyTokens = {};
   for (const [key, value] of Object.entries(typographyStyle ?? {})) {
-    if (key.startsWith("--") && typeof value === "string" && value.trim()) {
+    if (key.startsWith("--") && isStringValue(value) && value.trim()) {
       tokens[key] = value;
     }
   }
@@ -91,6 +104,12 @@ const HTML_TYPOGRAPHY_CSS = `
 
 function isLightTheme(): boolean {
   return document.documentElement.classList.contains("light");
+}
+
+function extractFontFamily(cssVarValue: string | undefined): string | undefined {
+  if (!isStringValue(cssVarValue) || !cssVarValue.trim()) return undefined;
+  const m = cssVarValue.trim().match(/^'([^']+)'/);
+  return m ? m[1] : undefined;
 }
 
 export interface HtmlViewerProps {
@@ -155,7 +174,16 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
       themeCSS += "}\n";
       if (isLightTheme()) themeCSS += ":root { color-scheme: light; }\n:root.light, :root { }\n";
 
-      const injection = `<style>${themeCSS}${HTML_TYPOGRAPHY_CSS}${ANNOTATION_HIGHLIGHT_CSS}</style><script>${BRIDGE_SCRIPT}</script>`;
+      let fontLinks = '';
+      const proseFamily = extractFontFamily(tokens['--annotation-prose-font-family']);
+      const codeFamily = extractFontFamily(tokens['--annotation-code-font-family']);
+      for (const fam of [proseFamily, codeFamily]) {
+        if (!fam) continue;
+        const url = getFontUrl(fam);
+        if (url) fontLinks += `<link rel="stylesheet" href="${url}">`;
+      }
+
+      const injection = `${fontLinks}<style>${themeCSS}${HTML_TYPOGRAPHY_CSS}${ANNOTATION_HIGHLIGHT_CSS}</style><script>${BRIDGE_SCRIPT}</script>`;
       const headClose = rawHtml.indexOf("</head>");
       if (headClose !== -1) {
         return rawHtml.slice(0, headClose) + injection + rawHtml.slice(headClose);
@@ -178,8 +206,9 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     });
 
     useEffect(() => {
-      function handler(e: MessageEvent) {
-        if (e.data?.type === `${PREFIX}ready`) {
+      function handler(event: MessageEvent) {
+        if (event.source !== iframeRef.current?.contentWindow) return;
+        if (Option.isSome(decodeHtmlBridgeReadyMessage(event.data))) {
           setIframeReady(true);
         }
       }
@@ -198,20 +227,21 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     // ready (fresh iframe) and whenever the user switches it in the toolstrip.
     useEffect(() => {
       if (!iframeReady) return;
-      iframeRef.current?.contentWindow?.postMessage(
-        { type: `${PREFIX}set-input-method`, method: inputMethod },
-        "*",
-      );
+      postHtmlBridgeMessage(iframeRef.current, {
+        type: `${PREFIX}set-input-method`,
+        method: inputMethod,
+      });
     }, [iframeReady, inputMethod]);
 
     useEffect(() => {
       if (!iframeReady) return;
       function sendTheme() {
         const tokens = { ...readThemeTokens(), ...readTypographyTokens(typographyStyle) };
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: `${PREFIX}theme`, tokens, isLight: isLightTheme() },
-          "*",
-        );
+        postHtmlBridgeMessage(iframeRef.current, {
+          type: `${PREFIX}theme`,
+          tokens,
+          isLight: isLightTheme(),
+        });
       }
       sendTheme();
       const observer = new MutationObserver(sendTheme);

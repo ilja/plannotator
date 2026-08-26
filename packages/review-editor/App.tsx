@@ -12,14 +12,12 @@ import { CompletionOverlay } from '@plannotator/ui/components/CompletionOverlay'
 import { GitHubIcon } from '@plannotator/ui/components/GitHubIcon';
 import { GitLabIcon } from '@plannotator/ui/components/GitLabIcon';
 import { RepoIcon } from '@plannotator/ui/components/RepoIcon';
-import { PullRequestIcon } from '@plannotator/ui/components/PullRequestIcon';
 import { getPlatformLabel, getMRLabel, getMRNumberLabel, getDisplayRepo } from '@plannotator/shared/pr-types';
 import type { SemanticDiffAdvert } from '@plannotator/shared/semantic-diff-types';
 import { configStore, useConfigValue } from '@plannotator/ui/config';
 import { loadDiffFont } from '@plannotator/ui/utils/diffFonts';
 import {
   getAIProviderSettings,
-  isPiProvider,
   resolveAIModelForProvider,
   resolveAIProviderSelection,
   saveAIProviderSelection,
@@ -37,12 +35,13 @@ import { useCodeAnnotationDraft } from '@plannotator/ui/hooks/useCodeAnnotationD
 import { useGitAdd } from './hooks/useGitAdd';
 import { generateId } from './utils/generateId';
 import { useAIChat } from './hooks/useAIChat';
-import { toast, Toaster } from 'sonner';
+import {toast} from 'sonner';
 import { useCodeNav, type CodeNavRequest } from './hooks/useCodeNav';
 import { buildPendingAIContext, type PendingAIContext } from './utils/pendingAIContext';
 import { isTypingTarget, useReviewSearch, type ReviewSearchMatch } from './hooks/useReviewSearch';
 import { useEditorAnnotations } from '@plannotator/ui/hooks/useEditorAnnotations';
 import { useExternalAnnotations } from '@plannotator/ui/hooks/useExternalAnnotations';
+import { decodeCodeAnnotation } from '@plannotator/ui/utils/annotationSchemas';
 import { exportEditorAnnotations } from '@plannotator/ui/utils/parser';
 import { ResizeHandle } from '@plannotator/ui/components/ResizeHandle';
 import { FolderTree } from 'lucide-react';
@@ -64,6 +63,12 @@ import { DEMO_DIFF } from './demoData';
 import { exportReviewFeedback } from './utils/exportFeedback';
 import { buildReviewFeedbackAnnotations } from './utils/reviewFeedbackAnnotations';
 import { parseDiffToFiles } from './utils/diffParser';
+import {
+  decodeDiffSwitchResponse,
+  loadInitialDiffResponse,
+} from './utils/initial-diff-response';
+import { loadReviewAICapabilitiesState } from './utils/ai-capabilities-response';
+import { readPRActionResponse } from './utils/pr-action-response';
 import { ReviewSubmissionDialog, buildReviewSubmission, type ReviewSubmission, type SubmissionTarget } from './components/ReviewSubmissionDialog';
 import { ReviewStateProvider, type ReviewState } from './dock/ReviewStateContext';
 import { reviewPanelComponents } from './dock/reviewPanelComponents';
@@ -83,9 +88,8 @@ import {
 } from './dock/reviewPanelTypes';
 import type { DiffFile, AnnotationScrollTarget } from './types';
 import { annotationMatchesPrScope } from './utils/annotationScope';
-import type { DiffOption, WorktreeInfo, GitContext } from '@plannotator/shared/types';
-import type { PRMetadata } from '@plannotator/shared/pr-types';
-import type { PRDiffScope, PRDiffScopeOption, PRStackInfo, PRStackTree } from '@plannotator/shared/pr-stack';
+import type {DiffOption, GitContext} from '@plannotator/shared/types';
+import type { PRDiffScope, PRDiffScopeOption, PRStackInfo } from '@plannotator/shared/pr-stack';
 import { altKey } from '@plannotator/ui/utils/platform';
 
 declare const __APP_VERSION__: string;
@@ -98,7 +102,7 @@ interface DiffData {
   diffType?: string;
   gitContext?: GitContext;
   diffOptions?: DiffOption[];
-  sharingEnabled?: boolean;
+  _sharingEnabled?: boolean;
   prStackInfo?: PRStackInfo | null;
   prDiffScope?: PRDiffScope;
   prDiffScopeOptions?: PRDiffScopeOption[];
@@ -202,7 +206,7 @@ const ReviewApp: React.FC = () => {
   const [submitted, setSubmitted] = useState<'approved' | 'feedback' | 'exited' | false>(false);
   const [showApproveWarning, setShowApproveWarning] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
-  const [sharingEnabled, setSharingEnabled] = useState(true);
+  const [_sharingEnabled, setSharingEnabled] = useState(true);
   const [repoInfo, setRepoInfo] = useState<{ display: string; branch?: string } | null>(null);
 
   useEffect(() => {
@@ -251,11 +255,11 @@ const ReviewApp: React.FC = () => {
   const mrLabel = prMetadata ? getMRLabel(prMetadata) : 'PR';
   const mrNumberLabel = prMetadata ? getMRNumberLabel(prMetadata) : '';
   const displayRepo = prMetadata ? getDisplayRepo(prMetadata) : '';
-  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+  const appVersion = __APP_VERSION__;
 
   const identity = useConfigValue('displayName');
 
-  const clearPendingSelection = useCallback(() => {
+  const _clearPendingSelection = useCallback(() => {
     setPendingSelection(null);
   }, []);
 
@@ -268,7 +272,10 @@ const ReviewApp: React.FC = () => {
   // (apps/review/) doesn't set it, so external annotations are silently disabled there.
   // The same !!origin proxy is used elsewhere in this file (draft hook, feedback guard, conditional UI)
   // so this should be addressed as a broader refactor.
-  const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations<CodeAnnotation>({ enabled: !!origin });
+  const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } = useExternalAnnotations(
+    decodeCodeAnnotation,
+    { enabled: !!origin },
+  );
   // Dockview center panel API for the review workspace.
   const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
   const filesRef = useRef(files);
@@ -413,14 +420,21 @@ const ReviewApp: React.FC = () => {
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiProviders, setAiProviders] = useState<Array<{ id: string; name: string; capabilities: Record<string, boolean>; models?: Array<{ id: string; label: string; default?: boolean }> }>>([]);
   const [aiDefaultProvider, setAiDefaultProvider] = useState<string | null>(null);
-  const [aiConfig, setAiConfig] = useState(() => {
+interface AiConfigState {
+  providerId: string | null;
+  model: string | null;
+  reasoningEffort: string | null;
+}
+
+const [aiConfig, setAiConfig] = useState(() => {
     const saved = getAIProviderSettings();
     const pid = saved.providerId;
-    return {
+    const config: AiConfigState = {
       providerId: pid,
       model: pid ? (saved.preferredModels[pid] ?? null) : null,
-      reasoningEffort: null as string | null,
+      reasoningEffort: null,
     };
+    return config;
   });
   const [showDiffTypeSetup, setShowDiffTypeSetup] = useState(false);
   const [diffTypeSetupPending, setDiffTypeSetupPending] = useState(false);
@@ -484,18 +498,12 @@ const ReviewApp: React.FC = () => {
   // Check AI capabilities on mount
   useEffect(() => {
     fetch('/api/ai/capabilities')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.available) {
-          const providers = (data.providers ?? []).filter(isPiProvider);
-          setAiAvailable(providers.length > 0);
-          const defaultProvider = typeof data.defaultProvider === 'string' &&
-            providers.some(provider => provider.id === data.defaultProvider)
-            ? data.defaultProvider
-            : null;
-          setAiProviders(providers);
-          setAiDefaultProvider(defaultProvider);
-        }
+      .then(loadReviewAICapabilitiesState)
+      .then(state => {
+        if (!state) return;
+        setAiAvailable(state.available);
+        setAiProviders(state.providers);
+        setAiDefaultProvider(state.defaultProvider);
       })
       .catch(() => {});
   }, []);
@@ -560,7 +568,6 @@ const ReviewApp: React.FC = () => {
       side: side === 'new' ? 'additions' : 'deletions',
     });
   }, [openDiffFile]);
-
 
   // Click AI marker in diff → scroll sidebar to that Q&A
   const [scrollToQuestionId, setScrollToQuestionId] = useState<string | null>(null);
@@ -790,39 +797,32 @@ const ReviewApp: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showExportModal, showDestinationMenu, isSearchOpen, searchQuery, searchMatches, isSearchPending, openSearch, stepSearchMatch, clearSearch, closeSearch, hasSearchableFiles, reviewSidebar.isOpen, reviewSidebar.open, reviewSidebar.close, isFileTreeOpen]);
 
-
   // Load diff content - try API first, fall back to demo
   useEffect(() => {
+    const fallbackToDemo = () => {
+      const demoFiles = parseDiffToFiles(DEMO_DIFF);
+      setDiffData({
+        files: demoFiles,
+        rawPatch: DEMO_DIFF,
+        gitRef: 'demo',
+      });
+      setFiles(demoFiles);
+      setWorkspaceDiffOptions(null);
+      setSemanticDiffAvailable(false);
+    };
+
     fetch('/api/diff')
       .then(res => {
         if (!res.ok) throw new Error('Not in API mode');
-        return res.json();
+        return loadInitialDiffResponse(() => res.json());
       })
-      .then((data: {
-        rawPatch: string;
-        gitRef: string;
-        origin?: Origin;
-        mode?: string;
-        diffType?: string;
-        base?: string;
-        gitContext?: GitContext;
-        diffOptions?: DiffOption[];
-        agentCwd?: string | null;
-        sharingEnabled?: boolean;
-        repoInfo?: { display: string; branch?: string };
-        prMetadata?: PRMetadata;
-        prStackInfo?: PRStackInfo | null;
-        prStackTree?: PRStackTree | null;
-        prDiffScope?: PRDiffScope;
-        prDiffScopeOptions?: PRDiffScopeOption[];
-        prPatchIncomplete?: boolean;
-        prPatchUpgradeAvailable?: boolean;
-        platformUser?: string;
-        viewedFiles?: string[];
-        error?: string;
-        semanticDiff?: SemanticDiffAdvert;
-        serverConfig?: { displayName?: string; gitUser?: string };
-      }) => {
+      .then(result => {
+        if (result.source === 'demo') {
+          fallbackToDemo();
+          return;
+        }
+
+        const data = result.data;
         // Initialize config store with server-provided values (config file > cookie > default)
         configStore.init(data.serverConfig);
         // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
@@ -878,18 +878,7 @@ const ReviewApp: React.FC = () => {
           setDiffTypeSetupPending(true);
         }
       })
-      .catch(() => {
-        // Not in API mode - use demo content
-        const demoFiles = parseDiffToFiles(DEMO_DIFF);
-        setDiffData({
-          files: demoFiles,
-          rawPatch: DEMO_DIFF,
-          gitRef: 'demo',
-        });
-        setFiles(demoFiles);
-        setWorkspaceDiffOptions(null);
-        setSemanticDiffAvailable(false);
-      })
+      .catch(fallbackToDemo)
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -1222,16 +1211,9 @@ const ReviewApp: React.FC = () => {
 
       if (!res.ok) throw new Error('Failed to switch diff');
 
-      const data = await res.json() as {
-        rawPatch: string;
-        gitRef: string;
-        diffType: string;
-        base?: string;
-        gitContext?: GitContext;
-        diffOptions?: DiffOption[];
-        error?: string;
-        semanticDiff?: SemanticDiffAdvert;
-      };
+      const rawData: unknown = await res.json();
+      const data = decodeDiffSwitchResponse(rawData);
+      if (!data) throw new Error('Failed to switch diff');
 
       const nextFiles = parseDiffToFiles(data.rawPatch);
       applySemanticDiffAdvert(data.semanticDiff);
@@ -1724,11 +1706,11 @@ const ReviewApp: React.FC = () => {
                 targetPrUrl: target.prUrl || undefined,
               }),
             });
-            const prData = await prRes.json() as { ok?: boolean; prUrl?: string; error?: string };
-            if (!prRes.ok || prData.error) {
-              return { ...target, status: 'failed', error: prData.error ?? 'Failed to submit' };
+            const prResult = await readPRActionResponse(prRes);
+            if (!prResult.ok) {
+              return { ...target, status: 'failed', error: prResult.error };
             }
-            if (prData.prUrl) openUrls.push(prData.prUrl);
+            if (prResult.prUrl) openUrls.push(prResult.prUrl);
             return { ...target, status: 'success' };
           } catch (err) {
             return { ...target, status: 'failed', error: err instanceof Error ? err.message : 'Network error' };
@@ -1794,7 +1776,7 @@ const ReviewApp: React.FC = () => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Alt' || e.repeat) return;
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = e.target instanceof HTMLElement ? e.target.tagName : undefined;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     };
 
@@ -1839,7 +1821,7 @@ const ReviewApp: React.FC = () => {
         return;
       }
 
-      const tag = (e.target as HTMLElement)?.tagName;
+      const tag = e.target instanceof HTMLElement ? e.target.tagName : undefined;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning) return;
       if (submitted || isSendingFeedback || isApproving || isExiting || isPlatformActioning) return;

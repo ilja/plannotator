@@ -14,16 +14,7 @@ import type {
   PRStackTree,
   PRListItem,
 } from "@plannotator/shared/pr-types";
-import {
-  parsePRUrl as parsePRUrlCore,
-  prRefFromMetadata,
-  getPlatformLabel,
-  getMRLabel,
-  getMRNumberLabel,
-  getDisplayRepo,
-  getCliName,
-  getCliInstallUrl,
-} from "@plannotator/shared/pr-types";
+import {parsePRUrl as parsePRUrlCore} from "@plannotator/shared/pr-types";
 import {
   checkAuth as checkAuthCore,
   getUser as getUserCore,

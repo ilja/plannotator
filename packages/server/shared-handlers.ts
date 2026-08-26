@@ -8,16 +8,22 @@
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { Option, Schema } from "effect";
 import { openBrowser as openBrowserImpl } from "./browser";
 import { validateImagePath, validateUploadExtension, UPLOAD_DIR } from "./image";
-import { saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "./draft";
+import { decodeDraftEnvelope, saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "./draft";
 import { FAVICON_SVG } from "@plannotator/shared/favicon";
 import { saveToObsidian, saveToBear, saveToOctarine } from "./integrations";
-import type { ObsidianConfig, BearConfig, OctarineConfig, IntegrationResult } from "./integrations";
+import type { IntegrationResult } from "./integrations";
 
-function normalizeDraftGeneration(value: unknown): number | undefined {
-  if (typeof value !== "number") return undefined;
+const DraftGenerationSchema = Schema.Natural;
+
+function normalizeDraftGeneration(value: number): number | undefined {
   return Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+interface DraftBodyCarrier {
+  readonly draftGeneration?: unknown;
 }
 
 export function readDraftGenerationFromUrl(req: Request): number | undefined {
@@ -25,12 +31,14 @@ export function readDraftGenerationFromUrl(req: Request): number | undefined {
   const raw = url.searchParams.get("generation") ?? url.searchParams.get("draftGeneration");
   if (raw === null) return undefined;
   const value = Number(raw);
+  if (Number.isNaN(value)) return undefined;
   return normalizeDraftGeneration(value);
 }
 
-export function readDraftGenerationFromBody(body: unknown): number | undefined {
-  if (!body || typeof body !== "object") return undefined;
-  return normalizeDraftGeneration((body as { draftGeneration?: unknown }).draftGeneration);
+export function readDraftGenerationFromBody(body: DraftBodyCarrier): number | undefined {
+  return Option.getOrUndefined(
+    Schema.decodeUnknownOption(DraftGenerationSchema)(body.draftGeneration),
+  );
 }
 
 /** Serve images from local paths or temp uploads. Used by all 3 servers. */
@@ -68,12 +76,16 @@ export async function handleImage(req: Request): Promise<Response> {
   }
 }
 
+function isUploadFile(file: FormDataEntryValue | null): file is File {
+  return file !== null && "arrayBuffer" in Object(file) && "name" in Object(file);
+}
+
 /** Upload image to temp dir, return path. Used by all 3 servers. */
 export async function handleUpload(req: Request): Promise<Response> {
   try {
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-    if (!file) {
+    const file = formData.get("file");
+    if (!isUploadFile(file)) {
       return new Response("No file provided", { status: 400 });
     }
 
@@ -92,11 +104,25 @@ export async function handleUpload(req: Request): Promise<Response> {
   }
 }
 
+interface AgentListOptions {}
+
+const OpencodeAgentSchema = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  mode: Schema.String,
+  hidden: Schema.optionalKey(Schema.Boolean),
+});
+const OpencodeAgentsResponseSchema = Schema.Struct({
+  data: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.Json))),
+});
+const decodeOpencodeAgent = Schema.decodeUnknownOption(OpencodeAgentSchema);
+const decodeOpencodeAgentsResponse = Schema.decodeUnknownOption(OpencodeAgentsResponseSchema);
+
 /** OpenCode agent client interface (subset of OpenCode SDK) */
 export interface OpencodeClient {
   app: {
-    agents: (options?: object) => Promise<{
-      data?: Array<{ name: string; description?: string; mode: string; hidden?: boolean }>;
+    agents: (options?: AgentListOptions) => Promise<{
+      data?: Schema.Schema.Type<typeof Schema.Json>;
     }>;
   };
 }
@@ -109,9 +135,15 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
 
   try {
     const result = await opencodeClient.app.agents({});
-    const agents = (result.data ?? [])
-      .filter((a) => a.mode === "primary" && !a.hidden)
-      .map((a) => ({ id: a.name, name: a.name, description: a.description }));
+    const response = Option.getOrUndefined(decodeOpencodeAgentsResponse(result));
+    if (!response) {
+      return Response.json({ agents: [], error: "Failed to fetch agents" });
+    }
+    const agents = (response.data ?? []).flatMap((rawAgent) => {
+      const agent = Option.getOrUndefined(decodeOpencodeAgent(rawAgent));
+      if (!agent || agent.mode !== "primary" || agent.hidden) return [];
+      return [{ id: agent.name, name: agent.name, description: agent.description }];
+    });
 
     return Response.json({ agents });
   } catch {
@@ -122,7 +154,10 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
 /** Save annotation draft. Used by all 3 servers. */
 export async function handleDraftSave(req: Request, contentKey: string): Promise<Response> {
   try {
-    const body = await req.json();
+    const body = decodeDraftEnvelope(await req.json());
+    if (body === null) {
+      return Response.json({ error: "Invalid draft" }, { status: 400 });
+    }
     saveDraft(contentKey, body);
     return Response.json({ ok: true });
   } catch (err) {
@@ -132,15 +167,19 @@ export async function handleDraftSave(req: Request, contentKey: string): Promise
   }
 }
 
+interface DraftNotFoundBody {
+  readonly found: false;
+  draftGeneration?: number;
+}
+
 /** Load annotation draft. Used by all 3 servers. */
 export function handleDraftLoad(contentKey: string): Response {
   const draft = loadDraft(contentKey);
   if (!draft) {
     const draftGeneration = getDraftGeneration(contentKey);
-    return Response.json(
-      { found: false, ...(draftGeneration !== null ? { draftGeneration } : {}) },
-      { status: 404 },
-    );
+    const notFoundBody: DraftNotFoundBody = { found: false };
+    if (draftGeneration !== null) notFoundBody.draftGeneration = draftGeneration;
+    return Response.json(notFoundBody, { status: 404 });
   }
   return Response.json(draft);
 }
@@ -225,26 +264,69 @@ export async function handleServerReady(
   }
 }
 
+interface SaveNotesResults {
+  obsidian?: IntegrationResult;
+  bear?: IntegrationResult;
+  octarine?: IntegrationResult;
+}
+
+const SaveNotesBodySchema = Schema.Record(Schema.String, Schema.Unknown);
+
+const ObsidianConfigSchema = Schema.Struct({
+  vaultPath: Schema.String,
+  folder: Schema.String,
+  plan: Schema.String,
+  filenameFormat: Schema.optionalKey(Schema.String),
+  filenameSeparator: Schema.optionalKey(Schema.Literals(["space", "dash", "underscore"])),
+});
+
+const BearConfigSchema = Schema.Struct({
+  plan: Schema.String,
+  customTags: Schema.optionalKey(Schema.String),
+  tagPosition: Schema.optionalKey(Schema.Literals(["prepend", "append"])),
+});
+
+const OctarineConfigSchema = Schema.Struct({
+  plan: Schema.String,
+  workspace: Schema.String,
+  folder: Schema.String,
+});
+
 /** Save to external note apps (Obsidian, Bear, Octarine). Used by plan + annotate servers. */
 export async function handleSaveNotes(req: Request): Promise<Response> {
-  const results: { obsidian?: IntegrationResult; bear?: IntegrationResult; octarine?: IntegrationResult } = {};
+  const results: SaveNotesResults = {};
 
   try {
-    const body = (await req.json()) as {
-      obsidian?: ObsidianConfig;
-      bear?: BearConfig;
-      octarine?: OctarineConfig;
-    };
+    const rawBody: unknown = await req.json();
+    const body = Schema.decodeUnknownOption(SaveNotesBodySchema)(rawBody);
+    if (Option.isNone(body)) {
+      return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    }
 
     const promises: Promise<void>[] = [];
-    if (body.obsidian?.vaultPath && body.obsidian?.plan) {
-      promises.push(saveToObsidian(body.obsidian).then(r => { results.obsidian = r; }));
+    if (Object.hasOwn(body.value, "obsidian")) {
+      const config = Schema.decodeUnknownOption(ObsidianConfigSchema)(body.value.obsidian);
+      if (Option.isNone(config)) {
+        results.obsidian = { success: false, error: "Invalid Obsidian save configuration" };
+      } else if (config.value.vaultPath && config.value.plan) {
+        promises.push(saveToObsidian(config.value).then(r => { results.obsidian = r; }));
+      }
     }
-    if (body.bear?.plan) {
-      promises.push(saveToBear(body.bear).then(r => { results.bear = r; }));
+    if (Object.hasOwn(body.value, "bear")) {
+      const config = Schema.decodeUnknownOption(BearConfigSchema)(body.value.bear);
+      if (Option.isNone(config)) {
+        results.bear = { success: false, error: "Invalid Bear save configuration" };
+      } else if (config.value.plan) {
+        promises.push(saveToBear(config.value).then(r => { results.bear = r; }));
+      }
     }
-    if (body.octarine?.plan && body.octarine?.workspace) {
-      promises.push(saveToOctarine(body.octarine).then(r => { results.octarine = r; }));
+    if (Object.hasOwn(body.value, "octarine")) {
+      const config = Schema.decodeUnknownOption(OctarineConfigSchema)(body.value.octarine);
+      if (Option.isNone(config)) {
+        results.octarine = { success: false, error: "Invalid Octarine save configuration" };
+      } else if (config.value.plan && config.value.workspace) {
+        promises.push(saveToOctarine(config.value).then(r => { results.octarine = r; }));
+      }
     }
     await Promise.allSettled(promises);
 

@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import tailwindcss from '@tailwindcss/vite';
 import pkg from '../../package.json';
+import uiPackage from '../../packages/ui/package.json';
 import { DEMO_FILE_CONTENTS } from '../../packages/review-editor/demoData';
 
 function demoFileContentPlugin(): Plugin {
@@ -29,6 +30,7 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __EFFECT_VERSION__: JSON.stringify(uiPackage.dependencies.effect),
   },
   plugins: [demoFileContentPlugin(), react(), tailwindcss(), viteSingleFile()],
   resolve: {

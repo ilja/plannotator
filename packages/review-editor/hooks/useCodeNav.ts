@@ -1,5 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
-import type { CodeNavRequest, CodeNavResponse } from '@plannotator/shared/code-nav';
+import { Option } from 'effect';
+import {
+  decodeCodeNavResponse,
+  type CodeNavRequest,
+  type CodeNavResponse,
+} from '@plannotator/shared/code-nav';
 
 export type { CodeNavRequest, CodeNavResponse };
 
@@ -26,7 +31,7 @@ export function useCodeNav() {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error('Failed');
-      const data: CodeNavResponse = await res.json();
+      const data = Option.getOrThrow(decodeCodeNavResponse(await res.json()));
       setResult(data);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;

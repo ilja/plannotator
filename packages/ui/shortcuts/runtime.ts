@@ -25,7 +25,7 @@ export interface UseShortcutScopeOptions<TScope extends ShortcutScopeDefinition<
 }
 
 function normalizeShortcutHandler(handler: ShortcutHandler): ShortcutHandlerConfig {
-  if (typeof handler === 'function') {
+  if (handler instanceof Function) {
     return { handle: handler };
   }
 
@@ -48,6 +48,7 @@ export function dispatchShortcutEvent<TScope extends ShortcutScopeDefinition<any
   const stopOnMatch = options?.stopOnMatch ?? true;
   let handled = false;
 
+  // SAFETY: Object.entries loses tuple typing for Record — cast to typed entries
   for (const [actionId, shortcut] of Object.entries(scope.shortcuts) as Array<[
     ShortcutActionId<TScope>,
     ShortcutDefinition,
@@ -76,10 +77,10 @@ export function dispatchShortcutEvent<TScope extends ShortcutScopeDefinition<any
 
 function getEventTarget(target: ShortcutEventTarget): EventTarget | null {
   if (target === 'window') {
-    return typeof window === 'undefined' ? null : window;
+    return globalThis.window === undefined ? null : window;
   }
   if (target === 'document') {
-    return typeof document === 'undefined' ? null : document;
+    return globalThis.document === undefined ? null : document;
   }
   return target;
 }
@@ -101,11 +102,14 @@ export function useShortcutScope<TScope extends ShortcutScopeDefinition<any>>({
     if (!eventTarget || !('addEventListener' in eventTarget)) return;
 
     const handleKeyDown = (event: Event) => {
+      // SAFETY: keydown listener receives KeyboardEvent from EventTarget — cast to KeyboardEvent
       dispatchShortcutEvent(scope, handlersRef.current, event as KeyboardEvent, { stopOnMatch });
     };
 
+    // SAFETY: handleKeyDown is (event: Event) => void compatible with EventListener — cast to EventListener
     eventTarget.addEventListener('keydown', handleKeyDown as EventListener);
     return () => {
+      // SAFETY: handleKeyDown is (event: Event) => void compatible with EventListener — cast to EventListener
       eventTarget.removeEventListener('keydown', handleKeyDown as EventListener);
     };
   }, [scope, stopOnMatch, target]);
@@ -165,6 +169,7 @@ export function useDoubleTapShortcuts<TScope extends ShortcutScopeDefinition<any
   useEffect(() => {
     // Pre-parse which actions have double-tap bindings
     const doubleTapActions: Array<{ actionId: ShortcutActionId<TScope>; keyName: string }> = [];
+    // SAFETY: Object.entries loses tuple typing for Record — cast to typed entries
     for (const [actionId, shortcut] of Object.entries(scope.shortcuts) as Array<[
       ShortcutActionId<TScope>,
       ShortcutDefinition,

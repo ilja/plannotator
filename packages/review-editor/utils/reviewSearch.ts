@@ -38,7 +38,7 @@ export interface ReviewSearchMatch {
 
 export interface ReviewSearchFileGroup {
   filePath: string;
-  fileIndex: number;
+  _fileIndex: number;
   matches: ReviewSearchMatch[];
 }
 
@@ -185,13 +185,13 @@ export function groupReviewSearchMatches(
 
     groups.set(match.filePath, {
       filePath: match.filePath,
-      fileIndex: fileIndexByPath.get(match.filePath) ?? -1,
+      _fileIndex: fileIndexByPath.get(match.filePath) ?? -1,
       matches: [match],
     });
   });
 
   return files
-    .map((file, fileIndex) => groups.get(file.path) ?? null)
+    .map((file, _fileIndex) => groups.get(file.path) ?? null)
     .filter((group): group is ReviewSearchFileGroup => group !== null)
     .map(group => ({
       ...group,

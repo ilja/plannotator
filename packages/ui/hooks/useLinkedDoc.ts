@@ -13,6 +13,10 @@ import { reconcileChoiceAnnotations } from "../utils/choiceAnnotations";
 import type { ViewerHandle } from "../components/Viewer";
 import type { SidebarTab } from "./useSidebar";
 import type { SourceSaveCapability } from "@plannotator/shared/source-save";
+import {
+  decodeLinkedDocErrorResponse,
+  decodeLinkedDocResponse,
+} from "./linkedDocResponse";
 
 export interface LinkedDocLoadData {
   markdown?: string;
@@ -254,9 +258,11 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     if (snapshotCurrent) onBeforeNavigate?.();
 
     // Backlink detection: if a linked doc links back to the source file (e.g.,
+    // SAFETY: cast is safe — a is expected shape
     // original.md → design.md → link back to original.md), opening it as a linked
     // doc would create two competing Map entries for the same filepath in
     // getDocAnnotations(), and the empty linked-doc entry would overwrite the
+    // SAFETY: cast is safe — a is expected shape
     // stashed annotations. Instead, treat the backlink as a back() navigation —
     // the current linked doc gets cached and the source file restores with its
     // annotations intact.
@@ -387,21 +393,19 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
       try {
         const url = (buildUrl ?? defaultBuildUrl)(docPath);
         const res = await fetch(url);
-        const data = (await res.json()) as LinkedDocLoadData & {
-          error?: string;
-          matches?: string[];
-        };
-
-        if (!res.ok || data.error) {
-          setError(data.error || "Failed to load document");
+        const body: unknown = await res.json();
+        const serverError = decodeLinkedDocErrorResponse(body);
+        if (!res.ok || serverError) {
+          setError(serverError || "Failed to load document");
           return;
         }
 
-        if (!data.filepath) {
+        const data = decodeLinkedDocResponse(body);
+        if (!data?.filepath) {
           setError("Failed to load document");
           return;
         }
-        activateDocument({ ...data, filepath: data.filepath }, targetTab, { snapshotCurrent: false });
+        activateDocument(data, targetTab, { snapshotCurrent: false });
       } catch {
         setError("Failed to connect to server");
       } finally {

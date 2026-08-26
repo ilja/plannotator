@@ -5,15 +5,22 @@
  * Fallback: version-gated GET polling if SSE fails (e.g., proxy environments).
  *
  * Generic over the annotation type — plan editor uses Annotation,
- * review editor uses CodeAnnotation. The hook is shape-agnostic;
- * it just serializes/deserializes JSON.
+ * review editor uses CodeAnnotation. Callers supply the canonical schema decoder
+ * so transport data becomes a validated annotation before it reaches UI state.
  *
  * Gated by an `enabled` option — callers pass their API-mode signal
  * to avoid SSE/polling in static or demo contexts where there is no server.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { ExternalAnnotationEvent } from '../types';
+import {
+  decodeExternalAnnotationEventEnvelope,
+  decodeExternalAnnotationPollingEnvelope,
+  parseExternalAnnotationEvent,
+  parseExternalAnnotationPollingSnapshot,
+  type ExternalAnnotationDecoder,
+} from '../utils/externalAnnotationDecoding';
+import { Option } from 'effect';
 
 const POLL_INTERVAL_MS = 500;
 const STREAM_URL = '/api/external-annotations/stream';
@@ -26,7 +33,13 @@ interface UseExternalAnnotationsReturn<T> {
   clearExternalAnnotations: (source?: string) => void;
 }
 
+/**
+ * Synchronizes schema-decoded external annotations from real-time events or polling.
+ *
+ * @template T - The canonical annotation type produced only by `decodeAnnotation`.
+ */
 export function useExternalAnnotations<T extends { id: string; source?: string }>(
+  decodeAnnotation: ExternalAnnotationDecoder<T>,
   options?: { enabled?: boolean },
 ): UseExternalAnnotationsReturn<T> {
   const enabled = options?.enabled ?? true;
@@ -47,7 +60,16 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
       if (cancelled) return;
 
       try {
-        const parsed: ExternalAnnotationEvent<T> = JSON.parse(event.data);
+        const eventData: unknown = JSON.parse(event.data);
+        const eventEnvelope = Option.getOrNull(
+          decodeExternalAnnotationEventEnvelope(eventData),
+        );
+        if (!eventEnvelope) return;
+        const parsed = parseExternalAnnotationEvent(
+          eventEnvelope,
+          decodeAnnotation,
+        );
+        if (!parsed) return;
 
         switch (parsed.type) {
           case 'snapshot':
@@ -71,7 +93,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
             break;
           case 'update':
             setAnnotations((prev) =>
-              prev.map((a) => a.id === parsed.id ? (parsed.annotation as T) : a),
+              prev.map((a) => (a.id === parsed.id ? parsed.annotation : a)),
             );
             break;
         }
@@ -115,13 +137,19 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
         if (res.status === 304) return; // No changes
         if (!res.ok) return;
 
-        const data = await res.json();
-        if (Array.isArray(data.annotations)) {
-          setAnnotations(data.annotations);
-        }
-        if (typeof data.version === 'number') {
-          versionRef.current = data.version;
-        }
+        const data: unknown = await res.json();
+        const pollingEnvelope = Option.getOrNull(
+          decodeExternalAnnotationPollingEnvelope(data),
+        );
+        if (!pollingEnvelope) return;
+        const snapshot = parseExternalAnnotationPollingSnapshot(
+          pollingEnvelope,
+          decodeAnnotation,
+        );
+        if (!snapshot) return;
+
+        setAnnotations(snapshot.annotations);
+        if (snapshot.version !== null) versionRef.current = snapshot.version;
       } catch {
         // Silent — next poll will retry
       }
@@ -135,7 +163,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
         pollTimerRef.current = null;
       }
     };
-  }, [enabled]);
+  }, [decodeAnnotation, enabled]);
 
   const deleteExternalAnnotation = useCallback(async (id: string) => {
     // Optimistic update

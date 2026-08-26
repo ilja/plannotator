@@ -13,40 +13,127 @@
  *   GET  /api/ai/capabilities  — Check if AI features are available
  */
 
-import type { AIContext, AIMessage, CreateSessionOptions } from "./types.ts";
+import type { AIMessage, CreateSessionOptions } from "./types.ts";
 import type { ProviderRegistry } from "./provider.ts";
 import type { SessionManager } from "./session-manager.ts";
+import { Schema } from "effect";
 
 // ---------------------------------------------------------------------------
 // Types for request/response
 // ---------------------------------------------------------------------------
 
-export interface CreateSessionRequest {
-  /** The context mode and content for the session. */
-  context: AIContext;
-  /** Instance ID of the provider to use (optional — uses default if omitted). */
-  providerId?: string;
-  /** Optional model override. */
-  model?: string;
-  /** Max agentic turns. */
-  maxTurns?: number;
-  /** Max budget in USD. */
-  maxBudgetUsd?: number;
-}
+const ParentSessionSchema = Schema.Struct({
+  sessionId: Schema.String,
+  cwd: Schema.String,
+});
 
-export interface QueryRequest {
-  /** The session ID to query. */
-  sessionId: string;
-  /** The user's prompt/question. */
-  prompt: string;
-  /** Optional context update (e.g., new annotations since session was created). */
-  contextUpdate?: string;
-}
+const CodeReviewContextSchema = Schema.Struct({
+  patch: Schema.String,
+  filePath: Schema.optionalKey(Schema.String),
+  lineRange: Schema.optionalKey(Schema.Struct({
+    start: Schema.Number,
+    end: Schema.Number,
+    side: Schema.Literals(["old", "new"]),
+  })),
+  selectedCode: Schema.optionalKey(Schema.String),
+  annotations: Schema.optionalKey(Schema.String),
+});
 
-export interface AbortRequest {
-  /** The session ID to abort. */
-  sessionId: string;
-}
+const AnnotateContextSchema = Schema.Struct({
+  content: Schema.String,
+  filePath: Schema.String,
+  sourceInfo: Schema.optionalKey(Schema.String),
+  sourceConverted: Schema.optionalKey(Schema.Boolean),
+  renderAs: Schema.optionalKey(Schema.Literals(["markdown", "html"])),
+  annotations: Schema.optionalKey(Schema.String),
+});
+
+export const AIContextSchema = Schema.Union([
+  Schema.Struct({
+    mode: Schema.Literal("code-review"),
+    review: CodeReviewContextSchema,
+    parent: Schema.optionalKey(ParentSessionSchema),
+  }),
+  Schema.Struct({
+    mode: Schema.Literal("annotate"),
+    annotate: AnnotateContextSchema,
+    parent: Schema.optionalKey(ParentSessionSchema),
+  }),
+]);
+
+export const CreateSessionRequestSchema = Schema.Struct({
+  context: AIContextSchema,
+  providerId: Schema.optionalKey(Schema.String),
+  model: Schema.optionalKey(Schema.String),
+  maxTurns: Schema.optionalKey(Schema.Number),
+  maxBudgetUsd: Schema.optionalKey(Schema.Number),
+});
+
+export const QueryRequestSchema = Schema.Struct({
+  sessionId: Schema.String,
+  prompt: Schema.String,
+  contextUpdate: Schema.optionalKey(Schema.String),
+});
+
+export const AbortRequestSchema = Schema.Struct({
+  sessionId: Schema.String,
+});
+
+export const PermissionRequestSchema = Schema.Struct({
+  sessionId: Schema.String,
+  requestId: Schema.String,
+  allow: Schema.Boolean,
+  message: Schema.optionalKey(Schema.String),
+});
+
+const AIProviderCapabilitiesSchema = Schema.Struct({
+  fork: Schema.Boolean,
+  resume: Schema.Boolean,
+  streaming: Schema.Boolean,
+  tools: Schema.Boolean,
+});
+
+const AIModelSchema = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  default: Schema.optionalKey(Schema.Boolean),
+});
+
+export const AICapabilitiesResponseSchema = Schema.Struct({
+  available: Schema.Boolean,
+  providers: Schema.Array(Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    capabilities: AIProviderCapabilitiesSchema,
+    models: Schema.Array(AIModelSchema),
+  })),
+  defaultProvider: Schema.Union([Schema.String, Schema.Null]),
+});
+
+export const CreateSessionResponseSchema = Schema.Struct({
+  sessionId: Schema.String,
+  parentSessionId: Schema.Union([Schema.String, Schema.Null]),
+  mode: Schema.Literals(["code-review", "annotate"]),
+  createdAt: Schema.Number,
+});
+
+export const AbortResponseSchema = Schema.Struct({
+  ok: Schema.Boolean,
+});
+
+export const SessionListResponseSchema = Schema.Array(Schema.Struct({
+  sessionId: Schema.String,
+  mode: Schema.Literals(["code-review", "annotate"]),
+  parentSessionId: Schema.Union([Schema.String, Schema.Null]),
+  createdAt: Schema.Number,
+  lastActiveAt: Schema.Number,
+  isActive: Schema.Boolean,
+  label: Schema.optionalKey(Schema.String),
+}));
+
+export type CreateSessionRequest = Schema.Schema.Type<typeof CreateSessionRequestSchema>;
+export type QueryRequest = Schema.Schema.Type<typeof QueryRequestSchema>;
+export type AbortRequest = Schema.Schema.Type<typeof AbortRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Handler factory
@@ -66,14 +153,18 @@ export interface AIEndpointDeps {
 const MAX_CLIENT_MAX_TURNS = 99;
 const MAX_CLIENT_BUDGET_USD = 5;
 
-function clampPositiveInteger(value: unknown, max: number): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+function clampPositiveInteger(value: number | undefined, max: number): number | undefined {
+  if (value === undefined || !Number.isFinite(value)) return undefined;
   return Math.max(1, Math.min(max, Math.floor(value)));
 }
 
-function clampPositiveNumber(value: unknown, max: number): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
+function clampPositiveNumber(value: number | undefined, max: number): number | undefined {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
   return Math.min(max, value);
+}
+
+function invalidRequest(): Response {
+  return Response.json({ error: "Invalid request body" }, { status: 400 });
 }
 
 /**
@@ -118,7 +209,12 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
         return new Response("Method not allowed", { status: 405 });
       }
 
-      const body = (await req.json()) as CreateSessionRequest;
+      let body: CreateSessionRequest;
+      try {
+        body = Schema.decodeUnknownSync(CreateSessionRequestSchema)(await req.json());
+      } catch {
+        return invalidRequest();
+      }
       const { context, providerId, model, maxTurns, maxBudgetUsd } = body;
 
       if (!context?.mode) {
@@ -183,7 +279,12 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
         return new Response("Method not allowed", { status: 405 });
       }
 
-      const body = (await req.json()) as QueryRequest;
+      let body: QueryRequest;
+      try {
+        body = Schema.decodeUnknownSync(QueryRequestSchema)(await req.json());
+      } catch {
+        return invalidRequest();
+      }
       const { sessionId, prompt, contextUpdate } = body;
 
       if (!sessionId || !prompt) {
@@ -254,7 +355,12 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
         return new Response("Method not allowed", { status: 405 });
       }
 
-      const body = (await req.json()) as AbortRequest;
+      let body: AbortRequest;
+      try {
+        body = Schema.decodeUnknownSync(AbortRequestSchema)(await req.json());
+      } catch {
+        return invalidRequest();
+      }
       const entry = sessionManager.get(body.sessionId);
       if (!entry) {
         return Response.json(
@@ -272,12 +378,12 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
         return new Response("Method not allowed", { status: 405 });
       }
 
-      const body = (await req.json()) as {
-        sessionId: string;
-        requestId: string;
-        allow: boolean;
-        message?: string;
-      };
+      let body: Schema.Schema.Type<typeof PermissionRequestSchema>;
+      try {
+        body = Schema.decodeUnknownSync(PermissionRequestSchema)(await req.json());
+      } catch {
+        return invalidRequest();
+      }
 
       if (!body.sessionId || !body.requestId) {
         return Response.json(

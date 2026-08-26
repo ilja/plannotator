@@ -75,6 +75,7 @@ export function parseAnnotateArgs(raw: string): ParsedAnnotateArgs {
   for (let j = 0; j < segments.length; j++) {
     const seg = segments[j];
     if (seg.type !== "tok") continue;
+    // SAFETY: FLAG_MAP lookup validates seg.text; non-flag strings return undefined and are skipped.
     const key = FLAG_MAP[seg.text as keyof typeof FLAG_MAP];
     if (!key) continue;
 

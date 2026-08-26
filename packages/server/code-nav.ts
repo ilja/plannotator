@@ -3,13 +3,16 @@
  */
 
 import {
+  decodeCodeNavRequest,
   type CodeNavRequest,
+  type CodeNavResolveRequest,
   type CodeNavRuntime,
   type CodeNavResponse,
   resolveCodeNav,
   validateCodeNavRequest,
   extractChangedFiles,
 } from "@plannotator/shared/code-nav";
+import { Option, Predicate, Schema } from "effect";
 
 export type { CodeNavRequest, CodeNavResponse };
 
@@ -47,16 +50,41 @@ export async function handleCodeNavResolve(
   cwd: string,
   changedFiles: string[],
 ): Promise<Response> {
+  let body: unknown;
   try {
-    const body = (await req.json()) as CodeNavRequest;
-    const error = validateCodeNavRequest(body);
-    if (error) {
-      return Response.json({ error }, { status: 400 });
-    }
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid request body" }, { status: 400 });
+  }
 
+  const decodedRequest = Option.getOrUndefined(decodeCodeNavRequest(body));
+  if (!decodedRequest) {
+    const error = Predicate.isObject(body)
+      ? validateCodeNavRequest(body)
+      : "Invalid request body";
+    return Response.json({ error: error ?? "Invalid request body" }, { status: 400 });
+  }
+
+  const language = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.String)(decodedRequest.language),
+  );
+  const resolveRequest: CodeNavResolveRequest = language === undefined
+    ? {
+      symbol: decodedRequest.symbol,
+      filePath: decodedRequest.filePath,
+      side: decodedRequest.side,
+    }
+    : {
+      symbol: decodedRequest.symbol,
+      filePath: decodedRequest.filePath,
+      side: decodedRequest.side,
+      language,
+    };
+
+  try {
     const result = await resolveCodeNav(
       bunCodeNavRuntime,
-      body,
+      resolveRequest,
       cwd,
       changedFiles,
     );

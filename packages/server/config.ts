@@ -3,6 +3,7 @@ export {
   saveConfig,
   detectGitUser,
   getServerConfig,
+  ConfigPatch,
   type PlannotatorConfig,
   type DiffOptions,
 } from "@plannotator/shared/config";

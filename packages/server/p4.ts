@@ -5,6 +5,7 @@
  * Mirrors the structure of git.ts for consistent VCS abstraction.
  */
 
+import { Option, Schema } from "effect";
 import {
   type DiffResult,
   type DiffType,
@@ -68,6 +69,49 @@ export interface P4WorkspaceInfo {
   serverAddress: string;
 }
 
+const P4WorkspaceFieldsSchema = Schema.Struct({
+  clientName: Schema.NonEmptyString,
+  clientRoot: Schema.NonEmptyString,
+  userName: Schema.NonEmptyString,
+  serverAddress: Schema.optionalKey(Schema.String),
+});
+
+interface RawP4WorkspaceFields {
+  clientName: string | undefined;
+  clientRoot: string | undefined;
+  userName: string | undefined;
+  serverAddress?: string;
+}
+
+export function parseP4WorkspaceInfo(stdout: string): P4WorkspaceInfo | null {
+  const fields = new Map<string, string>();
+  for (const line of stdout.split("\n")) {
+    const colonIdx = line.indexOf(": ");
+    if (colonIdx !== -1) {
+      fields.set(line.slice(0, colonIdx).trim(), line.slice(colonIdx + 2).trim());
+    }
+  }
+
+  const rawFields: RawP4WorkspaceFields = {
+    clientName: fields.get("Client name"),
+    clientRoot: fields.get("Client root"),
+    userName: fields.get("User name"),
+  };
+  const serverAddress = fields.get("Server address");
+  if (serverAddress !== undefined) rawFields.serverAddress = serverAddress;
+
+  const decoded = Option.getOrUndefined(
+    Schema.decodeUnknownOption(P4WorkspaceFieldsSchema)(rawFields),
+  );
+  if (!decoded) return null;
+
+  return {
+    ...decoded,
+    normalizedRoot: normalizePath(decoded.clientRoot).replace(/\/$/, ""),
+    serverAddress: decoded.serverAddress ?? "",
+  };
+}
+
 const workspaceCache = new Map<string, { info: P4WorkspaceInfo | null; ts: number }>();
 const CACHE_TTL_MS = 30_000;
 
@@ -86,31 +130,7 @@ export async function detectP4Workspace(
     return null;
   }
 
-  const info: Record<string, string> = {};
-  for (const line of result.stdout.split("\n")) {
-    const colonIdx = line.indexOf(": ");
-    if (colonIdx !== -1) {
-      info[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 2).trim();
-    }
-  }
-
-  const clientName = info["Client name"];
-  const clientRoot = info["Client root"];
-  const userName = info["User name"];
-  const serverAddress = info["Server address"];
-
-  if (!clientName || !clientRoot) {
-    workspaceCache.set(key, { info: null, ts: Date.now() });
-    return null;
-  }
-
-  const wsInfo: P4WorkspaceInfo = {
-    clientName,
-    clientRoot,
-    normalizedRoot: normalizePath(clientRoot).replace(/\/$/, ""),
-    userName,
-    serverAddress,
-  };
+  const wsInfo = parseP4WorkspaceInfo(result.stdout);
   workspaceCache.set(key, { info: wsInfo, ts: Date.now() });
   return wsInfo;
 }

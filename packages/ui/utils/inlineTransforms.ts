@@ -5,7 +5,11 @@
  * not on code or URL strings.
  */
 
-const EMOJI_MAP: Record<string, string> = {
+interface EmojiMap {
+  [key: string]: string;
+}
+
+const EMOJI_MAP: EmojiMap = {
   smile: '😄', heart: '❤️', thumbsup: '👍', thumbsdown: '👎',
   fire: '🔥', star: '⭐', tada: '🎉', rocket: '🚀',
   bug: '🐛', sparkles: '✨', warning: '⚠️', white_check_mark: '✅',

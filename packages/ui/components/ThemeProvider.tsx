@@ -1,8 +1,12 @@
+import { Option, Schema } from 'effect';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { storage } from '../utils/storage';
-import { BUILT_IN_THEMES, resolveAppliedThemeMode, type ThemeInfo } from '../utils/themeRegistry';
+import { BUILT_IN_THEMES, isKnownThemeId, resolveAppliedThemeMode, type ThemeInfo } from '../utils/themeRegistry';
 
 export type Mode = 'dark' | 'light' | 'system';
+
+const decodeMode = Schema.decodeUnknownOption(Schema.Literals(['dark', 'light', 'system']));
+const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 type ThemeProviderState = {
   // Mode (dark/light/system) — backward-compatible with old "theme" API
@@ -53,7 +57,7 @@ function applyThemeClasses(themeId: string, effectiveMode: 'dark' | 'light'): vo
 
 /** Read system preference synchronously */
 function getSystemIsLight(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches;
+  return globalThis.window !== undefined && globalThis.matchMedia('(prefers-color-scheme: light)').matches;
 }
 
 interface ThemeProviderProps {
@@ -71,13 +75,15 @@ export function ThemeProvider({
   storageKey = 'plannotator-theme',
   colorThemeStorageKey = 'plannotator-color-theme',
 }: ThemeProviderProps) {
-  const [mode, setModeState] = useState<Mode>(
-    () => (storage.getItem(storageKey) as Mode) || defaultTheme
-  );
+  const [mode, setModeState] = useState<Mode>(() => {
+    const stored = Option.getOrUndefined(decodeMode(storage.getItem(storageKey)));
+    return stored ?? defaultTheme;
+  });
 
-  const [colorTheme, setColorThemeState] = useState<string>(
-    () => storage.getItem(colorThemeStorageKey) || defaultColorTheme
-  );
+  const [colorTheme, setColorThemeState] = useState<string>(() => {
+    const stored = Option.getOrUndefined(decodeString(storage.getItem(colorThemeStorageKey)));
+    return stored && isKnownThemeId(stored) ? stored : defaultColorTheme;
+  });
 
   const [systemIsLight, setSystemIsLight] = useState(getSystemIsLight);
 
@@ -87,7 +93,7 @@ export function ThemeProvider({
   // [P3 fix] Apply theme class synchronously during initialization to prevent
   // flash of unstyled content. CSS tokens live under .theme-* selectors, so
   // without this the first frame has no valid --background/--foreground.
-  if (typeof window !== 'undefined') {
+  if (globalThis.window !== undefined) {
     applyThemeClasses(colorTheme, resolvedMode);
   }
 

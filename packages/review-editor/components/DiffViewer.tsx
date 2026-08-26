@@ -19,6 +19,7 @@ import { lineAnnotationMetadata } from '../utils/annotationDisplay';
 import type { AnnotationScrollTarget } from '../types';
 import { getLineNumberFromNode, getSideFromNode, getDiffSelection } from '../utils/diffSelection';
 import { isContentConsistentWithPatch } from '../utils/patchConsistency';
+import { loadFileContentResponse } from '../utils/file-content-response';
 import { InlineAnnotation } from './InlineAnnotation';
 import { InlineAIMarker } from './InlineAIMarker';
 import { ReviewGutterActions, type HoveredDiffLine } from './ReviewGutterActions';
@@ -310,8 +311,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     if (oldPath) params.set('oldPath', oldPath);
     if (reviewBase) params.set('base', reviewBase);
     fetch(`/api/file-content?${params}`, { signal: controller.signal })
-      .then(res => res.ok ? res.json() : null)
-      .then((data: { oldContent: string | null; newContent: string | null } | null) => {
+      .then(loadFileContentResponse)
+      .then((data) => {
         if (data && (data.oldContent != null || data.newContent != null)) {
           setFileContents({ forPath: filePath, old: data.oldContent, new: data.newContent });
         }
@@ -478,7 +479,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     const tryScroll = () => {
       if (cancelled) return;
       const target = getSearchRoots(container)
-        .map((root) => (root as ParentNode).querySelector?.('[data-selected-line]') ?? null)
+        .map((root) => root.querySelector?.('[data-selected-line]') ?? null)
         .find((el): el is Element => el != null);
       if (target) {
         const targetRect = target.getBoundingClientRect();
@@ -511,23 +512,29 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       }));
   }, [annotations]);
 
-  // Derive AI markers for the current file's lines
+  interface AiLineAnnotation {
+  side: 'additions' | 'deletions';
+  lineNumber: number;
+  metadata: DiffAnnotationMetadata;
+}
+
+// Derive AI markers for the current file's lines
   const aiLineAnnotations = useMemo(() => {
     if (!aiMessages.length) return [];
     return aiMessages
       .filter(m => m.question.lineStart != null && m.question.lineEnd != null)
-      .map(({ question, response }) => ({
-        side: question.side === 'new' ? 'additions' as const : 'deletions' as const,
+      .map(({ question, response }): AiLineAnnotation => ({
+        side: question.side === 'new' ? 'additions' : 'deletions',
         lineNumber: question.lineEnd!,
         metadata: {
           annotationId: question.id,
-          type: 'comment' as CodeAnnotationType,
-          kind: 'ai-marker' as const,
+          type: 'comment',
+          kind: 'ai-marker',
           questionId: question.id,
           promptPreview: question.prompt.slice(0, 40) + (question.prompt.length > 40 ? '...' : ''),
           hasResponse: !!response.text && !response.error,
           isStreaming: response.isStreaming,
-        } as DiffAnnotationMetadata,
+        },
       }));
   }, [aiMessages]);
 
@@ -628,12 +635,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     props.tokenElement.classList.remove('pn-token-nav');
   }, []);
 
-  const splitGridStyle = useMemo(() => {
+  const splitGridStyle = useMemo((): React.CSSProperties | undefined => {
     if (!isSplitLayout || diffOverflow === 'wrap') return undefined;
     return {
       '--split-left': `${splitRatio}fr`,
       '--split-right': `${1 - splitRatio}fr`,
-    } as React.CSSProperties;
+    };
   }, [diffOverflow, isSplitLayout, splitRatio]);
 
   // File-scoped comments render below the path, above the hunks (full text, no

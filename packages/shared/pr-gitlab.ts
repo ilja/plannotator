@@ -7,11 +7,91 @@
 
 import { join } from "path";
 import { mkdirSync, writeFileSync } from "fs";
-import type { PRRuntime, PRMetadata, PRContext, PRReviewFileComment, CommandResult } from "./pr-types";
+import { Option, Schema } from "effect";
+import type {PRRuntime, PRMetadata, PRContext, PRReviewFileComment} from "./pr-types";
 import { encodeApiFilePath } from "./pr-types";
 import { getPlannotatorDataDir } from "./data-dir";
 
 // GitLab-specific MRRef shape (used internally)
+const RawGlRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+type RawGlRecord = Schema.Schema.Type<typeof RawGlRecordSchema>;
+
+const RawGlViewSchema = Schema.Struct({
+  title: Schema.String,
+  author: Schema.Struct({ username: Schema.String }),
+  source_branch: Schema.String,
+  target_branch: Schema.String,
+  target_project_id: Schema.optionalKey(Schema.Unknown),
+  diff_refs: Schema.optionalKey(Schema.NullOr(Schema.Struct({
+    base_sha: Schema.String,
+    head_sha: Schema.String,
+  }))),
+  web_url: Schema.String,
+});
+const decodeRawGlViewJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGlViewSchema),
+);
+const decodeRawGlRecordJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(RawGlRecordSchema),
+);
+const decodeTargetProjectId = Schema.decodeUnknownOption(Schema.Number);
+const ProjectResponseSchema = Schema.Struct({
+  default_branch: Schema.optionalKey(Schema.String),
+});
+const decodeProjectResponseJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(ProjectResponseSchema),
+);
+const GlReviewDiffRefsResponseSchema = Schema.Struct({
+  diff_refs: Schema.optionalKey(Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown))),
+});
+const decodeGlReviewDiffRefsResponseJson = Schema.decodeUnknownOption(
+  Schema.fromJsonString(GlReviewDiffRefsResponseSchema),
+);
+const decodeString = Schema.decodeUnknownOption(Schema.String);
+
+const GitLabLabelRecordSchema = Schema.Struct({
+  name: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  color: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const GitLabLabelSchema = Schema.Union([Schema.String, GitLabLabelRecordSchema]);
+const decodeGitLabLabel = Schema.decodeUnknownOption(GitLabLabelSchema);
+const decodeGitLabLabelRecord = Schema.decodeUnknownOption(GitLabLabelRecordSchema);
+const GitLabNoteSchema = Schema.Struct({
+  system: Schema.optionalKey(Schema.Boolean),
+  id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, Schema.Number]))),
+  author: Schema.optionalKey(Schema.Struct({
+    username: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  })),
+  body: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  created_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  web_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabNote = Schema.decodeUnknownOption(GitLabNoteSchema);
+const decodeJsonArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
+const GitLabApprovalEntrySchema = Schema.Struct({
+  user: Schema.optionalKey(Schema.Struct({
+    id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, Schema.Number]))),
+    username: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  })),
+});
+const decodeGitLabApprovalEntry = Schema.decodeUnknownOption(GitLabApprovalEntrySchema);
+const GitLabPipelineSchema = Schema.Struct({
+  id: Schema.Union([Schema.String, Schema.Number]),
+  ref: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabPipeline = Schema.decodeUnknownOption(GitLabPipelineSchema);
+const GitLabJobSchema = Schema.Struct({
+  name: Schema.String,
+  status: Schema.String,
+  web_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabJob = Schema.decodeUnknownOption(GitLabJobSchema);
+const GitLabIssueSchema = Schema.Struct({
+  iid: Schema.Number,
+  web_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeGitLabIssue = Schema.decodeUnknownOption(GitLabIssueSchema);
+
 interface GlMRRef {
   platform: "gitlab";
   host: string;
@@ -34,6 +114,19 @@ function apiArgs(host: string, endpoint: string, extra: string[] = []): string[]
 }
 
 /** Shape of each entry from the GitLab merge_request diffs API */
+export const GitLabDiffEntrySchema = Schema.Struct({
+  diff: Schema.String,
+  old_path: Schema.String,
+  new_path: Schema.String,
+  new_file: Schema.Boolean,
+  deleted_file: Schema.Boolean,
+  renamed_file: Schema.Boolean,
+  /** Content withheld because the file's diff exceeds GitLab's size limits. Absent on older GitLab. */
+  too_large: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+  /** Diff collapsed (content omitted from the response). Absent on older GitLab. */
+  collapsed: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+});
+
 interface GitLabDiffEntry {
   diff: string;
   old_path: string;
@@ -46,6 +139,10 @@ interface GitLabDiffEntry {
   /** Diff collapsed (content omitted from the response). Absent on older GitLab. */
   collapsed?: boolean | null;
 }
+
+const decodeGitLabDiffEntry = Schema.decodeUnknownOption(GitLabDiffEntrySchema);
+const decodeGitLabDiffEntryForPagination = <Input>(value: Input) =>
+  Option.getOrUndefined(decodeGitLabDiffEntry(value));
 
 export { parsePaginatedArray } from "./cli-pagination";
 import { parsePaginatedArray } from "./cli-pagination";
@@ -107,8 +204,10 @@ export async function getGlUser(runtime: PRRuntime, host: string): Promise<strin
   try {
     const result = await runtime.runCommand("glab", apiArgs(host, "/user"));
     if (result.exitCode === 0 && result.stdout.trim()) {
-      const user = JSON.parse(result.stdout) as { username?: string };
-      return user.username ?? null;
+      const user = Option.getOrUndefined(
+        Schema.decodeUnknownOption(Schema.fromJsonString(RawGlRecordSchema))(result.stdout),
+      );
+      return user ? Option.getOrUndefined(decodeString(user.username)) ?? null : null;
     }
     return null;
   } catch {
@@ -161,6 +260,11 @@ export async function fetchGlMR(
     );
   }
 
+  const raw = Option.getOrUndefined(decodeRawGlViewJson(viewResult.stdout));
+  if (!raw) {
+    throw new Error("Failed to fetch MR metadata: Invalid response");
+  }
+
   // Fall back to the paginated JSON diffs API when raw_diffs is unavailable
   // (older self-hosted GitLab that doesn't expose the raw_diffs endpoint) or
   // returns empty (very large MRs that exceed its safety limit). Reconstruct a
@@ -179,7 +283,14 @@ export async function fetchGlMR(
       const fbErr = fallback.stderr.trim() || `exit code ${fallback.exitCode}`;
       throw new Error(`Failed to fetch MR diff (raw_diffs: ${rawErr}; diffs: ${fbErr}).`);
     }
-    const entries = parsePaginatedArray<GitLabDiffEntry>(fallback.stdout);
+    const parsedDiffs = parsePaginatedArray(fallback.stdout, decodeGitLabDiffEntryForPagination);
+    const entries = parsedDiffs.items;
+    if (parsedDiffs.rejected > 0) {
+      console.error(
+        `Warning: GitLab diffs API returned ${parsedDiffs.rejected} malformed entr${parsedDiffs.rejected === 1 ? "y" : "ies"}; the review is missing the remainder.`,
+      );
+      patchIncomplete = true;
+    }
     rawPatch = reconstructPatch(entries);
     if (!rawPatch.trim()) {
       throw new Error(
@@ -195,29 +306,21 @@ export async function fetchGlMR(
     }
   }
 
-  const raw = JSON.parse(viewResult.stdout) as {
-    title: string;
-    author: { username: string };
-    source_branch: string;
-    target_branch: string;
-    target_project_id?: number;
-    diff_refs: { base_sha: string; head_sha: string; start_sha: string } | null;
-    web_url: string;
-  };
-
   if (!raw.diff_refs) {
     throw new Error("MR has no diff refs — it may have been merged or the source branch deleted.");
   }
 
   let defaultBranch: string | undefined;
-  const projectEndpoint = typeof raw.target_project_id === "number"
-    ? `projects/${raw.target_project_id}`
+  const targetProjectId = Option.getOrUndefined(decodeTargetProjectId(raw.target_project_id));
+  const projectEndpoint = targetProjectId !== undefined
+    ? `projects/${targetProjectId}`
     : `projects/${encoded}`;
   try {
     const projectResult = await runtime.runCommand("glab", apiArgs(ref.host, projectEndpoint));
     if (projectResult.exitCode === 0 && projectResult.stdout.trim()) {
-      const project = JSON.parse(projectResult.stdout) as { default_branch?: string };
-      defaultBranch = project.default_branch;
+      defaultBranch = Option.getOrUndefined(
+        decodeProjectResponseJson(projectResult.stdout),
+      )?.default_branch;
     }
   } catch { /* default branch is best-effort metadata */ }
 
@@ -257,25 +360,30 @@ export async function fetchGlMRContext(
     runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/closes_issues`)),
   ]);
 
-  const str = (v: unknown): string => (typeof v === "string" ? v : "");
-  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const str = (value: any): string => Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(value)) ?? "";
+  const arr = (value: any): unknown[] => (Array.isArray(value) ? value : []);
 
   // --- MR details ---
-  let mr: Record<string, unknown> = {};
+  let mr: RawGlRecord = {};
   if (mrResult.exitCode === 0) {
-    try { mr = JSON.parse(mrResult.stdout); } catch { /* non-JSON response */ }
+    mr = Option.getOrUndefined(decodeRawGlRecordJson(mrResult.stdout)) ?? {};
   }
 
   // Normalize state: GitLab uses "opened"/"closed"/"merged" → uppercase
   const glState = str(mr.state);
   const state = glState === "opened" ? "OPEN" : glState.toUpperCase();
 
-  const isDraft = mr.draft === true
-    || (typeof mr.title === "string" && /^(Draft:|WIP:)/i.test(mr.title));
+  const titleString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(mr.title));
+  const isDraft = mr.draft === true || (titleString !== undefined && /^(Draft:|WIP:)/i.test(titleString));
 
-  const labels = arr(mr.labels).map((l: any) => {
-    if (typeof l === "string") return { name: l, color: "" };
-    return { name: str(l?.name), color: str(l?.color) };
+  const labels = arr(mr.labels).flatMap((l) => {
+    const decoded = Option.getOrUndefined(decodeGitLabLabel(l));
+    if (decoded === undefined) return [];
+    const lString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(decoded));
+    if (lString !== undefined) return [{ name: lString, color: "" }];
+    const record = Option.getOrUndefined(decodeGitLabLabelRecord(decoded));
+    if (!record) return [];
+    return [{ name: str(record.name), color: str(record.color) }];
   });
 
   // GitLab merge_status values
@@ -287,7 +395,11 @@ export async function fetchGlMRContext(
     : mergeStatus.toUpperCase();
 
   // Map GitLab detailed_merge_status to GitHub-compatible merge state enums
-  const mergeStateMap: Record<string, string> = {
+  interface MergeStateMap {
+    readonly [key: string]: string;
+  }
+
+  const mergeStateMap: MergeStateMap = {
     mergeable: "CLEAN",
     broken_status: "DIRTY",
     checking: "UNKNOWN",
@@ -311,9 +423,10 @@ export async function fetchGlMRContext(
   const notes: PRContext["comments"] = [];
   if (notesResult.exitCode === 0) {
     try {
-      const rawNotes = JSON.parse(notesResult.stdout) as any[];
-      for (const n of rawNotes) {
-        if (n.system) continue;
+      const rawNotes = Option.getOrUndefined(decodeJsonArray(JSON.parse(notesResult.stdout))) ?? [];
+      for (const rawNote of rawNotes) {
+        const n = Option.getOrUndefined(decodeGitLabNote(rawNote));
+        if (!n || n.system) continue;
         notes.push({
           id: String(n.id ?? ""),
           author: str(n.author?.username),
@@ -330,21 +443,28 @@ export async function fetchGlMRContext(
   const reviews: PRContext["reviews"] = [];
   if (approvalsResult.exitCode === 0) {
     try {
-      const approvals = JSON.parse(approvalsResult.stdout) as Record<string, unknown>;
-      const approvedBy = arr(approvals.approved_by);
-      const approved = approvals.approved === true || approvedBy.length > 0;
-      reviewDecision = approved ? "APPROVED" : "";
+      const approvals = Option.getOrUndefined(
+        Schema.decodeUnknownOption(RawGlRecordSchema)(JSON.parse(approvalsResult.stdout)),
+      );
+      if (approvals) {
+        const approvedBy = Option.getOrUndefined(
+          Schema.decodeUnknownOption(Schema.Array(Schema.Unknown))(approvals.approved_by),
+        ) ?? [];
+        const approved = approvals.approved === true || approvedBy.length > 0;
+        reviewDecision = approved ? "APPROVED" : "";
 
-      for (const a of approvedBy) {
-        const user = (a as any)?.user;
-        if (!user) continue;
-        reviews.push({
-          id: String(user.id ?? ""),
-          author: str(user.username),
-          state: "APPROVED",
-          body: "",
-          submittedAt: "",
-        });
+        for (const rawApproval of approvedBy) {
+          const approval = Option.getOrUndefined(decodeGitLabApprovalEntry(rawApproval));
+          const user = approval?.user;
+          if (!user) continue;
+          reviews.push({
+            id: String(user.id ?? ""),
+            author: str(user.username),
+            state: "APPROVED",
+            body: "",
+            submittedAt: "",
+          });
+        }
       }
     } catch { /* non-JSON response */ }
   }
@@ -353,32 +473,39 @@ export async function fetchGlMRContext(
   const checks: PRContext["checks"] = [];
   if (pipelinesResult.exitCode === 0) {
     try {
-      const pipelines = JSON.parse(pipelinesResult.stdout) as any[];
-      if (pipelines.length > 0) {
-        const latest = pipelines[0];
+      const pipelines = Option.getOrUndefined(decodeJsonArray(JSON.parse(pipelinesResult.stdout))) ?? [];
+      const latest = pipelines.length > 0
+        ? Option.getOrUndefined(decodeGitLabPipeline(pipelines[0]))
+        : undefined;
+      if (latest) {
         const jobsResult = await runtime.runCommand(
           "glab",
           apiArgs(ref.host, `projects/${encoded}/pipelines/${latest.id}/jobs?per_page=100`),
         );
         if (jobsResult.exitCode === 0) {
           try {
-            const jobs = JSON.parse(jobsResult.stdout) as any[];
-            for (const job of jobs) {
-              const jobStatus = str(job.status);
+            const jobs = Option.getOrUndefined(decodeJsonArray(JSON.parse(jobsResult.stdout))) ?? [];
+            for (const rawJob of jobs) {
+              const job = Option.getOrUndefined(decodeGitLabJob(rawJob));
+              if (!job) continue;
+              const jobStatus = job.status;
               const isComplete = ["success", "failed", "canceled", "skipped"].includes(jobStatus);
               // Map GitLab job statuses to GitHub-compatible conclusion enums
-              const conclusionMap: Record<string, string> = {
+              interface ConclusionMap {
+                readonly [key: string]: string;
+              }
+              const conclusionMap: ConclusionMap = {
                 success: "SUCCESS",
                 failed: "FAILURE",
                 canceled: "NEUTRAL",
                 skipped: "SKIPPED",
               };
               checks.push({
-                name: str(job.name),
+                name: job.name,
                 status: isComplete ? "COMPLETED" : "IN_PROGRESS",
                 conclusion: isComplete ? (conclusionMap[jobStatus] ?? jobStatus.toUpperCase()) : null,
-                workflowName: str(latest.ref),
-                detailsUrl: str(job.web_url),
+                workflowName: latest.ref ?? "",
+                detailsUrl: job.web_url ?? "",
               });
             }
           } catch { /* non-JSON jobs response */ }
@@ -391,11 +518,13 @@ export async function fetchGlMRContext(
   const linkedIssues: PRContext["linkedIssues"] = [];
   if (issuesResult.exitCode === 0) {
     try {
-      const issues = JSON.parse(issuesResult.stdout) as any[];
-      for (const i of issues) {
+      const issues = Option.getOrUndefined(decodeJsonArray(JSON.parse(issuesResult.stdout))) ?? [];
+      for (const rawIssue of issues) {
+        const issue = Option.getOrUndefined(decodeGitLabIssue(rawIssue));
+        if (!issue) continue;
         linkedIssues.push({
-          number: typeof i.iid === "number" ? i.iid : 0,
-          url: str(i.web_url),
+          number: issue.iid,
+          url: issue.web_url ?? "",
           repo: ref.projectPath,
         });
       }
@@ -487,14 +616,13 @@ export async function submitGlMRReview(
     let baseSha = headSha; // fallback
     let startSha = headSha;
     if (mrResult.exitCode === 0 && mrResult.stdout.trim()) {
-      try {
-        const mrData = JSON.parse(mrResult.stdout) as { diff_refs?: { base_sha: string; start_sha: string; head_sha: string } };
-        if (mrData.diff_refs) {
-          baseSha = mrData.diff_refs.base_sha;
-          startSha = mrData.diff_refs.start_sha;
-        }
-      } catch {
-        // Use fallbacks
+      const mrData = Option.getOrUndefined(
+        decodeGlReviewDiffRefsResponseJson(mrResult.stdout),
+      );
+      const diffRefs = mrData?.diff_refs;
+      if (diffRefs) {
+        baseSha = Option.getOrUndefined(decodeString(diffRefs.base_sha)) ?? headSha;
+        startSha = Option.getOrUndefined(decodeString(diffRefs.start_sha)) ?? headSha;
       }
     }
 
@@ -504,7 +632,7 @@ export async function submitGlMRReview(
     const results = await Promise.allSettled(
       fileComments.map(async (comment) => {
         const isOldSide = comment.side === "LEFT";
-        const position: Record<string, unknown> = {
+        let position: RawGlRecord = {
           position_type: "text",
           base_sha: baseSha,
           head_sha: headSha,
@@ -514,23 +642,23 @@ export async function submitGlMRReview(
         };
 
         if (isOldSide) {
-          position.old_line = comment.line;
+          position = { ...position, old_line: comment.line };
         } else {
-          position.new_line = comment.line;
+          position = { ...position, new_line: comment.line };
         }
 
         // Multi-line range support
         if (comment.start_line != null && comment.start_line !== comment.line) {
           const startIsOld = (comment.start_side ?? comment.side) === "LEFT";
-          const startEntry: Record<string, unknown> = { type: startIsOld ? "old" : "new" };
-          if (startIsOld) startEntry.old_line = comment.start_line;
-          else startEntry.new_line = comment.start_line;
+          const startEntry: RawGlRecord = startIsOld
+            ? { type: "old", old_line: comment.start_line }
+            : { type: "new", new_line: comment.start_line };
 
-          const endEntry: Record<string, unknown> = { type: isOldSide ? "old" : "new" };
-          if (isOldSide) endEntry.old_line = comment.line;
-          else endEntry.new_line = comment.line;
+          const endEntry: RawGlRecord = isOldSide
+            ? { type: "old", old_line: comment.line }
+            : { type: "new", new_line: comment.line };
 
-          position.line_range = { start: startEntry, end: endEntry };
+          position = { ...position, line_range: { start: startEntry, end: endEntry } };
         }
 
         const payload = JSON.stringify({ body: comment.body, position });

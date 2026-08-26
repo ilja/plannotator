@@ -9,7 +9,7 @@ import {
   type EnabledSourceSaveCapability,
 } from './sourceBackedDocuments';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 
 type SourceBackedDocumentsApi = ReturnType<typeof useSourceBackedDocuments>;
 
@@ -397,14 +397,18 @@ describe('useSourceBackedDocuments conflict actions', () => {
     });
 
     expect(session.current().getSourceBackedDocument(KEY)).toBeNull();
-    expect(session.current().getSourceBackedDocument(KEY)).toBeNull();
     expect(session.current().getUnsavedSourceBackedDocuments()).toEqual([]);
 
     await session.unmount();
   });
 });
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((nextResolve) => { resolve = nextResolve; });
   return { promise, resolve };

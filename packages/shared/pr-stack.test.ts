@@ -114,6 +114,11 @@ describe("runPRLayerLocalDiff", () => {
     mergeBaseSha: MERGE_BASE,
   };
 
+  interface LayerRuntimeResult {
+    readonly runtime: ReviewGitRuntime;
+    readonly calls: string[][];
+  }
+
   function layerRuntime(opts: {
     missingObjects?: Set<string>;
     /** Objects that become available after a `fetch origin -- <sha>` */
@@ -121,7 +126,7 @@ describe("runPRLayerLocalDiff", () => {
     diffStdout?: string;
     diffExitCode?: number;
     diffStderr?: string;
-  }): { runtime: ReviewGitRuntime; calls: string[][] } {
+  }): LayerRuntimeResult {
     const calls: string[][] = [];
     const missing = new Set(opts.missingObjects ?? []);
     return {
@@ -195,8 +200,8 @@ describe("runPRLayerLocalDiff", () => {
 
   test("falls back to three-dot when no merge-base SHA is reported (GitLab)", async () => {
     const { runtime, calls } = layerRuntime({});
-    const noMergeBase: PRMetadata = { ...layerMetadata };
-    delete (noMergeBase as { mergeBaseSha?: string }).mergeBaseSha;
+    const noMergeBase: Omit<PRMetadata, "mergeBaseSha"> & { mergeBaseSha?: string } = { ...layerMetadata };
+    delete noMergeBase.mergeBaseSha;
     const diff = await runPRLayerLocalDiff(runtime, noMergeBase, "/tmp/checkout");
 
     expect(diff.error).toBeUndefined();

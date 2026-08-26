@@ -21,7 +21,7 @@ import DiffsWorker from '@pierre/diffs/worker/worker.js?worker&inline';
 const poolOptions: WorkerPoolOptions = {
   poolSize: Math.min(Math.max(1, (globalThis.navigator?.hardwareConcurrency ?? 2) - 1), 3),
   totalASTLRUCacheSize: 100,
-  workerFactory: () => new DiffsWorker() as Worker,
+  workerFactory: () => new DiffsWorker(),
 };
 
 const highlighterOptions: WorkerInitializationRenderOptions = {

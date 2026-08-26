@@ -31,7 +31,7 @@ import {
 	getCliInstallUrl,
 } from "./generated/pr-provider.js";
 import { parseRemoteUrl } from "./generated/repo.js";
-import { fetchRef, createWorktree, removeWorktree, ensureObjectAvailable } from "./generated/worktree.js";
+import {fetchRef, createWorktree, ensureObjectAvailable} from "./generated/worktree.js";
 import { loadConfig, resolveDefaultDiffType, resolveSharingEnabled } from "./generated/config.js";
 import {
 	WorkspaceReviewSession,
@@ -75,8 +75,8 @@ export function hasReviewBrowserHtml(): boolean {
 	return Boolean(reviewHtmlContent);
 }
 
-export function getStartupErrorMessage(err: unknown): string {
-	return err instanceof Error ? err.message : "Unknown error";
+export function getStartupErrorMessage(err: Error): string {
+	return err.message;
 }
 
 async function openBrowserForServer(serverUrl: string, ctx: ExtensionContext): Promise<void> {
@@ -152,7 +152,7 @@ export function shouldUseLocalPrCheckout(options: { useLocal?: boolean }): boole
 export async function openCodeReview(
 	ctx: ExtensionContext,
 	options: { cwd?: string; defaultBranch?: string; diffType?: DiffType; prUrl?: string; vcsType?: VcsSelection; useLocal?: boolean } = {},
-): Promise<{ approved: boolean; feedback?: string; annotations?: unknown[]; exit?: boolean }> {
+): Promise<{ approved: boolean; feedback?: string; annotations?: readonly unknown[]; exit?: boolean }> {
 	const session = await startCodeReviewBrowserSession(ctx, options);
 	return session.waitForDecision();
 }
@@ -164,7 +164,7 @@ export async function startCodeReviewBrowserSession(
 	BrowserDecisionSession<{
 		approved: boolean;
 		feedback?: string;
-		annotations?: unknown[];
+		annotations?: readonly unknown[];
 		exit?: boolean;
 	}>
 > {
@@ -295,7 +295,7 @@ export async function startCodeReviewBrowserSession(
 					const prRepo = prMetadata.platform === "github"
 						? `${prMetadata.owner}/${prMetadata.repo}`
 						: prMetadata.projectPath;
-					if (/^-/.test(prRepo)) throw new Error(`Invalid repository identifier: ${prRepo}`);
+					if (prRepo.startsWith('-')) throw new Error(`Invalid repository identifier: ${prRepo}`);
 					const cli = prMetadata.platform === "github" ? "gh" : "glab";
 					const host = prMetadata.host;
 					// gh/glab repo clone doesn't accept --hostname; set GH_HOST/GITLAB_HOST env instead

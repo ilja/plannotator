@@ -8,50 +8,130 @@
  * Inspired by textarea.my's approach.
  */
 
-import { Annotation, AnnotationType, type ChoiceValidationEvidence, type ImageAttachment } from '../types';
+import { Option, Schema } from "effect";
+import { Annotation, AnnotationType, type ImageAttachment } from '../types';
 import { compress, decompress } from '@plannotator/shared/compress';
 import { encrypt, decrypt } from '@plannotator/shared/crypto';
+import { ChoiceValidationEvidenceSchema } from './choiceAnnotations';
 
 // Image in shareable format: plain string (old) or [path, name] tuple (new)
-type ShareableImage = string | [string, string];
+const ShareableImageSchema = Schema.Union([
+  Schema.String,
+  Schema.Tuple([Schema.String, Schema.String]),
+]);
+export type ShareableImage = Schema.Schema.Type<typeof ShareableImageSchema>;
 
-// Minimal shareable annotation format: [type, originalText, text?, author?, images?, quickLabel?]
-export type ShareableAnnotation =
-  | ['D', string, string | null, ShareableImage[]?]                    // Deletion: type, original, author, images
-  | ['C', string, string, string | null, ShareableImage[]?, (1)?]      // Comment: type, original, comment, author, images, isQuickLabel
-  | ['G', string, string | null, ShareableImage[]?];                   // Global Comment: type, comment, author, images
+const ShareableAnnotationSchema = Schema.Union([
+  Schema.Tuple([
+    Schema.Literal("D"),
+    Schema.String,
+    Schema.NullOr(Schema.String),
+    Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema))),
+  ]),
+  Schema.Tuple([
+    Schema.Literal("C"),
+    Schema.String,
+    Schema.String,
+    Schema.NullOr(Schema.String),
+    Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema))),
+    Schema.optional(Schema.Literal(1)),
+  ]),
+  Schema.Tuple([
+    Schema.Literal("R"),
+    Schema.String,
+    Schema.String,
+    Schema.NullOr(Schema.String),
+    Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema))),
+  ]),
+  Schema.Tuple([
+    Schema.Literal("I"),
+    Schema.String,
+    Schema.String,
+    Schema.NullOr(Schema.String),
+    Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema))),
+  ]),
+  Schema.Tuple([
+    Schema.Literal("G"),
+    Schema.String,
+    Schema.NullOr(Schema.String),
+    Schema.optional(Schema.NullOr(Schema.Array(ShareableImageSchema))),
+  ]),
+]);
+export type ShareableAnnotation = Schema.Schema.Type<typeof ShareableAnnotationSchema>;
 
-export interface SharePayload {
-  p: string;  // plan markdown
-  a: ShareableAnnotation[];
-  g?: ShareableImage[];  // global attachments (path strings or [path, name] tuples)
-  d?: (string | null)[];  // diffContext per annotation, parallel to `a`
-  s?: (string | undefined)[];  // source per annotation (external tool identifier), parallel to `a`
-  cv?: (ChoiceValidationEvidence | null)[];  // choice evidence per annotation, parallel to `a`
-  co?: (string | null)[];  // selected choice label per annotation, parallel to `a`
-  h?: string;  // raw HTML content (direct HTML rendering mode)
-  r?: 'html';  // render mode flag (omitted = markdown)
+const DiffContextSchema = Schema.Union([
+  Schema.Literal('added'),
+  Schema.Literal('removed'),
+  Schema.Literal('modified'),
+]);
+
+const SharePayloadSchema = Schema.Struct({
+  p: Schema.String,
+  a: Schema.Array(ShareableAnnotationSchema),
+  g: Schema.optional(Schema.Array(ShareableImageSchema)),
+  d: Schema.optional(Schema.Array(Schema.NullOr(DiffContextSchema))),
+  s: Schema.optional(Schema.Array(Schema.NullOr(Schema.String))),
+  cv: Schema.optional(Schema.Array(Schema.NullOr(ChoiceValidationEvidenceSchema))),
+  co: Schema.optional(Schema.Array(Schema.NullOr(Schema.String))),
+  h: Schema.optional(Schema.String),
+  r: Schema.optional(Schema.Literal("html")),
+});
+export type SharePayload = Schema.Schema.Type<typeof SharePayloadSchema>;
+
+const LegacyShareDataSchema = Schema.Struct({
+  a: Schema.Array(ShareableAnnotationSchema),
+  g: Schema.optional(Schema.Array(ShareableImageSchema)),
+  d: Schema.optional(Schema.Array(Schema.NullOr(DiffContextSchema))),
+  ts: Schema.Number,
+});
+export type LegacyShareData = Schema.Schema.Type<typeof LegacyShareDataSchema>;
+
+const isString = Schema.is(Schema.String);
+const isDiffContext = Schema.is(DiffContextSchema);
+
+const hasUniqueChoiceLabels = (
+  evidence: NonNullable<NonNullable<SharePayload['cv']>[number]>,
+): boolean => {
+  const labels = new Set(evidence.options.map(option => option.label));
+  return labels.size === evidence.options.length;
+};
+
+export function decodeSharePayload<Input>(value: Input): SharePayload | null {
+  const decoded = Schema.decodeUnknownOption(SharePayloadSchema)(value);
+  if (Option.isNone(decoded)) return null;
+
+  const evidenceIsValid = decoded.value.cv?.every(
+    evidence => evidence === null || hasUniqueChoiceLabels(evidence),
+  ) ?? true;
+  return evidenceIsValid ? decoded.value : null;
+}
+
+export function decodeLegacyShareData<Input>(value: Input): LegacyShareData | null {
+  return Option.getOrNull(Schema.decodeUnknownOption(LegacyShareDataSchema)(value));
 }
 
 /**
  * Convert ShareableImage[] to ImageAttachment[] (handles old plain-string format)
  */
-export function parseShareableImages(raw: ShareableImage[] | undefined): ImageAttachment[] | undefined {
+export function parseShareableImages(
+  raw: readonly ShareableImage[] | null | undefined,
+): ImageAttachment[] | undefined {
   if (!raw?.length) return undefined;
-  return raw.map(img => {
-    if (typeof img === 'string') {
-      // Old format: plain path string — derive name from filename
-      const name = img.split('/').pop()?.replace(/\.[^.]+$/, '') || 'image';
-      return { path: img, name };
+  return raw.map(image => {
+    if (isString(image)) {
+      const name = image.split('/').pop()?.replace(/\.[^.]+$/, '') || 'image';
+      return { path: image, name };
     }
-    return { path: img[0], name: img[1] };
+    return { path: image[0], name: image[1] };
   });
 }
 
 /**
  * Convert ImageAttachment[] to ShareableImage[] for compact serialization
  */
-export function toShareableImages(images: ImageAttachment[] | undefined): ShareableImage[] | undefined {
+export function toShareableImages(
+  images: readonly ImageAttachment[] | undefined,
+): ShareableImage[] | undefined {
   if (!images?.length) return undefined;
   return images.map(img => [img.path, img.name]);
 }
@@ -62,25 +142,25 @@ export { compress, decompress };
 /**
  * Convert full Annotation objects to minimal shareable format
  */
-export function toShareable(annotations: Annotation[]): ShareableAnnotation[] {
+export function toShareable(annotations: readonly Annotation[]): ShareableAnnotation[] {
   return annotations.map(ann => {
     const author = ann.author || null;
     const images = toShareableImages(ann.images);
 
     // Handle GLOBAL_COMMENT specially - it starts with 'G' (from GLOBAL_COMMENT)
     if (ann.type === AnnotationType.GLOBAL_COMMENT) {
-      return ['G', ann.text || '', author, images] as ShareableAnnotation;
+      return ['G', ann.text || '', author, images] satisfies ShareableAnnotation;
     }
 
     if (ann.type === AnnotationType.DELETION) {
-      return ['D', ann.originalText, author, images] as ShareableAnnotation;
+      return ['D', ann.originalText, author, images] satisfies ShareableAnnotation;
     }
 
     // COMMENT
     if (ann.isQuickLabel) {
-      return ['C', ann.originalText, ann.text || '', author, images ?? undefined, 1] as ShareableAnnotation;
+      return ['C', ann.originalText, ann.text || '', author, images ?? undefined, 1] satisfies ShareableAnnotation;
     }
-    return ['C', ann.originalText, ann.text || '', author, images] as ShareableAnnotation;
+    return ['C', ann.originalText, ann.text || '', author, images] satisfies ShareableAnnotation;
   });
 }
 
@@ -90,94 +170,111 @@ export function toShareable(annotations: Annotation[]): ShareableAnnotation[] {
  * by finding the text in the rendered document.
  */
 export function fromShareable(
-  data: ShareableAnnotation[],
-  diffContexts?: (string | null)[] | null,
-  sources?: (string | undefined)[] | null,
-  choiceValidationEvidence?: (ChoiceValidationEvidence | null)[] | null,
-  choiceOptionLabels?: (string | null)[] | null,
+  data: readonly ShareableAnnotation[],
+  diffContexts?: readonly (string | null)[] | null,
+  sources?: SharePayload['s'] | null,
+  choiceValidationEvidence?: SharePayload['cv'] | null,
+  choiceOptionLabels?: SharePayload['co'] | null,
 ): Annotation[] {
-  const typeMap: Record<string, AnnotationType> = {
-    'D': AnnotationType.DELETION,
-    'C': AnnotationType.COMMENT,
-    'G': AnnotationType.GLOBAL_COMMENT,
-  };
-
   return data.map((item, index) => {
     const type = item[0];
 
     // Handle global comments specially: ['G', text, author, images?]
     if (type === 'G') {
-      const text = item[1] as string;
-      const author = item[2] as string | null;
-      const rawImages = item[3] as ShareableImage[] | undefined;
-
-      return {
+      const annotation: Annotation = {
         id: `shared-${index}-${Date.now()}`,
         blockId: '',
         startOffset: 0,
         endOffset: 0,
         type: AnnotationType.GLOBAL_COMMENT,
-        text: text || undefined,
+        text: item[1] || undefined,
         originalText: '',
         createdA: Date.now() + index,
-        author: author || undefined,
-        images: parseShareableImages(rawImages),
-        ...(sources?.[index] ? { source: sources[index] } : {}),
+        author: item[2] || undefined,
+        images: parseShareableImages(item[3]),
       };
+      if (sources?.[index]) annotation.source = sources[index];
+      return annotation;
     }
 
     const originalText = item[1];
-    // For deletion: [type, original, author, images?]
-    // For others: [type, original, text, author, images?]
-    const text = type === 'D' ? undefined : item[2] as string;
-    const author = type === 'D' ? item[2] as string | null : item[3] as string | null;
-    const rawImages = type === 'D' ? item[3] as ShareableImage[] | undefined : item[4] as ShareableImage[] | undefined;
-    // Comment annotations may have isQuickLabel flag at index 5
-    const isQuickLabel = type === 'C' && item.length > 5 && item[5] === 1 ? true : undefined;
+    // Historical replacement/insertion tuples map to retained comment semantics.
+    const annotationType = type === 'D' ? AnnotationType.DELETION : AnnotationType.COMMENT;
+    const text = type === 'D' ? undefined : item[2];
+    const author = type === 'D' ? item[2] : item[3];
+    const rawImages = type === 'D' ? item[3] : item[4];
+    const isQuickLabel = type === 'C' && item[5] === 1;
     const choiceOptionLabel = type === 'C' ? choiceOptionLabels?.[index] ?? undefined : undefined;
     const choiceAnnotationId = choiceOptionLabel !== undefined
       ? `ann-choice-shared-${index}-${Date.now()}`
       : `shared-${index}-${Date.now()}`;
 
-    return {
+    const annotation: Annotation = {
       id: choiceAnnotationId,
       blockId: '',  // Will be populated during highlight restoration
       startOffset: 0,
       endOffset: 0,
-      type: typeMap[type],
+      type: annotationType,
       text: text || undefined,
       originalText,
       createdA: Date.now() + index,  // Preserve order
       author: author || undefined,
       images: parseShareableImages(rawImages),
-      ...(isQuickLabel ? { isQuickLabel } : {}),
-      ...(choiceOptionLabel !== undefined ? { choiceOptionLabel } : {}),
-      ...(diffContexts?.[index] ? { diffContext: diffContexts[index] as Annotation['diffContext'] } : {}),
-      ...(sources?.[index] ? { source: sources[index] } : {}),
-      ...(choiceValidationEvidence?.[index] ? { choiceValidationEvidence: choiceValidationEvidence[index]! } : {}),
       // startMeta/endMeta will be set by web-highlighter
     };
+    if (isQuickLabel) annotation.isQuickLabel = true;
+    if (choiceOptionLabel !== undefined) annotation.choiceOptionLabel = choiceOptionLabel;
+    const diffContext = diffContexts?.[index];
+    if (diffContext && isDiffContext(diffContext)) {
+      annotation.diffContext = diffContext;
+    }
+    if (sources?.[index]) annotation.source = sources[index];
+    if (choiceValidationEvidence?.[index]) {
+      annotation.choiceValidationEvidence = choiceValidationEvidence[index];
+    }
+    return annotation;
   });
 }
 
-function buildDiffContextArray(annotations: Annotation[]): (string | null)[] | null {
-  const arr = annotations.map(a => a.diffContext || null);
-  return arr.some(v => v !== null) ? arr : null;
+function buildDiffContextArray(annotations: readonly Annotation[]): SharePayload['d'] | null {
+  const values = annotations.map(annotation => annotation.diffContext ?? null);
+  return values.some(value => value !== null) ? values : null;
 }
 
-function buildSourceArray(annotations: Annotation[]): (string | undefined)[] | null {
-  const arr = annotations.map(a => a.source || undefined);
-  return arr.some(v => v !== undefined) ? arr : null;
+function buildSourceArray(annotations: readonly Annotation[]): SharePayload['s'] | null {
+  const values = annotations.map(annotation => annotation.source ?? null);
+  return values.some(value => value !== null) ? values : null;
 }
 
-function buildChoiceValidationEvidenceArray(annotations: Annotation[]): (ChoiceValidationEvidence | null)[] | null {
-  const arr = annotations.map(annotation => annotation.choiceValidationEvidence ?? null);
-  return arr.some(value => value !== null) ? arr : null;
+function buildChoiceValidationEvidenceArray(
+  annotations: readonly Annotation[],
+): SharePayload['cv'] | null {
+  const values = annotations.map(annotation => annotation.choiceValidationEvidence ?? null);
+  return values.some(value => value !== null) ? values : null;
 }
 
-function buildChoiceOptionLabelArray(annotations: Annotation[]): (string | null)[] | null {
-  const arr = annotations.map(annotation => annotation.choiceOptionLabel ?? null);
-  return arr.some(value => value !== null) ? arr : null;
+function buildChoiceOptionLabelArray(annotations: readonly Annotation[]): SharePayload['co'] | null {
+  const values = annotations.map(annotation => annotation.choiceOptionLabel ?? null);
+  return values.some(value => value !== null) ? values : null;
+}
+
+function buildSharePayload(
+  markdown: string,
+  annotations: readonly Annotation[],
+  globalAttachments: readonly ImageAttachment[] | undefined,
+  rawHtml?: string,
+): SharePayload {
+  return {
+    p: markdown,
+    a: toShareable(annotations),
+    g: globalAttachments?.length ? toShareableImages(globalAttachments) : undefined,
+    d: buildDiffContextArray(annotations) ?? undefined,
+    s: buildSourceArray(annotations) ?? undefined,
+    cv: buildChoiceValidationEvidenceArray(annotations) ?? undefined,
+    co: buildChoiceOptionLabelArray(annotations) ?? undefined,
+    h: rawHtml,
+    r: rawHtml ? 'html' : undefined,
+  };
 }
 
 /**
@@ -192,20 +289,7 @@ export async function generateShareUrl(
 ): Promise<string | null> {
   // HTML content is too large for URL hashes — force paste service path
   if (rawHtml) return null;
-  const diffContexts = buildDiffContextArray(annotations);
-  const sources = buildSourceArray(annotations);
-  const choiceValidationEvidence = buildChoiceValidationEvidenceArray(annotations);
-  const choiceOptionLabels = buildChoiceOptionLabelArray(annotations);
-  const payload: SharePayload = {
-    p: markdown,
-    a: toShareable(annotations),
-    g: globalAttachments?.length ? toShareableImages(globalAttachments) : undefined,
-    ...(diffContexts ? { d: diffContexts } : {}),
-    ...(sources ? { s: sources } : {}),
-    ...(choiceValidationEvidence ? { cv: choiceValidationEvidence } : {}),
-    ...(choiceOptionLabels ? { co: choiceOptionLabels } : {}),
-  };
-
+  const payload = buildSharePayload(markdown, annotations, globalAttachments);
   const hash = await compress(payload);
   return `${baseUrl}/#${hash}`;
 }
@@ -223,7 +307,7 @@ export async function parseShareHash(): Promise<SharePayload | null> {
   }
 
   try {
-    return (await decompress(hash)) as SharePayload;
+    return decodeSharePayload(await decompress(hash));
   } catch (e) {
     console.warn('Failed to parse share hash:', e);
     return null;
@@ -247,6 +331,18 @@ export function formatUrlSize(url: string): string {
 
 const DEFAULT_PASTE_API = 'https://plannotator-paste.plannotator.workers.dev';
 const DEFAULT_SHARE_BASE = 'https://share.plannotator.ai';
+
+function decodePasteApiUrl(value: string): string | null {
+  const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(value));
+  if (decoded === undefined) return null;
+
+  try {
+    const { protocol } = new URL(decoded);
+    return protocol === 'http:' || protocol === 'https:' ? decoded : null;
+  } catch {
+    return null;
+  }
+}
 
 export class ShortShareUrlError extends Error {
   constructor(message: string) {
@@ -276,25 +372,12 @@ export async function createShortShareUrl(
   },
   rawHtml?: string,
 ): Promise<{ shortUrl: string; id: string } | null> {
-  const pasteApi = options?.pasteApiUrl ?? DEFAULT_PASTE_API;
+  const pasteApi = decodePasteApiUrl(options?.pasteApiUrl ?? DEFAULT_PASTE_API);
   const shareBase = options?.shareBaseUrl ?? DEFAULT_SHARE_BASE;
+  if (pasteApi === null) return null;
 
   try {
-    const diffContexts = buildDiffContextArray(annotations);
-    const sources = buildSourceArray(annotations);
-    const choiceValidationEvidence = buildChoiceValidationEvidenceArray(annotations);
-    const choiceOptionLabels = buildChoiceOptionLabelArray(annotations);
-    const payload: SharePayload = {
-      p: markdown,
-      a: toShareable(annotations),
-      g: globalAttachments?.length ? toShareableImages(globalAttachments) : undefined,
-      ...(diffContexts ? { d: diffContexts } : {}),
-      ...(sources ? { s: sources } : {}),
-      ...(choiceValidationEvidence ? { cv: choiceValidationEvidence } : {}),
-      ...(choiceOptionLabels ? { co: choiceOptionLabels } : {}),
-      ...(rawHtml ? { h: rawHtml, r: 'html' as const } : {}),
-    };
-
+    const payload = buildSharePayload(markdown, annotations, globalAttachments, rawHtml);
     const compressed = await compress(payload);
 
     // Encrypt before uploading — server only sees ciphertext
@@ -315,7 +398,10 @@ export async function createShortShareUrl(
       return null;
     }
 
-    const result = (await response.json()) as { id: string };
+    const rawResult: unknown = await response.json();
+    const decodedResult = Schema.decodeUnknownOption(Schema.Struct({ id: Schema.String }))(rawResult);
+    if (Option.isNone(decodedResult)) return null;
+    const result = decodedResult.value;
     // Embed paste origin in fragment when non-default so the share portal can
     // fetch from the right service without a server.
     const pasteParam = pasteApi !== DEFAULT_PASTE_API
@@ -337,8 +423,11 @@ export async function createShortShareUrl(
 
 async function readPasteError(response: Response, fallback: string): Promise<string> {
   try {
-    const body = (await response.json()) as { error?: unknown };
-    return typeof body.error === 'string' && body.error.trim() ? body.error : fallback;
+    const rawBody: unknown = await response.json();
+    const decodedBody = Schema.decodeUnknownOption(Schema.Struct({ error: Schema.optional(Schema.Unknown) }))(rawBody);
+    const errorValue = Option.isSome(decodedBody) ? decodedBody.value.error : undefined;
+    const errorString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(errorValue));
+    return errorString !== undefined && errorString.trim() ? errorString : fallback;
   } catch {
     return fallback;
   }
@@ -355,8 +444,11 @@ export async function loadFromPasteId(
   pasteApiUrl: string = DEFAULT_PASTE_API,
   encryptionKey?: string
 ): Promise<SharePayload | null> {
+  const pasteApi = decodePasteApiUrl(pasteApiUrl);
+  if (pasteApi === null) return null;
+
   try {
-    const response = await fetch(`${pasteApiUrl}/api/paste/${pasteId}`, {
+    const response = await fetch(`${pasteApi}/api/paste/${pasteId}`, {
       signal: AbortSignal.timeout(10_000),
     });
 
@@ -365,16 +457,19 @@ export async function loadFromPasteId(
       return null;
     }
 
-    const result = (await response.json()) as { data: string };
+    const rawResult2: unknown = await response.json();
+    const decodedResult2 = Schema.decodeUnknownOption(Schema.Struct({ data: Schema.String }))(rawResult2);
+    if (Option.isNone(decodedResult2)) return null;
+    const result = decodedResult2.value;
 
     if (encryptionKey) {
       // Encrypted path: decrypt ciphertext, then decompress
       const compressed = await decrypt(result.data, encryptionKey);
-      return await decompress(compressed) as SharePayload;
+      return decodeSharePayload(await decompress(compressed));
     }
 
     // Legacy unencrypted path: decompress directly
-    return await decompress(result.data) as SharePayload;
+    return decodeSharePayload(await decompress(result.data));
   } catch (e) {
     console.warn('[sharing] Failed to load from paste ID:', e);
     return null;

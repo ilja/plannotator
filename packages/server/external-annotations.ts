@@ -9,6 +9,7 @@
  * apps/pi-extension/server/external-annotations.ts.
  */
 
+import { Option, Schema } from "effect";
 import {
   createAnnotationStore,
   transformPlanInput,
@@ -19,6 +20,7 @@ import {
   type AnnotationStore,
   type StorableAnnotation,
   type ExternalAnnotationEvent,
+  decodeExternalAnnotationPatch,
 } from "@plannotator/shared/external-annotation";
 
 export type { ExternalAnnotationEvent } from "@plannotator/shared/external-annotation";
@@ -34,7 +36,7 @@ export interface ExternalAnnotationHandler {
     options?: { disableIdleTimeout?: () => void },
   ) => Promise<Response | null>;
   /** Push annotations directly into the store (bypasses HTTP, reuses same validation). */
-  addAnnotations: (body: unknown) => { ids: string[] } | { error: string };
+  addAnnotations: (body: ParsedRequestBody) => { ids: string[] } | { error: string };
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,9 @@ export interface ExternalAnnotationHandler {
 
 const BASE = "/api/external-annotations";
 const STREAM = `${BASE}/stream`;
+
+const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
+type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -70,7 +75,7 @@ export function createExternalAnnotationHandler(
   });
 
   return {
-    addAnnotations(body: unknown): { ids: string[] } | { error: string } {
+    addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
       const parsed = transform(body);
       if ("error" in parsed) return { error: parsed.error };
       const created = store.add(parsed.annotations);
@@ -146,7 +151,12 @@ export function createExternalAnnotationHandler(
       // --- POST (add single or batch) ---
       if (url.pathname === BASE && req.method === "POST") {
         try {
-          const body = await req.json();
+          const body = Option.getOrUndefined(
+            Schema.decodeUnknownOption(ParsedRequestBodySchema)(await req.json()),
+          );
+          if (!body) {
+            return Response.json({ error: "Invalid JSON" }, { status: 400 });
+          }
           const parsed = transform(body);
 
           if ("error" in parsed) {
@@ -170,8 +180,11 @@ export function createExternalAnnotationHandler(
           return Response.json({ error: "Missing ?id parameter" }, { status: 400 });
         }
         try {
-          const body = await req.json();
-          const updated = store.update(id, body as Partial<StorableAnnotation>);
+          const patch = decodeExternalAnnotationPatch(mode, await req.json());
+          if (!patch) {
+            return Response.json({ error: "Invalid JSON" }, { status: 400 });
+          }
+          const updated = store.update(id, patch);
           if (!updated) {
             return Response.json({ error: "Not found" }, { status: 404 });
           }

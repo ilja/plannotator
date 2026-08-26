@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createSourceDocumentWatch, type SourceDocumentWatchEventSource } from './sourceDocumentWatch';
 
+type FakeWatchEvent = { type: 'ready' | 'changed'; dirPath?: string };
+
 type FakeSource = SourceDocumentWatchEventSource & {
-  emit: (payload: object) => void;
+  emit: (payload: FakeWatchEvent) => void;
   fail: () => void;
 };
 

@@ -95,11 +95,17 @@ describe('shortcuts', () => {
   });
 
   it('matches normalized runtime bindings', () => {
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const submitEvent = { key: 'Enter', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, code: 'Enter' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const reverseSearchEvent = { key: 'F3', ctrlKey: false, metaKey: false, shiftKey: true, altKey: false, code: 'F3' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const typeEvent = { key: 'A', ctrlKey: false, metaKey: false, shiftKey: true, altKey: false, code: 'KeyA' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const quickLabelEvent = { key: '3', ctrlKey: false, metaKey: false, shiftKey: false, altKey: true, code: 'Digit3' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const macOptionQuickLabelEvent = { key: '£', ctrlKey: false, metaKey: false, shiftKey: false, altKey: true, code: 'Digit3' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const wrongEvent = { key: 'Enter', ctrlKey: false, metaKey: false, shiftKey: false, altKey: true, code: 'Enter' } as KeyboardEvent;
 
     expect(matchesShortcutBinding(submitEvent, 'Mod+Enter')).toBe(true);
@@ -112,6 +118,7 @@ describe('shortcuts', () => {
 
   it('dispatches matching registry actions', () => {
     const calls: string[] = [];
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const event = { key: 'Enter', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
 
     const handled = dispatchShortcutEvent(annotateSettingsShortcutRegistry[0], {
@@ -125,6 +132,8 @@ describe('shortcuts', () => {
 
   it('can dispatch guarded annotate submit', () => {
     const calls: string[] = [];
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    // @ts-expect-error — minimal stub missing KeyboardEvent props, intentionally suppressed
     const event = {
       key: 'Enter',
       ctrlKey: true,
@@ -132,7 +141,8 @@ describe('shortcuts', () => {
       shiftKey: false,
       altKey: false,
       preventDefault: () => calls.push('preventDefault'),
-    } as unknown as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    } as KeyboardEvent;
 
     const handled = dispatchShortcutEvent(annotationEditorShortcuts, {
       submitAnnotations: {
@@ -169,6 +179,8 @@ describe('shortcuts', () => {
     });
 
     const calls: string[] = [];
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    // @ts-expect-error — minimal stub missing KeyboardEvent props, intentionally suppressed
     const event = {
       key: 'Enter',
       ctrlKey: false,
@@ -176,7 +188,8 @@ describe('shortcuts', () => {
       shiftKey: false,
       altKey: false,
       preventDefault: () => calls.push('preventDefault'),
-    } as unknown as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    } as KeyboardEvent;
 
     const handled = dispatchShortcutEvent(guardedScope, {
       primary: {
@@ -203,9 +216,13 @@ describe('shortcuts', () => {
   });
 
   it('matches key names for sequential binding support', () => {
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const altEvent = { key: 'Alt' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const shiftEvent = { key: 'Shift' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const metaEvent = { key: 'Meta' } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const ctrlEvent = { key: 'Control' } as KeyboardEvent;
 
     expect(matchesKeyName(altEvent, 'Alt')).toBe(true);
@@ -230,6 +247,7 @@ describe('shortcuts', () => {
     });
 
     let preventDefaultCalls = 0;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const event = {
       key: 's',
       ctrlKey: true,
@@ -239,7 +257,8 @@ describe('shortcuts', () => {
       preventDefault: () => {
         preventDefaultCalls += 1;
       },
-    } as unknown as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    } as KeyboardEvent;
 
     const handled = dispatchShortcutEvent(guardedScope, {
       save: {

@@ -30,8 +30,9 @@ type GlimpseWindow = Window & {
 };
 
 function requestGlimpseClose(): boolean {
+  // SAFETY: window may carry glimpse extension — cast to access optional glimpse
   const glimpseClose = (window as GlimpseWindow).glimpse?.close;
-  if (typeof glimpseClose === 'function') {
+  if (glimpseClose instanceof Function) {
     glimpseClose();
     return true;
   }

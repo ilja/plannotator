@@ -14,10 +14,9 @@ function getWrappedMatchIndex(matchCount: number, currentIndex: number, directio
 }
 
 export function isTypingTarget(target: EventTarget | null): boolean {
-  const element = target as HTMLElement | null;
-  if (!element) return false;
-  const tagName = element.tagName;
-  return tagName === 'INPUT' || tagName === 'TEXTAREA' || element.isContentEditable;
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable;
 }
 
 interface UseReviewSearchOptions {
@@ -34,9 +33,9 @@ export function useReviewSearch({
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [activeSearchMatchId, setActiveSearchMatchId] = useState(null as string | null);
+  const [activeSearchMatchId, setActiveSearchMatchId] = useState<string | null>(null);
 
-  const searchInputRef = useRef(null as HTMLInputElement | null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!searchQuery.trim()) {

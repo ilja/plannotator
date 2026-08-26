@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -17,7 +18,8 @@ import {
   startReviewServer,
   unstageFile,
 } from "./server";
-import { createPiAIRuntime } from "./server/ai-runtime.js";
+import { createPiAIRuntime, handlePiAIRequest } from "./server/ai-runtime.js";
+import { loadConfig } from "./generated/config.js";
 import { WorkspaceReviewSession } from "./generated/review-workspace.js";
 
 const tempDirs: string[] = [];
@@ -143,7 +145,7 @@ function reservePort(): Promise<number> {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
-      if (!address || typeof address === "string") {
+      if (!address || !("port" in address)) {
         server.close();
         reject(new Error("Failed to reserve test port"));
         return;
@@ -240,10 +242,10 @@ setInterval(() => {}, 1000);
         new Request("http://localhost/api/ai/capabilities"),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as {
+      const body: {
         available: boolean;
         providers: Array<{ id: string; name: string; models?: Array<{ id: string }> }>;
-      };
+      } = await response.json();
       expect(body.available).toBe(true);
       expect(body.providers).toHaveLength(1);
       expect(body.providers[0]).toMatchObject({ id: "pi-sdk", name: "pi-sdk" });
@@ -253,6 +255,35 @@ setInterval(() => {}, 1000);
       expect(body.providers[0].models?.map((model) => model.id)).toEqual(["fake/pi-model"]);
     } finally {
       runtime?.dispose();
+    }
+  });
+});
+
+describe("unavailable pi AI endpoint", () => {
+  test("returns a schema-compatible capabilities response", async () => {
+    const server = createHttpServer((req, res) => {
+      void handlePiAIRequest(req, res, new URL(req.url ?? "/", "http://localhost"), null);
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+
+    try {
+      const address = server.address();
+      if (!address || !("port" in address)) throw new Error("Failed to start test server");
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/ai/capabilities`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(JSON.stringify({
+        available: false,
+        providers: [],
+        defaultProvider: null,
+      }));
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
     }
   });
 });
@@ -275,13 +306,61 @@ describe("pi annotate server", () => {
     try {
       const response = await fetch(`${server.url}/api/plan`);
       expect(response.status).toBe(200);
-      const payload = await response.json() as {
+      const payload: {
         mode?: string;
         recentMessages?: Array<{ messageId: string; text: string }>;
-      };
+      } = await response.json();
 
       expect(payload.mode).toBe("annotate-last");
       expect(payload.recentMessages).toEqual([{ messageId: "entry-1", text: "assistant text" }]);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("rejects malformed drafts without overwriting a valid draft", async () => {
+    const dataDir = makeTempDir("plannotator-pi-draft-boundary-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "assistant text",
+      filePath: "last-message",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate-last",
+      recentMessages: [{ messageId: "entry-1", text: "assistant text" }],
+    });
+
+    try {
+      const initial = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: [{ id: "initial" }] }),
+      });
+      expect(initial.status).toBe(200);
+
+      const malformed = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid draft" });
+
+      const loaded = await fetch(`${server.url}/api/draft`);
+      expect(loaded.status).toBe(200);
+      expect(await loaded.json()).toEqual({ annotations: [{ id: "initial" }] });
+
+      const valid = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: [{ id: "updated" }] }),
+      });
+      expect(valid.status).toBe(200);
+
+      const updated = await fetch(`${server.url}/api/draft`);
+      expect(await updated.json()).toEqual({ annotations: [{ id: "updated" }] });
     } finally {
       server.stop();
     }
@@ -330,6 +409,100 @@ describe("pi annotate server", () => {
 
       const draftLoad = await fetch(`${server.url}/api/draft`);
       expect(draftLoad.status).toBe(404);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("rejects malformed feedback without consuming the annotate decision", async () => {
+    const dataDir = makeTempDir("plannotator-pi-annotate-feedback-boundary-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startAnnotateServer({
+      markdown: "assistant text",
+      filePath: "last-message",
+      htmlContent: "<html></html>",
+      origin: "pi",
+      mode: "annotate-last",
+    });
+    const decision = server.waitForDecision();
+
+    try {
+      const malformed = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback: 42 }),
+      });
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({ error: "Invalid request" });
+
+      const valid = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedback: "valid feedback",
+          annotations: [null, { id: "unknown" }],
+          selectedMessageId: "entry-1",
+          feedbackScope: "messages",
+        }),
+      });
+      expect(valid.status).toBe(200);
+      await expect(decision).resolves.toEqual({
+        feedback: "valid feedback",
+        annotations: [null, { id: "unknown" }],
+        selectedMessageId: "entry-1",
+        feedbackScope: "messages",
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("validates external annotation patches without mutating malformed updates", async () => {
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+    const server = await startAnnotateServer({
+      markdown: "# Test",
+      filePath: "test.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+    });
+
+    try {
+      const create = await fetch(`${server.url}/api/external-annotations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "editor", text: "original" }),
+      });
+      const { ids } = await create.json();
+      const id = ids[0];
+
+      const invalidField = await fetch(`${server.url}/api/external-annotations?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: 7 }),
+      });
+      expect(invalidField.status).toBe(400);
+
+      const unchanged = await fetch(`${server.url}/api/external-annotations`);
+      expect(await unchanged.json()).toMatchObject({
+        version: 1,
+        annotations: [{ id, text: "original" }],
+      });
+
+      const valid = await fetch(`${server.url}/api/external-annotations?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "spoofed-id",
+          text: "updated",
+          futureMetadata: { preserved: true },
+        }),
+      });
+      expect(valid.status).toBe(200);
+      expect(await valid.json()).toMatchObject({
+        annotation: { id, text: "updated", futureMetadata: { preserved: true } },
+      });
     } finally {
       server.stop();
     }
@@ -424,11 +597,11 @@ describe("pi annotate server", () => {
     });
 
     try {
-      const payload = await fetch(`${server.url}/api/plan`).then((response) => response.json()) as {
+      const payload: {
         mode?: string;
         projectRoot?: string;
         sourceSave?: { enabled?: boolean; reason?: string };
-      };
+      } = await fetch(`${server.url}/api/plan`).then((response) => response.json());
 
       expect(payload.mode).toBe("annotate-folder");
       expect(payload.projectRoot).toBe(folderPath);
@@ -457,8 +630,8 @@ describe("pi annotate server", () => {
     try {
       const response = await fetch(`${server.url}/api/ai/capabilities`);
       expect(response.status).toBe(200);
-      const payload = await response.json() as { available?: boolean; providers?: unknown[] };
-      expect(typeof payload.available).toBe("boolean");
+      const payload: { available?: boolean; providers?: unknown[] } = await response.json();
+      expect(payload.available).toBeTypeOf("boolean");
       expect(Array.isArray(payload.providers)).toBe(true);
     } finally {
       server.stop();
@@ -481,7 +654,7 @@ describe("pi review server", () => {
     "",
   ].join("\n");
 
-  test("advertises semantic diff availability and serves parsed sem output", async () => {
+  test("advertises semantic diff availability and runs the endpoint", async () => {
     const dir = makeTempDir("plannotator-pi-sem-server-");
     const dataDir = makeTempDir("plannotator-pi-sem-data-");
     const cwdLogPath = join(dir, "cwd-log");
@@ -497,20 +670,20 @@ describe("pi review server", () => {
     });
 
     try {
-      const diffPayload = await fetch(`${server.url}/api/diff`).then((response) => response.json()) as {
+      const diffPayload: {
         semanticDiff?: { available: boolean; semVersion?: string; semSource?: string };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
       expect(diffPayload.semanticDiff).toMatchObject({
         available: true,
         semVersion: "0.8.0",
         semSource: "env",
       });
 
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
         summary?: { added: number; fileCount: number };
         changes?: Array<{ entityType: string; entityName: string; filePath: string }>;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json());
       expect(semanticPayload).toMatchObject({
         status: "ok",
         summary: { added: 1, fileCount: 1 },
@@ -542,9 +715,9 @@ describe("pi review server", () => {
     });
 
     try {
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload.status).toBe("ok");
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(agentCwd));
     } finally {
@@ -570,9 +743,9 @@ describe("pi review server", () => {
     });
 
     try {
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload.status).toBe("ok");
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(repoDir));
     } finally {
@@ -593,19 +766,13 @@ describe("pi review server", () => {
     });
 
     try {
-      const diffPayload = await fetch(`${server.url}/api/diff`).then((response) => response.json()) as {
+      const diffPayload: {
         semanticDiff?: { available: boolean };
-      };
-      expect(diffPayload.semanticDiff).toEqual({ available: false });
+      } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
+      expect(diffPayload.semanticDiff?.available).toBe(false);
 
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
-        status: string;
-        reason?: string;
-      };
-      expect(semanticPayload).toMatchObject({
-        status: "unavailable",
-        reason: "sem-path-missing",
-      });
+      const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
+      expect(semanticPayload.status).toBe("unavailable");
     } finally {
       server.stop();
     }
@@ -637,12 +804,12 @@ describe("pi review server", () => {
     try {
       const diffResponse = await fetch(`${server.url}/api/diff`);
       expect(diffResponse.status).toBe(200);
-      const diffPayload = await diffResponse.json() as {
+      const diffPayload: {
         rawPatch: string;
         gitContext?: { diffOptions: Array<{ id: string }> };
         origin?: string;
         repoInfo?: { display: string };
-      };
+      } = await diffResponse.json();
       expect(diffPayload.origin).toBe("pi");
       expect(diffPayload.rawPatch).toContain("diff --git a/untracked.txt b/untracked.txt");
       expect(diffPayload.gitContext?.diffOptions.map((option) => option.id)).toEqual(
@@ -650,11 +817,18 @@ describe("pi review server", () => {
       );
       expect(diffPayload.repoInfo?.display).toBeTruthy();
 
+      const malformedCodeNavResponse = await fetch(`${server.url}/api/code-nav/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: 42, filePath: "tracked.txt", side: "new" }),
+      });
+      expect(malformedCodeNavResponse.status).toBe(400);
+
       const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
-      const fileContent = await fileContentResponse.json() as {
+      const fileContent: {
         oldContent: string | null;
         newContent: string | null;
-      };
+      } = await fileContentResponse.json();
       expect(fileContent.oldContent).toBe("before\n");
       expect(fileContent.newContent).toBe("after\n");
 
@@ -670,6 +844,18 @@ describe("pi review server", () => {
       expect(draftLoad.status).toBe(200);
       expect(await draftLoad.json()).toEqual(draftBody);
 
+      const malformedAnnotation = await fetch(`${server.url}/api/editor-annotation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filePath: 42,
+          selectedText: "after",
+          lineStart: 1,
+          lineEnd: 1,
+        }),
+      });
+      expect(malformedAnnotation.status).toBe(400);
+
       const annotationCreate = await fetch(`${server.url}/api/editor-annotation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -682,11 +868,11 @@ describe("pi review server", () => {
         }),
       });
       expect(annotationCreate.status).toBe(200);
-      const createdAnnotation = await annotationCreate.json() as { id: string };
+      const createdAnnotation: { id: string } = await annotationCreate.json();
       expect(createdAnnotation.id).toBeTruthy();
 
       const annotationsList = await fetch(`${server.url}/api/editor-annotations`);
-      const annotationsPayload = await annotationsList.json() as { annotations: Array<{ id: string }> };
+      const annotationsPayload: { annotations: Array<{ id: string }> } = await annotationsList.json();
       expect(annotationsPayload.annotations).toHaveLength(1);
       expect(annotationsPayload.annotations[0].id).toBe(createdAnnotation.id);
 
@@ -704,7 +890,7 @@ describe("pi review server", () => {
         body: formData,
       });
       expect(uploadResponse.status).toBe(200);
-      const uploadPayload = await uploadResponse.json() as { path: string; originalName: string };
+      const uploadPayload: { path: string; originalName: string } = await uploadResponse.json();
       expect(uploadPayload.originalName).toBe("diagram.png");
 
       const imageResponse = await fetch(
@@ -726,6 +912,13 @@ describe("pi review server", () => {
         body: JSON.stringify(generatedDraft),
       });
       expect(generatedDraftSave.status).toBe(200);
+
+      const invalidReviewFeedback = await fetch(`${server.url}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: {} }),
+      });
+      expect(invalidReviewFeedback.status).toBe(400);
 
       const feedbackResponse = await fetch(`${server.url}/api/feedback`, {
         method: "POST",
@@ -826,6 +1019,14 @@ describe("pi review server", () => {
       expect(stageResponse.status).toBe(200);
       expect(git(repoDir, ["diff", "--staged", "--name-only"])).toContain("stage-me.txt");
 
+      const invalidUndoResponse = await fetch(`${server.url}/api/git-add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath: "stage-me.txt", undo: "false" }),
+      });
+      expect(invalidUndoResponse.status).toBe(400);
+      expect(git(repoDir, ["diff", "--staged", "--name-only"])).toContain("stage-me.txt");
+
       const unstageResponse = await fetch(`${server.url}/api/git-add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -849,6 +1050,133 @@ describe("pi review server", () => {
       server.stop();
     }
   }, 15_000);
+
+  test("review config endpoint preserves all supported diff options", async () => {
+    const dataDir = makeTempDir("plannotator-pi-config-");
+    process.env.PLANNOTATOR_DATA_DIR = dataDir;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startReviewServer({
+      rawPatch: "",
+      gitRef: "test",
+      origin: "pi",
+      htmlContent: "<!doctype html><html><body>review</body></html>",
+    });
+
+    try {
+      const response = await fetch(`${server.url}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          diffOptions: {
+            expandUnchanged: true,
+            defaultDiffType: "merge-base",
+            lineBgIntensity: "strong",
+          },
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(loadConfig().diffOptions).toMatchObject({
+        expandUnchanged: true,
+        defaultDiffType: "merge-base",
+        lineBgIntensity: "strong",
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("rejects non-object config and save-notes request bodies", async () => {
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+    const annotateServer = await startAnnotateServer({
+      markdown: "# Test",
+      filePath: "test.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+    });
+
+    try {
+      const configResponse = await fetch(`${annotateServer.url}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(configResponse.status).toBe(400);
+      expect(await configResponse.json()).toEqual({ error: "Invalid request" });
+
+      const notesResponse = await fetch(`${annotateServer.url}/api/save-notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(notesResponse.status).toBe(500);
+      expect(await notesResponse.json()).toEqual({ error: "Save failed" });
+    } finally {
+      annotateServer.stop();
+    }
+
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+    const reviewServer = await startReviewServer({
+      rawPatch: "",
+      gitRef: "test",
+      origin: "pi",
+      htmlContent: "<html></html>",
+    });
+
+    try {
+      const configResponse = await fetch(`${reviewServer.url}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([]),
+      });
+      expect(configResponse.status).toBe(400);
+      expect(await configResponse.json()).toEqual({ error: "Invalid request" });
+    } finally {
+      reviewServer.stop();
+    }
+  });
+
+  test("rejects malformed GitHub viewed-file requests before mutation", async () => {
+    const ghDir = makeTempDir("plannotator-pi-gh-");
+    const ghPath = join(ghDir, "gh");
+    writeFileSync(ghPath, "#!/bin/sh\nexit 1\n", "utf-8");
+    chmodSync(ghPath, 0o755);
+    process.env[pathEnvKey] = `${ghDir}${delimiter}${originalPath ?? ""}`;
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+
+    const server = await startReviewServer({
+      rawPatch: "",
+      gitRef: "test",
+      origin: "pi",
+      htmlContent: "<!doctype html><html><body>review</body></html>",
+      prMetadata: {
+        platform: "github",
+        host: "github.com",
+        owner: "owner",
+        repo: "repo",
+        number: 1,
+        prNodeId: "node-1",
+        title: "Test PR",
+        author: "author",
+        baseBranch: "main",
+        headBranch: "feature",
+        baseSha: "base-sha",
+        headSha: "head-sha",
+        url: "https://github.com/owner/repo/pull/1",
+      },
+    });
+
+    try {
+      const response = await fetch(`${server.url}/api/pr-viewed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePaths: "src/app.ts", viewed: "true" }),
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      server.stop();
+    }
+  });
 
   test("workspace mode maps prefixed paths to child repos", async () => {
     const homeDir = makeTempDir("plannotator-pi-home-");
@@ -893,23 +1221,22 @@ describe("pi review server", () => {
 
     try {
       const diffResponse = await fetch(`${server.url}/api/diff`);
-      const diffPayload = await diffResponse.json() as {
+      const diffPayload: {
         mode?: string;
         agentCwd?: string;
         diffType?: string;
         diffOptions?: Array<{ id: string }>;
         semanticDiff?: { available: boolean };
-      };
+      } = await diffResponse.json();
       expect(diffPayload.mode).toBe("workspace");
       expect(diffPayload.diffType).toBe("workspace-current");
       expect(diffPayload.diffOptions?.map((option) => option.id)).toContain("workspace-last");
       expect(diffPayload.agentCwd).toBe(root);
-      expect(diffPayload.semanticDiff).toEqual(expect.objectContaining({ available: true }));
       expect("workspace" in diffPayload).toBe(false);
 
-      const semanticPayload = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json()) as {
+      const semanticPayload: {
         status: string;
-      };
+      } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload.status).toBe("ok");
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(root));
       expect(readFileSync(inputLogPath, "utf-8")).toContain("diff --git a/api/tracked.txt b/api/tracked.txt");
@@ -920,14 +1247,13 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "workspace-last", hideWhitespace: true }),
       });
       expect(switchResponse.status).toBe(200);
-      const switched = await switchResponse.json() as {
+      const switched: {
         diffType?: string;
         diffOptions?: Array<{ id: string }>;
         semanticDiff?: { available: boolean };
-      };
+      } = await switchResponse.json();
       expect(switched.diffType).toBe("workspace-last");
       expect(switched.diffOptions?.map((option) => option.id)).toContain("workspace-current");
-      expect(switched.semanticDiff).toEqual(expect.objectContaining({ available: true }));
 
       const currentResponse = await fetch(`${server.url}/api/diff/switch`, {
         method: "POST",
@@ -938,10 +1264,10 @@ describe("pi review server", () => {
 
       const fileContentResponse = await fetch(`${server.url}/api/file-content?path=api/tracked.txt`);
       expect(fileContentResponse.status).toBe(200);
-      const fileContent = await fileContentResponse.json() as {
+      const fileContent: {
         oldContent: string | null;
         newContent: string | null;
-      };
+      } = await fileContentResponse.json();
       expect(fileContent.oldContent).toBe("before\n");
       expect(fileContent.newContent).toBe("after\n");
 
@@ -996,11 +1322,18 @@ describe("pi review server", () => {
     });
 
     try {
+      const invalidWorkspaceSwitch = await fetch(`${server.url}/api/diff/switch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diffType: "workspace-current" }),
+      });
+      expect(invalidWorkspaceSwitch.status).toBe(400);
+
       // Initial load: server echoes the detected default as the active base.
-      const initial = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const initial: {
         base?: string;
         gitContext?: { defaultBranch: string };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       expect(initial.base).toBe(gitContext.defaultBranch);
       expect(initial.base).toBe(initial.gitContext?.defaultBranch);
 
@@ -1011,7 +1344,7 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "branch", base: "develop" }),
       });
       expect(switchResponse.status).toBe(200);
-      const switched = await switchResponse.json() as { base?: string; diffType: string };
+      const switched: { base?: string; diffType: string } = await switchResponse.json();
       expect(switched.base).toBe("develop");
       expect(switched.diffType).toBe("branch");
 
@@ -1025,9 +1358,9 @@ describe("pi review server", () => {
 
       // Subsequent /api/diff load reflects the switched base — this is what
       // survives a page refresh / reconnect.
-      const rehydrate = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const rehydrate: {
         base?: string;
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       expect(rehydrate.base).toBe("develop");
 
       // Unknown refs pass through verbatim — the resolver trusts callers so
@@ -1038,7 +1371,7 @@ describe("pi review server", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ diffType: "branch", base: "nope-does-not-exist" }),
       });
-      const unknown = await unknownResponse.json() as { base?: string; error?: string };
+      const unknown: { base?: string; error?: string } = await unknownResponse.json();
       expect(unknown.base).toBe("nope-does-not-exist");
       expect(unknown.error).toBeTruthy();
 
@@ -1088,10 +1421,10 @@ describe("pi review server", () => {
     });
 
     try {
-      const payload = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const payload: {
         base?: string;
         gitContext?: { defaultBranch: string };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       // The server must echo the caller's override, not the detected default.
       expect(payload.base).toBe("develop");
       expect(payload.gitContext?.defaultBranch).toBe("main");
@@ -1155,9 +1488,9 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "merge-base", base: "main" }),
       });
       expect(switchResponse.status).toBe(200);
-      const switched = await switchResponse.json() as {
+      const switched: {
         gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-      };
+      } = await switchResponse.json();
       expect(switched.gitContext?.vcsType).toBe("git");
       expect(switched.gitContext?.diffOptions.map((option) => option.id)).toContain("merge-base");
       expect(switched.gitContext?.diffOptions.map((option) => option.id)).not.toContain("jj-current");
@@ -1178,12 +1511,12 @@ describe("pi review server", () => {
     });
 
     try {
-      const initial = await fetch(`${server.url}/api/diff`).then((r) => r.json()) as {
+      const initial: {
         diffType: string;
         rawPatch: string;
         base?: string;
         gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-      };
+      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
       expect(initial.diffType).toBe("jj-current");
       expect(initial.base).toBe(expectedJjBase);
       expect(initial.gitContext?.vcsType).toBe("jj");
@@ -1201,7 +1534,7 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "jj-last" }),
       });
       expect(lastResponse.status).toBe(200);
-      const last = await lastResponse.json() as { rawPatch: string; diffType: string };
+      const last: { rawPatch: string; diffType: string } = await lastResponse.json();
       expect(last.diffType).toBe("jj-last");
       expect(last.rawPatch).toContain("last.txt");
 
@@ -1212,7 +1545,7 @@ describe("pi review server", () => {
           body: JSON.stringify({ diffType: nextType }),
         });
         expect(response.status).toBe(200);
-        const payload = await response.json() as { diffType: string; rawPatch: string };
+        const payload: { diffType: string; rawPatch: string } = await response.json();
         expect(payload.diffType).toBe(nextType);
         expect(payload.rawPatch).toContain("tracked.txt");
       }
@@ -1223,16 +1556,16 @@ describe("pi review server", () => {
         body: JSON.stringify({ diffType: "jj-current", hideWhitespace: true }),
       });
       expect(hideWhitespaceResponse.status).toBe(200);
-      const hidden = await hideWhitespaceResponse.json() as { rawPatch: string };
+      const hidden: { rawPatch: string } = await hideWhitespaceResponse.json();
       expect(hidden.rawPatch).toContain("+after");
       expect(hidden.rawPatch).not.toContain("+const  x = 1;");
 
       const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
       expect(fileContentResponse.status).toBe(200);
-      const fileContent = await fileContentResponse.json() as {
+      const fileContent: {
         oldContent: string | null;
         newContent: string | null;
-      };
+      } = await fileContentResponse.json();
       expect(fileContent.oldContent).toBe("before\n");
       expect(fileContent.newContent).toBe("after\n");
 

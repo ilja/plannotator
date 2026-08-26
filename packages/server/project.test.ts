@@ -42,7 +42,9 @@ describe("sanitizeTag", () => {
   });
 
   test("returns null for null/undefined", () => {
+    // SAFETY: Intentionally pass null to exercise sanitizeTag's runtime guard.
     expect(sanitizeTag(null as any)).toBeNull();
+    // SAFETY: Intentionally pass undefined to exercise sanitizeTag's runtime guard.
     expect(sanitizeTag(undefined as any)).toBeNull();
   });
 });
@@ -93,7 +95,7 @@ describe("extractDirName", () => {
 describe("detectProjectName", () => {
   test("returns a string or null", async () => {
     const result = await detectProjectName();
-    expect(result === null || typeof result === "string").toBe(true);
+    if (result !== null) expect(result).toBeTypeOf("string");
   });
 
   test("result is sanitized if not null", async () => {

@@ -1,5 +1,14 @@
 import { existsSync, readFileSync } from "fs";
+import { Option, Schema } from "effect";
 import { join } from "path";
+
+const ObsidianVaultEntries = Schema.Record(Schema.String, Schema.Unknown);
+const ObsidianConfigFile = Schema.Struct({
+	vaults: ObsidianVaultEntries,
+});
+const ObsidianVaultEntry = Schema.Struct({
+	path: Schema.NonEmptyString,
+});
 
 // --- Types ---
 
@@ -57,17 +66,19 @@ export function detectObsidianVaults(): string[] {
 		}
 
 		const configContent = readFileSync(configPath, "utf-8");
-		const config = JSON.parse(configContent);
-
-		if (!config.vaults || typeof config.vaults !== "object") {
-			return [];
-		}
+		const parsed: unknown = JSON.parse(configContent);
+		const config = Option.getOrUndefined(
+			Schema.decodeUnknownOption(ObsidianConfigFile)(parsed),
+		);
+		if (!config) return [];
 
 		// Extract vault paths, filter to ones that exist
 		const vaults: string[] = [];
-		for (const vaultId of Object.keys(config.vaults)) {
-			const vault = config.vaults[vaultId];
-			if (vault.path && existsSync(vault.path)) {
+		for (const [, vaultValue] of Object.entries(config.vaults)) {
+			const vault = Option.getOrUndefined(
+				Schema.decodeUnknownOption(ObsidianVaultEntry)(vaultValue),
+			);
+			if (vault && existsSync(vault.path)) {
 				vaults.push(vault.path);
 			}
 		}
@@ -104,7 +115,7 @@ export function extractTitle(markdown: string): string {
 		// Clean up the title for use as filename
 		return h1Match[1]
 			.trim()
-			.replace(/[<>:"/\\|?*(){}\[\]#~`]/g, "") // Remove invalid/problematic filename chars
+			.replace(/[<>:"/\\|?*(){}[\]#~`]/g, "") // Remove invalid/problematic filename chars
 			.replace(/\s+/g, " ") // Normalize whitespace
 			.trim() // Re-trim after stripping
 			.slice(0, 50); // Limit length
@@ -163,7 +174,11 @@ export function generateFilename(
 	const hour12 = hour24 % 12 || 12;
 	const ampm = hour24 >= 12 ? "pm" : "am";
 
-	const vars: Record<string, string> = {
+	interface FilenameVars {
+		readonly [key: string]: string;
+	}
+
+	const vars: FilenameVars = {
 		title,
 		YYYY: String(now.getFullYear()),
 		MM: String(now.getMonth() + 1).padStart(2, "0"),

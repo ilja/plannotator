@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Option } from 'effect';
 import type { Origin } from '@plannotator/shared/agents';
 import type { DiffLineBgIntensity } from '@plannotator/shared/config';
 import { configStore, useConfigValue } from '../config';
-import { CODE_FONT_OPTIONS, loadCodeFont, loadDiffFont } from '../utils/diffFonts';
+import { CODE_FONT_OPTIONS, loadCodeFont, loadDiffFont, loadProseFont } from '../utils/diffFonts';
 import { getIdentity, regenerateIdentity, setCustomIdentity } from '../utils/identity';
 import { GitUser } from '../icons/GitUser';
 import {
@@ -25,13 +26,11 @@ import {
   saveOctarineSettings,
   type OctarineSettings,
 } from '../utils/octarine';
-import {
-  getUIPreferences,
-  saveUIPreferences,
-  PLAN_WIDTH_OPTIONS,
-  type UIPreferences,
-  type PlanWidth,
-} from '../utils/uiPreferences';
+interface FilenameVars {
+  [key: string]: string;
+}
+
+import {getUIPreferences, saveUIPreferences, PLAN_WIDTH_OPTIONS, type UIPreferences} from '../utils/uiPreferences';
 import { getAutoCloseDelay, setAutoCloseDelay, AUTO_CLOSE_OPTIONS, type AutoCloseDelay } from '../utils/storage';
 import {
   getDefaultNotesApp,
@@ -40,6 +39,7 @@ import {
 } from '../utils/defaultNotesApp';
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { type QuickLabel, getQuickLabels, saveQuickLabels, resetQuickLabels, DEFAULT_QUICK_LABELS, getLabelColors, LABEL_COLOR_MAP } from '../utils/quickLabels';
+import { decodeConventionalLabelEntryFields, decodeConventionalLabelJsonArray, decodeConventionalLabelString } from '../utils/conventionalLabelDecoding';
 import { ThemeTab } from './ThemeTab';
 import { isMac, modKey, altKey } from '../utils/platform';
 import { getAIProviderSettings, isPiProvider, resolveAIProviderSelection } from '../utils/aiProvider';
@@ -51,6 +51,7 @@ import {
   saveFileBrowserSettings,
   type FileBrowserSettings,
 } from '../utils/fileBrowser';
+import { decodeObsidianVaultsResponse } from '../utils/obsidianVaultsDecoding';
 
 type SettingsTab = 'general' | 'theme' | 'git' | 'display' | 'saving' | 'labels' | 'shortcuts' | 'ai' | 'files' | 'obsidian' | 'bear' | 'octarine' | 'comments' | 'hooks';
 
@@ -215,6 +216,10 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
   const annotationCodeFontSize = useConfigValue('annotationCodeFontSize');
 
   useEffect(() => {
+    if (annotationProseFontFamily) loadProseFont(annotationProseFontFamily);
+  }, [annotationProseFontFamily]);
+
+  useEffect(() => {
     if (annotationCodeFontFamily) loadCodeFont(annotationCodeFontFamily, 'annotationCodeFont');
   }, [annotationCodeFontFamily]);
 
@@ -235,9 +240,17 @@ const AnnotationDisplayTab: React.FC<{ children: React.ReactNode }> = ({ childre
           style={annotationProseFontFamily ? { fontFamily: `'${annotationProseFontFamily}', var(--font-sans)` } : undefined}
         >
           {ANNOTATION_PROSE_FONT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value} style={opt.value ? { fontFamily: `'${opt.value}', var(--font-sans)` } : undefined}>{opt.label}</option>
           ))}
         </select>
+        {annotationProseFontFamily && (
+          <div
+            className="text-xs text-muted-foreground px-1 py-1 rounded bg-muted/30"
+            style={{ fontFamily: `'${annotationProseFontFamily}', var(--font-sans)` }}
+          >
+            Preview: The quick brown fox jumps over the lazy dog.
+          </div>
+        )}
       </div>
 
       <div className="border-t border-border" />
@@ -541,19 +554,21 @@ const DEFAULT_CC_LABELS: CCLabelConfig[] = [
   { label: 'chore',      display: 'chore',      blocking: true },
 ];
 
-function parseCCLabels(json: string | null): CCLabelConfig[] {
-  if (!json) return DEFAULT_CC_LABELS;
-  try {
-    const parsed = JSON.parse(json);
-    if (!Array.isArray(parsed)) return DEFAULT_CC_LABELS;
-    return parsed.map((l: Record<string, unknown>) => ({
-      label: (l.label as string) || 'custom',
-      display: (l.display as string) || (l.label as string) || 'custom',
-      blocking: l.blocking === true || l.blocking === 'true',
-    }));
-  } catch {
-    return DEFAULT_CC_LABELS;
-  }
+export function parseCCLabels(json: string | null): CCLabelConfig[] {
+  const parsed = decodeConventionalLabelJsonArray(json);
+  if (!parsed || parsed.some((value) => value === null)) return DEFAULT_CC_LABELS;
+
+  return parsed.map((value) => {
+    const fields = decodeConventionalLabelEntryFields(value);
+    const labelValue = decodeConventionalLabelString(fields?.label);
+    const displayValue = decodeConventionalLabelString(fields?.display);
+    const label = labelValue?.trim() ? labelValue : 'custom';
+    return {
+      label,
+      display: displayValue?.trim() ? displayValue : label,
+      blocking: fields?.blocking === true || fields?.blocking === 'true',
+    };
+  });
 }
 
 const CommentsTab: React.FC = () => {
@@ -722,7 +737,9 @@ const CommentsTab: React.FC = () => {
   );
 };
 
-export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mode = 'plan', onUIPreferencesChange, externalOpen, onExternalClose, aiProviders = [], gitUser }) => {
+const EMPTY_AI_PROVIDERS: SettingsProps['aiProviders'] = [];
+
+export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mode = 'plan', onUIPreferencesChange, externalOpen, onExternalClose, aiProviders = EMPTY_AI_PROVIDERS, gitUser }) => {
   const [showDialog, setShowDialog] = useState(false);
   const [themePreview, setThemePreview] = useState(false);
 
@@ -783,6 +800,7 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
     return t;
   }, [mode, piAIProviders.length]);
 
+  // SAFETY: obsidian/bear/octarine are valid SettingsTab literals per SettingsTab union
   const integrationTabs: { id: SettingsTab; label: string }[] = [
     { id: 'files', label: 'Files' },
     ...(mode === 'plan'
@@ -846,11 +864,19 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
       setVaultsLoading(true);
       fetch('/api/obsidian/vaults')
         .then(res => res.json())
-        .then((data: { vaults: string[] }) => {
-          setDetectedVaults(data.vaults || []);
+        .then((data) => {
+          const responseBody: unknown = data;
+          const decodedVaults = decodeObsidianVaultsResponse(responseBody);
+          if (Option.isNone(decodedVaults)) {
+            throw new Error('Invalid Obsidian vaults response envelope');
+          }
+
+          const vaults = decodedVaults.value;
+          setDetectedVaults(vaults);
           // Auto-select first vault if none set
-          if (data.vaults?.length > 0 && !obsidian.vaultPath) {
-            handleObsidianChange({ vaultPath: data.vaults[0] });
+          const firstVault = vaults[0];
+          if (firstVault !== undefined && !obsidian.vaultPath) {
+            handleObsidianChange({ vaultPath: firstVault });
           }
         })
         .catch(() => setDetectedVaults([]))
@@ -1043,8 +1069,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                           onBlur={(e) => handleIdentitySave(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                              handleIdentitySave((e.target as HTMLInputElement).value);
-                              (e.target as HTMLInputElement).blur();
+                              handleIdentitySave(e.currentTarget.value);
+                              e.currentTarget.blur();
                             }
                           }}
                           className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono truncate border border-transparent focus:border-primary/50 focus:outline-none transition-colors"
@@ -1079,7 +1105,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                       <select
                         value={autoCloseDelay}
                         onChange={(e) => {
-                          const next = e.target.value as AutoCloseDelay;
+                          // SAFETY: e.currentTarget.value is AutoCloseDelay per AUTO_CLOSE_OPTIONS
+                          const next = e.currentTarget.value as AutoCloseDelay;
                           setAutoCloseDelayState(next);
                           setAutoCloseDelay(next);
                         }}
@@ -1210,7 +1237,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                         // Exaggerated proportions so the width difference is visually obvious in the small preview
                         const sidebarPct = 14;
                         const panelPct = 14;
-                        const cardPctMap: Record<PlanWidth, number> = { compact: 48, default: 70, wide: 94 };
+                        interface CardPctMap { compact: number; default: number; wide: number; }
+                        const cardPctMap: CardPctMap = { compact: 48, default: 70, wide: 94 };
                         const cardPct = cardPctMap[active.id];
                         return (
                           <div className="space-y-2">
@@ -1298,7 +1326,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                       </div>
                       <select
                         value={defaultNotesApp}
-                        onChange={(e) => handleDefaultNotesAppChange(e.target.value as DefaultNotesApp)}
+                        // SAFETY: e.currentTarget.value is DefaultNotesApp per select options
+                        onChange={(e) => handleDefaultNotesAppChange(e.currentTarget.value as DefaultNotesApp)}
                         className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
                       >
                         <option value="ask">Ask each time</option>
@@ -1706,8 +1735,8 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                                     onChange={(e) => handleObsidianChange({ vaultPath: e.target.value })}
                                     className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
                                   >
-                                    {detectedVaults.map((vault) => (
-                                      <option key={vault} value={vault}>
+                                    {detectedVaults.map((vault, index) => (
+                                      <option key={`${vault}-${index}`} value={vault}>
                                         {vault.split('/').pop() || vault}
                                       </option>
                                     ))}
@@ -1764,7 +1793,7 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                                 const now = new Date();
                                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                                 const h24 = now.getHours(); const h12 = h24 % 12 || 12;
-                                const vars: Record<string, string> = {
+                                const vars: FilenameVars = {
                                   title: 'My Plan Title', YYYY: String(now.getFullYear()),
                                   MM: String(now.getMonth()+1).padStart(2,'0'), DD: String(now.getDate()).padStart(2,'0'),
                                   Mon: months[now.getMonth()], D: String(now.getDate()),
@@ -1784,7 +1813,11 @@ export const Settings: React.FC<SettingsProps> = ({ onIdentityChange, origin, mo
                             <label className="text-xs text-muted-foreground">Filename Separator</label>
                             <select
                               value={obsidian.filenameSeparator || 'space'}
-                              onChange={(e) => handleObsidianChange({ filenameSeparator: e.target.value as 'space' | 'dash' | 'underscore' })}
+                              onChange={(e) => {
+                                // SAFETY: e.currentTarget.value is FilenameSeparator per select options
+                                const v = e.currentTarget.value as 'space' | 'dash' | 'underscore';
+                                handleObsidianChange({ filenameSeparator: v });
+                              }}
                               className="w-full px-3 py-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
                             >
                               <option value="space">Spaces (default)</option>
@@ -1907,7 +1940,11 @@ tags: [plan, ...]
                           <label className="text-xs text-muted-foreground">Tag Position</label>
                           <select
                             value={bear.tagPosition}
-                            onChange={(e) => handleBearChange({ tagPosition: e.target.value as 'prepend' | 'append' })}
+                            onChange={(e) => {
+                              // SAFETY: e.currentTarget.value is TagPosition per select options
+                              const v = e.currentTarget.value as 'prepend' | 'append';
+                              handleBearChange({ tagPosition: v });
+                            }}
                             className="w-full px-3 py-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
                           >
                             <option value="append">Append (end of note)</option>

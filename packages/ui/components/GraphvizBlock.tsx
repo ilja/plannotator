@@ -305,7 +305,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
 
   useEffect(() => {
     if (showSource || !containerRef.current || !naturalBoundsRef.current) return;
-    if (typeof ResizeObserver === 'undefined') return;
+    if (globalThis.ResizeObserver === undefined) return;
 
     const observer = new ResizeObserver(() => {
       if (Math.abs(zoomLevelRef.current - 1) > 0.001) return;
@@ -486,7 +486,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
         {showSource || !svg ? inlineSource : !isExpanded ? diagramBody : <div className="rounded-xl border border-border/30 bg-muted/10" style={{ height: naturalHeight }} />}
       </div>
 
-      {!showSource && svg && isExpanded && typeof document !== 'undefined' && createPortal(
+      {!showSource && svg && isExpanded && globalThis.document !== undefined && createPortal(
         <div className="fixed inset-0 z-[9999] bg-background/90 backdrop-blur-sm p-4 md:p-6">
           <div className="mx-auto flex h-full max-w-[min(96vw,110rem)] flex-col gap-3">
             <div className="flex items-center justify-between gap-4 text-xs text-muted-foreground">

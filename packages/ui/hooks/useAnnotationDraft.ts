@@ -17,12 +17,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   SourceBackedDocumentDraftData,
-  SourceBackedDraftSourceSaveCapability,
   SourceBackedSavedFileChangeDraftData,
 } from '@plannotator/shared/draft';
 import type { Annotation, CodeAnnotation, ImageAttachment } from '../types';
-import { fromShareable, parseShareableImages } from '../utils/sharing';
-import type { ShareableAnnotation } from '../utils/sharing';
+import {
+  decodeStoredAnnotationDraft,
+  decodeStoredDraftGeneration,
+  type DecodedStoredAnnotationDraft,
+} from '../utils/annotationDraftDecoding';
 
 const DEBOUNCE_MS = 500;
 
@@ -41,104 +43,6 @@ interface DraftData {
   /** Client-side generation used to ignore stale saves after a draft delete. */
   draftGeneration?: number;
   ts: number;
-}
-
-interface MissingDraftData {
-  found?: false;
-  draftGeneration?: number;
-}
-
-/** Old format: compact tuples (for backward compat on load). */
-interface LegacyDraftData {
-  a: ShareableAnnotation[];
-  g?: unknown[];
-  d?: (string | null)[];
-  ts: number;
-}
-
-function isLegacyDraft(data: unknown): data is LegacyDraftData {
-  return !!data && typeof data === 'object' && 'a' in data && Array.isArray((data as LegacyDraftData).a);
-}
-
-function parseSourceBackedDocumentDraft(value: unknown): SourceBackedDocumentDraftData | null {
-  if (!value || typeof value !== 'object') return null;
-  const doc = value as Partial<SourceBackedDocumentDraftData>;
-  const sourceSave = doc.sourceSave as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
-  if (!(
-    typeof doc.key === 'string' &&
-    typeof doc.sessionOpenText === 'string' &&
-    typeof doc.diskBaseline === 'string' &&
-    typeof doc.currentText === 'string' &&
-    (doc.missingOnDisk === undefined || typeof doc.missingOnDisk === 'boolean') &&
-    isDraftSourceSaveCapability(sourceSave)
-  )) {
-    return null;
-  }
-  const savedChange = parseSourceBackedSavedFileChange(doc.savedChange, sourceSave);
-  return {
-    key: doc.key,
-    sourceSave,
-    sessionOpenText: doc.sessionOpenText,
-    diskBaseline: doc.diskBaseline,
-    currentText: doc.currentText,
-    ...(doc.missingOnDisk ? { missingOnDisk: true } : {}),
-    ...(savedChange ? { savedChange } : {}),
-  };
-}
-
-function isSourceBackedSavedFileChange(value: unknown): value is SourceBackedSavedFileChangeDraftData {
-  return parseSourceBackedSavedFileChange(value) !== null;
-}
-
-function parseSourceBackedSavedFileChange(
-  value: unknown,
-  fallbackSourceSave?: SourceBackedDraftSourceSaveCapability,
-): SourceBackedSavedFileChangeDraftData | null {
-  if (!value || typeof value !== 'object') return null;
-  const change = value as Partial<SourceBackedSavedFileChangeDraftData>;
-  if (!(
-    typeof change.key === 'string' &&
-    typeof change.path === 'string' &&
-    typeof change.basename === 'string' &&
-    typeof change.beforeText === 'string' &&
-    typeof change.afterText === 'string' &&
-    (change.beforeHash === undefined || typeof change.beforeHash === 'string') &&
-    (change.afterHash === undefined || typeof change.afterHash === 'string')
-  )) {
-    return null;
-  }
-  const sourceSave = isDraftSourceSaveCapability(change.sourceSave)
-    ? change.sourceSave
-    : fallbackSourceSave;
-  if (!sourceSave) return null;
-  return {
-    key: change.key,
-    path: change.path,
-    basename: change.basename,
-    beforeText: change.beforeText,
-    afterText: change.afterText,
-    beforeHash: change.beforeHash,
-    afterHash: change.afterHash,
-    sourceSave,
-  };
-}
-
-function isDraftSourceSaveCapability(value: unknown): value is SourceBackedDraftSourceSaveCapability {
-  const sourceSave = value as Partial<SourceBackedDraftSourceSaveCapability> | undefined;
-  return (
-    !!sourceSave &&
-    sourceSave.enabled === true &&
-    typeof sourceSave.path === 'string' &&
-    typeof sourceSave.basename === 'string' &&
-    typeof sourceSave.hash === 'string' &&
-    typeof sourceSave.mtimeMs === 'number' &&
-    typeof sourceSave.size === 'number' &&
-    typeof sourceSave.eol === 'string'
-  );
-}
-
-function readDraftGeneration(value: unknown): number | null {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function formatTimeAgo(ts: number): string {
@@ -219,81 +123,50 @@ export function useAnnotationDraft({
 
     fetch('/api/draft')
       .then(async res => {
-        const data = await res.json().catch(() => null) as DraftData | LegacyDraftData | MissingDraftData | null;
+        const rawData = await res.json().catch(() => null);
         if (!res.ok) {
-          const generation = readDraftGeneration((data as MissingDraftData | null)?.draftGeneration);
+          const generation = decodeStoredDraftGeneration(rawData);
           if (generation !== null) {
             draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
           }
           return null;
         }
-        return data;
+        return decodeStoredAnnotationDraft(rawData);
       })
-      .then((data: DraftData | LegacyDraftData | null) => {
+      .then((data: DecodedStoredAnnotationDraft | null) => {
         if (!data) {
           hasMountedRef.current = true;
           return;
         }
 
-        let restoredAnnotations: Annotation[];
-        let restoredCodeAnnotations: CodeAnnotation[] = [];
-        let restoredGlobal: ImageAttachment[];
-
-        if (isLegacyDraft(data)) {
-          // Old tuple format — deserialize via fromShareable
-          restoredAnnotations = data.a.length > 0 ? fromShareable(data.a, data.d) : [];
-          restoredGlobal = data.g ? (parseShareableImages(data.g as Parameters<typeof parseShareableImages>[0]) ?? []) : [];
-        } else if (Array.isArray(data.annotations)) {
-          // New direct-object format
-          const generation = readDraftGeneration(data.draftGeneration);
-          if (generation !== null) {
-            draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
-          }
-          restoredAnnotations = data.annotations;
-          restoredCodeAnnotations = Array.isArray(data.codeAnnotations) ? data.codeAnnotations : [];
-          restoredGlobal = Array.isArray(data.globalAttachments) ? data.globalAttachments : [];
-        } else if (Array.isArray((data as DraftData).codeAnnotations) && (data as DraftData).codeAnnotations!.length > 0) {
-          const generation = readDraftGeneration((data as DraftData).draftGeneration);
-          if (generation !== null) {
-            draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
-          }
-          restoredAnnotations = [];
-          restoredCodeAnnotations = (data as DraftData).codeAnnotations!;
-          restoredGlobal = Array.isArray((data as DraftData).globalAttachments) ? (data as DraftData).globalAttachments : [];
-        } else {
-          hasMountedRef.current = true;
-          return;
+        if (data.draftGeneration !== null) {
+          draftGenerationRef.current = Math.max(
+            draftGenerationRef.current,
+            data.draftGeneration,
+          );
         }
 
-        const restoredEdited =
-          !isLegacyDraft(data) && typeof (data as DraftData).editedMarkdown === 'string'
-            ? (data as DraftData).editedMarkdown!
-            : null;
-        const restoredEditedDocuments =
-          !isLegacyDraft(data) && Array.isArray((data as DraftData).editedDocuments)
-            ? (data as DraftData).editedDocuments!
-                .map(parseSourceBackedDocumentDraft)
-                .filter((doc): doc is SourceBackedDocumentDraftData => doc !== null)
-            : [];
-        const restoredSavedFileChanges =
-          !isLegacyDraft(data) && Array.isArray((data as DraftData).savedFileChanges)
-            ? (data as DraftData).savedFileChanges!.filter(isSourceBackedSavedFileChange)
-            : [];
-
-        const totalCount = restoredAnnotations.length + restoredCodeAnnotations.length + restoredGlobal.length;
-        if (totalCount > 0 || restoredEdited !== null || restoredEditedDocuments.length > 0 || restoredSavedFileChanges.length > 0) {
+        const totalCount =
+          data.annotations.length +
+          data.codeAnnotations.length +
+          data.globalAttachments.length;
+        const hasEdits =
+          data.editedMarkdown !== null ||
+          data.editedDocuments.length > 0 ||
+          data.savedFileChanges.length > 0;
+        if (totalCount > 0 || hasEdits) {
           draftDataRef.current = {
-            annotations: restoredAnnotations,
-            codeAnnotations: restoredCodeAnnotations,
-            globalAttachments: restoredGlobal,
-            editedMarkdown: restoredEdited,
-            editedDocuments: restoredEditedDocuments,
-            savedFileChanges: restoredSavedFileChanges,
+            annotations: data.annotations,
+            codeAnnotations: data.codeAnnotations,
+            globalAttachments: data.globalAttachments,
+            editedMarkdown: data.editedMarkdown,
+            editedDocuments: data.editedDocuments,
+            savedFileChanges: data.savedFileChanges,
           };
           setDraftBanner({
             count: totalCount,
-            timeAgo: formatTimeAgo(data.ts || 0),
-            hasEdits: restoredEdited !== null || restoredEditedDocuments.length > 0 || restoredSavedFileChanges.length > 0,
+            timeAgo: formatTimeAgo(data.ts),
+            hasEdits,
           });
         }
         hasMountedRef.current = true;
@@ -329,12 +202,12 @@ export function useAnnotationDraft({
       annotations,
       codeAnnotations,
       globalAttachments,
-      ...(editedMarkdown !== null ? { editedMarkdown } : {}),
-      ...(editedDocuments.length > 0 ? { editedDocuments } : {}),
-      ...(savedFileChanges.length > 0 ? { savedFileChanges } : {}),
       draftGeneration,
       ts: Date.now(),
     };
+    if (editedMarkdown !== null) payload.editedMarkdown = editedMarkdown;
+    if (editedDocuments.length > 0) payload.editedDocuments = editedDocuments;
+    if (savedFileChanges.length > 0) payload.savedFileChanges = savedFileChanges;
 
     const body = JSON.stringify(payload);
     const headers = { 'Content-Type': 'application/json' };

@@ -6,11 +6,13 @@
  * Notes tab: Save plan to Obsidian/Bear without approving
  */
 
+import { Result } from 'effect';
 import React, { useState, useEffect } from 'react';
 import { getObsidianSettings, getEffectiveVaultPath } from '../utils/obsidian';
 import { getBearSettings } from '../utils/bear';
 import { getOctarineSettings } from '../utils/octarine';
 import { wrapFeedbackForAgent } from '../utils/parser';
+import { decodeSaveNotesResponse } from '../utils/saveNotesResponse';
 import { OverlayScrollArea } from './OverlayScrollArea';
 
 interface ExportModalProps {
@@ -25,7 +27,7 @@ interface ExportModalProps {
   /** Error from the last short URL generation attempt (empty string = no error) */
   shortUrlError?: string;
   /** Generate a short URL on demand (user clicks "Create short link") */
-  onGenerateShortUrl?: () => void | Promise<unknown>;
+  onGenerateShortUrl?: () => void | Promise<void>;
   annotationsOutput: string;
   annotationCount: number;
   sharingEnabled?: boolean;
@@ -122,7 +124,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setSaveStatus(prev => ({ ...prev, [target]: 'saving' }));
     setSaveErrors(prev => { const next = { ...prev }; delete next[target]; return next; });
 
-    const body: { obsidian?: object; bear?: object; octarine?: object } = {};
+    interface ExportBody { obsidian?: object; bear?: object; octarine?: object; }
+    const body: ExportBody = {};
 
     if (target === 'obsidian') {
       body.obsidian = {
@@ -150,8 +153,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      const result = data.results?.[target];
+      const data: unknown = await res.json();
+      const decoded = decodeSaveNotesResponse(data);
+      const result = Result.isSuccess(decoded) ? decoded.success[target] : undefined;
 
       if (result?.success) {
         setSaveStatus(prev => ({ ...prev, [target]: 'success' }));
@@ -262,7 +266,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                       readOnly
                       value={shortShareUrl}
                       className="w-full bg-muted rounded-lg p-3 pr-20 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/50"
-                      onClick={e => (e.target as HTMLInputElement).select()}
+                      onClick={e => e.currentTarget.select()}
                     />
                     <button
                       onClick={() => handleCopy(shortShareUrl, 'short')}
@@ -325,7 +329,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     readOnly
                     value={shareUrl}
                     className="w-full h-24 bg-muted rounded-lg p-3 pr-20 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-accent/50"
-                    onClick={e => (e.target as HTMLTextAreaElement).select()}
+                    onClick={e => e.currentTarget.select()}
                   />
                   <button
                     onClick={() => handleCopy(shareUrl, 'full')}

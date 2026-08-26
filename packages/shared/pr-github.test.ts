@@ -1,7 +1,14 @@
 import { describe, expect, test, spyOn } from "bun:test";
-import { fetchGhPR, reconstructGhPatch, type GitHubFileEntry } from "./pr-github";
+import {
+  fetchGhPR,
+  fetchGhPRContext,
+  fetchGhPRList,
+  fetchGhPRStack,
+  fetchGhPRViewedFiles,
+  reconstructGhPatch,
+} from "./pr-github";
 import { parseDiffGitHeader, parseDiffFilePathLines, parseDiffMetadataPathLines } from "./diff-paths";
-import type { PRRuntime } from "./pr-types";
+import type { PRMetadata, PRRuntime } from "./pr-types";
 
 const REF = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
 
@@ -20,11 +27,16 @@ const VIEW_JSON = JSON.stringify({
  * Mock gh runtime. Routes by subcommand; records every invocation so tests can
  * assert on exactly which commands ran (and which didn't).
  */
+interface GithubRuntimeResult {
+  readonly runtime: PRRuntime;
+  readonly calls: string[];
+}
+
 function githubRuntime(opts: {
   prDiff: { stdout?: string; stderr?: string; exitCode: number };
   files?: { stdout?: string; stderr?: string; exitCode: number };
   view?: { stdout?: string; stderr?: string; exitCode: number };
-}): { runtime: PRRuntime; calls: string[] } {
+}): GithubRuntimeResult {
   const calls: string[] = [];
   const runtime: PRRuntime = {
     async runCommand(command, args) {
@@ -200,6 +212,456 @@ describe("fetchGhPR", () => {
 
     await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata/);
     expect(calls.some((c) => c.includes("/pulls/123/files"))).toBe(false);
+  });
+
+  test("rejects invalid metadata JSON before fallback or compare requests", async () => {
+    const { runtime, calls } = githubRuntime({
+      prDiff: { exitCode: 1, stderr: "406" },
+      files: { exitCode: 0, stdout: "[]" },
+      view: { exitCode: 0, stdout: "not json" },
+    });
+
+    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata: Invalid response/);
+    expect(calls.some((c) => c.includes("/pulls/123/files"))).toBe(false);
+    expect(calls.some((c) => c.includes("/compare/"))).toBe(false);
+  });
+
+  test("rejects malformed required metadata fields", async () => {
+    const view = JSON.parse(VIEW_JSON);
+    view.author.login = 42;
+    const { runtime, calls } = githubRuntime({
+      prDiff: { exitCode: 0, stdout: "diff --git a/a.ts b/a.ts\n" },
+      view: { exitCode: 0, stdout: JSON.stringify(view) },
+    });
+
+    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata: Invalid response/);
+    expect(calls.some((c) => c.includes("/compare/"))).toBe(false);
+  });
+
+  test("ignores a malformed optional changedFiles count", async () => {
+    const view = JSON.parse(VIEW_JSON);
+    view.changedFiles = "many";
+    const { runtime } = githubRuntime({
+      prDiff: { exitCode: 1, stderr: "406" },
+      files: { exitCode: 0, stdout: JSON.stringify([{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" }]) },
+      view: { exitCode: 0, stdout: JSON.stringify(view) },
+    });
+
+    const result = await fetchGhPR(runtime, REF);
+    expect(result.patchIncomplete).toBeFalsy();
+  });
+});
+
+describe("fetchGhPRList", () => {
+  const listRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+
+  test("decodes valid entries and filters malformed siblings", async () => {
+    const runtime: PRRuntime = {
+      async runCommand() {
+        return {
+          stdout: JSON.stringify([
+            { number: 1, title: "", author: { login: "" }, url: "", baseRefName: "", state: "OPEN" },
+            { number: 1, title: "Duplicate", author: { login: "dev" }, url: "url", baseRefName: "main", state: "MERGED" },
+            { number: 2, title: "Closed", author: { login: "dev" }, url: "url-2", baseRefName: "main", state: "CLOSED" },
+            { number: 3, title: "Bad author", author: { login: 42 }, url: "url-3", baseRefName: "main", state: "OPEN" },
+            { number: 4, title: "Bad state", author: { login: "dev" }, url: "url-4", baseRefName: "main", state: "UNKNOWN" },
+          ]),
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+
+    await expect(fetchGhPRList(runtime, listRef)).resolves.toEqual([
+      { id: "1", number: 1, title: "", author: "", url: "", baseBranch: "", state: "open" },
+      { id: "1", number: 1, title: "Duplicate", author: "dev", url: "url", baseBranch: "main", state: "merged" },
+      { id: "2", number: 2, title: "Closed", author: "dev", url: "url-2", baseBranch: "main", state: "closed" },
+    ]);
+  });
+
+  test("preserves empty output, exit fallback, and root parse failures", async () => {
+    const outputs = [
+      { stdout: "[]", exitCode: 0 },
+      { stdout: "", exitCode: 1 },
+    ];
+    for (const output of outputs) {
+      const runtime: PRRuntime = { async runCommand() { return { ...output, stderr: "failed" }; } };
+      await expect(fetchGhPRList(runtime, listRef)).resolves.toEqual([]);
+    }
+
+    const invalidJson: PRRuntime = { async runCommand() { return { stdout: "not json", stderr: "", exitCode: 0 }; } };
+    await expect(fetchGhPRList(invalidJson, listRef)).rejects.toThrow();
+
+    const nonArray: PRRuntime = { async runCommand() { return { stdout: "{}", stderr: "", exitCode: 0 }; } };
+    await expect(fetchGhPRList(nonArray, listRef)).rejects.toThrow();
+  });
+});
+
+describe("fetchGhPRStack", () => {
+  const stackRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 3 };
+  const metadata: PRMetadata = {
+    platform: "github",
+    host: "github.com",
+    owner: "o",
+    repo: "r",
+    number: 3,
+    title: "Current",
+    author: "dev",
+    baseBranch: "base",
+    headBranch: "feature",
+    defaultBranch: "main",
+    baseSha: "base-sha",
+    headSha: "head-sha",
+    url: "https://prs/3",
+  };
+
+  test("builds ordered stack nodes from valid GraphQL siblings", async () => {
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        const query = args.find((arg) => arg.includes("RefName=")) ?? "";
+        if (query === "headRefName=base") {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequests: {
+                    nodes: [
+                      { number: 1, title: "Ancestor", url: "https://prs/1", baseRefName: "main", headRefName: "base", state: "MERGED" },
+                      { number: 99, title: 42 },
+                    ],
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (query === "baseRefName=feature") {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequests: {
+                    nodes: [{ number: 4, title: "Descendant", url: "https://prs/4", baseRefName: "feature", headRefName: "leaf", state: "OPEN" }],
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }), stderr: "", exitCode: 0 };
+      },
+    };
+
+    await expect(fetchGhPRStack(runtime, stackRef, metadata)).resolves.toEqual({
+      nodes: [
+        { branch: "main", isCurrent: false, isDefaultBranch: true },
+        { branch: "base", number: 1, title: "Ancestor", url: "https://prs/1", isCurrent: false, isDefaultBranch: false, state: "merged" },
+        { branch: "feature", number: 3, title: "Current", url: "https://prs/3", isCurrent: true, isDefaultBranch: false },
+        { branch: "leaf", number: 4, title: "Descendant", url: "https://prs/4", isCurrent: false, isDefaultBranch: false, state: "open" },
+      ],
+    });
+  });
+
+  test("returns null without a default branch and preserves empty query results", async () => {
+    let calls = 0;
+    const runtime: PRRuntime = {
+      async runCommand() {
+        calls++;
+        return { stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }), stderr: "", exitCode: 0 };
+      },
+    };
+    const noDefault = { ...metadata, defaultBranch: undefined };
+    await expect(fetchGhPRStack(runtime, stackRef, noDefault)).resolves.toBeNull();
+    expect(calls).toBe(0);
+  });
+});
+
+describe("fetchGhPRViewedFiles", () => {
+  const viewedRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+
+  test("merges paginated viewed states and filters malformed file nodes", async () => {
+    let page = 0;
+    const runtime: PRRuntime = {
+      async runCommand() {
+        page++;
+        if (page === 1) {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequest: {
+                    files: {
+                      nodes: [
+                        { path: "src/a.ts", viewerViewedState: "VIEWED" },
+                        { path: "src/b.ts", viewerViewedState: "UNVIEWED" },
+                        { path: 42, viewerViewedState: "VIEWED" },
+                      ],
+                      pageInfo: { hasNextPage: true, endCursor: "cursor-1" },
+                    },
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  files: {
+                    nodes: [{ path: "src/c.ts", viewerViewedState: "DISMISSED" }],
+                    pageInfo: { hasNextPage: false, endCursor: null },
+                  },
+                },
+              },
+            },
+          }),
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+
+    await expect(fetchGhPRViewedFiles(runtime, viewedRef)).resolves.toEqual({
+      "src/a.ts": true,
+      "src/b.ts": false,
+      "src/c.ts": true,
+    });
+  });
+
+  test("throws for CLI and GraphQL errors", async () => {
+    const failedCli: PRRuntime = {
+      async runCommand() { return { stdout: "", stderr: "boom", exitCode: 1 }; },
+    };
+    await expect(fetchGhPRViewedFiles(failedCli, viewedRef)).rejects.toThrow(/Failed to fetch PR viewed files/);
+
+    const graphqlError: PRRuntime = {
+      async runCommand() {
+        return {
+          stdout: JSON.stringify({ errors: [{ message: "forbidden" }] }),
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    };
+    await expect(fetchGhPRViewedFiles(graphqlError, viewedRef)).rejects.toThrow("GraphQL error: forbidden");
+  });
+});
+
+describe("fetchGhPRContext envelope", () => {
+  const envelopeRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+
+  test("rejects invalid roots before fetching review threads", async () => {
+    for (const stdout of ["not json", "null", "[]"]) {
+      let graphqlCalls = 0;
+      const runtime: PRRuntime = {
+        async runCommand(command, args) {
+          if (args[0] === "pr" && args[1] === "view") {
+            return { stdout, stderr: "", exitCode: 0 };
+          }
+          graphqlCalls++;
+          return { stdout: "{}", stderr: "", exitCode: 0 };
+        },
+      };
+
+      await expect(fetchGhPRContext(runtime, envelopeRef)).rejects.toThrow(
+        "Failed to fetch PR context: Invalid response",
+      );
+      expect(graphqlCalls).toBe(0);
+    }
+  });
+
+  test("preserves field-level defaults for malformed members in a valid record", async () => {
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        if (args[0] === "pr" && args[1] === "view") {
+          return {
+            stdout: JSON.stringify({
+              body: "valid body",
+              state: 42,
+              labels: "not an array",
+              comments: "not an array",
+              reviews: [],
+              statusCheckRollup: [],
+              closingIssuesReferences: [],
+              unknownField: { preserved: true },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: JSON.stringify({ data: { repository: null } }), stderr: "", exitCode: 0 };
+      },
+    };
+
+    await expect(fetchGhPRContext(runtime, envelopeRef)).resolves.toMatchObject({
+      body: "valid body",
+      state: "",
+      labels: [],
+      comments: [],
+      reviews: [],
+      reviewThreads: [],
+    });
+  });
+});
+
+describe("fetchGhPRContext review threads", () => {
+  const contextRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+  const contextBody = JSON.stringify({
+    body: "Context body",
+    state: "OPEN",
+    isDraft: false,
+    labels: [],
+    comments: [],
+    reviews: [],
+    reviewDecision: "",
+    mergeable: "MERGEABLE",
+    mergeStateStatus: "CLEAN",
+    statusCheckRollup: [],
+    closingIssuesReferences: [],
+  });
+
+  test("retains valid threads and comments around malformed siblings", async () => {
+    const runtime: PRRuntime = {
+      async runCommand(command, args) {
+        if (args[0] === "pr" && args[1] === "view") {
+          return { stdout: contextBody, stderr: "", exitCode: 0 };
+        }
+        if (args[0] === "api" && args[1] === "graphql") {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequest: {
+                    reviewThreads: {
+                      nodes: [
+                        {
+                          id: "thread-1",
+                          isResolved: false,
+                          isOutdated: false,
+                          path: "src/a.ts",
+                          line: 10,
+                          startLine: null,
+                          diffSide: "LEFT",
+                          comments: {
+                            nodes: [
+                              {
+                                id: "comment-1",
+                                body: "First",
+                                author: null,
+                                createdAt: "2024-01-01T00:00:00Z",
+                                url: "https://comments/1",
+                                diffHunk: "@@ -1 +1 @@",
+                              },
+                              { id: "bad", body: 42 },
+                              {
+                                id: "comment-2",
+                                body: "Second",
+                                author: { login: "reviewer" },
+                                createdAt: "2024-01-02T00:00:00Z",
+                                url: "https://comments/2",
+                                diffHunk: null,
+                              },
+                            ],
+                          },
+                        },
+                        { id: "bad-thread", isResolved: true },
+                        {
+                          id: "thread-2",
+                          isResolved: true,
+                          isOutdated: true,
+                          path: "src/b.ts",
+                          line: null,
+                          startLine: 20,
+                          diffSide: "RIGHT",
+                          comments: { nodes: [] },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        return { stdout: "", stderr: "unexpected", exitCode: 1 };
+      },
+    };
+
+    const context = await fetchGhPRContext(runtime, contextRef);
+
+    expect(context.body).toBe("Context body");
+    expect(context.reviewThreads).toEqual([
+      {
+        id: "thread-1",
+        isResolved: false,
+        isOutdated: false,
+        path: "src/a.ts",
+        line: 10,
+        startLine: null,
+        diffSide: "LEFT",
+        comments: [
+          {
+            id: "comment-1",
+            author: "",
+            body: "First",
+            createdAt: "2024-01-01T00:00:00Z",
+            url: "https://comments/1",
+            diffHunk: "@@ -1 +1 @@",
+          },
+          {
+            id: "comment-2",
+            author: "reviewer",
+            body: "Second",
+            createdAt: "2024-01-02T00:00:00Z",
+            url: "https://comments/2",
+          },
+        ],
+      },
+      {
+        id: "thread-2",
+        isResolved: true,
+        isOutdated: true,
+        path: "src/b.ts",
+        line: null,
+        startLine: 20,
+        diffSide: "RIGHT",
+        comments: [],
+      },
+    ]);
+  });
+
+  test("keeps context when GraphQL fails or has no response branch", async () => {
+    for (const graphqlResult of [
+      { stdout: "not json", exitCode: 0 },
+      { stdout: JSON.stringify({ data: { repository: null } }), exitCode: 0 },
+      { stdout: "", exitCode: 1 },
+    ]) {
+      const runtime: PRRuntime = {
+        async runCommand(command, args) {
+          if (args[0] === "pr" && args[1] === "view") {
+            return { stdout: contextBody, stderr: "", exitCode: 0 };
+          }
+          if (args[0] === "api" && args[1] === "graphql") {
+            return { stdout: graphqlResult.stdout, stderr: "graphql failed", exitCode: graphqlResult.exitCode };
+          }
+          return { stdout: "", stderr: "unexpected", exitCode: 1 };
+        },
+      };
+
+      const context = await fetchGhPRContext(runtime, contextRef);
+      expect(context.body).toBe("Context body");
+      expect(context.reviewThreads).toEqual([]);
+    }
   });
 });
 

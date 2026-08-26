@@ -24,21 +24,23 @@ import { useCodeAnnotationDraft } from './hooks/useCodeAnnotationDraft';
 import type { CodeAnnotation } from './types';
 import { saveDraft, loadDraft, deleteDraft, getDraftGeneration } from '../shared/draft';
 
-const hasDom = typeof document !== 'undefined';
+const hasDom = globalThis.document !== undefined;
 
 const DRAFT_KEY = 'code-annotation-draft-test';
 const DEBOUNCE_WAIT_MS = 650; // hook debounce is 500ms
 
+// SAFETY: test constructs CodeAnnotation shape for draft round-trip.
 const ANNOTATION = {
   id: 'a1',
   filePath: 'src/index.ts',
   lineStart: 10,
   lineEnd: 10,
-  side: 'new',
-  type: 'comment',
-  comment: 'fix this',
-  originalText: 'const x = 1;',
-} as unknown as CodeAnnotation;
+  side: 'new' as const,
+  type: 'comment' as const,
+  text: 'fix this',
+  originalCode: 'const x = 1;',
+  createdAt: 1,
+} as CodeAnnotation;
 
 // ---------------------------------------------------------------------------
 // Real-disk fetch shim (mirrors the review server's /api/draft handlers)
@@ -52,8 +54,9 @@ let prevDataDirEnv: string | undefined;
 const draftCalls: { method: string; url: string }[] = [];
 
 function installFetchShim() {
+  // SAFETY: fetch shim matches typeof fetch signature; globalThis.fetch is Fetch.
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString();
+    const url = input instanceof Request || input instanceof URL ? input.toString() : String(input);
     if (url.startsWith('/api/draft')) {
       const parsedUrl = new URL(url, 'http://localhost');
       const method = init?.method ?? 'GET';
@@ -63,10 +66,12 @@ function installFetchShim() {
         return data
           ? new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } })
           : new Response(
-              JSON.stringify({
-                found: false,
-                ...(getDraftGeneration(DRAFT_KEY) !== null ? { draftGeneration: getDraftGeneration(DRAFT_KEY) } : {}),
-              }),
+              JSON.stringify((() => {
+                const body: any = { found: false };
+                const dg = getDraftGeneration(DRAFT_KEY);
+                if (dg !== null) body.draftGeneration = dg;
+                return body;
+              })()),
               { status: 404, headers: { 'Content-Type': 'application/json' } },
             );
       }
@@ -138,7 +143,10 @@ const tick = (ms: number) => act(async () => new Promise((r) => setTimeout(r, ms
 async function mountSession(opts: HookOptions): Promise<Session> {
   const host = document.createElement('div');
   document.body.appendChild(host);
-  const resultRef: { current: HookResult | null } = { current: null };
+  interface ResultRef {
+    current: HookResult | null;
+  }
+  const resultRef: ResultRef = { current: null };
   let root: Root;
   await act(async () => {
     root = createRoot(host);
@@ -172,7 +180,8 @@ describe('code-review annotation draft persistence', () => {
     const s1 = await mountSession(options());
     await s1.rerender(options({ annotations: [ANNOTATION] }));
     await tick(DEBOUNCE_WAIT_MS);
-    const afterSave = loadDraft(DRAFT_KEY) as { codeAnnotations?: unknown[] } | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
+    const afterSave: any = loadDraft(DRAFT_KEY);
     expect(afterSave).not.toBeNull();
     expect(afterSave!.codeAnnotations).toHaveLength(1);
 
@@ -194,7 +203,8 @@ describe('code-review annotation draft persistence', () => {
     // user action. They must NOT count as "the user had content", or clearing
     // them would fire a tombstone delete. (Regression guard for the engagement
     // signal being keyed on user-authored annotations only.)
-    const EXTERNAL = { ...(ANNOTATION as object), id: 'ext1', source: 'eslint' } as unknown as CodeAnnotation;
+    // SAFETY: test constructs CodeAnnotation with external source tag for churn guard.
+    const EXTERNAL = { ...ANNOTATION, id: 'ext1', source: 'eslint' } as CodeAnnotation;
 
     const s = await mountSession(options());
     // External annotation appears, then disappears — pure external churn.
@@ -232,7 +242,8 @@ describe('code-review annotation draft persistence', () => {
     await tick(DEBOUNCE_WAIT_MS);
 
     // The unrestored draft survives — the banner can still offer it.
-    const stillThere = loadDraft(DRAFT_KEY) as { codeAnnotations?: unknown[] } | null;
+    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
+    const stillThere: any = loadDraft(DRAFT_KEY);
     expect(stillThere).not.toBeNull();
     expect(stillThere!.codeAnnotations).toHaveLength(1);
     await s.unmount();

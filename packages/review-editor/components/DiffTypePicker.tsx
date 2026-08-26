@@ -15,7 +15,11 @@ interface DiffTypePickerProps {
  * Plain-English explanations shown in a tooltip next to each option.
  * Keep these short — they're hover hints, not docs.
  */
-const OPTION_HINTS: Record<string, string> = {
+interface OptionHintMap {
+  [key: string]: string;
+}
+
+const OPTION_HINTS: OptionHintMap = {
   uncommitted: "All your local changes — anything you haven't committed yet.",
   staged: "Only what you've run `git add` on.",
   unstaged: "What `git diff` shows with no arguments.",
