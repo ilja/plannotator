@@ -86,8 +86,6 @@ import {
   prRefFromMetadata,
   isSameProject,
   getDisplayRepo,
-  getMRLabel,
-  getMRNumberLabel,
 } from "./pr";
 import { AI_QUERY_ENDPOINT, createAIRuntime } from "./ai-runtime";
 import type { AIEndpoints } from "@plannotator/ai";
@@ -148,7 +146,7 @@ export interface ReviewServerOptions {
   /** PR metadata when reviewing a pull request (PR mode) */
   prMetadata?: PRMetadata;
   /**
-   * The initial layer patch is missing per-file content (platform APIs
+   * The initial layer patch is missing per-file content (GitHub APIs
    * withhold patches on very large PRs). Enables the local recompute upgrade
    * once a pool checkout is ready.
    */
@@ -242,7 +240,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   // limits) becomes available once the checkout warmup finishes — the layer
   // fingerprint flips to drive the refresh notice, and the pr-diff-scope
   // "layer" branch performs the upgrade. Tracked per-PR across pr-switch.
-  // Partiality is INFORMATION (the platform withheld content) and is always
+  // Partiality is INFORMATION (GitHub withheld content) and is always
   // reported; whether a local recompute can be OFFERED is a separate
   // capability, gated on the pool below (layerUpgradeAvailable).
   let layerPatchIncomplete = (options.prPatchIncomplete ?? false) && isPRMode;
@@ -272,7 +270,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
 
   // --- PR local checkout resolution -----------------------------------------
   // The pool's initial entry may still be warming up: the checkout is built in
-  // the background so the server can start on the platform diff alone. Three
+  // the background so the server can start on the GitHub diff alone. Three
   // states matter:
   //   ready entry      → use its path
   //   entry, not ready → the path does not exist on disk yet (or warmup
@@ -500,7 +498,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     isPRMode && prMetadata
       ? {
           display: getDisplayRepo(prMetadata),
-          branch: `${getMRLabel(prMetadata)} ${getMRNumberLabel(prMetadata)}`,
+          branch: `PR #${prMetadata.number}`,
         }
       : workspace
         ? { display: basename(workspace.root), branch: "Workspace" }
@@ -512,7 +510,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     };
   }
 
-  // Fetch current platform user (for own-PR/MR detection)
+  // Fetch the current GitHub user for own-pull-request detection.
   let prRef = isPRMode && prMetadata ? prRefFromMetadata(prMetadata) : null;
   const platformUser = prRef ? await getPRUser(prRef) : null;
   let prStackInfo = prMetadata ? getPRStackInfo(prMetadata) : null;
@@ -820,7 +818,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
               };
 
               if (body.scope === "layer") {
-                // Upgrade path: the platform withheld per-file content for
+                // Upgrade path: GitHub withheld per-file content for
                 // this PR (too large). Once the local checkout is ready,
                 // recompute the exact layer diff locally and replace the
                 // truncated API reconstruction. Snapshot the PR before the
@@ -977,7 +975,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
               prMetadata = pr.metadata;
               prRef = prRefFromMetadata(pr.metadata);
               currentPatch = pr.rawPatch;
-              currentGitRef = `${getMRLabel(pr.metadata)} ${getMRNumberLabel(pr.metadata)}`;
+              currentGitRef = `PR #${pr.metadata.number}`;
               currentError = undefined;
               originalPRPatch = pr.rawPatch;
               originalPRGitRef = currentGitRef;
@@ -1036,7 +1034,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
 
               repoInfo = {
                 display: getDisplayRepo(pr.metadata),
-                branch: `${getMRLabel(pr.metadata)} ${getMRNumberLabel(pr.metadata)}`,
+                branch: `PR #${pr.metadata.number}`,
               };
 
               const basePrSwitchPayload = {
@@ -1115,7 +1113,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
             }
 
             // Full-stack PR mode uses local git for file expansion because
-            // the patch is no longer the platform's layer diff.
+            // the patch is no longer GitHub's layer diff.
             const fileContentCwd = resolvePRLocalCwd();
             if (
               isPRMode &&
@@ -1159,7 +1157,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
               return Response.json(result);
             }
 
-            // PR mode: fetch from platform API using merge-base/head SHAs.
+            // PR mode: fetch from the GitHub API using merge-base/head SHAs.
             // The diff is computed against the merge-base (common ancestor), not the
             // base branch tip. File contents must match the diff for hunk expansion.
             if (isPRMode && prMetadata) {
@@ -1381,7 +1379,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
                 targetUrl = cached.metadata.url;
               } else if (currentPRDiffScope !== "layer") {
                 return Response.json(
-                  { error: "Switch to Layer diff before posting a platform review" },
+                  { error: "Switch to Layer diff before posting a GitHub review" },
                   { status: 400 },
                 );
               }
@@ -1407,12 +1405,6 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
           if (url.pathname === "/api/pr-viewed" && req.method === "POST") {
             if (!isPRMode || !prMetadata) {
               return Response.json({ error: "Not in PR mode" }, { status: 400 });
-            }
-            if (prMetadata.platform !== "github") {
-              return Response.json(
-                { error: "Viewed sync only supported for GitHub" },
-                { status: 400 },
-              );
             }
             const prNodeId = prMetadata.prNodeId;
             if (!prNodeId) {

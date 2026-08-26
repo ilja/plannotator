@@ -3,7 +3,7 @@ export interface RepoInfo {
   display: string;
   /** Current git branch (if in a git repo) */
   branch?: string;
-  /** Host of the git remote (e.g., "github.com", "gitlab.com"). Populated */
+  /** Host of the git remote (e.g., "github.com"). Populated */
   /** only when the remote URL is parseable; absent for directory-only fallbacks. */
   host?: string;
 }
@@ -15,7 +15,6 @@ export interface RepoInfo {
  * - SSH: git@github.com:org/repo.git
  * - HTTPS: https://github.com/org/repo.git
  * - SSH with port: ssh://git@github.com:22/org/repo.git
- * - GitLab subgroups: git@gitlab.com:group/subgroup/project.git
  */
 export function parseRemoteUrl(url: string): string | null {
   if (!url) return null;
@@ -41,7 +40,7 @@ export function parseRemoteUrl(url: string): string | null {
 /**
  * Parse the host from a git remote URL. Returns null when the shape
  * doesn't match a known remote form. Used to identify the forge
- * (github.com, gitlab.com, self-hosted) so inline mention / issue
+ * (GitHub.com or GitHub Enterprise) so inline mention / issue
  * refs can link to the correct destination instead of assuming GitHub.
  */
 export function parseRemoteHost(url: string): string | null {

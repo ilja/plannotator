@@ -9,7 +9,6 @@ const realFetch = globalThis.fetch;
 const roots: Root[] = [];
 
 const metadata: PRMetadata = {
-  platform: "github",
   host: "github.com",
   owner: "example",
   repo: "project",

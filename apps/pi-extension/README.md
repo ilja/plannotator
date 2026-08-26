@@ -45,7 +45,7 @@ This builds the annotation and code review UIs and copies them into `apps/pi-ext
 
 ## Code review
 
-Run `/plannotator-review` to open your current git changes in the code review UI. Annotate specific lines, switch between diff views, and submit feedback that gets sent to the agent. You can also pass a PR/MR URL or `--git` to force Git in JJ workspaces.
+Run `/plannotator-review` to open your current git changes in the code review UI. Annotate specific lines, switch between diff views, and submit feedback that gets sent to the agent. You can also pass a GitHub PR URL or `--git` to force Git in JJ workspaces.
 
 ## Markdown, text, HTML, folder, and URL annotation
 

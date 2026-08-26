@@ -1185,7 +1185,6 @@ describe("pi review server", () => {
       origin: "pi",
       htmlContent: "<!doctype html><html><body>review</body></html>",
       prMetadata: {
-        platform: "github",
         host: "github.com",
         owner: "owner",
         repo: "repo",

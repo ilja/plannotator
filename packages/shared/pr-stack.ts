@@ -148,11 +148,11 @@ const FULL_SHA_RE = /^[0-9a-f]{40,64}$/i;
 
 /**
  * Recompute the PR's LAYER diff locally — the same merge-base..head diff the
- * platform renders, but with no API size limits. Used to upgrade a truncated
- * files-API reconstruction (platforms withhold per-file patches on very large
+ * GitHub renders, but with no API size limits. Used to upgrade a truncated
+ * files-API reconstruction (GitHub withholds per-file patches on very large
  * PRs) once a local checkout exists.
  *
- * Prefers the platform-reported merge-base SHA (the exact commit the platform
+ * Prefers the GitHub-reported merge-base SHA (the exact commit GitHub
  * diffed against); falls back to discovering the merge base locally via a
  * three-dot diff against baseSha. Diffs explicit SHAs, not HEAD — agent jobs
  * may move HEAD in the checkout.
@@ -172,8 +172,8 @@ export async function runPRLayerLocalDiff(
     return unavailable(`Invalid PR head SHA: ${metadata.headSha}`);
   }
 
-  // Shallow warmup clones may lack an object; both GitHub and GitLab allow
-  // fetching reachable commits by SHA (the warmup already relies on this).
+  // Shallow warmup clones may lack an object; GitHub allows fetching reachable
+  // commits by SHA (the warmup already relies on this).
   const ensureObject = (sha: string): Promise<boolean> =>
     ensureObjectAvailable(runtime, sha, { cwd });
 
@@ -255,7 +255,7 @@ export async function getPRFullStackFingerprint(
 }
 
 /**
- * Fetch and checkout a PR/MR head in a local worktree.
+ * Fetch and checkout a pull request head in a local worktree.
  * Returns true if the checkout succeeded, false otherwise.
  */
 export async function checkoutPRHead(
@@ -263,10 +263,7 @@ export async function checkoutPRHead(
   metadata: PRMetadata,
   cwd: string,
 ): Promise<boolean> {
-  const refSpec =
-    metadata.platform === "github"
-      ? `refs/pull/${metadata.number}/head`
-      : `refs/merge-requests/${metadata.iid}/head`;
+  const refSpec = `refs/pull/${metadata.number}/head`;
 
   const fetch = await runtime.runGit(["fetch", "origin", refSpec], { cwd });
   if (fetch.exitCode !== 0) return false;
@@ -300,7 +297,7 @@ export function buildMinimalStackTree(metadata: PRMetadata, stackInfo: PRStackIn
 
   nodes.push({
     branch: metadata.headBranch,
-    number: metadata.platform === "github" ? metadata.number : metadata.iid,
+    number: metadata.number,
     title: metadata.title,
     url: metadata.url,
     isCurrent: true,

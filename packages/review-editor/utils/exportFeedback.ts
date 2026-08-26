@@ -4,7 +4,7 @@ import type {
   ConventionalDecoration,
 } from "@plannotator/ui/types";
 import type { PRMetadata } from "@plannotator/shared/pr-types";
-import { getMRLabel, getMRNumberLabel, getDisplayRepo } from "@plannotator/shared/pr-types";
+import { getDisplayRepo } from "@plannotator/shared/pr-types";
 
 /**
  * Format a conventional comment prefix per the Conventional Comments spec:
@@ -240,7 +240,7 @@ export function exportReviewFeedback(
     const scopeLabel = derivedScope ?? (scopes.size === 0 ? prReviewScope : undefined);
 
     let output = prMeta
-      ? `# ${getMRLabel(prMeta)} Review: ${getDisplayRepo(prMeta)}${getMRNumberLabel(prMeta)}\n\n` +
+      ? `# PR Review: ${getDisplayRepo(prMeta)}#${prMeta.number}\n\n` +
         `**${prMeta.title}**\n` +
         `Branch: \`${prMeta.headBranch}\` → \`${prMeta.baseBranch}\`\n` +
         `${scopeLabel ? `Review scope: ${scopeLabel}\n` : ""}` +

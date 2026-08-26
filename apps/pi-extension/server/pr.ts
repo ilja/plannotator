@@ -1,5 +1,5 @@
 /**
- * PR/MR provider for Node.js runtime.
+ * GitHub pull request provider for Node.js runtime.
  * Node.js PRRuntime + bound dispatch functions from shared pr-provider.
  */
 

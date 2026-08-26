@@ -96,9 +96,9 @@ describe("decodePRContextResponse", () => {
     });
   });
 
-  test("decodes GitLab-shaped context with empty label colors and nullable checks", () => {
+  test("preserves empty label colors and nullable checks", () => {
     const { url: _url, ...reviewWithoutUrl } = validReview;
-    const gitlabContext = {
+    const context = {
       ...validContext,
       labels: [{ name: "bug", color: "" }],
       reviews: [reviewWithoutUrl],
@@ -106,7 +106,7 @@ describe("decodePRContextResponse", () => {
       checks: [{ ...validContext.checks[0], conclusion: null }],
     };
 
-    expect(decodePRContextResponse(gitlabContext)).toEqual(gitlabContext);
+    expect(decodePRContextResponse(context)).toEqual(context);
   });
 
   test("rejects malformed successful envelopes and required scalar fields", () => {

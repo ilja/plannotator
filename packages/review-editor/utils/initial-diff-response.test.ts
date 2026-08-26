@@ -51,7 +51,6 @@ const validResponse = {
   sharingEnabled: false,
   repoInfo: { display: "backnotprop/plannotator", branch: "feature/review" },
   prMetadata: {
-    platform: "github",
     host: "github.com",
     owner: "backnotprop",
     repo: "plannotator",
@@ -331,7 +330,7 @@ describe("decodeInitialDiffResponse", () => {
       agentCwd: 42,
       sharingEnabled: "true",
       repoInfo: { display: 42 },
-      prMetadata: { platform: "github", number: "42" },
+      prMetadata: { ...validResponse.prMetadata, number: "42" },
       prStackInfo: { ...validResponse.prStackInfo, source: "unknown" },
       prStackTree: { nodes: [{ branch: "missing flags" }] },
       prDiffScope: "unknown",
@@ -515,7 +514,6 @@ describe("decodeInitialDiffResponse", () => {
         source: validResponse.prStackInfo.source,
       });
       expect(decoded.success.prMetadata).toEqual({
-        platform: validResponse.prMetadata.platform,
         host: validResponse.prMetadata.host,
         owner: validResponse.prMetadata.owner,
         repo: validResponse.prMetadata.repo,
@@ -529,46 +527,6 @@ describe("decodeInitialDiffResponse", () => {
         url: validResponse.prMetadata.url,
       });
       expect(decoded.success.semanticDiff).toEqual({ available: true });
-    }
-  });
-
-  test("decodes GitLab metadata without GitHub-only fields", () => {
-    const decoded = decodeInitialDiffResponse({
-      rawPatch: validResponse.rawPatch,
-      gitRef: validResponse.gitRef,
-      prMetadata: {
-        platform: "gitlab",
-        host: "gitlab.com",
-        projectPath: "backnotprop/plannotator",
-        iid: 42,
-        title: "Safe response decoding",
-        author: "ilja",
-        baseBranch: "main",
-        headBranch: "feature/review",
-        defaultBranch: 42,
-        baseSha: "base-sha",
-        headSha: "head-sha",
-        mergeBaseSha: false,
-        url: "https://gitlab.com/backnotprop/plannotator/-/merge_requests/42",
-      },
-    });
-
-    expect(Result.isSuccess(decoded)).toBeTrue();
-    if (Result.isSuccess(decoded)) {
-      expect(decoded.success.prMetadata).toEqual({
-        platform: "gitlab",
-        host: "gitlab.com",
-        projectPath: "backnotprop/plannotator",
-        iid: 42,
-        title: "Safe response decoding",
-        author: "ilja",
-        baseBranch: "main",
-        headBranch: "feature/review",
-        baseSha: "base-sha",
-        headSha: "head-sha",
-        url: "https://gitlab.com/backnotprop/plannotator/-/merge_requests/42",
-      });
-      expect("prNodeId" in decoded.success.prMetadata).toBeFalse();
     }
   });
 

@@ -51,7 +51,7 @@ export const reviewEditorShortcuts = defineShortcutScope({
       description: "Toggle review destination",
       bindings: ["Alt Alt"],
       section: "Actions",
-      hint: "Double-tap to switch between platform and agent in PR review mode.",
+      hint: "Double-tap to switch between GitHub and agent in PR review mode.",
       displayOrder: 30,
     },
     toggleFileTree: {

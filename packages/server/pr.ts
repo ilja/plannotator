@@ -1,5 +1,5 @@
 /**
- * PR/MR provider for Bun runtimes
+ * GitHub pull request provider for Bun runtimes
  *
  * Thin wrapper around shared pr-provider.ts, same pattern as git.ts.
  * Pre-binds a Bun-based runtime so consumers get a clean API.
@@ -39,14 +39,8 @@ export type {
 export {
   prRefFromMetadata,
   isSameProject,
-  getPlatformLabel,
-  getMRLabel,
-  getMRNumberLabel,
   getDisplayRepo,
-  getCliName,
-  getCliInstallUrl,
 } from "@plannotator/shared/pr-types";
-export type { GithubPRMetadata } from "@plannotator/shared/pr-types";
 
 const runtime: PRRuntime = {
   async runCommand(cmd, args) {

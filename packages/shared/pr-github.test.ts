@@ -14,7 +14,7 @@ import {
 } from "./diff-paths";
 import type { PRMetadata, PRRuntime } from "./pr-types";
 
-const REF = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+const REF = { host: "github.com", owner: "o", repo: "r", number: 123 };
 
 const VIEW_JSON = JSON.stringify({
   id: "PR_node123",
@@ -87,7 +87,6 @@ describe("fetchGhPR", () => {
 
     expect(result.rawPatch).toBe(patch);
     expect(result.metadata).toMatchObject({
-      platform: "github",
       number: 123,
       baseBranch: "main",
       headBranch: "feature",
@@ -295,7 +294,6 @@ describe("fetchGhPR", () => {
 
 describe("fetchGhPRList", () => {
   const listRef = {
-    platform: "github" as const,
     host: "github.com",
     owner: "o",
     repo: "r",
@@ -409,14 +407,12 @@ describe("fetchGhPRList", () => {
 
 describe("fetchGhPRStack", () => {
   const stackRef = {
-    platform: "github" as const,
     host: "github.com",
     owner: "o",
     repo: "r",
     number: 3,
   };
   const metadata: PRMetadata = {
-    platform: "github",
     host: "github.com",
     owner: "o",
     repo: "r",
@@ -545,7 +541,6 @@ describe("fetchGhPRStack", () => {
 
 describe("fetchGhPRViewedFiles", () => {
   const viewedRef = {
-    platform: "github" as const,
     host: "github.com",
     owner: "o",
     repo: "r",
@@ -632,7 +627,6 @@ describe("fetchGhPRViewedFiles", () => {
 
 describe("fetchGhPRContext envelope", () => {
   const envelopeRef = {
-    platform: "github" as const,
     host: "github.com",
     owner: "o",
     repo: "r",
@@ -695,7 +689,6 @@ describe("fetchGhPRContext envelope", () => {
 
 describe("fetchGhPRContext review threads", () => {
   const contextRef = {
-    platform: "github" as const,
     host: "github.com",
     owner: "o",
     repo: "r",

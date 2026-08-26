@@ -20,7 +20,7 @@ const stateLabels = {
 };
 
 interface PRSelectorProps {
-  mrNumberLabel: string;
+  prNumberLabel: string;
   prTitle: string;
   currentNumber: number;
   onSelect: (url: string) => void;
@@ -30,7 +30,7 @@ interface PRSelectorProps {
 const HIDE_MERGED_PR_KEY = "plannotator-pr-list-hide-merged";
 
 export function PRSelector({
-  mrNumberLabel,
+  prNumberLabel,
   prTitle,
   currentNumber,
   onSelect,
@@ -137,7 +137,7 @@ export function PRSelector({
           title={prTitle}
         >
           <PullRequestIcon className="w-3 h-3 flex-shrink-0" />
-          <span className="font-mono whitespace-nowrap">{mrNumberLabel}</span>
+          <span className="font-mono whitespace-nowrap">{prNumberLabel}</span>
           <span className="truncate hidden md:inline">{prTitle}</span>
           <svg
             className={`w-2.5 h-2.5 flex-shrink-0 text-muted-foreground/30 transition-transform duration-150 ${open ? "rotate-180" : ""}`}

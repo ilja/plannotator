@@ -14,14 +14,8 @@ import { DiffOptionsPopover } from "./components/DiffOptionsPopover";
 import { storage } from "@plannotator/ui/utils/storage";
 import { CompletionOverlay } from "@plannotator/ui/components/CompletionOverlay";
 import { GitHubIcon } from "@plannotator/ui/components/GitHubIcon";
-import { GitLabIcon } from "@plannotator/ui/components/GitLabIcon";
 import { RepoIcon } from "@plannotator/ui/components/RepoIcon";
-import {
-  getPlatformLabel,
-  getMRLabel,
-  getMRNumberLabel,
-  getDisplayRepo,
-} from "@plannotator/shared/pr-types";
+import { getDisplayRepo } from "@plannotator/shared/pr-types";
 import type { SemanticDiffAdvert } from "@plannotator/shared/semantic-diff-types";
 import { configStore, useConfigValue } from "@plannotator/ui/config";
 import { loadDiffFont } from "@plannotator/ui/utils/diffFonts";
@@ -281,13 +275,9 @@ const ReviewApp: React.FC = () => {
     return true;
   });
 
-  // Derived: Platform mode is active when destination is platform AND we have PR/MR metadata
+  // GitHub mode is active when selected and pull request metadata is available.
   const platformMode = reviewDestination === "platform" && !!prMetadata;
-
-  // Platform-aware labels
-  const platformLabel = prMetadata ? getPlatformLabel(prMetadata) : "GitHub";
-  const mrLabel = prMetadata ? getMRLabel(prMetadata) : "PR";
-  const mrNumberLabel = prMetadata ? getMRNumberLabel(prMetadata) : "";
+  const prNumberLabel = prMetadata ? `#${prMetadata.number}` : "";
   const displayRepo = prMetadata ? getDisplayRepo(prMetadata) : "";
   const appVersion = __APP_VERSION__;
 
@@ -1251,7 +1241,7 @@ const ReviewApp: React.FC = () => {
         }
         // Sync viewed state to GitHub (fire and forget — best effort)
         // Capture willBeViewed inside the callback to ensure correctness with React batching
-        if (prMetadata && prMetadata.platform === "github") {
+        if (prMetadata) {
           fetch("/api/pr-viewed", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1606,7 +1596,7 @@ const ReviewApp: React.FC = () => {
   const handleRefreshStaleDiff = useCallback(() => {
     if (prMetadata) {
       // Only the full-stack scope can go stale locally — the layer diff is
-      // computed platform-side and its fingerprint never flips.
+      // computed by GitHub and its fingerprint never flips.
       if (prDiffScope === "full-stack") handlePRDiffScopeSelect("full-stack");
       return;
     }
@@ -2002,11 +1992,7 @@ const ReviewApp: React.FC = () => {
             : [
                 {
                   prUrl: prMetadata?.url ?? "",
-                  prNumber: prMetadata
-                    ? prMetadata.platform === "github"
-                      ? prMetadata.number
-                      : prMetadata.iid
-                    : 0,
+                  prNumber: prMetadata?.number ?? 0,
                   prTitle: prMetadata?.title ?? "",
                   prRepo: prMetadata ? getDisplayRepo(prMetadata) : "",
                   fileComments: [],
@@ -2077,8 +2063,8 @@ const ReviewApp: React.FC = () => {
         const prLinks = openUrls.join(", ");
         const statusMessage =
           action === "approve"
-            ? `${mrLabel === "MR" ? "Merge request" : "Pull request"} approved on ${platformLabel}${prLinks ? ": " + prLinks : ""}`
-            : `${mrLabel === "MR" ? "Merge request" : "Pull request"} reviewed on ${platformLabel}${prLinks ? ": " + prLinks : ""}`;
+            ? `Pull request approved on GitHub${prLinks ? ": " + prLinks : ""}`
+            : `Pull request reviewed on GitHub${prLinks ? ": " + prLinks : ""}`;
         fetch("/api/feedback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2095,7 +2081,7 @@ const ReviewApp: React.FC = () => {
         setIsPlatformActioning(false);
       }
     },
-    [platformOpenPR, platformLabel, mrLabel, prMetadata],
+    [platformOpenPR, prMetadata],
   );
 
   const openPlatformDialog = useCallback(
@@ -2103,7 +2089,7 @@ const ReviewApp: React.FC = () => {
       const diffPaths = new Set(files.map((f) => f.path));
       const prMeta = prMetadata
         ? {
-            number: prMetadata.platform === "github" ? prMetadata.number : prMetadata.iid,
+            number: prMetadata.number,
             title: prMetadata.title,
             repo: getDisplayRepo(prMetadata),
           }
@@ -2221,7 +2207,6 @@ const ReviewApp: React.FC = () => {
     isPlatformActioning,
     origin,
     platformMode,
-    platformLabel,
     platformUser,
     prMetadata,
     totalAnnotationCount,
@@ -2273,17 +2258,15 @@ const ReviewApp: React.FC = () => {
                       {displayRepo}
                     </span>
                     <PRSelector
-                      mrNumberLabel={mrNumberLabel}
+                      prNumberLabel={prNumberLabel}
                       prTitle={prMetadata.title}
-                      currentNumber={
-                        prMetadata.platform === "github" ? prMetadata.number : prMetadata.iid
-                      }
+                      currentNumber={prMetadata.number}
                       onSelect={handlePRSwitch}
                       disabled={isSwitchingPRScope}
                     />
                     <StackedPRLabel
                       metadata={prMetadata}
-                      mrNumberLabel={mrNumberLabel}
+                      prNumberLabel={prNumberLabel}
                       stackInfo={prStackInfo}
                       stackTree={prStackTree}
                       scope={prDiffScope}
@@ -2414,18 +2397,14 @@ const ReviewApp: React.FC = () => {
                           className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-muted hover:bg-muted/80 transition-colors"
                           title={
                             reviewDestination === "platform"
-                              ? `Posting to ${platformLabel} ${mrLabel}`
+                              ? "Posting to GitHub pull request"
                               : "Sending to agent session"
                           }
                         >
                           {reviewDestination === "platform" ? (
                             <>
-                              {prMetadata?.platform === "gitlab" ? (
-                                <GitLabIcon className="w-3.5 h-3.5" />
-                              ) : (
-                                <GitHubIcon className="w-3.5 h-3.5" />
-                              )}
-                              <span>{platformLabel}</span>
+                              <GitHubIcon className="w-3.5 h-3.5" />
+                              <span>GitHub</span>
                             </>
                           ) : (
                             "Agent"
@@ -2460,8 +2439,8 @@ const ReviewApp: React.FC = () => {
                                     : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                                 }`}
                               >
-                                <div className="font-medium">{platformLabel}</div>
-                                <div className="text-muted-foreground/60">Post to {mrLabel}</div>
+                                <div className="font-medium">GitHub</div>
+                                <div className="text-muted-foreground/60">Post to pull request</div>
                               </button>
                               <button
                                 onClick={() => {
@@ -2517,7 +2496,7 @@ const ReviewApp: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Partial PR diff notice — the platform withheld per-file
+                    {/* Partial PR diff notice — GitHub withheld per-file
                     content (PR too large). "Load full diff" re-requests the
                     layer scope; the server recomputes the exact diff from the
                     local checkout (waiting out the warmup if needed). The
@@ -2528,7 +2507,7 @@ const ReviewApp: React.FC = () => {
                       <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 px-2 py-1 bg-amber-500/10 rounded border border-amber-500/25">
                         <span
                           className="hidden md:inline"
-                          title={`${prMetadata?.platform === "gitlab" ? "GitLab" : "GitHub"} omitted diff content for some files because this PR is too large`}
+                          title="GitHub omitted diff content for some files because this PR is too large"
                         >
                           Partial diff
                         </span>
@@ -2540,7 +2519,7 @@ const ReviewApp: React.FC = () => {
                           // remedy that not every runtime supports).
                           <span
                             className="hidden sm:inline text-amber-700/70 dark:text-amber-300/70"
-                            title="The platform omitted diff content for some files and this session has no local checkout to recompute from. CLI sessions can re-run the review with --local."
+                            title="GitHub omitted diff content for some files and this session has no local checkout to recompute from. CLI sessions can re-run the review with --local."
                           >
                             (no local checkout — full diff unavailable)
                           </span>
@@ -2627,7 +2606,7 @@ const ReviewApp: React.FC = () => {
                           shortLabel="Post"
                           loadingLabel="Posting..."
                           shortLoadingLabel="Posting..."
-                          title="Post review to platform"
+                          title="Post review to GitHub"
                         />
                         <div className="relative group/approve">
                           <ApproveButton
@@ -2651,7 +2630,7 @@ const ReviewApp: React.FC = () => {
                             }
                             title={
                               platformUser && prMetadata?.author === platformUser
-                                ? `You can't approve your own ${mrLabel}`
+                                ? "You can't approve your own pull request"
                                 : "Approve - no changes needed"
                             }
                           />
@@ -2659,9 +2638,7 @@ const ReviewApp: React.FC = () => {
                             <div className="absolute top-full right-0 mt-2 px-3 py-2 bg-popover border border-border rounded-lg shadow-xl text-xs text-foreground w-48 text-center opacity-0 invisible group-hover/approve:opacity-100 group-hover/approve:visible transition-all pointer-events-none z-50">
                               <div className="absolute bottom-full right-4 border-4 border-transparent border-b-border" />
                               <div className="absolute bottom-full right-4 mt-px border-4 border-transparent border-b-popover" />
-                              You can't approve your own{" "}
-                              {mrLabel === "MR" ? "merge request" : "pull request"} on{" "}
-                              {platformLabel}.
+                              You can't approve your own pull request on GitHub.
                             </div>
                           )}
                         </div>
@@ -3213,8 +3190,8 @@ const ReviewApp: React.FC = () => {
                   ? "Review session closed without feedback."
                   : platformMode
                     ? submitted === "approved"
-                      ? `Your approval was submitted to ${platformLabel}.`
-                      : `Your feedback was submitted to ${platformLabel}.`
+                      ? "Your approval was submitted to GitHub."
+                      : "Your feedback was submitted to GitHub."
                     : submitted === "approved"
                       ? `${getAgentName(origin)} will proceed with the changes.`
                       : `${getAgentName(origin)} will address your review feedback.`
@@ -3244,8 +3221,6 @@ const ReviewApp: React.FC = () => {
               }}
               onCancel={() => setPlatformCommentDialog(null)}
               isSubmitting={isPlatformActioning}
-              mrLabel={mrLabel}
-              platformLabel={platformLabel}
             />
           </div>
         </ReviewStateProvider>

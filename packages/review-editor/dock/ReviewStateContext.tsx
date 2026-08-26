@@ -44,7 +44,7 @@ export interface ReviewState {
   activeDiffBase?: string;
   /** Diff context baked into exported feedback. */
   feedbackDiffContext?: FeedbackDiffContext;
-  /** PR/MR review scope label, e.g. "Layer diff" or "Full stack diff". */
+  /** Pull request review scope label, e.g. "Layer diff" or "Full stack diff". */
   prReviewScope?: string;
   prDiffScope?: PRDiffScope;
   /** Local checkout directory — base for resolving repo-relative diff paths to

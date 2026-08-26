@@ -24,7 +24,6 @@ function fakeRuntime(): FakeRuntimeResult {
 
 function makeMetadata(number: number, baseBranch = "main"): PRMetadata {
   return {
-    platform: "github",
     host: "github.com",
     owner: "acme",
     repo: "widgets",
@@ -208,36 +207,6 @@ describe("worktree-pool", () => {
     expect(removeCommands.length).toBe(2);
   });
 
-  test("GitLab MR uses correct ref format", async () => {
-    const { runtime, commands } = fakeRuntime();
-    const pool = createWorktreePool({
-      sessionDir: "/tmp/session",
-      repoDir: "/repo",
-      isSameRepo: true,
-    });
-
-    const glMetadata: PRMetadata = {
-      platform: "gitlab",
-      host: "gitlab.com",
-      projectPath: "group/project",
-      iid: 42,
-      title: "MR !42",
-      author: "bob",
-      baseBranch: "main",
-      headBranch: "feature/fix",
-      baseSha: "abc123def456abc123def456abc123def456abc1",
-      headSha: "def456abc123def456abc123def456abc123def4",
-      url: "https://gitlab.com/group/project/-/merge_requests/42",
-    };
-
-    const entry = await pool.ensure(runtime, glMetadata);
-    expect(entry.path).toBe("/tmp/session/pool/pr-42");
-
-    const fetchPRHead = commands.find(
-      (c) => c[0] === "fetch" && c[2] === "--" && c[3]?.includes("merge-requests"),
-    );
-    expect(fetchPRHead?.[3]).toBe("refs/merge-requests/42/head");
-  });
 });
 
 // --- Seeded background warmup (non-blocking PR checkout) ---------------------

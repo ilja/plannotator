@@ -270,14 +270,20 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
         // GitHub alert marker: a blockquote whose first line is [!KIND].
         // We strip the marker from content and tag the block; rendering decides the style.
         const alertMatch = stripped.match(/^\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/i);
+        const alertKind = alertMatch?.[1]?.toLowerCase();
+        const normalizedAlertKind =
+          alertKind === "note" ||
+          alertKind === "tip" ||
+          alertKind === "warning" ||
+          alertKind === "caution" ||
+          alertKind === "important"
+            ? alertKind
+            : undefined;
         blocks.push({
           id: `block-${currentId++}`,
           type: "blockquote",
           content: alertMatch ? "" : stripped,
-          alertKind: alertMatch
-            ? // SAFETY: alertMatch[1] is known alert kind string — cast to union
-              (alertMatch[1].toLowerCase() as "note" | "tip" | "warning" | "caution" | "important")
-            : undefined,
+          alertKind: normalizedAlertKind,
           order: currentId,
           startLine: currentLineNum,
         });

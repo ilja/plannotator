@@ -8,7 +8,6 @@ function result(stdout = "", stderr = "", exitCode = 0): GitCommandResult {
 }
 
 const metadata: PRMetadata = {
-  platform: "github",
   host: "github.com",
   owner: "backnotprop",
   repo: "plannotator-stack-fixture",
@@ -159,7 +158,7 @@ describe("runPRLayerLocalDiff", () => {
     };
   }
 
-  test("diffs the platform merge-base against the PR head (exact layer diff)", async () => {
+  test("diffs the GitHub merge-base against the PR head (exact layer diff)", async () => {
     const { runtime, calls } = layerRuntime({});
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
@@ -198,7 +197,7 @@ describe("runPRLayerLocalDiff", () => {
     expect(calls.at(-1)?.at(-1)).toBe(`${BASE}...${HEAD}`);
   });
 
-  test("falls back to three-dot when no merge-base SHA is reported (GitLab)", async () => {
+  test("falls back to three-dot when no merge-base SHA is reported", async () => {
     const { runtime, calls } = layerRuntime({});
     const noMergeBase: Omit<PRMetadata, "mergeBaseSha"> & { mergeBaseSha?: string } = {
       ...layerMetadata,

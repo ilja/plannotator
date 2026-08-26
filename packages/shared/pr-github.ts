@@ -7,6 +7,7 @@
 import { Option, Schema } from "effect";
 import type {
   PRRuntime,
+  PRRef,
   PRMetadata,
   PRContext,
   PRReviewThread,
@@ -149,14 +150,7 @@ const decodeGhReviewThreadsJson = Schema.decodeUnknownOption(
 const decodeGhReviewThread = Schema.decodeUnknownOption(GhReviewThreadSchema);
 const decodeGhReviewThreadComment = Schema.decodeUnknownOption(GhReviewThreadCommentSchema);
 
-// GitHub-specific PRRef shape (used internally)
-interface GhPRRef {
-  platform: "github";
-  host: string;
-  owner: string;
-  repo: string;
-  number: number;
-}
+type GhPRRef = PRRef;
 
 /** Build the --repo flag value: HOST/OWNER/REPO for GHE, OWNER/REPO for github.com */
 function repoFlag(ref: GhPRRef): string {
@@ -434,7 +428,6 @@ export async function fetchGhPR(
   }
 
   const metadata: PRMetadata = {
-    platform: "github",
     host: ref.host,
     owner: ref.owner,
     repo: ref.repo,
@@ -1002,7 +995,6 @@ export async function fetchGhPRStack(
   ref: GhPRRef,
   metadata: PRMetadata,
 ): Promise<PRStackTree | null> {
-  if (metadata.platform !== "github") return null;
   const defaultBranch = metadata.defaultBranch;
   if (!defaultBranch) return null;
 

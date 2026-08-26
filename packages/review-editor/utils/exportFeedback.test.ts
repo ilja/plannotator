@@ -16,7 +16,6 @@ const ann = (overrides: Partial<CodeAnnotation> = {}): CodeAnnotation => ({
 });
 
 const prMeta: PRMetadata = {
-  platform: "github",
   host: "github.com",
   owner: "acme",
   repo: "widgets",

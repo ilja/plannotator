@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  getCliInstallUrl,
-  getCliName,
   getDisplayRepo,
-  getMRLabel,
-  getMRNumberLabel,
-  getPlatformLabel,
   isSameProject,
   parsePRUrl,
   prRefFromMetadata,
@@ -14,12 +9,11 @@ import {
 } from "./pr-types";
 import { getPRDiffScopeOptions, getPRStackInfo } from "./pr-stack";
 
-describe("pr-provider platform helpers", () => {
+describe("GitHub PR helpers", () => {
   test("parses GitHub PR URLs including nested suffixes", () => {
     const ref = parsePRUrl("https://github.com/backnotprop/plannotator/pull/364/files");
 
     expect(ref).toEqual({
-      platform: "github",
       host: "github.com",
       owner: "backnotprop",
       repo: "plannotator",
@@ -31,7 +25,6 @@ describe("pr-provider platform helpers", () => {
     const ref = parsePRUrl("https://ghe.company.com/org/repo/pull/99/files");
 
     expect(ref).toEqual({
-      platform: "github",
       host: "ghe.company.com",
       owner: "org",
       repo: "repo",
@@ -39,37 +32,14 @@ describe("pr-provider platform helpers", () => {
     });
   });
 
-  test("does not confuse GHE URL with GitLab", () => {
+  test("parses GitHub Enterprise URLs on arbitrary hosts", () => {
     const ref = parsePRUrl("https://git.internal.corp/team/app/pull/5");
 
     expect(ref).toEqual({
-      platform: "github",
       host: "git.internal.corp",
       owner: "team",
       repo: "app",
       number: 5,
-    });
-  });
-
-  test("parses GitLab.com MR URLs", () => {
-    const ref = parsePRUrl("https://gitlab.com/group/project/-/merge_requests/42/diffs");
-
-    expect(ref).toEqual({
-      platform: "gitlab",
-      host: "gitlab.com",
-      projectPath: "group/project",
-      iid: 42,
-    });
-  });
-
-  test("parses self-hosted GitLab MR URLs with nested groups", () => {
-    const ref = parsePRUrl("https://gitlab.example.com/group/subgroup/project/-/merge_requests/7");
-
-    expect(ref).toEqual({
-      platform: "gitlab",
-      host: "gitlab.example.com",
-      projectPath: "group/subgroup/project",
-      iid: 7,
     });
   });
 
@@ -78,9 +48,8 @@ describe("pr-provider platform helpers", () => {
     expect(parsePRUrl("")).toBeNull();
   });
 
-  test("formats platform-aware labels for GitHub and GitLab", () => {
+  test("formats GitHub PR labels", () => {
     const githubMeta: PRMetadata = {
-      platform: "github",
       host: "github.com",
       owner: "backnotprop",
       repo: "plannotator",
@@ -94,34 +63,11 @@ describe("pr-provider platform helpers", () => {
       url: "https://github.com/backnotprop/plannotator/pull/364",
     };
 
-    const gitlabMeta: PRMetadata = {
-      platform: "gitlab",
-      host: "gitlab.example.com",
-      projectPath: "group/project",
-      iid: 42,
-      title: "GitLab MR",
-      author: "alice",
-      baseBranch: "main",
-      headBranch: "feature/gitlab",
-      baseSha: "base",
-      headSha: "head",
-      url: "https://gitlab.example.com/group/project/-/merge_requests/42",
-    };
-
-    expect(getPlatformLabel(githubMeta)).toBe("GitHub");
-    expect(getMRLabel(githubMeta)).toBe("PR");
-    expect(getMRNumberLabel(githubMeta)).toBe("#364");
     expect(getDisplayRepo(githubMeta)).toBe("backnotprop/plannotator");
-
-    expect(getPlatformLabel(gitlabMeta)).toBe("GitLab");
-    expect(getMRLabel(gitlabMeta)).toBe("MR");
-    expect(getMRNumberLabel(gitlabMeta)).toBe("!42");
-    expect(getDisplayRepo(gitlabMeta)).toBe("group/project");
   });
 
-  test("reconstructs refs and CLI metadata for each platform", () => {
+  test("reconstructs refs from metadata", () => {
     const githubMeta: PRMetadata = {
-      platform: "github",
       host: "github.com",
       owner: "backnotprop",
       repo: "plannotator",
@@ -135,47 +81,19 @@ describe("pr-provider platform helpers", () => {
       url: "https://github.com/backnotprop/plannotator/pull/1",
     };
 
-    const gitlabMeta: PRMetadata = {
-      platform: "gitlab",
-      host: "gitlab.example.com",
-      projectPath: "group/project",
-      iid: 2,
-      title: "GitLab MR",
-      author: "alice",
-      baseBranch: "main",
-      headBranch: "feature/gitlab",
-      baseSha: "base",
-      headSha: "head",
-      url: "https://gitlab.example.com/group/project/-/merge_requests/2",
-    };
-
     const githubRef = prRefFromMetadata(githubMeta);
-    const gitlabRef = prRefFromMetadata(gitlabMeta);
 
     expect(githubRef).toEqual({
-      platform: "github",
       host: "github.com",
       owner: "backnotprop",
       repo: "plannotator",
       number: 1,
     });
-    expect(gitlabRef).toEqual({
-      platform: "gitlab",
-      host: "gitlab.example.com",
-      projectPath: "group/project",
-      iid: 2,
-    });
-
-    expect(getCliName(githubRef)).toBe("gh");
-    expect(getCliInstallUrl(githubRef)).toBe("https://cli.github.com");
-    expect(getCliName(gitlabRef)).toBe("glab");
-    expect(getCliInstallUrl(gitlabRef)).toBe("https://gitlab.com/gitlab-org/cli");
   });
 });
 
 describe("PR stack helpers", () => {
   const stackedMeta: PRMetadata = {
-    platform: "github",
     host: "github.com",
     owner: "backnotprop",
     repo: "plannotator-stack-fixture",
@@ -233,19 +151,11 @@ describe("PR stack helpers", () => {
 
 describe("isSameProject", () => {
   const ghRef: PRRef = {
-    platform: "github",
     host: "github.com",
     owner: "acme",
     repo: "widgets",
     number: 1,
   };
-  const glRef: PRRef = {
-    platform: "gitlab",
-    host: "gitlab.com",
-    projectPath: "acme/widgets",
-    iid: 1,
-  };
-
   test("same GitHub project", () => {
     expect(isSameProject(ghRef, { ...ghRef, number: 99 })).toBe(true);
   });
@@ -260,17 +170,5 @@ describe("isSameProject", () => {
 
   test("different GitHub host", () => {
     expect(isSameProject(ghRef, { ...ghRef, host: "ghe.corp.com" })).toBe(false);
-  });
-
-  test("same GitLab project", () => {
-    expect(isSameProject(glRef, { ...glRef, iid: 99 })).toBe(true);
-  });
-
-  test("different GitLab projectPath", () => {
-    expect(isSameProject(glRef, { ...glRef, projectPath: "other/repo" })).toBe(false);
-  });
-
-  test("GitHub vs GitLab", () => {
-    expect(isSameProject(ghRef, glRef)).toBe(false);
   });
 });

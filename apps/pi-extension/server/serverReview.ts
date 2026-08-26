@@ -18,8 +18,6 @@ export type { DiffOption, DiffType, GitContext } from "../generated/review-core.
 
 import {
   getDisplayRepo,
-  getMRLabel,
-  getMRNumberLabel,
   isSameProject,
   type PRMetadata,
   prRefFromMetadata,
@@ -201,7 +199,7 @@ export async function startReviewServer(options: {
   pasteApiUrl?: string;
   prMetadata?: PRMetadata;
   /**
-   * The initial layer patch is missing per-file content (platform APIs
+   * The initial layer patch is missing per-file content (GitHub APIs
    * withhold patches on very large PRs). Enables the local recompute upgrade
    * once a pool checkout is ready.
    */
@@ -244,7 +242,7 @@ export async function startReviewServer(options: {
   // limits) becomes available once a pool checkout exists — the layer
   // fingerprint flips to drive the refresh notice, and the pr-diff-scope
   // "layer" branch performs the upgrade. Tracked per-PR across pr-switch.
-  // Partiality is INFORMATION (the platform withheld content) and is always
+  // Partiality is INFORMATION (GitHub withheld content) and is always
   // reported; whether a local recompute can be OFFERED is a separate
   // capability, gated on the pool below (layerUpgradeAvailable).
   let layerPatchIncomplete = (options.prPatchIncomplete ?? false) && isPRMode;
@@ -313,7 +311,7 @@ export async function startReviewServer(options: {
   let repoInfo = prMeta
     ? {
         display: getDisplayRepo(prMeta),
-        branch: `${getMRLabel(prMeta)} ${getMRNumberLabel(prMeta)}`,
+        branch: `PR #${prMeta.number}`,
       }
     : workspace
       ? { display: basename(workspace.root), branch: "Workspace" }
@@ -774,7 +772,7 @@ export async function startReviewServer(options: {
         };
 
         if (body.scope === "layer") {
-          // Upgrade path: the platform withheld per-file content for this
+          // Upgrade path: GitHub withheld per-file content for this
           // PR (too large). Once a pool checkout exists, recompute the
           // exact layer diff locally and replace the truncated API
           // reconstruction. Snapshot the PR before the await — a pr-switch
@@ -895,7 +893,7 @@ export async function startReviewServer(options: {
         prMeta = pr.metadata;
         prRef = prRefFromMetadata(pr.metadata);
         currentPatch = pr.rawPatch;
-        currentGitRef = `${getMRLabel(pr.metadata)} ${getMRNumberLabel(pr.metadata)}`;
+        currentGitRef = `PR #${pr.metadata.number}`;
         currentError = undefined;
         originalPRPatch = pr.rawPatch;
         originalPRGitRef = currentGitRef;
@@ -945,7 +943,7 @@ export async function startReviewServer(options: {
 
         repoInfo = {
           display: getDisplayRepo(pr.metadata),
-          branch: `${getMRLabel(pr.metadata)} ${getMRNumberLabel(pr.metadata)}`,
+          branch: `PR #${pr.metadata.number}`,
         };
 
         const switchResponse = {
@@ -1041,7 +1039,7 @@ export async function startReviewServer(options: {
           targetHeadSha = cached.metadata.headSha;
           targetUrl = cached.metadata.url;
         } else if (currentPRDiffScope !== "layer") {
-          json(res, { error: "Switch to Layer diff before posting a platform review" }, 400);
+          json(res, { error: "Switch to Layer diff before posting a GitHub review" }, 400);
           return;
         }
 
@@ -1059,10 +1057,6 @@ export async function startReviewServer(options: {
     } else if (url.pathname === "/api/pr-viewed" && req.method === "POST") {
       if (!isPRMode || !prMeta || !prRef) {
         json(res, { error: "Not in PR mode" }, 400);
-        return;
-      }
-      if (prMeta.platform !== "github") {
-        json(res, { error: "Viewed sync only supported for GitHub" }, 400);
         return;
       }
       const prNodeId = prMeta.prNodeId;
@@ -1173,7 +1167,7 @@ export async function startReviewServer(options: {
         return;
       }
 
-      // PR mode: fetch from platform API using merge-base/head SHAs
+      // PR mode: fetch from the GitHub API using merge-base/head SHAs
       if (isPRMode && prRef && prMeta) {
         try {
           const oldSha = prMeta.mergeBaseSha ?? prMeta.baseSha;

@@ -29,7 +29,7 @@ async function mountPRSelector() {
     root = createRoot(host);
     root.render(
       <PRSelector
-        mrNumberLabel="#42"
+        prNumberLabel="#42"
         prTitle="Current pull request"
         currentNumber={42}
         onSelect={() => {}}

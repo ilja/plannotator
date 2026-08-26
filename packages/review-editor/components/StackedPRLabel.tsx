@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { getPlatformLabel } from "@plannotator/shared/pr-types";
 import { buildMinimalStackTree } from "@plannotator/shared/pr-stack";
 import { getItem, setItem } from "@plannotator/ui/utils/storage";
 import type { PRMetadata } from "@plannotator/shared/pr-types";
@@ -14,7 +13,7 @@ import type {
 
 interface StackedPRLabelProps {
   metadata: PRMetadata;
-  mrNumberLabel: string;
+  prNumberLabel: string;
   stackInfo: PRStackInfo | null;
   stackTree: PRStackTree | null;
   scope: PRDiffScope;
@@ -49,7 +48,7 @@ const HIDE_MERGED_KEY = "plannotator-stack-hide-merged";
 
 export function StackedPRLabel({
   metadata,
-  mrNumberLabel,
+  prNumberLabel,
   stackInfo,
   stackTree,
   scope,
@@ -382,7 +381,7 @@ export function StackedPRLabel({
               rel="noopener noreferrer"
               className="text-[11px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
             >
-              View {mrNumberLabel} on {getPlatformLabel(metadata)}
+              View {prNumberLabel} on GitHub
               <svg
                 className="w-2.5 h-2.5"
                 fill="none"

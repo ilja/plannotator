@@ -42,7 +42,6 @@ const validGithubPRResponse = {
   rawPatch: "diff --git a/file.ts b/file.ts",
   gitRef: "main..feature/review",
   prMetadata: {
-    platform: "github" as const,
     host: "github.com",
     owner: "backnotprop",
     repo: "plannotator",
@@ -86,24 +85,6 @@ const validGithubPRResponse = {
   agentCwd: "/tmp/pr-42",
   semanticDiff: { available: true, semVersion: "1.0.0", semSource: "local" },
   error: "A non-fatal warning",
-};
-
-const validGitlabPRResponse = {
-  ...validGithubPRResponse,
-  gitRef: "main..feature/mr-42",
-  prMetadata: {
-    platform: "gitlab" as const,
-    host: "gitlab.com",
-    projectPath: "backnotprop/plannotator",
-    iid: 42,
-    title: "Safe response decoding",
-    author: "ilja",
-    baseBranch: "main",
-    headBranch: "feature/mr-42",
-    baseSha: "base-sha",
-    headSha: "head-sha",
-    url: "https://gitlab.com/backnotprop/plannotator/-/merge_requests/42",
-  },
 };
 
 const validCachedPRResponse = {
@@ -203,9 +184,8 @@ afterEach(async () => {
 });
 
 describe("decodePRSwitchResponse", () => {
-  test("decodes valid GitHub and GitLab responses", () => {
+  test("decodes valid GitHub responses", () => {
     expect(decodePRSwitchResponse(validGithubPRResponse)).toMatchObject(validGithubPRResponse);
-    expect(decodePRSwitchResponse(validGitlabPRResponse)).toMatchObject(validGitlabPRResponse);
   });
 
   test("accepts a minimal cached response with only required fields", () => {
@@ -225,10 +205,6 @@ describe("decodePRSwitchResponse", () => {
       {
         ...validGithubPRResponse,
         prMetadata: { ...validGithubPRResponse.prMetadata, number: "42" },
-      },
-      {
-        ...validGithubPRResponse,
-        prMetadata: { ...validGithubPRResponse.prMetadata, platform: "gitlab" },
       },
     ]) {
       expect(decodePRSwitchResponse(value)).toBeUndefined();
@@ -425,14 +401,11 @@ describe("readPRDiffScopeResponse", () => {
 
 describe("usePRStack response handling", () => {
   test.skipIf(!hasDom)(
-    "validates GitHub and GitLab PR switch responses while preserving loading completion",
+    "validates GitHub PR switch responses while preserving loading completion",
     async () => {
       const applied: unknown[] = [];
       const errors: string[] = [];
-      installFetch([
-        new Response(JSON.stringify(validGithubPRResponse), { status: 200 }),
-        new Response(JSON.stringify(validGitlabPRResponse), { status: 200 }),
-      ]);
+      installFetch([new Response(JSON.stringify(validGithubPRResponse), { status: 200 })]);
       await renderHarness(applied, errors);
 
       const firstOutput = await clickAction("pr-switch");
@@ -440,16 +413,8 @@ describe("usePRStack response handling", () => {
       expect(applied).toHaveLength(1);
       expect(applied[0]).toMatchObject({
         gitRef: validGithubPRResponse.gitRef,
-        prMetadata: { platform: "github", number: 42 },
       });
 
-      const secondOutput = await clickAction("pr-switch");
-      expect(secondOutput.dataset.switching).toBe("false");
-      expect(applied).toHaveLength(2);
-      expect(applied[1]).toMatchObject({
-        gitRef: validGitlabPRResponse.gitRef,
-        prMetadata: { platform: "gitlab", iid: 42 },
-      });
       expect(errors).toEqual([]);
     },
   );

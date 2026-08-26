@@ -80,8 +80,7 @@ const AvailableBranchesFieldsSchema = Schema.Struct({
   remote: Schema.optionalKey(Schema.Unknown),
 });
 
-const GithubPRMetadataSchema = Schema.Struct({
-  platform: Schema.Literal("github"),
+const PRMetadataSchema = Schema.Struct({
   host: Schema.String,
   owner: Schema.String,
   repo: Schema.String,
@@ -98,24 +97,6 @@ const GithubPRMetadataSchema = Schema.Struct({
   url: Schema.String,
 });
 
-const GitlabMRMetadataSchema = Schema.Struct({
-  platform: Schema.Literal("gitlab"),
-  host: Schema.String,
-  projectPath: Schema.String,
-  iid: Schema.Int,
-  title: Schema.String,
-  author: Schema.String,
-  baseBranch: Schema.String,
-  headBranch: Schema.String,
-  defaultBranch: Schema.optionalKey(Schema.Unknown),
-  baseSha: Schema.String,
-  headSha: Schema.String,
-  mergeBaseSha: Schema.optionalKey(Schema.Unknown),
-  url: Schema.String,
-});
-
-const PRMetadataSchema = Schema.Union([GithubPRMetadataSchema, GitlabMRMetadataSchema]);
-
 const PRStackInfoSchema = Schema.Struct({
   isStacked: Schema.Boolean,
   baseBranch: Schema.String,
@@ -125,7 +106,6 @@ const PRStackInfoSchema = Schema.Struct({
     "branch-inferred",
     "tree-discovered",
     "github-native",
-    "gitlab-native",
     "graphite",
     "ghstack",
   ]),
@@ -581,45 +561,17 @@ function decodePRMetadata(
   const fields = Option.getOrUndefined(decodePRMetadataFields(record));
   if (!fields) return undefined;
 
-  if (fields.platform === "github") {
-    const { prNodeId, defaultBranch, mergeBaseSha, ...required } = fields;
-    const decodedPrNodeId = Option.getOrUndefined(decodeString(prNodeId));
-    const decodedDefaultBranch = Option.getOrUndefined(decodeString(defaultBranch));
-    const decodedMergeBaseSha = Option.getOrUndefined(decodeString(mergeBaseSha));
-    return {
-      ...withoutKnownFields(record, [
-        "platform",
-        "host",
-        "owner",
-        "repo",
-        "number",
-        "prNodeId",
-        "title",
-        "author",
-        "baseBranch",
-        "headBranch",
-        "defaultBranch",
-        "baseSha",
-        "headSha",
-        "mergeBaseSha",
-        "url",
-      ]),
-      ...required,
-      ...(decodedPrNodeId !== undefined && { prNodeId: decodedPrNodeId }),
-      ...(decodedDefaultBranch !== undefined && { defaultBranch: decodedDefaultBranch }),
-      ...(decodedMergeBaseSha !== undefined && { mergeBaseSha: decodedMergeBaseSha }),
-    };
-  }
-
-  const { defaultBranch, mergeBaseSha, ...required } = fields;
+  const { prNodeId, defaultBranch, mergeBaseSha, ...required } = fields;
+  const decodedPrNodeId = Option.getOrUndefined(decodeString(prNodeId));
   const decodedDefaultBranch = Option.getOrUndefined(decodeString(defaultBranch));
   const decodedMergeBaseSha = Option.getOrUndefined(decodeString(mergeBaseSha));
   return {
     ...withoutKnownFields(record, [
-      "platform",
       "host",
-      "projectPath",
-      "iid",
+      "owner",
+      "repo",
+      "number",
+      "prNodeId",
       "title",
       "author",
       "baseBranch",
@@ -631,6 +583,7 @@ function decodePRMetadata(
       "url",
     ]),
     ...required,
+    ...(decodedPrNodeId !== undefined && { prNodeId: decodedPrNodeId }),
     ...(decodedDefaultBranch !== undefined && { defaultBranch: decodedDefaultBranch }),
     ...(decodedMergeBaseSha !== undefined && { mergeBaseSha: decodedMergeBaseSha }),
   };

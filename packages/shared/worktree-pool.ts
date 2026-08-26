@@ -96,12 +96,9 @@ export function createWorktreePool(
       }
 
       const create = async (): Promise<PoolEntry> => {
-        const number = metadata.platform === "github" ? metadata.number : metadata.iid;
+        const number = metadata.number;
         const worktreePath = join(config.sessionDir, "pool", `pr-${number}`);
-        const refSpec =
-          metadata.platform === "github"
-            ? `refs/pull/${number}/head`
-            : `refs/merge-requests/${number}/head`;
+        const refSpec = `refs/pull/${number}/head`;
 
         await fetchRef(runtime, metadata.baseBranch, { cwd: config.repoDir });
         await ensureObjectAvailable(runtime, metadata.baseSha, { cwd: config.repoDir });

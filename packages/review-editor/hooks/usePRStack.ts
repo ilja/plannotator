@@ -7,7 +7,7 @@ import {
   type InitialDiffResponse,
 } from "../utils/initial-diff-response";
 
-/** Decoded `/api/pr-switch` data with required GitHub or GitLab metadata. */
+/** Decoded `/api/pr-switch` data with required GitHub pull request metadata. */
 export interface PRSwitchResponse extends InitialDiffResponse {
   prMetadata: PRMetadata;
 }

@@ -4,9 +4,9 @@ export interface PaginatedArrayResult<T> {
 }
 
 /**
- * Parse output of `gh api --paginate` / `glab api --paginate`.
+ * Parse output of `gh api --paginate`.
  *
- * Both CLIs concatenate pages as adjacent JSON arrays (`[...][...]`) which is
+ * The CLI concatenates pages as adjacent JSON arrays (`[...][...]`) which is
  * not valid JSON. Walk the output, split it into top-level arrays, and merge
  * them. Single-page output (the common case) round-trips through the same path.
  * Each page member is decoded independently so one malformed API entry does

@@ -1,14 +1,10 @@
 /**
- * Browser-safe PR/MR types and pure helpers.
+ * Browser-safe GitHub pull request types and pure helpers.
  *
- * Split out from pr-provider.ts so the review UI can import types,
- * label helpers, and URL parsing without dragging the GitHub/GitLab
- * server implementations (and their Node-only dependencies) through
- * the browser bundle. pr-provider.ts re-exports nothing from here;
- * server-side dispatch lives there.
+ * Split out from pr-provider.ts so the review UI can import types and URL
+ * parsing without dragging GitHub's server implementation through the browser
+ * bundle.
  */
-
-// --- Runtime Types ---
 
 export interface CommandResult {
   stdout: string;
@@ -21,75 +17,30 @@ export interface PRRuntime {
   runCommandWithInput?: (cmd: string, args: string[], input: string) => Promise<CommandResult>;
 }
 
-// --- Platform Types ---
-
-export type Platform = "github" | "gitlab";
-
-/** GitHub PR reference */
-export interface GithubPRRef {
-  platform: "github";
+/** A GitHub pull request parsed from a URL. */
+export interface PRRef {
   host: string;
   owner: string;
   repo: string;
   number: number;
 }
 
-/** GitLab MR reference */
-export interface GitlabMRRef {
-  platform: "gitlab";
-  host: string;
-  projectPath: string;
-  iid: number;
-}
-
-/** Discriminated union — auto-detected from URL */
-export type PRRef = GithubPRRef | GitlabMRRef;
-
-/** GitHub PR metadata */
-export interface GithubPRMetadata {
-  platform: "github";
-  host: string;
-  owner: string;
-  repo: string;
-  number: number;
-  /** GraphQL node ID for the PR — used for markFileAsViewed mutations */
+/** GitHub pull request metadata. */
+export interface PRMetadata extends PRRef {
+  /** GraphQL node ID used for mark-file-as-viewed mutations. */
   prNodeId?: string;
   title: string;
   author: string;
   baseBranch: string;
   headBranch: string;
-  /** Repository default branch, used to infer whether this PR targets another PR branch. */
+  /** Repository default branch, used to infer stacked pull requests. */
   defaultBranch?: string;
   baseSha: string;
   headSha: string;
-  /** Merge-base SHA — the common ancestor commit used to compute the PR diff. Differs from baseSha when the base branch has moved. */
+  /** Common ancestor used to compute the pull request diff. */
   mergeBaseSha?: string;
   url: string;
 }
-
-/** GitLab MR metadata */
-export interface GitlabMRMetadata {
-  platform: "gitlab";
-  host: string;
-  projectPath: string;
-  iid: number;
-  title: string;
-  author: string;
-  baseBranch: string;
-  headBranch: string;
-  /** Project default branch, used to infer whether this MR targets another MR branch. */
-  defaultBranch?: string;
-  baseSha: string;
-  headSha: string;
-  /** Merge-base SHA — the common ancestor commit used to compute the MR diff. */
-  mergeBaseSha?: string;
-  url: string;
-}
-
-/** Discriminated union — downstream gets type narrowing for free */
-export type PRMetadata = GithubPRMetadata | GitlabMRMetadata;
-
-// --- PR Context Types (platform-agnostic) ---
 
 export interface PRComment {
   id: string;
@@ -180,13 +131,7 @@ export interface PRStackInfo {
   baseBranch: string;
   defaultBranch?: string;
   label: string;
-  source:
-    | "branch-inferred"
-    | "tree-discovered"
-    | "github-native"
-    | "gitlab-native"
-    | "graphite"
-    | "ghstack";
+  source: "branch-inferred" | "tree-discovered" | "github-native" | "graphite" | "ghstack";
 }
 
 export interface PRStackNode {
@@ -213,107 +158,47 @@ export interface PRListItem {
   state: "open" | "closed" | "merged";
 }
 
-// --- Label Helpers ---
-// Accept either PRRef or PRMetadata (both have `platform` discriminant)
-
-type HasPlatform = PRRef | PRMetadata;
-
-/** "GitHub" or "GitLab" */
-export function getPlatformLabel(m: HasPlatform): string {
-  return m.platform === "github" ? "GitHub" : "GitLab";
+/** Format a repository name for display. */
+export function getDisplayRepo(metadata: PRRef | PRMetadata): string {
+  return `${metadata.owner}/${metadata.repo}`;
 }
 
-/** "PR" or "MR" */
-export function getMRLabel(m: HasPlatform): string {
-  return m.platform === "github" ? "PR" : "MR";
+/** Reconstruct a pull request reference from metadata. */
+export function prRefFromMetadata(metadata: PRMetadata): PRRef {
+  return {
+    host: metadata.host,
+    owner: metadata.owner,
+    repo: metadata.repo,
+    number: metadata.number,
+  };
 }
 
-/** "#123" or "!42" */
-export function getMRNumberLabel(m: HasPlatform): string {
-  if (m.platform === "github") return `#${m.number}`;
-  return `!${m.iid}`;
-}
-
-/** "owner/repo" or "group/project" */
-export function getDisplayRepo(m: HasPlatform): string {
-  if (m.platform === "github") return `${m.owner}/${m.repo}`;
-  return m.projectPath;
-}
-
-/** Reconstruct a PRRef from metadata */
-export function prRefFromMetadata(m: PRMetadata): PRRef {
-  if (m.platform === "github") {
-    return { platform: "github", host: m.host, owner: m.owner, repo: m.repo, number: m.number };
-  }
-  return { platform: "gitlab", host: m.host, projectPath: m.projectPath, iid: m.iid };
-}
-
+/** Return whether two pull request references belong to the same repository. */
 export function isSameProject(a: PRRef, b: PRRef): boolean {
-  if (a.platform !== b.platform) return false;
-  if (a.platform === "github" && b.platform === "github") {
-    return a.host === b.host && a.owner === b.owner && a.repo === b.repo;
-  }
-  if (a.platform === "gitlab" && b.platform === "gitlab") {
-    return a.host === b.host && a.projectPath === b.projectPath;
-  }
-  return false;
+  return a.host === b.host && a.owner === b.owner && a.repo === b.repo;
 }
 
-/** CLI tool name for the platform */
-export function getCliName(ref: PRRef): string {
-  return ref.platform === "github" ? "gh" : "glab";
-}
-
-/** Install URL for the platform CLI */
-export function getCliInstallUrl(ref: PRRef): string {
-  return ref.platform === "github" ? "https://cli.github.com" : "https://gitlab.com/gitlab-org/cli";
-}
-
-/** Encode a file path for use in platform API URLs */
+/** Encode a file path for use in GitHub API URLs. */
 export function encodeApiFilePath(filePath: string): string {
   return encodeURIComponent(filePath);
 }
 
-// --- URL Parsing ---
-
 /**
- * Parse a PR/MR URL into its components. Auto-detects platform.
+ * Parse a GitHub pull request URL, including GitHub Enterprise hosts.
  *
- * Handles:
- * - GitHub: https://github.com/owner/repo/pull/123[/files|/commits]
- * - GitHub Enterprise: https://ghe.company.com/owner/repo/pull/123
- * - GitLab: https://gitlab.com/group/subgroup/project/-/merge_requests/42[/diffs]
- * - Self-hosted GitLab: https://gitlab.mycompany.com/group/project/-/merge_requests/42
- *
- * GitLab is checked first because `/-/merge_requests/` is unambiguous,
- * while `/pull/` could theoretically appear on any host.
+ * Handles `https://github.com/owner/repo/pull/123` and arbitrary GitHub
+ * Enterprise hosts using the same path format.
  */
 export function parsePRUrl(url: string): PRRef | null {
   if (!url) return null;
 
-  // GitLab: https://{host}/{projectPath}/-/merge_requests/{iid}[/...]
-  // Checked first — `/-/merge_requests/` is the most specific pattern.
-  const glMatch = url.match(/^https?:\/\/([^/]+)\/(.+?)\/-\/merge_requests\/(\d+)/);
-  if (glMatch) {
-    return {
-      platform: "gitlab",
-      host: glMatch[1],
-      projectPath: glMatch[2],
-      iid: parseInt(glMatch[3], 10),
-    };
-  }
+  const match = url.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+  if (!match) return null;
 
-  // GitHub (including GHE): https://{host}/{owner}/{repo}/pull/{number}[/...]
-  const ghMatch = url.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-  if (ghMatch) {
-    return {
-      platform: "github",
-      host: ghMatch[1],
-      owner: ghMatch[2],
-      repo: ghMatch[3],
-      number: parseInt(ghMatch[4], 10),
-    };
-  }
-
-  return null;
+  return {
+    host: match[1],
+    owner: match[2],
+    repo: match[3],
+    number: parseInt(match[4], 10),
+  };
 }

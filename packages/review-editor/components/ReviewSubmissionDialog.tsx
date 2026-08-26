@@ -49,8 +49,6 @@ interface ReviewSubmissionDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   isSubmitting: boolean;
-  mrLabel: string;
-  platformLabel: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -244,8 +242,6 @@ export function ReviewSubmissionDialog({
   onConfirm,
   onCancel,
   isSubmitting,
-  mrLabel,
-  platformLabel,
 }: ReviewSubmissionDialogProps) {
   if (!isOpen) return null;
 
@@ -259,7 +255,7 @@ export function ReviewSubmissionDialog({
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
       <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl p-6">
         <h3 className="font-semibold mb-1">
-          {isApprove ? `Approve ${mrLabel}` : "Post Review Comments"}
+          {isApprove ? "Approve pull request" : "Post Review Comments"}
         </h3>
         <p className="text-sm text-muted-foreground mb-3">
           {isApprove
@@ -351,8 +347,8 @@ export function ReviewSubmissionDialog({
             {submission.orphans.map((group) => (
               <div key={group.reason} className="text-xs text-muted-foreground mb-2">
                 {group.reason === "full-stack"
-                  ? `${group.annotations.length} finding${group.annotations.length !== 1 ? "s" : ""} from full-stack view — line numbers don't map to a single ${mrLabel}'s diff.`
-                  : `${group.annotations.length} annotation${group.annotations.length !== 1 ? "s" : ""} not attributed to a specific ${mrLabel}.`}
+                  ? `${group.annotations.length} finding${group.annotations.length !== 1 ? "s" : ""} from full-stack view — line numbers don't map to a single pull request diff.`
+                  : `${group.annotations.length} annotation${group.annotations.length !== 1 ? "s" : ""} not attributed to a specific pull request.`}
               </div>
             ))}
             <div className="flex gap-2">
@@ -380,7 +376,7 @@ export function ReviewSubmissionDialog({
             onChange={(e) => onPlatformOpenPRChange(e.target.checked)}
             className="rounded border-border"
           />
-          View on {platformLabel} after submitting
+          View on GitHub after submitting
         </label>
 
         {/* Actions */}

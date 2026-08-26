@@ -9,7 +9,7 @@ export function useAnnotationFactory(prMetadata: PRMetadata | null, diffScope?: 
     if (!prMetadata) return {};
     const base = {
       prUrl: prMetadata.url,
-      prNumber: prMetadata.platform === "github" ? prMetadata.number : prMetadata.iid,
+      prNumber: prMetadata.number,
       prTitle: prMetadata.title,
       prRepo: getDisplayRepo(prMetadata),
     };
