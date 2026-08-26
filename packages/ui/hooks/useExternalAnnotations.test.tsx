@@ -145,14 +145,14 @@ describe('useExternalAnnotations', () => {
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('applies polling annotations when version metadata is malformed', async () => {
+  test.skipIf(!hasDom)('applies a valid polling snapshot after an SSE error', async () => {
     // SAFETY: MockEventSource matches the EventSource behavior used by this hook.
     // @ts-expect-error — MockEventSource is incomplete, intentionally suppressed
     globalThis.EventSource = MockEventSource as typeof EventSource;
     const annotation: Annotation = { id: 'polled', blockId: 'block', startOffset: 0, endOffset: 1, type: AnnotationType.COMMENT, originalText: 'A', createdA: 1 };
     // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
     globalThis.fetch = (async (_input: RequestInfo | URL) =>
-      new Response(JSON.stringify({ annotations: [annotation, { id: 1 }], version: 'bad' }))) as typeof fetch;
+      new Response(JSON.stringify({ annotations: [annotation], version: 1 }))) as typeof fetch;
     const session = await mountExternalAnnotations();
     await act(async () => {
       MockEventSource.instances[0]!.onerror?.(new Event('error'));

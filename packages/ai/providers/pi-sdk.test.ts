@@ -53,7 +53,7 @@ input.on('line', (line) => {
           setTimeout(() => reject(new Error('Pi startup timed out')), 1_000);
         }),
       ]);
-
+      expect(result.done).toBe(false);
       expect(result.value).toMatchObject({ type: 'result', success: true });
     } finally {
       provider.dispose();

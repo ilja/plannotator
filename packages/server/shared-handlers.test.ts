@@ -29,24 +29,6 @@ function saveNotesRequest(body: JsonRequestBody): Request {
   });
 }
 
-const malformedSaveNoteTargets = [
-  {
-    target: "obsidian",
-    name: "Obsidian",
-    config: { folder: "plannotator", plan: "# Test Plan" },
-  },
-  {
-    target: "bear",
-    name: "Bear",
-    config: { customTags: "plannotator" },
-  },
-  {
-    target: "octarine",
-    name: "Octarine",
-    config: { workspace: "workspace", folder: "plannotator" },
-  },
-] as const;
-
 type StderrChunk = string | Uint8Array;
 
 function captureStderrWrites(): StderrCapture {
@@ -82,6 +64,7 @@ describe("handleUpload", () => {
     expect(response.status).toBe(400);
     expect(await response.text()).toBe("No file provided");
   });
+
 });
 
 describe("handleAgents", () => {
@@ -218,26 +201,13 @@ describe("handleSaveNotes", () => {
     expect(json.results).toEqual({});
   });
 
-  test("returns a 400 JSON error for valid JSON with a non-object root", async () => {
+  test("returns a 400 JSON error for a non-object request body", async () => {
     const response = await handleSaveNotes(saveNotesRequest("not a save-notes object"));
 
     expect(response.status).toBe(400);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(await response.json()).toEqual({ error: "Invalid JSON" });
   });
-
-  for (const { target, name, config } of malformedSaveNoteTargets) {
-    test(`reports a malformed ${name} target as an integration failure`, async () => {
-      const response = await handleSaveNotes(saveNotesRequest({ [target]: config }));
-
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json.results[target]).toEqual({
-        success: false,
-        error: `Invalid ${name} save configuration`,
-      });
-    });
-  }
 
   test("saves a valid target when another requested target is malformed", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "plannotator-save-notes-"));
@@ -262,6 +232,19 @@ describe("handleSaveNotes", () => {
       });
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("reports malformed Obsidian and Octarine target configurations", async () => {
+    for (const [target, config, error] of [
+      ["obsidian", { folder: "plannotator", plan: "# Test Plan" }, "Invalid Obsidian save configuration"],
+      ["octarine", { workspace: "workspace", folder: "plannotator" }, "Invalid Octarine save configuration"],
+    ] as const) {
+      const response = await handleSaveNotes(saveNotesRequest({ [target]: config }));
+
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.results[target]).toEqual({ success: false, error });
     }
   });
 

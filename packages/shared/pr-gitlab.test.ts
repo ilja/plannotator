@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { Option, Schema } from "effect";
-import { fetchGlMR, fetchGlMRContext, getGlUser, parsePaginatedArray, submitGlMRReview } from "./pr-gitlab";
+import { Schema } from "effect";
+import { fetchGlMR, fetchGlMRContext, getGlUser, submitGlMRReview } from "./pr-gitlab";
 import type { PRRuntime } from "./pr-types";
 
 describe("fetchGlMR", () => {
@@ -758,42 +758,5 @@ describe("fetchGlMR raw_diffs fallback", () => {
       diffs: { exitCode: 1, stderr: "diffs boom" },
     });
     await expect(fetchGlMR(runtime, REF)).rejects.toThrow(/Failed to fetch MR diff/);
-  });
-});
-
-describe("parsePaginatedArray", () => {
-  test("merges adjacent JSON array pages from glab --paginate", () => {
-    const schema = Schema.Struct({ a: Schema.Number });
-    const decode = <Input>(value: Input) =>
-      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
-    expect(parsePaginatedArray('[{"a":1}][{"a":2},{"a":3}]', decode)).toEqual({
-      items: [{ a: 1 }, { a: 2 }, { a: 3 }],
-      rejected: 0,
-    });
-  });
-
-  test("round-trips single-page output", () => {
-    const schema = Schema.Struct({ a: Schema.Number });
-    const decode = <Input>(value: Input) =>
-      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
-    expect(parsePaginatedArray('[{"a":1}]', decode)).toEqual({
-      items: [{ a: 1 }],
-      rejected: 0,
-    });
-  });
-
-  test("returns [] for empty output", () => {
-    const decode = <Input>(value: Input) => value;
-    expect(parsePaginatedArray("", decode)).toEqual({ items: [], rejected: 0 });
-  });
-
-  test("does not split on bracket characters inside strings", () => {
-    const schema = Schema.Struct({ s: Schema.String });
-    const decode = <Input>(value: Input) =>
-      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
-    expect(parsePaginatedArray('[{"s":"a][b"}]', decode)).toEqual({
-      items: [{ s: "a][b" }],
-      rejected: 0,
-    });
   });
 });

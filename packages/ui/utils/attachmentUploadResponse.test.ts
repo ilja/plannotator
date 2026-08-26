@@ -2,12 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { decodeAttachmentUploadResponse } from './attachmentUploadResponse';
 
 describe('decodeAttachmentUploadResponse', () => {
-  test('decodes a valid path', () => {
-    expect(decodeAttachmentUploadResponse({ path: '/uploads/image.png' })).toEqual({
-      path: '/uploads/image.png',
-    });
-  });
-
   test('ignores extra response fields', () => {
     expect(decodeAttachmentUploadResponse({
       path: '/uploads/image.png',

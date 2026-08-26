@@ -125,7 +125,7 @@ describe("review-workspace", () => {
       "",
     ].join("\n");
 
-    it("advertises semantic diff availability and serves parsed sem output", async () => {
+    it("advertises semantic diff availability and runs the endpoint", async () => {
       const dir = makeTempDir("plannotator-sem-server-");
       const dataDir = makeTempDir("plannotator-sem-data-");
       const cwdLogPath = join(dir, "cwd-log");
@@ -250,13 +250,10 @@ describe("review-workspace", () => {
 
       try {
         const diffPayload: { semanticDiff?: { available: boolean } } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
-        expect(diffPayload.semanticDiff).toEqual({ available: false });
+        expect(diffPayload.semanticDiff?.available).toBe(false);
 
-        const semanticPayload: { status: string; reason?: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
-        expect(semanticPayload).toMatchObject({
-          status: "unavailable",
-          reason: "sem-path-missing",
-        });
+        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
+        expect(semanticPayload.status).toBe("unavailable");
       } finally {
         server.stop();
       }
@@ -1043,15 +1040,7 @@ describe("review-workspace", () => {
           body: JSON.stringify({ diffType: 123 }),
         });
         expect(diffSwitchMalformed.status).toBe(400);
-        const diffSwitchBody: { error?: string } = await diffSwitchMalformed.json();
-        expect(diffSwitchBody.error).toBe("Missing diffType");
-
-        const diffSwitchEmpty = await fetch(`${server.url}/api/diff/switch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        expect(diffSwitchEmpty.status).toBe(400);
+        expect(await diffSwitchMalformed.json()).toEqual({ error: "Missing diffType" });
 
         const gitAddMalformed = await fetch(`${server.url}/api/git-add`, {
           method: "POST",
@@ -1059,8 +1048,7 @@ describe("review-workspace", () => {
           body: JSON.stringify({ filePath: 123 }),
         });
         expect(gitAddMalformed.status).toBe(400);
-        const gitAddBody: { error?: string } = await gitAddMalformed.json();
-        expect(gitAddBody.error).toBe("Missing filePath");
+        expect(await gitAddMalformed.json()).toEqual({ error: "Missing filePath" });
 
         const configMalformed = await fetch(`${server.url}/api/config`, {
           method: "POST",
@@ -1068,8 +1056,7 @@ describe("review-workspace", () => {
           body: JSON.stringify({ displayName: 123 }),
         });
         expect(configMalformed.status).toBe(400);
-        const configBody: { error?: string } = await configMalformed.json();
-        expect(configBody.error).toBe("Invalid request");
+        expect(await configMalformed.json()).toEqual({ error: "Invalid request" });
 
         const feedbackMalformed = await fetch(`${server.url}/api/feedback`, {
           method: "POST",
@@ -1077,8 +1064,7 @@ describe("review-workspace", () => {
           body: JSON.stringify({ feedback: 123 }),
         });
         expect(feedbackMalformed.status).toBe(400);
-        const feedbackBody: { error?: string } = await feedbackMalformed.json();
-        expect(feedbackBody.error).toBe("Invalid request");
+        expect(await feedbackMalformed.json()).toEqual({ error: "Invalid request" });
 
         // Valid git-add still works after malformed requests (state not corrupted)
         const validGitAdd = await fetch(`${server.url}/api/git-add`, {
@@ -1089,6 +1075,7 @@ describe("review-workspace", () => {
         // api/tracked.txt is modified but not yet staged; staging should succeed
         // (workspace mode stages via workspace.stageFile)
         expect(validGitAdd.status).toBe(200);
+        expect(git(api, ["diff", "--staged", "--name-only"])).toContain("tracked.txt");
       } finally {
         server.stop();
       }

@@ -387,11 +387,19 @@ describe('usePRStack response handling', () => {
 
     const firstOutput = await clickAction('pr-switch');
     expect(firstOutput.dataset.switching).toBe('false');
-    expect(applied[0]).toEqual(validGithubPRResponse);
+    expect(applied).toHaveLength(1);
+    expect(applied[0]).toMatchObject({
+      gitRef: validGithubPRResponse.gitRef,
+      prMetadata: { platform: 'github', number: 42 },
+    });
 
     const secondOutput = await clickAction('pr-switch');
     expect(secondOutput.dataset.switching).toBe('false');
-    expect(applied[1]).toEqual(validGitlabPRResponse);
+    expect(applied).toHaveLength(2);
+    expect(applied[1]).toMatchObject({
+      gitRef: validGitlabPRResponse.gitRef,
+      prMetadata: { platform: 'gitlab', iid: 42 },
+    });
     expect(errors).toEqual([]);
   });
 
@@ -447,11 +455,16 @@ describe('usePRStack response handling', () => {
 
     const scopeOutput = await clickAction('scope');
     expect(scopeOutput.dataset.switching).toBe('false');
-    expect(applied[0]).toEqual(validFullStackResponse);
+    expect(applied).toHaveLength(1);
+    expect(applied[0]).toMatchObject({ prDiffScope: 'full-stack' });
 
     const fullOutput = await clickAction('full');
     expect(fullOutput.dataset.loadingFull).toBe('false');
-    expect(applied[1]).toMatchObject({ prDiffScope: 'layer', rawPatch: validLayerResponse.rawPatch });
+    expect(applied).toHaveLength(2);
+    expect(applied[1]).toMatchObject({
+      prDiffScope: 'layer',
+      rawPatch: validLayerResponse.rawPatch,
+    });
     expect(errors).toEqual([]);
   });
 

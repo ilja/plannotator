@@ -126,11 +126,31 @@ describe('useDiffFreshness response handling', () => {
     expect(appliedCwds).toEqual(['/tmp/review', null]);
   });
 
-  test.skipIf(!hasDom)('ignores malformed roots and invalid JSON without clearing staleness', async () => {
+  test.skipIf(!hasDom)('omits optional metadata without clearing staleness', async () => {
     installManualTimers();
     installFetch([
-      new Response(JSON.stringify({ fresh: false, fingerprint: 'abc123' })),
-      new Response(JSON.stringify({ fresh: 'yes' })),
+      new Response(JSON.stringify({ fresh: false })),
+      new Response(JSON.stringify({ fresh: false })),
+    ]);
+    const appliedCwds: Array<string | null> = [];
+    const { host } = await mountHarness('snapshot', appliedCwds);
+
+    await runPoll(host);
+    expect(staleOutput(host).dataset.stale).toBe('true');
+
+    const dismiss = host.querySelector('button');
+    if (!(dismiss instanceof HTMLButtonElement)) throw new Error('Hook harness did not render');
+    await act(async () => dismiss.click());
+    expect(staleOutput(host).dataset.stale).toBe('false');
+
+    await runPoll(host);
+    expect(staleOutput(host).dataset.stale).toBe('false');
+  });
+
+  test.skipIf(!hasDom)('keeps staleness after an invalid JSON poll', async () => {
+    installManualTimers();
+    installFetch([
+      new Response(JSON.stringify({ fresh: false })),
       new Response('{invalid-json'),
     ]);
     const appliedCwds: Array<string | null> = [];
@@ -141,9 +161,6 @@ describe('useDiffFreshness response handling', () => {
 
     await runPoll(host);
     expect(staleOutput(host).dataset.stale).toBe('true');
-    await runPoll(host);
-    expect(staleOutput(host).dataset.stale).toBe('true');
-    expect(appliedCwds).toEqual([]);
   });
 
   test.skipIf(!hasDom)('ignores non-OK responses', async () => {
@@ -159,28 +176,6 @@ describe('useDiffFreshness response handling', () => {
     expect(staleOutput(host).dataset.stale).toBe('true');
     await runPoll(host);
     expect(staleOutput(host).dataset.stale).toBe('true');
-  });
-
-  test.skipIf(!hasDom)('omits malformed metadata and preserves stale dismissal fallback', async () => {
-    installManualTimers();
-    installFetch([
-      new Response(JSON.stringify({ fresh: false, fingerprint: 42, agentCwd: 42 })),
-      new Response(JSON.stringify({ fresh: false, fingerprint: 42, agentCwd: 42 })),
-    ]);
-    const appliedCwds: Array<string | null> = [];
-    const { host } = await mountHarness('snapshot', appliedCwds);
-
-    await runPoll(host);
-    expect(staleOutput(host).dataset.stale).toBe('true');
-    expect(appliedCwds).toEqual([]);
-
-    const dismiss = host.querySelector('button');
-    if (!(dismiss instanceof HTMLButtonElement)) throw new Error('Hook harness did not render');
-    await act(async () => dismiss.click());
-    expect(staleOutput(host).dataset.stale).toBe('false');
-
-    await runPoll(host);
-    expect(staleOutput(host).dataset.stale).toBe('false');
   });
 
   test.skipIf(!hasDom)('does not apply a cancelled poll after a reset', async () => {

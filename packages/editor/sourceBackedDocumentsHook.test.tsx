@@ -397,7 +397,6 @@ describe('useSourceBackedDocuments conflict actions', () => {
     });
 
     expect(session.current().getSourceBackedDocument(KEY)).toBeNull();
-    expect(session.current().getSourceBackedDocument(KEY)).toBeNull();
     expect(session.current().getUnsavedSourceBackedDocuments()).toEqual([]);
 
     await session.unmount();

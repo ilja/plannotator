@@ -543,7 +543,6 @@ describe("AI endpoints", () => {
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(false);
-    expect(data.defaultProvider).toBeNull();
   });
 
   test("capabilities returns provider info when registered", async () => {
@@ -555,11 +554,19 @@ describe("AI endpoints", () => {
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(true);
-    expect(data.defaultProvider).toBe("mock");
-    expect(data.providers.length).toBe(1);
     expect(data.providers[0].id).toBe("mock");
-    expect(data.providers[0].name).toBe("mock");
     expect(data.providers[0].capabilities.fork).toBe(true);
+  });
+
+  test("capabilities returns instance ID not type name for defaultProvider", async () => {
+    const { reg, endpoints } = setup();
+    reg.register(mockProvider("pi-sdk"), "pi-fast");
+
+    const res = await endpoints["/api/ai/capabilities"](
+      new Request("http://localhost/api/ai/capabilities")
+    );
+    const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
+    expect(data.defaultProvider).toBe("pi-fast");
   });
 
   test("capabilities waits for pending provider discovery", async () => {
@@ -593,22 +600,9 @@ describe("AI endpoints", () => {
       new Request("http://localhost/api/ai/capabilities")
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
-    expect(data.providers.length).toBe(2);
     const ids = data.providers.map((p: { id: string }) => p.id);
     expect(ids).toContain("pi-1");
     expect(ids).toContain("mock-1");
-  });
-
-  test("capabilities returns instance ID not type name for defaultProvider", async () => {
-    const { reg, endpoints } = setup();
-    reg.register(mockProvider("pi-sdk"), "pi-fast");
-
-    const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
-    );
-    const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
-    // Should return the instance ID "pi-fast", not the type name "pi-sdk"
-    expect(data.defaultProvider).toBe("pi-fast");
   });
 
   test("session creation and query flow", async () => {

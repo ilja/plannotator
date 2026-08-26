@@ -81,27 +81,27 @@ afterEach(() => {
 	}
 });
 
-describe("handleDocExists", () => {
-	test("rejects malformed request bodies", async () => {
-		const malformedBodies = [
-			null,
-			{ paths: ["valid", 42] },
-			{ paths: ["valid"], base: 123 },
-		];
+	describe("handleDocExists", () => {
+		test("rejects malformed request bodies", async () => {
+			const malformedBodies = [
+				null,
+				{ paths: ["valid", 42] },
+				{ paths: ["valid"], base: 123 },
+			];
 
-		for (const body of malformedBodies) {
-			const response = await handleDocExists(
-				new Request("http://localhost/api/doc/exists", {
-					method: "POST",
-					body: JSON.stringify(body),
-				}),
-				{ rootPath: makeTempDir("plannotator-doc-exists-invalid-") },
-			);
+			for (const body of malformedBodies) {
+				const response = await handleDocExists(
+					new Request("http://localhost/api/doc/exists", {
+						method: "POST",
+						body: JSON.stringify(body),
+					}),
+					{ rootPath: makeTempDir("plannotator-doc-exists-invalid-") },
+				);
 
-			expect(response.status).toBe(400);
-			expect(await response.json()).toEqual({ error: "Expected { paths: string[] }" });
-		}
-	});
+				expect(response.status).toBe(400);
+				expect(await response.json()).toEqual({ error: "Expected { paths: string[] }" });
+			}
+		});
 
 	test("does not reveal absolute files outside the allowed root", async () => {
 		const root = makeTempDir("plannotator-doc-exists-root-");

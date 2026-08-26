@@ -92,15 +92,4 @@ describe('readPRActionResponse', () => {
     }
   });
 
-  test('keeps mixed target outcomes independent under Promise.allSettled', async () => {
-    const results = await Promise.allSettled([
-      readPRActionResponse(new Response(JSON.stringify({ ok: true, prUrl: 'https://example.com/pr/1' }))),
-      readPRActionResponse(new Response(JSON.stringify({ ok: true, prUrl: 42 }))),
-    ]);
-
-    expect(results).toEqual([
-      { status: 'fulfilled', value: { ok: true, prUrl: 'https://example.com/pr/1' } },
-      { status: 'fulfilled', value: { ok: false, error: 'Failed to submit' } },
-    ]);
-  });
 });

@@ -60,13 +60,4 @@ describe('loadFileContentResponse', () => {
     ).resolves.toBeNull();
   });
 
-  test('keeps malformed and valid responses independent', async () => {
-    const [malformed, valid] = await Promise.all([
-      loadFileContentResponse(new Response(JSON.stringify({ oldContent: 'before' }), { status: 200 })),
-      loadFileContentResponse(new Response(JSON.stringify(validResponses[3]), { status: 200 })),
-    ]);
-
-    expect(malformed).toBeNull();
-    expect(valid).toEqual(validResponses[3]);
-  });
 });

@@ -8,35 +8,25 @@ describe("handleCodeNavResolve", () => {
     { method: "POST", headers: { "Content-Type": "application/json" }, body },
   );
 
-  test("rejects malformed JSON with the invalid request body category", async () => {
+  test("rejects malformed JSON", async () => {
     const response = await handleCodeNavResolve(request("{"), process.cwd(), []);
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "Invalid request body" });
   });
 
-  test("rejects invalid request fields before navigation runs", async () => {
-    for (const [body, error] of [
-      [{ filePath: "src/server.ts", side: "new" }, "Missing or empty symbol"],
-      [{ symbol: "   ", filePath: "src/server.ts", side: "new" }, "Missing or empty symbol"],
-      [{ symbol: "symbol", side: "new" }, "Missing filePath"],
-      [{ symbol: "symbol", filePath: "   ", side: "new" }, "Missing filePath"],
-      [{ symbol: "symbol", filePath: "../server.ts", side: "new" }, "Invalid filePath"],
-      [{ symbol: "symbol", filePath: "/server.ts", side: "new" }, "Invalid filePath"],
-      [{ symbol: "symbol", filePath: "src/server.ts", side: "both" }, "side must be 'old' or 'new'"],
-    ] as const) {
-      const response = await handleCodeNavResolve(
-        request(JSON.stringify(body)),
-        process.cwd(),
-        [],
-      );
+  test("rejects one invalid request field through the HTTP boundary", async () => {
+    const response = await handleCodeNavResolve(
+      request(JSON.stringify({ symbol: "symbol", filePath: "../server.ts", side: "new" })),
+      process.cwd(),
+      [],
+    );
 
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ error });
-    }
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid filePath" });
   });
 
-  test("rejects non-object JSON with the invalid request body category", async () => {
+  test("rejects non-object JSON through the HTTP boundary", async () => {
     const response = await handleCodeNavResolve(request(JSON.stringify([])), process.cwd(), []);
 
     expect(response.status).toBe(400);

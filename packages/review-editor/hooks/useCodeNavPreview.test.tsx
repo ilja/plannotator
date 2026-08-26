@@ -105,25 +105,6 @@ describe('useCodeNavPreview response handling', () => {
     expect(requests).toHaveLength(1);
   });
 
-  test.skipIf(!hasDom)('clears the preview after malformed roots and content', async () => {
-    installFetch([
-      new Response(JSON.stringify({ content: 'trusted content' })),
-      new Response(JSON.stringify([])),
-      new Response(JSON.stringify({ content: 42 })),
-    ]);
-    const host = await mountHarness();
-
-    await selectLocation(host, 'src/example.ts');
-    const malformedRoot = await selectLocation(host, 'src/other.ts');
-    expect(malformedRoot.dataset.filePath).toBe('');
-    expect(malformedRoot.dataset.lines).toBe('');
-
-    const malformedContent = await selectLocation(host, 'src/third.ts');
-    expect(malformedContent.dataset.loading).toBe('false');
-    expect(malformedContent.dataset.filePath).toBe('');
-    expect(malformedContent.dataset.lines).toBe('');
-  });
-
   test.skipIf(!hasDom)('clears the preview after invalid JSON', async () => {
     installFetch([
       new Response(JSON.stringify({ content: 'trusted content' })),

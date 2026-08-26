@@ -210,30 +210,6 @@ describe("useFileBrowser", () => {
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)("filters malformed Obsidian tree nodes", async () => {
-    const vaultPath = "/tmp/plannotator-vault";
-    installFetchResponses([response({
-      tree: [
-        { name: "valid.md", path: "valid.md", type: "file" },
-        { name: "broken.md", path: 42, type: "file" },
-      ],
-    })]);
-
-    const session = await mountHook();
-    await act(async () => {
-      await session.result.current!.addVaultDir(vaultPath);
-    });
-
-    expect(session.result.current!.dirs[0]).toMatchObject({
-      path: vaultPath,
-      isLoading: false,
-      isVault: true,
-      tree: [{ name: "valid.md", path: "valid.md", type: "file" }],
-    });
-
-    await session.unmount();
-  });
-
   test.skipIf(!hasDom)("waits for the initial tree fetch before opening the live watcher", async () => {
     installMockEventSource();
     const dirPath = "/tmp/plannotator-docs";

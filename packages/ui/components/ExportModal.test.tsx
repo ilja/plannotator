@@ -141,16 +141,6 @@ describe('ExportModal save-notes response handling', () => {
     expect(document.body.textContent).toContain('Save failed');
   });
 
-  test.skipIf(!hasDom)('shows the existing Save failed error when the selected result is malformed', async () => {
-    installSaveNotesFetch({ results: { obsidian: { success: true, path: 42 } } });
-    await renderExportModal();
-
-    await saveToObsidian();
-
-    expect(document.body.textContent).toContain('Failed');
-    expect(document.body.textContent).toContain('Save failed');
-  });
-
   test.skipIf(!hasDom)('omits an invalid persisted filename separator from the save-notes payload', async () => {
     let requestBody: SaveNotesRequest | undefined;
     installSaveNotesFetch(

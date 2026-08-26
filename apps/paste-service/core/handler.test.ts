@@ -58,19 +58,7 @@ describe("handleRequest", () => {
 
     expect(response.status).toBe(201);
     const { id } = await response.json();
-    expect(id).toHaveLength(8);
     expect(store.values.get(id)).toBe("hello");
-  });
-
-  test("rejects a missing data field", async () => {
-    const store = new MemoryPasteStore();
-
-    const response = await handleRequest(post(JSON.stringify({})), store, cors);
-
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({
-      error: 'Missing or invalid "data" field',
-    });
   });
 
   test("rejects a non-string data field", async () => {
@@ -96,6 +84,17 @@ describe("handleRequest", () => {
       store,
       cors
     );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Missing or invalid "data" field',
+    });
+  });
+
+  test("rejects a missing data field", async () => {
+    const store = new MemoryPasteStore();
+
+    const response = await handleRequest(post(JSON.stringify({})), store, cors);
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({

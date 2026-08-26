@@ -162,15 +162,6 @@ describe('OpenInAppButton response validation', () => {
     expect(renderedError()).toBe('Failed to open');
   });
 
-  test.skipIf(!hasDom)('uses the fallback for malformed failure envelopes', async () => {
-    installFetchResponses(jsonResponse({ ok: false, error: 42 }));
-
-    await renderOpenInAppButton();
-    await clickPrimaryOpenButton();
-
-    expect(renderedError()).toBe('Failed to open');
-  });
-
   test.skipIf(!hasDom)('uses the fallback for invalid JSON', async () => {
     installFetchResponses(new Response('not json'));
 

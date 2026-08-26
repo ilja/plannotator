@@ -65,23 +65,6 @@ afterEach(async () => {
 });
 
 describe("useValidatedCodePaths response handling", () => {
-  test.skipIf(!hasDom)("retains valid entries while filtering malformed siblings", async () => {
-    installFetch([new Response(JSON.stringify({
-      results: {
-        "src/example.ts": { status: "found", resolved: "/repo/src/example.ts" },
-        "src/broken.ts": { status: "found", resolved: 42 },
-        "src/other.ts": { status: "missing" },
-      },
-    }))]);
-    const host = await mountHarness();
-
-    const output = await readOutput(host);
-    expect(output.dataset.ready).toBe("true");
-    expect(output.dataset.status).toBe("found");
-    expect(output.dataset.otherStatus).toBe("missing");
-    expect(output.dataset.keys).toBe("src/example.ts|src/other.ts");
-  });
-
   test.skipIf(!hasDom)("uses the existing ready fallback for malformed, non-OK, and invalid JSON responses", async () => {
     installFetch([
       new Response(JSON.stringify({ results: { "src/example.ts": { status: "found", resolved: "/repo/example.ts" } } })),

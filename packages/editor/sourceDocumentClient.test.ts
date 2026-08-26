@@ -35,7 +35,7 @@ describe('source document client', () => {
       },
     }));
 
-    expect(await probeSourceSave('/repo/docs/a.md')).toEqual({
+    await expect(probeSourceSave('/repo/docs/a.md')).resolves.toEqual({
       status: 'ok',
       sourceSave: {
         enabled: true,
@@ -76,7 +76,7 @@ describe('source document client', () => {
         eol: 'lf',
       },
     }));
-    expect(await fetchSourceDocumentSnapshot('/repo/docs/a.md')).toEqual({
+    await expect(fetchSourceDocumentSnapshot('/repo/docs/a.md')).resolves.toEqual({
       status: 'ok',
       snapshot: {
         markdown: 'after\n',

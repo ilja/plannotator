@@ -14,6 +14,26 @@ describe("parsePaginatedArray", () => {
     });
   });
 
+  test("round-trips single-page output", () => {
+    const schema = Schema.Struct({ a: Schema.Number });
+    const decode = <Input>(value: Input) =>
+      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
+    expect(parsePaginatedArray('[{"a":1}]', decode)).toEqual({
+      items: [{ a: 1 }],
+      rejected: 0,
+    });
+  });
+
+  test("does not split on bracket characters inside strings", () => {
+    const schema = Schema.Struct({ s: Schema.String });
+    const decode = <Input>(value: Input) =>
+      Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
+    expect(parsePaginatedArray('[{"s":"a][b"}]', decode)).toEqual({
+      items: [{ s: "a][b" }],
+      rejected: 0,
+    });
+  });
+
   test("filters malformed siblings while preserving valid entries", () => {
     expect(parsePaginatedArray('[{"id":1},{"id":"bad"},{"id":1}]', decodeItem)).toEqual({
       items: [{ id: 1 }, { id: 1 }],

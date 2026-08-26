@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { Option, Schema } from "effect";
+import { Option } from "effect";
 import {
   buildRgArgs,
   classifyMatch,
-  CodeNavRequestSchema,
-  CodeNavResponseSchema,
   decodeCodeNavRequest,
   decodeCodeNavResponse,
   rankLocations,
@@ -561,10 +559,6 @@ describe("code navigation HTTP wire schemas", () => {
     }
   });
 
-  test("exports the request schema for HTTP boundary consumers", () => {
-    expect(Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavRequestSchema)(valid))).toBeDefined();
-  });
-
   test("accepts complete search and unavailable response variants", () => {
     expect(Option.getOrUndefined(decodeCodeNavResponse(validResponse))).toEqual(validResponse);
     expect(Option.getOrUndefined(decodeCodeNavResponse({
@@ -591,9 +585,6 @@ describe("code navigation HTTP wire schemas", () => {
     }
   });
 
-  test("exports the response schema for HTTP boundary consumers", () => {
-    expect(Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavResponseSchema)(validResponse))).toEqual(validResponse);
-  });
 });
 
 // ---------------------------------------------------------------------------

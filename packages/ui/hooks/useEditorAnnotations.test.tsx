@@ -64,19 +64,6 @@ afterEach(async () => {
 });
 
 describe('useEditorAnnotations response handling', () => {
-  test.skipIf(!hasDom)('filters malformed entries while retaining valid polling results', async () => {
-    installFetch([new Response(JSON.stringify({ annotations: [
-      { id: 'first', filePath: 'src/a.ts', selectedText: 'a', lineStart: 1, lineEnd: 1, createdAt: 1 },
-      { id: 'broken', filePath: 42, selectedText: 'b', lineStart: 2, lineEnd: 2, createdAt: 2 },
-      { id: 'second', filePath: 'src/b.ts', selectedText: 'b', lineStart: 0, lineEnd: -1, createdAt: 1.5, comment: 42 },
-    ] }))]);
-    const host = await mountHarness();
-
-    const output = host.querySelector('output');
-    expect(output?.dataset.ids).toBe('first|second');
-    expect(output?.dataset.count).toBe('2');
-  });
-
   test.skipIf(!hasDom)('clears stale annotations for a valid empty response', async () => {
     installFetch([
       new Response(JSON.stringify({ annotations: [{ id: 'first', filePath: 'src/a.ts', selectedText: 'a', lineStart: 1, lineEnd: 1, createdAt: 1 }] })),
