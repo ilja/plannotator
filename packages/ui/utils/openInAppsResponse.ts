@@ -1,9 +1,9 @@
-import { Result, Schema } from 'effect';
+import { Result, Schema } from "effect";
 
 const OpenInAppSchema = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
-  kind: Schema.Literals(['file-manager', 'editor', 'terminal']),
+  kind: Schema.Literals(["file-manager", "editor", "terminal"]),
   icon: Schema.String,
 });
 
@@ -57,19 +57,21 @@ function unavailableOpenInAppsResponse(): OpenInAppsResponse {
  * clear the cached promise so the next call retries; valid unavailable responses
  * are cached like any other successful response.
  */
-export function createOpenInAppsLoader(fetcher: OpenInAppsFetcher): () => Promise<OpenInAppsResponse> {
+export function createOpenInAppsLoader(
+  fetcher: OpenInAppsFetcher,
+): () => Promise<OpenInAppsResponse> {
   let openInAppsPromise: Promise<OpenInAppsResponse> | null = null;
 
   return () => {
     if (!openInAppsPromise) {
-      openInAppsPromise = fetcher('/api/open-in/apps')
+      openInAppsPromise = fetcher("/api/open-in/apps")
         .then((response) => {
           if (!response.ok) throw new Error(`Open-in apps request failed: ${response.status}`);
           return response.json();
         })
         .then((data) => {
           const decoded = decodeOpenInAppsResponse(data);
-          if (Result.isFailure(decoded)) throw new Error('Malformed open-in apps response');
+          if (Result.isFailure(decoded)) throw new Error("Malformed open-in apps response");
           return decoded.success;
         })
         .catch(() => {

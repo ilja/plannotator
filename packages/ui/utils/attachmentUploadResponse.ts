@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Schema } from "effect";
 
 const AttachmentUploadResponseSchema = Schema.Struct({
   path: Schema.String,

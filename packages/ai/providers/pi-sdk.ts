@@ -11,27 +11,27 @@ import { BaseSession } from "../base-session.ts";
 import { buildEffectivePrompt, buildSystemPrompt } from "../context.ts";
 import { Option, Schema } from "effect";
 import type {
-	AIMessage,
-	AIProvider,
-	AIProviderCapabilities,
-	CreateSessionOptions,
-	PiSDKConfig,
+  AIMessage,
+  AIProvider,
+  AIProviderCapabilities,
+  CreateSessionOptions,
+  PiSDKConfig,
 } from "../types.ts";
 import {
-	buildWindowsCommandScriptSpawnCommand,
-	killWindowsProcessTree,
-	resolveWindowsCommandShim,
+  buildWindowsCommandScriptSpawnCommand,
+  killWindowsProcessTree,
+  resolveWindowsCommandShim,
 } from "./command-path.ts";
 import {
-	PiCommandSchema,
-	PiJsonObjectSchema,
-	PiModelsResponseSchema,
-	PiResponseEnvelopeSchema,
-	PiResponseSchema,
-	PiSDKConfigSchema,
-	PiStateResponseSchema,
-	type PiCommand,
-	type PiJsonObject,
+  PiCommandSchema,
+  PiJsonObjectSchema,
+  PiModelsResponseSchema,
+  PiResponseEnvelopeSchema,
+  PiResponseSchema,
+  PiSDKConfigSchema,
+  PiStateResponseSchema,
+  type PiCommand,
+  type PiJsonObject,
 } from "./pi-protocol.ts";
 
 // ---------------------------------------------------------------------------
@@ -47,178 +47,175 @@ const PROVIDER_NAME = "pi-sdk";
 type EventListener = (event: PiJsonObject) => void;
 
 class PiProcess {
-	private proc: Bun.PipedSubprocess | null = null;
-	private listeners: EventListener[] = [];
-	private pendingRequests = new Map<
-		string,
-		{
-			resolve: (data: PiJsonObject) => void;
-			reject: (err: Error) => void;
-		}
-	>();
-	private nextId = 0;
-	private buffer = "";
-	private _alive = false;
+  private proc: Bun.PipedSubprocess | null = null;
+  private listeners: EventListener[] = [];
+  private pendingRequests = new Map<
+    string,
+    {
+      resolve: (data: PiJsonObject) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  private nextId = 0;
+  private buffer = "";
+  private _alive = false;
 
-	async spawn(piPath: string, cwd: string): Promise<void> {
-		const commandPath = resolveWindowsCommandShim(piPath);
-		const command =
-			buildWindowsCommandScriptSpawnCommand(commandPath, ["--mode", "rpc"]) ?? [
-				commandPath,
-				"--mode",
-				"rpc",
-			];
-		try {
-			this.proc = Bun.spawn(command, {
-				cwd,
-				stdin: "pipe",
-				stdout: "pipe",
-				stderr: "pipe",
-			});
-		} catch (err) {
-			const error = err instanceof Error ? err : new Error(String(err));
-			this.handleProcessEnd(error);
-			throw error;
-		}
-		this._alive = true;
+  async spawn(piPath: string, cwd: string): Promise<void> {
+    const commandPath = resolveWindowsCommandShim(piPath);
+    const command = buildWindowsCommandScriptSpawnCommand(commandPath, ["--mode", "rpc"]) ?? [
+      commandPath,
+      "--mode",
+      "rpc",
+    ];
+    try {
+      this.proc = Bun.spawn(command, {
+        cwd,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.handleProcessEnd(error);
+      throw error;
+    }
+    this._alive = true;
 
-		this.readStream();
+    this.readStream();
 
-		this.proc.exited.then(() => {
-			this.handleProcessEnd(new Error("Pi process exited unexpectedly"));
-		});
-	}
+    this.proc.exited.then(() => {
+      this.handleProcessEnd(new Error("Pi process exited unexpectedly"));
+    });
+  }
 
-	private handleProcessEnd(error: Error): void {
-		if (!this.proc && this.pendingRequests.size === 0) return;
+  private handleProcessEnd(error: Error): void {
+    if (!this.proc && this.pendingRequests.size === 0) return;
 
-		this._alive = false;
-		this.proc = null;
-		for (const [, pending] of this.pendingRequests) {
-			pending.reject(error);
-		}
-		this.pendingRequests.clear();
-		// Signal active query listeners so the drain loop exits with an error
-		for (const listener of this.listeners) {
-			listener({ type: "process_exited" });
-		}
-	}
+    this._alive = false;
+    this.proc = null;
+    for (const [, pending] of this.pendingRequests) {
+      pending.reject(error);
+    }
+    this.pendingRequests.clear();
+    // Signal active query listeners so the drain loop exits with an error
+    for (const listener of this.listeners) {
+      listener({ type: "process_exited" });
+    }
+  }
 
-	private async readStream(): Promise<void> {
-		const proc = this.proc;
-		if (!proc) return;
-		const reader = proc.stdout.getReader();
-		const decoder = new TextDecoder();
+  private async readStream(): Promise<void> {
+    const proc = this.proc;
+    if (!proc) return;
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
 
-		try {
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-				this.buffer += decoder.decode(value, { stream: true });
-				const lines = this.buffer.split("\n");
-				this.buffer = lines.pop() ?? "";
+        this.buffer += decoder.decode(value, { stream: true });
+        const lines = this.buffer.split("\n");
+        this.buffer = lines.pop() ?? "";
 
-				for (const line of lines) {
-					const trimmed = line.replace(/\r$/, "");
-					if (!trimmed) continue;
-					try {
-						const parsed = JSON.parse(trimmed);
-						this.routeMessage(parsed);
-					} catch {
-						// Ignore malformed lines
-					}
-				}
-			}
-		} catch {
-			// Stream closed
-		}
-	}
+        for (const line of lines) {
+          const trimmed = line.replace(/\r$/, "");
+          if (!trimmed) continue;
+          try {
+            const parsed = JSON.parse(trimmed);
+            this.routeMessage(parsed);
+          } catch {
+            // Ignore malformed lines
+          }
+        }
+      }
+    } catch {
+      // Stream closed
+    }
+  }
 
-	private routeMessage(input: PiJsonObject): void {
-		const msg = Option.getOrUndefined(Schema.decodeUnknownOption(PiJsonObjectSchema)(input));
-		if (!msg) return;
-		const response = Option.getOrUndefined(Schema.decodeUnknownOption(PiResponseSchema)(msg));
-		// Response to a command we sent
-		if (response) {
-			const pending = this.pendingRequests.get(response.id);
-			if (pending) {
-				this.pendingRequests.delete(response.id);
-				if (response.success === false) {
-					pending.reject(new Error(response.error ?? "RPC error"));
-				} else {
-					pending.resolve(response.data ?? {});
-				}
-				return;
-			}
-		}
-		const responseEnvelope = Option.getOrUndefined(
-			Schema.decodeUnknownOption(PiResponseEnvelopeSchema)(msg),
-		);
-		if (responseEnvelope) {
-			const pending = this.pendingRequests.get(responseEnvelope.id);
-			if (pending) {
-				this.pendingRequests.delete(responseEnvelope.id);
-				pending.reject(new Error("Malformed RPC response"));
-				return;
-			}
-		}
+  private routeMessage(input: PiJsonObject): void {
+    const msg = Option.getOrUndefined(Schema.decodeUnknownOption(PiJsonObjectSchema)(input));
+    if (!msg) return;
+    const response = Option.getOrUndefined(Schema.decodeUnknownOption(PiResponseSchema)(msg));
+    // Response to a command we sent
+    if (response) {
+      const pending = this.pendingRequests.get(response.id);
+      if (pending) {
+        this.pendingRequests.delete(response.id);
+        if (response.success === false) {
+          pending.reject(new Error(response.error ?? "RPC error"));
+        } else {
+          pending.resolve(response.data ?? {});
+        }
+        return;
+      }
+    }
+    const responseEnvelope = Option.getOrUndefined(
+      Schema.decodeUnknownOption(PiResponseEnvelopeSchema)(msg),
+    );
+    if (responseEnvelope) {
+      const pending = this.pendingRequests.get(responseEnvelope.id);
+      if (pending) {
+        this.pendingRequests.delete(responseEnvelope.id);
+        pending.reject(new Error("Malformed RPC response"));
+        return;
+      }
+    }
 
-		// Agent event — forward to listeners
-		for (const listener of this.listeners) {
-			listener(msg);
-		}
-	}
+    // Agent event — forward to listeners
+    for (const listener of this.listeners) {
+      listener(msg);
+    }
+  }
 
-	/** Send a command without waiting for a response. */
-	send(command: PiCommand): void {
-		const proc = this.proc;
-		if (!proc) return;
-		// Bun.spawn stdin is a FileSink with .write(), not a WritableStream
-		proc.stdin.write(`${JSON.stringify(command)}\n`);
-		proc.stdin.flush();
-	}
+  /** Send a command without waiting for a response. */
+  send(command: PiCommand): void {
+    const proc = this.proc;
+    if (!proc) return;
+    // Bun.spawn stdin is a FileSink with .write(), not a WritableStream
+    proc.stdin.write(`${JSON.stringify(command)}\n`);
+    proc.stdin.flush();
+  }
 
-	/** Send a command and wait for the correlated response. */
-	sendAndWait(
-		command: PiCommand,
-	): Promise<PiJsonObject> {
-		const id = `req_${++this.nextId}`;
-		return new Promise((resolve, reject) => {
-			this.pendingRequests.set(id, { resolve, reject });
-			const request = Schema.decodeUnknownSync(PiCommandSchema)({ ...command, id });
-			this.send(request);
-		});
-	}
+  /** Send a command and wait for the correlated response. */
+  sendAndWait(command: PiCommand): Promise<PiJsonObject> {
+    const id = `req_${++this.nextId}`;
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject });
+      const request = Schema.decodeUnknownSync(PiCommandSchema)({ ...command, id });
+      this.send(request);
+    });
+  }
 
-	/** Register a listener for agent events (non-response messages). */
-	onEvent(listener: EventListener): () => void {
-		this.listeners.push(listener);
-		return () => {
-			const idx = this.listeners.indexOf(listener);
-			if (idx >= 0) this.listeners.splice(idx, 1);
-		};
-	}
+  /** Register a listener for agent events (non-response messages). */
+  onEvent(listener: EventListener): () => void {
+    this.listeners.push(listener);
+    return () => {
+      const idx = this.listeners.indexOf(listener);
+      if (idx >= 0) this.listeners.splice(idx, 1);
+    };
+  }
 
-	get alive(): boolean {
-		return this._alive;
-	}
+  get alive(): boolean {
+    return this._alive;
+  }
 
-	kill(): void {
-		this._alive = false;
-		const proc = this.proc;
-		this.proc = null;
-		if (proc) {
-			if (!killWindowsProcessTree(proc.pid)) {
-				proc.kill();
-			}
-		}
-		this.listeners.length = 0;
-		for (const [, pending] of this.pendingRequests) {
-			pending.reject(new Error("Process killed"));
-		}
-		this.pendingRequests.clear();
-	}
+  kill(): void {
+    this._alive = false;
+    const proc = this.proc;
+    this.proc = null;
+    if (proc) {
+      if (!killWindowsProcessTree(proc.pid)) {
+        proc.kill();
+      }
+    }
+    this.listeners.length = 0;
+    for (const [, pending] of this.pendingRequests) {
+      pending.reject(new Error("Process killed"));
+    }
+    this.pendingRequests.clear();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -226,85 +223,83 @@ class PiProcess {
 // ---------------------------------------------------------------------------
 
 export class PiSDKProvider implements AIProvider {
-	readonly name = PROVIDER_NAME;
-	readonly capabilities: AIProviderCapabilities = {
-		fork: false,
-		resume: false,
-		streaming: true,
-		tools: true,
-	};
-	models?: Array<{ id: string; label: string; default?: boolean }>;
+  readonly name = PROVIDER_NAME;
+  readonly capabilities: AIProviderCapabilities = {
+    fork: false,
+    resume: false,
+    streaming: true,
+    tools: true,
+  };
+  models?: Array<{ id: string; label: string; default?: boolean }>;
 
-	private config: PiSDKConfig;
-	private sessions = new Map<string, PiSDKSession>();
+  private config: PiSDKConfig;
+  private sessions = new Map<string, PiSDKSession>();
 
-	constructor(config: PiSDKConfig) {
-		this.config = config;
-	}
+  constructor(config: PiSDKConfig) {
+    this.config = config;
+  }
 
-	async createSession(options: CreateSessionOptions): Promise<PiSDKSession> {
-		const session = new PiSDKSession({
-			systemPrompt: buildSystemPrompt(options.context),
-			cwd: options.cwd ?? this.config.cwd ?? process.cwd(),
-			parentSessionId: null,
-			piExecutablePath: this.config.piExecutablePath ?? "pi",
-			model: options.model ?? this.config.model,
-		});
-		this.sessions.set(session.id, session);
-		return session;
-	}
+  async createSession(options: CreateSessionOptions): Promise<PiSDKSession> {
+    const session = new PiSDKSession({
+      systemPrompt: buildSystemPrompt(options.context),
+      cwd: options.cwd ?? this.config.cwd ?? process.cwd(),
+      parentSessionId: null,
+      piExecutablePath: this.config.piExecutablePath ?? "pi",
+      model: options.model ?? this.config.model,
+    });
+    this.sessions.set(session.id, session);
+    return session;
+  }
 
-	async forkSession(): Promise<never> {
-		throw new Error(
-			"Pi does not support session forking. " +
-				"The endpoint layer should fall back to createSession().",
-		);
-	}
+  async forkSession(): Promise<never> {
+    throw new Error(
+      "Pi does not support session forking. " +
+        "The endpoint layer should fall back to createSession().",
+    );
+  }
 
-	async resumeSession(): Promise<never> {
-		throw new Error("Pi does not support session resuming.");
-	}
+  async resumeSession(): Promise<never> {
+    throw new Error("Pi does not support session resuming.");
+  }
 
-	dispose(): void {
-		for (const session of this.sessions.values()) {
-			session.killProcess();
-		}
-		this.sessions.clear();
-	}
+  dispose(): void {
+    for (const session of this.sessions.values()) {
+      session.killProcess();
+    }
+    this.sessions.clear();
+  }
 
-	/** Fetch available models from Pi. Call before registering the provider. */
-	async fetchModels(): Promise<void> {
-		const piPath = this.config.piExecutablePath ?? "pi";
+  /** Fetch available models from Pi. Call before registering the provider. */
+  async fetchModels(): Promise<void> {
+    const piPath = this.config.piExecutablePath ?? "pi";
 
-		let proc: PiProcess | undefined;
+    let proc: PiProcess | undefined;
 
-		try {
-			proc = new PiProcess();
-			await proc.spawn(piPath, this.config.cwd ?? process.cwd());
+    try {
+      proc = new PiProcess();
+      await proc.spawn(piPath, this.config.cwd ?? process.cwd());
 
-			const data = await Promise.race([
-				proc.sendAndWait({ type: "get_available_models" }),
-				new Promise<never>((_, reject) =>
-					setTimeout(() => reject(new Error("Timeout")), 10_000),
-				),
-			]);
+      const data = await Promise.race([
+        proc.sendAndWait({ type: "get_available_models" }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10_000)),
+      ]);
 
-			const models = Option.getOrUndefined(
-				Schema.decodeUnknownOption(PiModelsResponseSchema)(data),
-			);
-			if (models && models.models.length > 0) {
-				this.models = models.models.map((m, i) => ({
-					id: `${m.provider}/${m.id}`,
-					label: m.name ?? m.id,
-					...(i === 0 && { default: true }),
-				}));
-			}
-		} catch {
-			// Pi not configured or no models available
-		} finally {
-			proc?.kill();
-		}
-	}
+      const models = Option.getOrUndefined(
+        Schema.decodeUnknownOption(PiModelsResponseSchema)(data),
+      );
+      if (models && models.models.length > 0) {
+        this.models = models.models.map((m, i) => ({
+          id: `${m.provider}/${m.id}`,
+          label: m.name ?? m.id,
+          ...(i === 0 && { default: true }),
+        }));
+      }
+    } catch {
+      // Pi not configured or no models available
+    } finally {
+      proc?.kill();
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -312,169 +307,169 @@ export class PiSDKProvider implements AIProvider {
 // ---------------------------------------------------------------------------
 
 interface SessionConfig {
-	systemPrompt: string;
-	cwd: string;
-	parentSessionId: string | null;
-	piExecutablePath: string;
-	/** Model in "provider/modelId" format, e.g. "anthropic/claude-haiku-4-5". */
-	model?: string;
+  systemPrompt: string;
+  cwd: string;
+  parentSessionId: string | null;
+  piExecutablePath: string;
+  /** Model in "provider/modelId" format, e.g. "anthropic/claude-haiku-4-5". */
+  model?: string;
 }
 
 class PiSDKSession extends BaseSession {
-	private config: SessionConfig;
-	private process: PiProcess | null = null;
+  private config: SessionConfig;
+  private process: PiProcess | null = null;
 
-	constructor(config: SessionConfig) {
-		super({ parentSessionId: config.parentSessionId });
-		this.config = config;
-	}
+  constructor(config: SessionConfig) {
+    super({ parentSessionId: config.parentSessionId });
+    this.config = config;
+  }
 
-	async *query(prompt: string): AsyncIterable<AIMessage> {
-		const started = this.startQuery();
-		if (!started) {
-			yield BaseSession.BUSY_ERROR;
-			return;
-		}
-		const { gen } = started;
+  async *query(prompt: string): AsyncIterable<AIMessage> {
+    const started = this.startQuery();
+    if (!started) {
+      yield BaseSession.BUSY_ERROR;
+      return;
+    }
+    const { gen } = started;
 
-		try {
-			// Lazy-spawn subprocess
-			if (!this.process || !this.process.alive) {
-				this.process = new PiProcess();
-				await this.process.spawn(this.config.piExecutablePath, this.config.cwd);
+    try {
+      // Lazy-spawn subprocess
+      if (!this.process || !this.process.alive) {
+        this.process = new PiProcess();
+        await this.process.spawn(this.config.piExecutablePath, this.config.cwd);
 
-				// Set model if specified (format: "provider/modelId")
-				if (this.config.model) {
-					const [provider, ...rest] = this.config.model.split("/");
-					const modelId = rest.join("/");
-					if (provider && modelId) {
-						try {
-							await this.process.sendAndWait({
-								type: "set_model",
-								provider,
-								modelId,
-							});
-						} catch {
-							// Continue with Pi's default model
-						}
-					}
-				}
+        // Set model if specified (format: "provider/modelId")
+        if (this.config.model) {
+          const [provider, ...rest] = this.config.model.split("/");
+          const modelId = rest.join("/");
+          if (provider && modelId) {
+            try {
+              await this.process.sendAndWait({
+                type: "set_model",
+                provider,
+                modelId,
+              });
+            } catch {
+              // Continue with Pi's default model
+            }
+          }
+        }
 
-				// Get session ID
-				try {
-					const state = await this.process.sendAndWait({ type: "get_state" });
-					const parsedState = Option.getOrUndefined(
-						Schema.decodeUnknownOption(PiStateResponseSchema)(state),
-					);
-					if (parsedState?.sessionId) this.resolveId(parsedState.sessionId);
-				} catch {
-					// Continue with placeholder ID
-				}
+        // Get session ID
+        try {
+          const state = await this.process.sendAndWait({ type: "get_state" });
+          const parsedState = Option.getOrUndefined(
+            Schema.decodeUnknownOption(PiStateResponseSchema)(state),
+          );
+          if (parsedState?.sessionId) this.resolveId(parsedState.sessionId);
+        } catch {
+          // Continue with placeholder ID
+        }
 
-				// If subprocess died during startup, surface the error immediately
-				if (!this.process.alive) {
-					yield {
-						type: "error",
-						error:
-							"Pi process exited during startup. Check that Pi is configured correctly (API keys, models).",
-						code: "pi_startup_error",
-					};
-					return;
-				}
-			}
+        // If subprocess died during startup, surface the error immediately
+        if (!this.process.alive) {
+          yield {
+            type: "error",
+            error:
+              "Pi process exited during startup. Check that Pi is configured correctly (API keys, models).",
+            code: "pi_startup_error",
+          };
+          return;
+        }
+      }
 
-			// Build effective prompt (prepend system prompt on first query)
-			const effectivePrompt = buildEffectivePrompt(
-				prompt,
-				this.config.systemPrompt,
-				this._firstQuerySent,
-			);
+      // Build effective prompt (prepend system prompt on first query)
+      const effectivePrompt = buildEffectivePrompt(
+        prompt,
+        this.config.systemPrompt,
+        this._firstQuerySent,
+      );
 
-			// Set up async queue to bridge callback events → async iterable
-			const queue: AIMessage[] = [];
-			let resolve: (() => void) | null = null;
-			let done = false;
+      // Set up async queue to bridge callback events → async iterable
+      const queue: AIMessage[] = [];
+      let resolve: (() => void) | null = null;
+      let done = false;
 
-			const push = (msg: AIMessage) => {
-				queue.push(msg);
-				resolve?.();
-			};
+      const push = (msg: AIMessage) => {
+        queue.push(msg);
+        resolve?.();
+      };
 
-			const finish = () => {
-				done = true;
-				resolve?.();
-			};
+      const finish = () => {
+        done = true;
+        resolve?.();
+      };
 
-			const unsubscribe = this.process.onEvent((event) => {
-				const mapped = mapPiEvent(event, this.id);
-				for (const msg of mapped) {
-					push(msg);
-					if (
-						msg.type === "result" ||
-						(msg.type === "error" &&
-							(event.type === "agent_end" || event.type === "process_exited"))
-					) {
-						finish();
-					}
-				}
-			});
+      const unsubscribe = this.process.onEvent((event) => {
+        const mapped = mapPiEvent(event, this.id);
+        for (const msg of mapped) {
+          push(msg);
+          if (
+            msg.type === "result" ||
+            (msg.type === "error" &&
+              (event.type === "agent_end" || event.type === "process_exited"))
+          ) {
+            finish();
+          }
+        }
+      });
 
-			// Send prompt — use sendAndWait to catch RPC-level rejections
-			// (e.g. expired credentials, invalid session)
-			try {
-				await this.process.sendAndWait({
-					type: "prompt",
-					message: effectivePrompt,
-				});
-			} catch (err) {
-				unsubscribe();
-				yield {
-					type: "error",
-					error: `Pi rejected prompt: ${err instanceof Error ? err.message : String(err)}`,
-					code: "pi_prompt_rejected",
-				};
-				return;
-			}
-			this._firstQuerySent = true;
+      // Send prompt — use sendAndWait to catch RPC-level rejections
+      // (e.g. expired credentials, invalid session)
+      try {
+        await this.process.sendAndWait({
+          type: "prompt",
+          message: effectivePrompt,
+        });
+      } catch (err) {
+        unsubscribe();
+        yield {
+          type: "error",
+          error: `Pi rejected prompt: ${err instanceof Error ? err.message : String(err)}`,
+          code: "pi_prompt_rejected",
+        };
+        return;
+      }
+      this._firstQuerySent = true;
 
-			// Drain queue
-			try {
-				while (!done || queue.length > 0) {
-					if (queue.length > 0) {
-						yield queue.shift()!;
-					} else {
-						await new Promise<void>((r) => {
-							resolve = r;
-						});
-						resolve = null;
-					}
-				}
-			} finally {
-				unsubscribe();
-			}
-		} catch (err) {
-			yield {
-				type: "error",
-				error: err instanceof Error ? err.message : String(err),
-				code: "provider_error",
-			};
-		} finally {
-			this.endQuery(gen);
-		}
-	}
+      // Drain queue
+      try {
+        while (!done || queue.length > 0) {
+          if (queue.length > 0) {
+            yield queue.shift()!;
+          } else {
+            await new Promise<void>((r) => {
+              resolve = r;
+            });
+            resolve = null;
+          }
+        }
+      } finally {
+        unsubscribe();
+      }
+    } catch (err) {
+      yield {
+        type: "error",
+        error: err instanceof Error ? err.message : String(err),
+        code: "provider_error",
+      };
+    } finally {
+      this.endQuery(gen);
+    }
+  }
 
-	abort(): void {
-		if (this.process?.alive) {
-			this.process.send({ type: "abort" });
-		}
-		super.abort();
-	}
+  abort(): void {
+    if (this.process?.alive) {
+      this.process.send({ type: "abort" });
+    }
+    super.abort();
+  }
 
-	/** Kill the subprocess. Called by the provider on dispose. */
-	killProcess(): void {
-		this.process?.kill();
-		this.process = null;
-	}
+  /** Kill the subprocess. Called by the provider on dispose. */
+  killProcess(): void {
+    this.process?.kill();
+    this.process = null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -491,6 +486,6 @@ export { mapPiEvent } from "./pi-events.ts";
 import { registerProviderFactory } from "../provider.ts";
 
 registerProviderFactory(
-	PROVIDER_NAME,
-	async (config) => new PiSDKProvider(Schema.decodeUnknownSync(PiSDKConfigSchema)(config)),
+  PROVIDER_NAME,
+  async (config) => new PiSDKProvider(Schema.decodeUnknownSync(PiSDKConfigSchema)(config)),
 );

@@ -5,8 +5,7 @@ import { corsHeaders, getAllowedOrigins } from "../core/cors";
 import { FsPasteStore } from "../stores/fs";
 
 const port = parseInt(process.env.PASTE_PORT || "19433", 10);
-const dataDir =
-  process.env.PASTE_DATA_DIR || join(homedir(), ".plannotator", "pastes");
+const dataDir = process.env.PASTE_DATA_DIR || join(homedir(), ".plannotator", "pastes");
 const ttlDays = parseInt(process.env.PASTE_TTL_DAYS || "7", 10);
 const ttlSeconds = ttlDays * 24 * 60 * 60;
 const maxSize = parseInt(process.env.PASTE_MAX_SIZE || String(DEFAULT_PASTE_MAX_SIZE), 10);

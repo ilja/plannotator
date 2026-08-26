@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { decodeCodeNavFileResponse } from '../utils/code-nav-file-response';
+import { useState, useCallback, useRef } from "react";
+import { decodeCodeNavFileResponse } from "../utils/code-nav-file-response";
 
 const MAX_CACHE_ENTRIES = 10;
 
@@ -16,63 +16,59 @@ export function useCodeNavPreview() {
   const cacheRef = useRef(new Map<string, string>());
   const abortRef = useRef<AbortController | null>(null);
 
-  const selectLocation = useCallback(
-    async (filePath: string, line: number) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
+  const selectLocation = useCallback(async (filePath: string, line: number) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-      const cache = cacheRef.current;
-      const cached = cache.get(filePath);
+    const cache = cacheRef.current;
+    const cached = cache.get(filePath);
 
-      if (cached) {
+    if (cached) {
+      setIsLoading(false);
+      const allLines = cached.split("\n");
+      setPreviewData({
+        lines: allLines,
+        startLine: 1,
+        targetLine: line,
+        filePath,
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/code-nav/file?path=${encodeURIComponent(filePath)}`, {
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = decodeCodeNavFileResponse(await res.json());
+      if (!data) throw new Error("Malformed response");
+
+      if (cache.size >= MAX_CACHE_ENTRIES) {
+        const firstKey = cache.keys().next().value;
+        if (firstKey) cache.delete(firstKey);
+      }
+      cache.set(filePath, data.content);
+
+      if (controller.signal.aborted) return;
+
+      const allLines = data.content.split("\n");
+      setPreviewData({
+        lines: allLines,
+        startLine: 1,
+        targetLine: line,
+        filePath,
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setPreviewData(null);
+    } finally {
+      if (abortRef.current === controller) {
         setIsLoading(false);
-        const allLines = cached.split('\n');
-        setPreviewData({
-          lines: allLines,
-          startLine: 1,
-          targetLine: line,
-          filePath,
-        });
-        return;
       }
-
-      setIsLoading(true);
-      try {
-        const res = await fetch(
-          `/api/code-nav/file?path=${encodeURIComponent(filePath)}`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) throw new Error('Failed');
-        const data = decodeCodeNavFileResponse(await res.json());
-        if (!data) throw new Error('Malformed response');
-
-        if (cache.size >= MAX_CACHE_ENTRIES) {
-          const firstKey = cache.keys().next().value;
-          if (firstKey) cache.delete(firstKey);
-        }
-        cache.set(filePath, data.content);
-
-        if (controller.signal.aborted) return;
-
-        const allLines = data.content.split('\n');
-        setPreviewData({
-          lines: allLines,
-          startLine: 1,
-          targetLine: line,
-          filePath,
-        });
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setPreviewData(null);
-      } finally {
-        if (abortRef.current === controller) {
-          setIsLoading(false);
-        }
-      }
-    },
-    [],
-  );
+    }
+  }, []);
 
   const clear = useCallback(() => {
     abortRef.current?.abort();

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import * as Popover from '@radix-ui/react-popover';
-import type { JjEvoLogEntry } from '@plannotator/shared/types';
+import React, { useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import type { JjEvoLogEntry } from "@plannotator/shared/types";
 
 interface EvoLogPickerProps {
   entries: JjEvoLogEntry[];
@@ -50,20 +50,16 @@ export const EvoLogPicker: React.FC<EvoLogPickerProps> = ({
           title={`Compare against evolog entry: ${selectedCommitId}`}
           className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium overflow-hidden transition-colors focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed ${
             isCustom
-              ? 'bg-primary/10 border border-primary/30 text-foreground'
-              : 'bg-muted border border-transparent text-foreground'
+              ? "bg-primary/10 border border-primary/30 text-foreground"
+              : "bg-muted border border-transparent text-foreground"
           }`}
         >
-          <span className="text-[10px] uppercase tracking-wide opacity-60 flex-shrink-0">
-            from
-          </span>
+          <span className="text-[10px] uppercase tracking-wide opacity-60 flex-shrink-0">from</span>
           <span className="truncate flex-1 text-left font-mono">
             {(selected?.commitId ?? selectedCommitId).slice(0, 8)}
           </span>
           {selected?.age && (
-            <span className="text-[10px] text-muted-foreground truncate">
-              {selected.age}
-            </span>
+            <span className="text-[10px] text-muted-foreground truncate">{selected.age}</span>
           )}
           <svg
             className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0"
@@ -101,14 +97,18 @@ export const EvoLogPicker: React.FC<EvoLogPickerProps> = ({
                   disabled={isCurrent}
                   onClick={() => !isCurrent && handleSelect(entry.commitId)}
                   className={`w-full flex items-start gap-2 px-3 py-2 text-xs text-left transition-colors focus:outline-none focus:bg-muted ${
-                    isCurrent
-                      ? 'opacity-40 cursor-default'
-                      : 'hover:bg-muted cursor-pointer'
-                  } ${isSelected && !isCurrent ? 'text-foreground font-medium' : 'text-foreground/80'}`}
+                    isCurrent ? "opacity-40 cursor-default" : "hover:bg-muted cursor-pointer"
+                  } ${isSelected && !isCurrent ? "text-foreground font-medium" : "text-foreground/80"}`}
                 >
                   <span className="w-3 flex-shrink-0 mt-0.5">
                     {isSelected && !isCurrent && (
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     )}

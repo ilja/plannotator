@@ -13,9 +13,7 @@ import { Option, Schema } from "effect";
 
 const IPC_REGISTRY = path.join(getPlannotatorDataDir(), "vscode-ipc.json");
 const VscodeIpcRegistrySchema = Schema.Record(Schema.String, Schema.Unknown);
-const VscodeIpcPortSchema = Schema.Int.pipe(
-  Schema.check(Schema.isGreaterThan(0)),
-);
+const VscodeIpcPortSchema = Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)));
 
 /**
  * Common "no-op" values for $BROWSER used by headless/background environments
@@ -62,9 +60,7 @@ export function decodeVscodeIpcRegistry(raw: string) {
  */
 async function tryVscodeIpc(url: string): Promise<boolean> {
   try {
-    const registry = decodeVscodeIpcRegistry(
-      fs.readFileSync(IPC_REGISTRY, "utf-8"),
-    );
+    const registry = decodeVscodeIpcRegistry(fs.readFileSync(IPC_REGISTRY, "utf-8"));
     const cwd = process.cwd();
     // Find the best matching workspace (longest prefix match)
     let bestMatch = "";
@@ -102,10 +98,7 @@ export async function isWSL(): Promise<boolean> {
     const file = Bun.file("/proc/version");
     if (await file.exists()) {
       const content = await file.text();
-      return (
-        content.toLowerCase().includes("wsl") ||
-        content.toLowerCase().includes("microsoft")
-      );
+      return content.toLowerCase().includes("wsl") || content.toLowerCase().includes("microsoft");
     }
   } catch {
     // Ignore errors reading /proc/version
@@ -181,7 +174,7 @@ async function openGlimpse(url: string): Promise<boolean> {
       "node_modules",
       "glimpseui",
       "bin",
-      "glimpse.mjs"
+      "glimpse.mjs",
     );
     if (node && fs.existsSync(entry)) {
       command = node;
@@ -217,7 +210,7 @@ async function openGlimpse(url: string): Promise<boolean> {
 
 export async function openBrowser(
   url: string,
-  options?: { isRemote?: boolean; useGlimpse?: boolean }
+  options?: { isRemote?: boolean; useGlimpse?: boolean },
 ): Promise<boolean> {
   try {
     const rawPlannotatorBrowser = process.env.PLANNOTATOR_BROWSER;

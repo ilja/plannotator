@@ -7,7 +7,11 @@ import {
   fetchGhPRViewedFiles,
   reconstructGhPatch,
 } from "./pr-github";
-import { parseDiffGitHeader, parseDiffFilePathLines, parseDiffMetadataPathLines } from "./diff-paths";
+import {
+  parseDiffGitHeader,
+  parseDiffFilePathLines,
+  parseDiffMetadataPathLines,
+} from "./diff-paths";
 import type { PRMetadata, PRRuntime } from "./pr-types";
 
 const REF = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
@@ -42,10 +46,18 @@ function githubRuntime(opts: {
     async runCommand(command, args) {
       calls.push([command, ...args].join(" "));
       if (args[0] === "pr" && args[1] === "diff") {
-        return { stdout: opts.prDiff.stdout ?? "", stderr: opts.prDiff.stderr ?? "", exitCode: opts.prDiff.exitCode };
+        return {
+          stdout: opts.prDiff.stdout ?? "",
+          stderr: opts.prDiff.stderr ?? "",
+          exitCode: opts.prDiff.exitCode,
+        };
       }
       if (args[0] === "pr" && args[1] === "view") {
-        return { stdout: opts.view?.stdout ?? VIEW_JSON, stderr: opts.view?.stderr ?? "", exitCode: opts.view?.exitCode ?? 0 };
+        return {
+          stdout: opts.view?.stdout ?? VIEW_JSON,
+          stderr: opts.view?.stderr ?? "",
+          exitCode: opts.view?.exitCode ?? 0,
+        };
       }
       if (args[0] === "repo" && args[1] === "view") {
         return { stdout: "main\n", stderr: "", exitCode: 0 };
@@ -54,7 +66,11 @@ function githubRuntime(opts: {
         return { stdout: `${"c".repeat(40)}\n`, stderr: "", exitCode: 0 };
       }
       if (args[0] === "api" && args[1]?.includes("/pulls/123/files")) {
-        return { stdout: opts.files?.stdout ?? "", stderr: opts.files?.stderr ?? "", exitCode: opts.files?.exitCode ?? 1 };
+        return {
+          stdout: opts.files?.stdout ?? "",
+          stderr: opts.files?.stderr ?? "",
+          exitCode: opts.files?.exitCode ?? 1,
+        };
       }
       return { stdout: "", stderr: `unexpected command: ${args.join(" ")}`, exitCode: 1 };
     },
@@ -123,7 +139,9 @@ describe("fetchGhPR", () => {
     try {
       const result = await fetchGhPR(runtime, REF);
       expect(result.patchIncomplete).toBe(true);
-      const warned = errSpy.mock.calls.some((args) => String(args[0]).includes("omitted diff content for 2 file(s)"));
+      const warned = errSpy.mock.calls.some((args) =>
+        String(args[0]).includes("omitted diff content for 2 file(s)"),
+      );
       expect(warned).toBe(true);
     } finally {
       errSpy.mockRestore();
@@ -155,7 +173,12 @@ describe("fetchGhPR", () => {
   test("passes --hostname to the files API on GitHub Enterprise", async () => {
     const { runtime, calls } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "406" },
-      files: { exitCode: 0, stdout: JSON.stringify([{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" }]) },
+      files: {
+        exitCode: 0,
+        stdout: JSON.stringify([
+          { filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" },
+        ]),
+      },
     });
 
     await fetchGhPR(runtime, { ...REF, host: "ghe.corp.com" });
@@ -170,7 +193,9 @@ describe("fetchGhPR", () => {
       files: { exitCode: 1, stderr: "files boom" },
     });
 
-    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/diff too large.*files boom|files boom.*diff too large/s);
+    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(
+      /diff too large.*files boom|files boom.*diff too large/s,
+    );
   });
 
   test("throws a clear empty-diff error when the files API returns no entries", async () => {
@@ -187,7 +212,12 @@ describe("fetchGhPR", () => {
     view.changedFiles = 3500;
     const { runtime } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "406" },
-      files: { exitCode: 0, stdout: JSON.stringify([{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" }]) },
+      files: {
+        exitCode: 0,
+        stdout: JSON.stringify([
+          { filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" },
+        ]),
+      },
       view: { exitCode: 0, stdout: JSON.stringify(view) },
     });
 
@@ -196,7 +226,9 @@ describe("fetchGhPR", () => {
       const result = await fetchGhPR(runtime, REF);
       expect(result.rawPatch).toContain("diff --git a/a.ts b/a.ts"); // partial diff still served
       expect(result.patchIncomplete).toBe(true); // 3000-file cap → upgrade offered
-      const warned = errSpy.mock.calls.some((args) => String(args[0]).includes("3500 changed files"));
+      const warned = errSpy.mock.calls.some((args) =>
+        String(args[0]).includes("3500 changed files"),
+      );
       expect(warned).toBe(true);
     } finally {
       errSpy.mockRestore();
@@ -221,7 +253,9 @@ describe("fetchGhPR", () => {
       view: { exitCode: 0, stdout: "not json" },
     });
 
-    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata: Invalid response/);
+    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(
+      /Failed to fetch PR metadata: Invalid response/,
+    );
     expect(calls.some((c) => c.includes("/pulls/123/files"))).toBe(false);
     expect(calls.some((c) => c.includes("/compare/"))).toBe(false);
   });
@@ -234,7 +268,9 @@ describe("fetchGhPR", () => {
       view: { exitCode: 0, stdout: JSON.stringify(view) },
     });
 
-    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(/Failed to fetch PR metadata: Invalid response/);
+    await expect(fetchGhPR(runtime, REF)).rejects.toThrow(
+      /Failed to fetch PR metadata: Invalid response/,
+    );
     expect(calls.some((c) => c.includes("/compare/"))).toBe(false);
   });
 
@@ -243,7 +279,12 @@ describe("fetchGhPR", () => {
     view.changedFiles = "many";
     const { runtime } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "406" },
-      files: { exitCode: 0, stdout: JSON.stringify([{ filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" }]) },
+      files: {
+        exitCode: 0,
+        stdout: JSON.stringify([
+          { filename: "a.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" },
+        ]),
+      },
       view: { exitCode: 0, stdout: JSON.stringify(view) },
     });
 
@@ -253,18 +294,59 @@ describe("fetchGhPR", () => {
 });
 
 describe("fetchGhPRList", () => {
-  const listRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+  const listRef = {
+    platform: "github" as const,
+    host: "github.com",
+    owner: "o",
+    repo: "r",
+    number: 123,
+  };
 
   test("decodes valid entries and filters malformed siblings", async () => {
     const runtime: PRRuntime = {
       async runCommand() {
         return {
           stdout: JSON.stringify([
-            { number: 1, title: "", author: { login: "" }, url: "", baseRefName: "", state: "OPEN" },
-            { number: 1, title: "Duplicate", author: { login: "dev" }, url: "url", baseRefName: "main", state: "MERGED" },
-            { number: 2, title: "Closed", author: { login: "dev" }, url: "url-2", baseRefName: "main", state: "CLOSED" },
-            { number: 3, title: "Bad author", author: { login: 42 }, url: "url-3", baseRefName: "main", state: "OPEN" },
-            { number: 4, title: "Bad state", author: { login: "dev" }, url: "url-4", baseRefName: "main", state: "UNKNOWN" },
+            {
+              number: 1,
+              title: "",
+              author: { login: "" },
+              url: "",
+              baseRefName: "",
+              state: "OPEN",
+            },
+            {
+              number: 1,
+              title: "Duplicate",
+              author: { login: "dev" },
+              url: "url",
+              baseRefName: "main",
+              state: "MERGED",
+            },
+            {
+              number: 2,
+              title: "Closed",
+              author: { login: "dev" },
+              url: "url-2",
+              baseRefName: "main",
+              state: "CLOSED",
+            },
+            {
+              number: 3,
+              title: "Bad author",
+              author: { login: 42 },
+              url: "url-3",
+              baseRefName: "main",
+              state: "OPEN",
+            },
+            {
+              number: 4,
+              title: "Bad state",
+              author: { login: "dev" },
+              url: "url-4",
+              baseRefName: "main",
+              state: "UNKNOWN",
+            },
           ]),
           stderr: "",
           exitCode: 0,
@@ -274,8 +356,24 @@ describe("fetchGhPRList", () => {
 
     await expect(fetchGhPRList(runtime, listRef)).resolves.toEqual([
       { id: "1", number: 1, title: "", author: "", url: "", baseBranch: "", state: "open" },
-      { id: "1", number: 1, title: "Duplicate", author: "dev", url: "url", baseBranch: "main", state: "merged" },
-      { id: "2", number: 2, title: "Closed", author: "dev", url: "url-2", baseBranch: "main", state: "closed" },
+      {
+        id: "1",
+        number: 1,
+        title: "Duplicate",
+        author: "dev",
+        url: "url",
+        baseBranch: "main",
+        state: "merged",
+      },
+      {
+        id: "2",
+        number: 2,
+        title: "Closed",
+        author: "dev",
+        url: "url-2",
+        baseBranch: "main",
+        state: "closed",
+      },
     ]);
   });
 
@@ -285,20 +383,38 @@ describe("fetchGhPRList", () => {
       { stdout: "", exitCode: 1 },
     ];
     for (const output of outputs) {
-      const runtime: PRRuntime = { async runCommand() { return { ...output, stderr: "failed" }; } };
+      const runtime: PRRuntime = {
+        async runCommand() {
+          return { ...output, stderr: "failed" };
+        },
+      };
       await expect(fetchGhPRList(runtime, listRef)).resolves.toEqual([]);
     }
 
-    const invalidJson: PRRuntime = { async runCommand() { return { stdout: "not json", stderr: "", exitCode: 0 }; } };
+    const invalidJson: PRRuntime = {
+      async runCommand() {
+        return { stdout: "not json", stderr: "", exitCode: 0 };
+      },
+    };
     await expect(fetchGhPRList(invalidJson, listRef)).rejects.toThrow();
 
-    const nonArray: PRRuntime = { async runCommand() { return { stdout: "{}", stderr: "", exitCode: 0 }; } };
+    const nonArray: PRRuntime = {
+      async runCommand() {
+        return { stdout: "{}", stderr: "", exitCode: 0 };
+      },
+    };
     await expect(fetchGhPRList(nonArray, listRef)).rejects.toThrow();
   });
 });
 
 describe("fetchGhPRStack", () => {
-  const stackRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 3 };
+  const stackRef = {
+    platform: "github" as const,
+    host: "github.com",
+    owner: "o",
+    repo: "r",
+    number: 3,
+  };
   const metadata: PRMetadata = {
     platform: "github",
     host: "github.com",
@@ -326,7 +442,14 @@ describe("fetchGhPRStack", () => {
                 repository: {
                   pullRequests: {
                     nodes: [
-                      { number: 1, title: "Ancestor", url: "https://prs/1", baseRefName: "main", headRefName: "base", state: "MERGED" },
+                      {
+                        number: 1,
+                        title: "Ancestor",
+                        url: "https://prs/1",
+                        baseRefName: "main",
+                        headRefName: "base",
+                        state: "MERGED",
+                      },
                       { number: 99, title: 42 },
                     ],
                   },
@@ -343,7 +466,16 @@ describe("fetchGhPRStack", () => {
               data: {
                 repository: {
                   pullRequests: {
-                    nodes: [{ number: 4, title: "Descendant", url: "https://prs/4", baseRefName: "feature", headRefName: "leaf", state: "OPEN" }],
+                    nodes: [
+                      {
+                        number: 4,
+                        title: "Descendant",
+                        url: "https://prs/4",
+                        baseRefName: "feature",
+                        headRefName: "leaf",
+                        state: "OPEN",
+                      },
+                    ],
                   },
                 },
               },
@@ -352,16 +484,43 @@ describe("fetchGhPRStack", () => {
             exitCode: 0,
           };
         }
-        return { stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }), stderr: "", exitCode: 0 };
+        return {
+          stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }),
+          stderr: "",
+          exitCode: 0,
+        };
       },
     };
 
     await expect(fetchGhPRStack(runtime, stackRef, metadata)).resolves.toEqual({
       nodes: [
         { branch: "main", isCurrent: false, isDefaultBranch: true },
-        { branch: "base", number: 1, title: "Ancestor", url: "https://prs/1", isCurrent: false, isDefaultBranch: false, state: "merged" },
-        { branch: "feature", number: 3, title: "Current", url: "https://prs/3", isCurrent: true, isDefaultBranch: false },
-        { branch: "leaf", number: 4, title: "Descendant", url: "https://prs/4", isCurrent: false, isDefaultBranch: false, state: "open" },
+        {
+          branch: "base",
+          number: 1,
+          title: "Ancestor",
+          url: "https://prs/1",
+          isCurrent: false,
+          isDefaultBranch: false,
+          state: "merged",
+        },
+        {
+          branch: "feature",
+          number: 3,
+          title: "Current",
+          url: "https://prs/3",
+          isCurrent: true,
+          isDefaultBranch: false,
+        },
+        {
+          branch: "leaf",
+          number: 4,
+          title: "Descendant",
+          url: "https://prs/4",
+          isCurrent: false,
+          isDefaultBranch: false,
+          state: "open",
+        },
       ],
     });
   });
@@ -371,7 +530,11 @@ describe("fetchGhPRStack", () => {
     const runtime: PRRuntime = {
       async runCommand() {
         calls++;
-        return { stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }), stderr: "", exitCode: 0 };
+        return {
+          stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }),
+          stderr: "",
+          exitCode: 0,
+        };
       },
     };
     const noDefault = { ...metadata, defaultBranch: undefined };
@@ -381,7 +544,13 @@ describe("fetchGhPRStack", () => {
 });
 
 describe("fetchGhPRViewedFiles", () => {
-  const viewedRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+  const viewedRef = {
+    platform: "github" as const,
+    host: "github.com",
+    owner: "o",
+    repo: "r",
+    number: 123,
+  };
 
   test("merges paginated viewed states and filters malformed file nodes", async () => {
     let page = 0;
@@ -438,9 +607,13 @@ describe("fetchGhPRViewedFiles", () => {
 
   test("throws for CLI and GraphQL errors", async () => {
     const failedCli: PRRuntime = {
-      async runCommand() { return { stdout: "", stderr: "boom", exitCode: 1 }; },
+      async runCommand() {
+        return { stdout: "", stderr: "boom", exitCode: 1 };
+      },
     };
-    await expect(fetchGhPRViewedFiles(failedCli, viewedRef)).rejects.toThrow(/Failed to fetch PR viewed files/);
+    await expect(fetchGhPRViewedFiles(failedCli, viewedRef)).rejects.toThrow(
+      /Failed to fetch PR viewed files/,
+    );
 
     const graphqlError: PRRuntime = {
       async runCommand() {
@@ -451,12 +624,20 @@ describe("fetchGhPRViewedFiles", () => {
         };
       },
     };
-    await expect(fetchGhPRViewedFiles(graphqlError, viewedRef)).rejects.toThrow("GraphQL error: forbidden");
+    await expect(fetchGhPRViewedFiles(graphqlError, viewedRef)).rejects.toThrow(
+      "GraphQL error: forbidden",
+    );
   });
 });
 
 describe("fetchGhPRContext envelope", () => {
-  const envelopeRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+  const envelopeRef = {
+    platform: "github" as const,
+    host: "github.com",
+    owner: "o",
+    repo: "r",
+    number: 123,
+  };
 
   test("rejects invalid roots before fetching review threads", async () => {
     for (const stdout of ["not json", "null", "[]"]) {
@@ -513,7 +694,13 @@ describe("fetchGhPRContext envelope", () => {
 });
 
 describe("fetchGhPRContext review threads", () => {
-  const contextRef = { platform: "github" as const, host: "github.com", owner: "o", repo: "r", number: 123 };
+  const contextRef = {
+    platform: "github" as const,
+    host: "github.com",
+    owner: "o",
+    repo: "r",
+    number: 123,
+  };
   const contextBody = JSON.stringify({
     body: "Context body",
     state: "OPEN",
@@ -652,7 +839,11 @@ describe("fetchGhPRContext review threads", () => {
             return { stdout: contextBody, stderr: "", exitCode: 0 };
           }
           if (args[0] === "api" && args[1] === "graphql") {
-            return { stdout: graphqlResult.stdout, stderr: "graphql failed", exitCode: graphqlResult.exitCode };
+            return {
+              stdout: graphqlResult.stdout,
+              stderr: "graphql failed",
+              exitCode: graphqlResult.exitCode,
+            };
           }
           return { stdout: "", stderr: "unexpected", exitCode: 1 };
         },
@@ -668,7 +859,11 @@ describe("fetchGhPRContext review threads", () => {
 describe("reconstructGhPatch", () => {
   test("modified file round-trips through the real diff header parsers", () => {
     const patch = reconstructGhPatch([
-      { filename: "src/app.ts", status: "modified", patch: "@@ -1,2 +1,2 @@\n-const a = 1;\n+const a = 2;\n context" },
+      {
+        filename: "src/app.ts",
+        status: "modified",
+        patch: "@@ -1,2 +1,2 @@\n-const a = 1;\n+const a = 2;\n context",
+      },
     ]);
 
     const lines = patch.split("\n");
@@ -701,13 +896,21 @@ describe("reconstructGhPatch", () => {
 
   test("renamed file emits rename metadata that the real parser extracts", () => {
     const patch = reconstructGhPatch([
-      { filename: "after.ts", previous_filename: "before.ts", status: "renamed", patch: "@@ -1 +1 @@\n-a\n+b" },
+      {
+        filename: "after.ts",
+        previous_filename: "before.ts",
+        status: "renamed",
+        patch: "@@ -1 +1 @@\n-a\n+b",
+      },
     ]);
 
     const lines = patch.split("\n");
     expect(lines[0]).toBe("diff --git a/before.ts b/after.ts");
     expect(parseDiffGitHeader(lines[0])).toEqual({ oldPath: "before.ts", newPath: "after.ts" });
-    expect(parseDiffMetadataPathLines(lines)).toEqual({ oldPath: "before.ts", newPath: "after.ts" });
+    expect(parseDiffMetadataPathLines(lines)).toEqual({
+      oldPath: "before.ts",
+      newPath: "after.ts",
+    });
     // Pierre's parser classifies renames off the similarity line — a patched
     // rename must carry a sub-100% score or it renders as a plain change.
     expect(lines[1]).toBe("similarity index 99%");
@@ -758,7 +961,10 @@ describe("reconstructGhPatch", () => {
 
     const headerLine = patch.split("\n")[0];
     expect(headerLine).toBe("diff --git a/docs/my file.md b/docs/my file.md");
-    expect(parseDiffGitHeader(headerLine)).toEqual({ oldPath: "docs/my file.md", newPath: "docs/my file.md" });
+    expect(parseDiffGitHeader(headerLine)).toEqual({
+      oldPath: "docs/my file.md",
+      newPath: "docs/my file.md",
+    });
   });
 
   test("pure rename with a space in the new name still yields parseable paths (file must not vanish)", () => {
@@ -770,7 +976,10 @@ describe("reconstructGhPatch", () => {
 
     const headerLine = patch.split("\n")[0];
     expect(headerLine).toBe("diff --git a/docs/roadmap.md b/docs/road map.md");
-    expect(parseDiffGitHeader(headerLine)).toEqual({ oldPath: "docs/roadmap.md", newPath: "docs/road map.md" });
+    expect(parseDiffGitHeader(headerLine)).toEqual({
+      oldPath: "docs/roadmap.md",
+      newPath: "docs/road map.md",
+    });
   });
 
   test("C-quotes paths containing double quotes, matching git, and the parser round-trips them", () => {
@@ -785,7 +994,12 @@ describe("reconstructGhPatch", () => {
 
   test("copied file emits copy metadata", () => {
     const patch = reconstructGhPatch([
-      { filename: "copy.ts", previous_filename: "orig.ts", status: "copied", patch: "@@ -1 +1 @@\n-a\n+b" },
+      {
+        filename: "copy.ts",
+        previous_filename: "orig.ts",
+        status: "copied",
+        patch: "@@ -1 +1 @@\n-a\n+b",
+      },
     ]);
 
     expect(patch).toContain("similarity index 99%");

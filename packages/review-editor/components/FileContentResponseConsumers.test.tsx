@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import React from 'react';
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import type { ComponentProps } from 'react';
-import type { DiffViewer } from './DiffViewer';
-import type { AllFilesCodeView } from './AllFilesCodeView';
-import type { DiffFile } from '../types';
+import { afterEach, describe, expect, test } from "bun:test";
+import React from "react";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import type { ComponentProps } from "react";
+import type { DiffViewer } from "./DiffViewer";
+import type { AllFilesCodeView } from "./AllFilesCodeView";
+import type { DiffFile } from "../types";
 
 const hasDom = globalThis.document !== undefined;
 const realFetch = globalThis.fetch;
@@ -16,22 +16,22 @@ function patchFor(filePath: string): string {
     `diff --git a/${filePath} b/${filePath}`,
     `--- a/${filePath}`,
     `+++ b/${filePath}`,
-    '@@ -2,1 +2,1 @@',
-    '-changed',
-    '+changed-new',
-  ].join('\n');
+    "@@ -2,1 +2,1 @@",
+    "-changed",
+    "+changed-new",
+  ].join("\n");
 }
 
-const patch = patchFor('src/example.ts');
-const malformedOldContent = 'before\nchanged\nmalformed-full-only';
-const oldContent = 'before\nchanged\nafter\nvalid-full-only';
-const newContent = 'before\nchanged-new\nafter\nvalid-full-only';
+const patch = patchFor("src/example.ts");
+const malformedOldContent = "before\nchanged\nmalformed-full-only";
+const oldContent = "before\nchanged\nafter\nvalid-full-only";
+const newContent = "before\nchanged-new\nafter\nvalid-full-only";
 
 function collectTextIncludingShadowRoots(root: Node): string {
-  let text = '';
+  let text = "";
   const visit = (node: Node) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      text += node.textContent ?? '';
+      text += node.textContent ?? "";
       return;
     }
     if (node instanceof Element && node.shadowRoot) {
@@ -47,8 +47,8 @@ function collectTextIncludingShadowRoots(root: Node): string {
 function installFetch(responses: (path: string) => Response): void {
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL): Promise<Response> => {
-      const url = new URL(String(input), 'http://localhost');
-      return responses(url.searchParams.get('path') ?? '');
+      const url = new URL(String(input), "http://localhost");
+      return responses(url.searchParams.get("path") ?? "");
     },
     { preconnect: (): void => {} },
   );
@@ -63,8 +63,8 @@ async function flushAsyncWork(): Promise<void> {
 function diffViewerProps(): ComponentProps<typeof DiffViewer> {
   return {
     patch,
-    filePath: 'src/example.ts',
-    diffStyle: 'unified',
+    filePath: "src/example.ts",
+    diffStyle: "unified",
     expandUnchanged: true,
     annotations: [],
     selectedAnnotationId: null,
@@ -82,7 +82,7 @@ function diffViewerProps(): ComponentProps<typeof DiffViewer> {
 function allFilesProps(files: DiffFile[]): ComponentProps<typeof AllFilesCodeView> {
   return {
     files,
-    diffStyle: 'unified',
+    diffStyle: "unified",
     expandUnchanged: true,
     annotations: [],
     selectedAnnotationId: null,
@@ -97,7 +97,7 @@ function allFilesProps(files: DiffFile[]): ComponentProps<typeof AllFilesCodeVie
 }
 
 async function mount(element: React.ReactElement): Promise<HTMLDivElement> {
-  const host = document.createElement('div');
+  const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   roots.push(root);
@@ -113,40 +113,64 @@ afterEach(async () => {
     await act(async () => root.unmount());
   }
   globalThis.fetch = realFetch;
-  if (hasDom) document.body.innerHTML = '';
+  if (hasDom) document.body.innerHTML = "";
 });
 
-describe('file-content response consumers', () => {
-  test.skipIf(!hasDom)('DiffViewer keeps the raw patch for a malformed response', async () => {
-    installFetch(() => new Response(JSON.stringify({ oldContent: malformedOldContent }), { status: 200 }));
-    await mount(React.createElement((await import('./DiffViewer')).DiffViewer, diffViewerProps()));
+describe("file-content response consumers", () => {
+  test.skipIf(!hasDom)("DiffViewer keeps the raw patch for a malformed response", async () => {
+    installFetch(
+      () => new Response(JSON.stringify({ oldContent: malformedOldContent }), { status: 200 }),
+    );
+    await mount(React.createElement((await import("./DiffViewer")).DiffViewer, diffViewerProps()));
     await act(async () => {
       await flushAsyncWork();
     });
 
     const text = collectTextIncludingShadowRoots(document.body);
-    expect(text).toContain('changed-new');
-    expect(text).not.toContain('malformed-full-only');
+    expect(text).toContain("changed-new");
+    expect(text).not.toContain("malformed-full-only");
   });
 
-  test.skipIf(!hasDom)('AllFilesCodeView isolates malformed augmentation from a valid sibling', async () => {
-    const files: DiffFile[] = [
-      { path: 'src/malformed.ts', patch: patchFor('src/malformed.ts'), additions: 1, deletions: 1, status: 'modified' },
-      { path: 'src/valid.ts', patch: patchFor('src/valid.ts'), additions: 1, deletions: 1, status: 'modified' },
-    ];
-    installFetch((path) => path === 'src/malformed.ts'
-      ? new Response(JSON.stringify({ oldContent: malformedOldContent }), { status: 200 })
-      : new Response(JSON.stringify({ oldContent, newContent }), { status: 200 }));
+  test.skipIf(!hasDom)(
+    "AllFilesCodeView isolates malformed augmentation from a valid sibling",
+    async () => {
+      const files: DiffFile[] = [
+        {
+          path: "src/malformed.ts",
+          patch: patchFor("src/malformed.ts"),
+          additions: 1,
+          deletions: 1,
+          status: "modified",
+        },
+        {
+          path: "src/valid.ts",
+          patch: patchFor("src/valid.ts"),
+          additions: 1,
+          deletions: 1,
+          status: "modified",
+        },
+      ];
+      installFetch((path) =>
+        path === "src/malformed.ts"
+          ? new Response(JSON.stringify({ oldContent: malformedOldContent }), { status: 200 })
+          : new Response(JSON.stringify({ oldContent, newContent }), { status: 200 }),
+      );
 
-    await mount(React.createElement((await import('./AllFilesCodeView')).AllFilesCodeView, allFilesProps(files)));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      await flushAsyncWork();
-    });
+      await mount(
+        React.createElement(
+          (await import("./AllFilesCodeView")).AllFilesCodeView,
+          allFilesProps(files),
+        ),
+      );
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        await flushAsyncWork();
+      });
 
-    const text = collectTextIncludingShadowRoots(document.body);
-    expect(text).not.toContain('malformed-full-only');
-    expect(text).toContain('valid-full-only');
-    expect(text).toContain('changed-new');
-  });
+      const text = collectTextIncludingShadowRoots(document.body);
+      expect(text).not.toContain("malformed-full-only");
+      expect(text).toContain("valid-full-only");
+      expect(text).toContain("changed-new");
+    },
+  );
 });

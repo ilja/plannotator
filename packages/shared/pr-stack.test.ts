@@ -200,7 +200,9 @@ describe("runPRLayerLocalDiff", () => {
 
   test("falls back to three-dot when no merge-base SHA is reported (GitLab)", async () => {
     const { runtime, calls } = layerRuntime({});
-    const noMergeBase: Omit<PRMetadata, "mergeBaseSha"> & { mergeBaseSha?: string } = { ...layerMetadata };
+    const noMergeBase: Omit<PRMetadata, "mergeBaseSha"> & { mergeBaseSha?: string } = {
+      ...layerMetadata,
+    };
     delete noMergeBase.mergeBaseSha;
     const diff = await runPRLayerLocalDiff(runtime, noMergeBase, "/tmp/checkout");
 

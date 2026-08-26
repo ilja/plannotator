@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 /**
  * Get the display URL for an image path or URL
  */
 export const getImageSrc = (path: string, base?: string): string => {
-  if (path.startsWith('http://') || path.startsWith('https://')) {
+  if (path.startsWith("http://") || path.startsWith("https://")) {
     return path; // Remote URL, use directly
   }
   let url = `/api/image?path=${encodeURIComponent(path)}`;
-  if (base && !path.startsWith('/')) {
+  if (base && !path.startsWith("/")) {
     url += `&base=${encodeURIComponent(base)}`;
   }
   return url;
@@ -16,7 +16,7 @@ export const getImageSrc = (path: string, base?: string): string => {
 
 interface ImageThumbnailProps {
   path: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
   onClick?: () => void;
   onRemove?: () => void;
   showRemove?: boolean;
@@ -24,18 +24,18 @@ interface ImageThumbnailProps {
 }
 
 const SIZES = {
-  sm: 'w-6 h-6',
-  md: 'w-10 h-10',
-  lg: 'w-16 h-16',
+  sm: "w-6 h-6",
+  md: "w-10 h-10",
+  lg: "w-16 h-16",
 };
 
 export const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
   path,
-  size = 'md',
+  size = "md",
   onClick,
   onRemove,
   showRemove = true,
-  className = '',
+  className = "",
 }) => {
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,9 +44,7 @@ export const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
 
   return (
     <div className={`group relative ${sizeClass} ${className}`}>
-      {loading && !error && (
-        <div className={`absolute inset-0 bg-muted rounded animate-pulse`} />
-      )}
+      {loading && !error && <div className={`absolute inset-0 bg-muted rounded animate-pulse`} />}
 
       {error ? (
         <div
@@ -77,7 +75,7 @@ export const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
             setError(true);
             setLoading(false);
           }}
-          className={`${sizeClass} rounded object-cover border border-border ${onClick ? 'cursor-pointer hover:opacity-80' : ''}`}
+          className={`${sizeClass} rounded object-cover border border-border ${onClick ? "cursor-pointer hover:opacity-80" : ""}`}
         />
       )}
 
@@ -91,7 +89,13 @@ export const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
           }}
           className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
         >
-          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <svg
+            className="w-2.5 h-2.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>

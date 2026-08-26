@@ -1,5 +1,5 @@
-import React from 'react';
-import { fileBasename } from '../utils/fileName';
+import React from "react";
+import { fileBasename } from "../utils/fileName";
 
 /**
  * Compact chip showing a file's name (basename) with the full path on hover.

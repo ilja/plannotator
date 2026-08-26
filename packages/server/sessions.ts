@@ -6,14 +6,7 @@
  */
 
 import { join } from "path";
-import {
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  readdirSync,
-  unlinkSync,
-  existsSync,
-} from "fs";
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, existsSync } from "fs";
 import { Schema } from "effect";
 import { getPlannotatorDataDir } from "@plannotator/shared/data-dir";
 
@@ -114,7 +107,5 @@ export function listSessions(): SessionInfo[] {
   }
 
   // Sort by most recent first
-  return active.sort(
-    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-  );
+  return active.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
 }

@@ -15,13 +15,26 @@ function installFetch(responses: Response[]): void {
   );
 }
 
-function HookHarness({ initialMarkdown = "src/example.ts" }: { initialMarkdown?: string }): React.JSX.Element {
+function HookHarness({
+  initialMarkdown = "src/example.ts",
+}: {
+  initialMarkdown?: string;
+}): React.JSX.Element {
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const { validated, ready } = useValidatedCodePaths(markdown);
 
   return (
     <div>
-      <button type="button" onClick={() => setMarkdown((current) => current === "src/example.ts" ? "src/other.ts" : "src/example.ts")}>Switch</button>
+      <button
+        type="button"
+        onClick={() =>
+          setMarkdown((current) =>
+            current === "src/example.ts" ? "src/other.ts" : "src/example.ts",
+          )
+        }
+      >
+        Switch
+      </button>
       <output
         data-ready={String(ready)}
         data-keys={[...validated.keys()].join("|")}
@@ -65,38 +78,49 @@ afterEach(async () => {
 });
 
 describe("useValidatedCodePaths response handling", () => {
-  test.skipIf(!hasDom)("uses the existing ready fallback for malformed, non-OK, and invalid JSON responses", async () => {
-    installFetch([
-      new Response(JSON.stringify({ results: { "src/example.ts": { status: "found", resolved: "/repo/example.ts" } } })),
-      new Response(JSON.stringify({ results: [] })),
-      new Response(JSON.stringify({ error: "Unavailable" }), { status: 503 }),
-      new Response("{invalid-json"),
-    ]);
-    const host = await mountHarness();
-    const switchButton = host.querySelector("button");
-    if (!(switchButton instanceof HTMLButtonElement)) throw new Error("Switch button did not render");
+  test.skipIf(!hasDom)(
+    "uses the existing ready fallback for malformed, non-OK, and invalid JSON responses",
+    async () => {
+      installFetch([
+        new Response(
+          JSON.stringify({
+            results: { "src/example.ts": { status: "found", resolved: "/repo/example.ts" } },
+          }),
+        ),
+        new Response(JSON.stringify({ results: [] })),
+        new Response(JSON.stringify({ error: "Unavailable" }), { status: 503 }),
+        new Response("{invalid-json"),
+      ]);
+      const host = await mountHarness();
+      const switchButton = host.querySelector("button");
+      if (!(switchButton instanceof HTMLButtonElement))
+        throw new Error("Switch button did not render");
 
-    expect((await readOutput(host)).dataset.status).toBe("found");
+      expect((await readOutput(host)).dataset.status).toBe("found");
 
-    for (let index = 0; index < 3; index++) {
-      await act(async () => {
-        switchButton.click();
-        await flushAsyncWork();
-      });
-      const output = await readOutput(host);
-      expect(output.dataset.ready).toBe("true");
-      expect(output.dataset.keys).toBe("");
-    }
-  });
+      for (let index = 0; index < 3; index++) {
+        await act(async () => {
+          switchButton.click();
+          await flushAsyncWork();
+        });
+        const output = await readOutput(host);
+        expect(output.dataset.ready).toBe("true");
+        expect(output.dataset.keys).toBe("");
+      }
+    },
+  );
 
   test.skipIf(!hasDom)("replaces a malformed result after a valid retry", async () => {
     installFetch([
-      new Response(JSON.stringify({ results: { "src/example.ts": { status: "found", resolved: 42 } } })),
+      new Response(
+        JSON.stringify({ results: { "src/example.ts": { status: "found", resolved: 42 } } }),
+      ),
       new Response(JSON.stringify({ results: { "src/other.ts": { status: "missing" } } })),
     ]);
     const host = await mountHarness();
     const switchButton = host.querySelector("button");
-    if (!(switchButton instanceof HTMLButtonElement)) throw new Error("Switch button did not render");
+    if (!(switchButton instanceof HTMLButtonElement))
+      throw new Error("Switch button did not render");
 
     await act(async () => {
       switchButton.click();
@@ -116,7 +140,8 @@ describe("useValidatedCodePaths response handling", () => {
     );
     const host = await mountHarness();
     const switchButton = host.querySelector("button");
-    if (!(switchButton instanceof HTMLButtonElement)) throw new Error("Switch button did not render");
+    if (!(switchButton instanceof HTMLButtonElement))
+      throw new Error("Switch button did not render");
 
     await act(async () => {
       switchButton.click();
@@ -125,13 +150,21 @@ describe("useValidatedCodePaths response handling", () => {
     expect(resolvers).toHaveLength(2);
 
     await act(async () => {
-      resolvers[0](new Response(JSON.stringify({ results: { "src/example.ts": { status: "found", resolved: "/stale" } } })));
+      resolvers[0](
+        new Response(
+          JSON.stringify({
+            results: { "src/example.ts": { status: "found", resolved: "/stale" } },
+          }),
+        ),
+      );
       await flushAsyncWork();
     });
     expect((await readOutput(host)).dataset.keys).toBe("");
 
     await act(async () => {
-      resolvers[1](new Response(JSON.stringify({ results: { "src/other.ts": { status: "missing" } } })));
+      resolvers[1](
+        new Response(JSON.stringify({ results: { "src/other.ts": { status: "missing" } } })),
+      );
       await flushAsyncWork();
     });
     expect((await readOutput(host)).dataset.otherStatus).toBe("missing");

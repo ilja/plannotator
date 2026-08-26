@@ -1,5 +1,5 @@
-import React from 'react';
-import type { ResizeHandleProps as BaseProps } from '../hooks/useResizablePanel';
+import React from "react";
+import type { ResizeHandleProps as BaseProps } from "../hooks/useResizablePanel";
 
 interface Props extends BaseProps {
   className?: string;
@@ -25,7 +25,7 @@ interface Props extends BaseProps {
    *             right of the boundary. DO NOT push `left` positive —
    *             `left-3 -right-3` evaluates to width 0 and kills the drag.
    */
-  side?: 'left' | 'right';
+  side?: "left" | "right";
 }
 
 export const ResizeHandle: React.FC<Props> = ({
@@ -38,21 +38,21 @@ export const ResizeHandle: React.FC<Props> = ({
   onCollapse,
 }) => (
   <div
-    className={`relative w-0 cursor-col-resize flex-shrink-0 group${className ? ` ${className}` : ''}`}
+    className={`relative w-0 cursor-col-resize flex-shrink-0 group${className ? ` ${className}` : ""}`}
   >
     {/* Visible track — 4px wide, centered on the zero-width layout box,
         invisible until hover/drag. */}
-    <div className={`absolute inset-y-0 -left-0.5 -right-0.5 transition-colors ${
-      isDragging ? 'bg-transparent' : 'group-hover:bg-border'
-    }`} />
+    <div
+      className={`absolute inset-y-0 -left-0.5 -right-0.5 transition-colors ${
+        isDragging ? "bg-transparent" : "group-hover:bg-border"
+      }`}
+    />
     {/* Wider grab/touch zone — must never have zero width (see `side` docs).
         Pointer events + setPointerCapture live here; touch-action:none (from
         style) stops touch drags from scroll-hijacking. */}
     <div
       className={`absolute inset-y-0 ${
-        side === 'left' ? '-right-2 -left-1' :
-        side === 'right' ? '-right-3 left-0' :
-        '-inset-x-2'
+        side === "left" ? "-right-2 -left-1" : side === "right" ? "-right-3 left-0" : "-inset-x-2"
       }`}
       style={style}
       onPointerDown={onPointerDown}
@@ -73,11 +73,17 @@ export const ResizeHandle: React.FC<Props> = ({
         data-collapse={side}
         className="absolute top-1/2 left-1/2 z-20 flex h-6 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center before:absolute before:-inset-2 before:content-[''] rounded-sm bg-surface-1 text-muted-foreground/60 opacity-0 ring-1 ring-border/40 transition-opacity hover:text-foreground group-hover:opacity-100 group-hover/sidebar:opacity-100"
       >
-        <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg
+          className="size-3"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            d={side === 'right' ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7'}
+            d={side === "right" ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
           />
         </svg>
       </button>

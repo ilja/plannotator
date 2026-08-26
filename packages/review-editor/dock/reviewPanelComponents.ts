@@ -1,11 +1,11 @@
-import { REVIEW_PANEL_TYPES } from './reviewPanelTypes';
-import { ReviewDiffPanel } from './panels/ReviewDiffPanel';
-import { ReviewPRSummaryPanel } from './panels/ReviewPRSummaryPanel';
-import { ReviewPRCommentsPanel } from './panels/ReviewPRCommentsPanel';
-import { ReviewPRChecksPanel } from './panels/ReviewPRChecksPanel';
-import { ReviewAllFilesDiffPanel } from './panels/ReviewAllFilesDiffPanel';
-import { ReviewCodeNavPanel } from './panels/ReviewCodeNavPanel';
-import { ReviewSemanticDiffPanel } from './panels/ReviewSemanticDiffPanel';
+import { REVIEW_PANEL_TYPES } from "./reviewPanelTypes";
+import { ReviewDiffPanel } from "./panels/ReviewDiffPanel";
+import { ReviewPRSummaryPanel } from "./panels/ReviewPRSummaryPanel";
+import { ReviewPRCommentsPanel } from "./panels/ReviewPRCommentsPanel";
+import { ReviewPRChecksPanel } from "./panels/ReviewPRChecksPanel";
+import { ReviewAllFilesDiffPanel } from "./panels/ReviewAllFilesDiffPanel";
+import { ReviewCodeNavPanel } from "./panels/ReviewCodeNavPanel";
+import { ReviewSemanticDiffPanel } from "./panels/ReviewSemanticDiffPanel";
 
 /**
  * Component registry for dockview — maps panel type strings to React components.

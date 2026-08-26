@@ -8,7 +8,7 @@
 import { join } from "path";
 import { mkdirSync, writeFileSync } from "fs";
 import { Option, Schema } from "effect";
-import type {PRRuntime, PRMetadata, PRContext, PRReviewFileComment} from "./pr-types";
+import type { PRRuntime, PRMetadata, PRContext, PRReviewFileComment } from "./pr-types";
 import { encodeApiFilePath } from "./pr-types";
 import { getPlannotatorDataDir } from "./data-dir";
 
@@ -22,18 +22,18 @@ const RawGlViewSchema = Schema.Struct({
   source_branch: Schema.String,
   target_branch: Schema.String,
   target_project_id: Schema.optionalKey(Schema.Unknown),
-  diff_refs: Schema.optionalKey(Schema.NullOr(Schema.Struct({
-    base_sha: Schema.String,
-    head_sha: Schema.String,
-  }))),
+  diff_refs: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({
+        base_sha: Schema.String,
+        head_sha: Schema.String,
+      }),
+    ),
+  ),
   web_url: Schema.String,
 });
-const decodeRawGlViewJson = Schema.decodeUnknownOption(
-  Schema.fromJsonString(RawGlViewSchema),
-);
-const decodeRawGlRecordJson = Schema.decodeUnknownOption(
-  Schema.fromJsonString(RawGlRecordSchema),
-);
+const decodeRawGlViewJson = Schema.decodeUnknownOption(Schema.fromJsonString(RawGlViewSchema));
+const decodeRawGlRecordJson = Schema.decodeUnknownOption(Schema.fromJsonString(RawGlRecordSchema));
 const decodeTargetProjectId = Schema.decodeUnknownOption(Schema.Number);
 const ProjectResponseSchema = Schema.Struct({
   default_branch: Schema.optionalKey(Schema.String),
@@ -59,9 +59,11 @@ const decodeGitLabLabelRecord = Schema.decodeUnknownOption(GitLabLabelRecordSche
 const GitLabNoteSchema = Schema.Struct({
   system: Schema.optionalKey(Schema.Boolean),
   id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, Schema.Number]))),
-  author: Schema.optionalKey(Schema.Struct({
-    username: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  })),
+  author: Schema.optionalKey(
+    Schema.Struct({
+      username: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    }),
+  ),
   body: Schema.optionalKey(Schema.NullOr(Schema.String)),
   created_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
   web_url: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -69,10 +71,12 @@ const GitLabNoteSchema = Schema.Struct({
 const decodeGitLabNote = Schema.decodeUnknownOption(GitLabNoteSchema);
 const decodeJsonArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
 const GitLabApprovalEntrySchema = Schema.Struct({
-  user: Schema.optionalKey(Schema.Struct({
-    id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, Schema.Number]))),
-    username: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  })),
+  user: Schema.optionalKey(
+    Schema.Struct({
+      id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.String, Schema.Number]))),
+      username: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    }),
+  ),
 });
 const decodeGitLabApprovalEntry = Schema.decodeUnknownOption(GitLabApprovalEntrySchema);
 const GitLabPipelineSchema = Schema.Struct({
@@ -207,7 +211,7 @@ export async function getGlUser(runtime: PRRuntime, host: string): Promise<strin
       const user = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.fromJsonString(RawGlRecordSchema))(result.stdout),
       );
-      return user ? Option.getOrUndefined(decodeString(user.username)) ?? null : null;
+      return user ? (Option.getOrUndefined(decodeString(user.username)) ?? null) : null;
     }
     return null;
   } catch {
@@ -250,7 +254,10 @@ export async function fetchGlMR(
   // Primary: raw_diffs — preserves Git's binary-marker shape and includes
   // collapsed/generated file contents that the JSON diffs API can omit.
   const [diffResult, viewResult] = await Promise.all([
-    runtime.runCommand("glab", apiArgs(ref.host, `projects/${encoded}/merge_requests/${ref.iid}/raw_diffs`)),
+    runtime.runCommand(
+      "glab",
+      apiArgs(ref.host, `projects/${encoded}/merge_requests/${ref.iid}/raw_diffs`),
+    ),
     runtime.runCommand("glab", apiArgs(ref.host, `projects/${encoded}/merge_requests/${ref.iid}`)),
   ]);
 
@@ -276,7 +283,9 @@ export async function fetchGlMR(
   } else {
     const fallback = await runtime.runCommand(
       "glab",
-      apiArgs(ref.host, `projects/${encoded}/merge_requests/${ref.iid}/diffs?per_page=100`, ["--paginate"]),
+      apiArgs(ref.host, `projects/${encoded}/merge_requests/${ref.iid}/diffs?per_page=100`, [
+        "--paginate",
+      ]),
     );
     if (fallback.exitCode !== 0) {
       const rawErr = diffResult.stderr.trim() || `exit code ${diffResult.exitCode}`;
@@ -312,9 +321,8 @@ export async function fetchGlMR(
 
   let defaultBranch: string | undefined;
   const targetProjectId = Option.getOrUndefined(decodeTargetProjectId(raw.target_project_id));
-  const projectEndpoint = targetProjectId !== undefined
-    ? `projects/${targetProjectId}`
-    : `projects/${encoded}`;
+  const projectEndpoint =
+    targetProjectId !== undefined ? `projects/${targetProjectId}` : `projects/${encoded}`;
   try {
     const projectResult = await runtime.runCommand("glab", apiArgs(ref.host, projectEndpoint));
     if (projectResult.exitCode === 0 && projectResult.stdout.trim()) {
@@ -322,7 +330,9 @@ export async function fetchGlMR(
         decodeProjectResponseJson(projectResult.stdout),
       )?.default_branch;
     }
-  } catch { /* default branch is best-effort metadata */ }
+  } catch {
+    /* default branch is best-effort metadata */
+  }
 
   const metadata: PRMetadata = {
     platform: "gitlab",
@@ -344,23 +354,23 @@ export async function fetchGlMR(
 
 // --- MR Context ---
 
-export async function fetchGlMRContext(
-  runtime: PRRuntime,
-  ref: GlMRRef,
-): Promise<PRContext> {
+export async function fetchGlMRContext(runtime: PRRuntime, ref: GlMRRef): Promise<PRContext> {
   const encoded = encodeProject(ref.projectPath);
   const mrEndpoint = `projects/${encoded}/merge_requests/${ref.iid}`;
 
   // Fetch all context in parallel
-  const [mrResult, notesResult, approvalsResult, pipelinesResult, issuesResult] = await Promise.all([
-    runtime.runCommand("glab", apiArgs(ref.host, mrEndpoint)),
-    runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/notes?sort=asc&per_page=100`)),
-    runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/approvals`)),
-    runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/pipelines?per_page=5`)),
-    runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/closes_issues`)),
-  ]);
+  const [mrResult, notesResult, approvalsResult, pipelinesResult, issuesResult] = await Promise.all(
+    [
+      runtime.runCommand("glab", apiArgs(ref.host, mrEndpoint)),
+      runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/notes?sort=asc&per_page=100`)),
+      runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/approvals`)),
+      runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/pipelines?per_page=5`)),
+      runtime.runCommand("glab", apiArgs(ref.host, `${mrEndpoint}/closes_issues`)),
+    ],
+  );
 
-  const str = (value: any): string => Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(value)) ?? "";
+  const str = (value: any): string =>
+    Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(value)) ?? "";
   const arr = (value: any): unknown[] => (Array.isArray(value) ? value : []);
 
   // --- MR details ---
@@ -374,7 +384,8 @@ export async function fetchGlMRContext(
   const state = glState === "opened" ? "OPEN" : glState.toUpperCase();
 
   const titleString = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(mr.title));
-  const isDraft = mr.draft === true || (titleString !== undefined && /^(Draft:|WIP:)/i.test(titleString));
+  const isDraft =
+    mr.draft === true || (titleString !== undefined && /^(Draft:|WIP:)/i.test(titleString));
 
   const labels = arr(mr.labels).flatMap((l) => {
     const decoded = Option.getOrUndefined(decodeGitLabLabel(l));
@@ -389,10 +400,14 @@ export async function fetchGlMRContext(
   // GitLab merge_status values
   const mergeStatus = str(mr.merge_status);
   const detailedStatus = str(mr.detailed_merge_status);
-  const mergeable = mergeStatus === "can_be_merged" ? "MERGEABLE"
-    : mergeStatus === "cannot_be_merged" ? "CONFLICTING"
-    : mergeStatus === "unchecked" ? "UNKNOWN"
-    : mergeStatus.toUpperCase();
+  const mergeable =
+    mergeStatus === "can_be_merged"
+      ? "MERGEABLE"
+      : mergeStatus === "cannot_be_merged"
+        ? "CONFLICTING"
+        : mergeStatus === "unchecked"
+          ? "UNKNOWN"
+          : mergeStatus.toUpperCase();
 
   // Map GitLab detailed_merge_status to GitHub-compatible merge state enums
   interface MergeStateMap {
@@ -435,7 +450,9 @@ export async function fetchGlMRContext(
           url: str(n.web_url) || "",
         });
       }
-    } catch { /* non-JSON response */ }
+    } catch {
+      /* non-JSON response */
+    }
   }
 
   // --- Approvals ---
@@ -447,9 +464,10 @@ export async function fetchGlMRContext(
         Schema.decodeUnknownOption(RawGlRecordSchema)(JSON.parse(approvalsResult.stdout)),
       );
       if (approvals) {
-        const approvedBy = Option.getOrUndefined(
-          Schema.decodeUnknownOption(Schema.Array(Schema.Unknown))(approvals.approved_by),
-        ) ?? [];
+        const approvedBy =
+          Option.getOrUndefined(
+            Schema.decodeUnknownOption(Schema.Array(Schema.Unknown))(approvals.approved_by),
+          ) ?? [];
         const approved = approvals.approved === true || approvedBy.length > 0;
         reviewDecision = approved ? "APPROVED" : "";
 
@@ -466,17 +484,21 @@ export async function fetchGlMRContext(
           });
         }
       }
-    } catch { /* non-JSON response */ }
+    } catch {
+      /* non-JSON response */
+    }
   }
 
   // --- Pipelines → Checks ---
   const checks: PRContext["checks"] = [];
   if (pipelinesResult.exitCode === 0) {
     try {
-      const pipelines = Option.getOrUndefined(decodeJsonArray(JSON.parse(pipelinesResult.stdout))) ?? [];
-      const latest = pipelines.length > 0
-        ? Option.getOrUndefined(decodeGitLabPipeline(pipelines[0]))
-        : undefined;
+      const pipelines =
+        Option.getOrUndefined(decodeJsonArray(JSON.parse(pipelinesResult.stdout))) ?? [];
+      const latest =
+        pipelines.length > 0
+          ? Option.getOrUndefined(decodeGitLabPipeline(pipelines[0]))
+          : undefined;
       if (latest) {
         const jobsResult = await runtime.runCommand(
           "glab",
@@ -484,7 +506,8 @@ export async function fetchGlMRContext(
         );
         if (jobsResult.exitCode === 0) {
           try {
-            const jobs = Option.getOrUndefined(decodeJsonArray(JSON.parse(jobsResult.stdout))) ?? [];
+            const jobs =
+              Option.getOrUndefined(decodeJsonArray(JSON.parse(jobsResult.stdout))) ?? [];
             for (const rawJob of jobs) {
               const job = Option.getOrUndefined(decodeGitLabJob(rawJob));
               if (!job) continue;
@@ -503,15 +526,21 @@ export async function fetchGlMRContext(
               checks.push({
                 name: job.name,
                 status: isComplete ? "COMPLETED" : "IN_PROGRESS",
-                conclusion: isComplete ? (conclusionMap[jobStatus] ?? jobStatus.toUpperCase()) : null,
+                conclusion: isComplete
+                  ? (conclusionMap[jobStatus] ?? jobStatus.toUpperCase())
+                  : null,
                 workflowName: latest.ref ?? "",
                 detailsUrl: job.web_url ?? "",
               });
             }
-          } catch { /* non-JSON jobs response */ }
+          } catch {
+            /* non-JSON jobs response */
+          }
         }
       }
-    } catch { /* non-JSON pipelines response */ }
+    } catch {
+      /* non-JSON pipelines response */
+    }
   }
 
   // --- Linked Issues ---
@@ -543,7 +572,7 @@ export async function fetchGlMRContext(
     mergeStateStatus,
     comments: notes,
     reviews,
-    reviewThreads: [],  // TODO: parse DiffNote positions from notes for thread support
+    reviewThreads: [], // TODO: parse DiffNote positions from notes for thread support
     checks,
     linkedIssues,
   };
@@ -597,11 +626,19 @@ export async function submitGlMRReview(
     const notePayload = JSON.stringify({ body: body.trim() });
     const noteResult = await runtime.runCommandWithInput(
       "glab",
-      apiArgs(ref.host, `${mrEndpoint}/notes`, ["--method", "POST", "--input", "-", "-H", "Content-Type:application/json"]),
+      apiArgs(ref.host, `${mrEndpoint}/notes`, [
+        "--method",
+        "POST",
+        "--input",
+        "-",
+        "-H",
+        "Content-Type:application/json",
+      ]),
       notePayload,
     );
     if (noteResult.exitCode !== 0) {
-      const msg = noteResult.stderr.trim() || noteResult.stdout.trim() || `exit code ${noteResult.exitCode}`;
+      const msg =
+        noteResult.stderr.trim() || noteResult.stdout.trim() || `exit code ${noteResult.exitCode}`;
       throw new Error(`Failed to post MR note: ${msg}`);
     }
   }
@@ -609,16 +646,11 @@ export async function submitGlMRReview(
   // 2. Post inline file comments as discussions with position
   if (fileComments.length > 0) {
     // We need the MR's diff_refs for the position SHAs.
-    const mrResult = await runtime.runCommand(
-      "glab",
-      apiArgs(ref.host, mrEndpoint),
-    );
+    const mrResult = await runtime.runCommand("glab", apiArgs(ref.host, mrEndpoint));
     let baseSha = headSha; // fallback
     let startSha = headSha;
     if (mrResult.exitCode === 0 && mrResult.stdout.trim()) {
-      const mrData = Option.getOrUndefined(
-        decodeGlReviewDiffRefsResponseJson(mrResult.stdout),
-      );
+      const mrData = Option.getOrUndefined(decodeGlReviewDiffRefsResponseJson(mrResult.stdout));
       const diffRefs = mrData?.diff_refs;
       if (diffRefs) {
         baseSha = Option.getOrUndefined(decodeString(diffRefs.base_sha)) ?? headSha;
@@ -664,7 +696,14 @@ export async function submitGlMRReview(
         const payload = JSON.stringify({ body: comment.body, position });
         const res = await runtime.runCommandWithInput!(
           "glab",
-          apiArgs(ref.host, `${mrEndpoint}/discussions`, ["--method", "POST", "--input", "-", "-H", "Content-Type:application/json"]),
+          apiArgs(ref.host, `${mrEndpoint}/discussions`, [
+            "--method",
+            "POST",
+            "--input",
+            "-",
+            "-H",
+            "Content-Type:application/json",
+          ]),
           payload,
         );
 
@@ -699,18 +738,22 @@ export async function submitGlMRReview(
         savedTo = join(dir, `${slug}.json`);
         writeFileSync(
           savedTo,
-          JSON.stringify({ ref, headSha, baseSha, startSha, errors, failedComments: failed }, null, 2),
+          JSON.stringify(
+            { ref, headSha, baseSha, startSha, errors, failedComments: failed },
+            null,
+            2,
+          ),
         );
       } catch (writeErr) {
-        console.error(`[plannotator] Failed to persist unposted comments: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`);
+        console.error(
+          `[plannotator] Failed to persist unposted comments: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
+        );
       }
       const suffix = savedTo ? ` (unposted bodies saved to ${savedTo})` : "";
 
       if (errors.length === fileComments.length) {
         // All failed — safe to throw, nothing was posted.
-        throw new Error(
-          `Failed to post inline comments${suffix}:\n${errors.join("\n")}`,
-        );
+        throw new Error(`Failed to post inline comments${suffix}:\n${errors.join("\n")}`);
       }
       // Partial failure — some comments and the MR note are already posted.
       // Don't throw, or the UI will resubmit the whole review and duplicate them.
@@ -724,11 +767,21 @@ export async function submitGlMRReview(
   if (action === "approve") {
     const approveResult = await runtime.runCommandWithInput(
       "glab",
-      apiArgs(ref.host, `${mrEndpoint}/approve`, ["--method", "POST", "--input", "-", "-H", "Content-Type:application/json"]),
+      apiArgs(ref.host, `${mrEndpoint}/approve`, [
+        "--method",
+        "POST",
+        "--input",
+        "-",
+        "-H",
+        "Content-Type:application/json",
+      ]),
       "{}",
     );
     if (approveResult.exitCode !== 0) {
-      const msg = approveResult.stderr.trim() || approveResult.stdout.trim() || `exit code ${approveResult.exitCode}`;
+      const msg =
+        approveResult.stderr.trim() ||
+        approveResult.stdout.trim() ||
+        `exit code ${approveResult.exitCode}`;
       throw new Error(`Failed to approve MR: ${msg}`);
     }
   }

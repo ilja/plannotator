@@ -1,4 +1,4 @@
-import { Result, Schema } from 'effect';
+import { Result, Schema } from "effect";
 
 const PRSelectorItemSchema = Schema.Struct({
   id: Schema.String,
@@ -6,7 +6,7 @@ const PRSelectorItemSchema = Schema.Struct({
   title: Schema.String,
   author: Schema.String,
   url: Schema.String,
-  state: Schema.Literals(['open', 'closed', 'merged']),
+  state: Schema.Literals(["open", "closed", "merged"]),
 });
 
 const PRListResponseEnvelopeSchema = Schema.Struct({
@@ -29,8 +29,10 @@ export function decodePRListResponse<Input>(
   const envelope = decodePRListResponseEnvelope(value);
   if (Result.isFailure(envelope)) return Result.fail(envelope.failure);
 
-  return Result.succeed(envelope.success.prs.flatMap((entry) => {
-    const decodedEntry = decodePRSelectorItem(entry);
-    return Result.isSuccess(decodedEntry) ? [decodedEntry.success] : [];
-  }));
+  return Result.succeed(
+    envelope.success.prs.flatMap((entry) => {
+      const decodedEntry = decodePRSelectorItem(entry);
+      return Result.isSuccess(decodedEntry) ? [decodedEntry.success] : [];
+    }),
+  );
 }

@@ -1,15 +1,15 @@
-import { useMemo, useCallback } from 'react';
-import { getDisplayRepo } from '@plannotator/shared/pr-types';
-import type { PRMetadata } from '@plannotator/shared/pr-types';
-import type { PRDiffScope } from '@plannotator/shared/pr-stack';
-import type { CodeAnnotation } from '@plannotator/ui/types';
+import { useMemo, useCallback } from "react";
+import { getDisplayRepo } from "@plannotator/shared/pr-types";
+import type { PRMetadata } from "@plannotator/shared/pr-types";
+import type { PRDiffScope } from "@plannotator/shared/pr-stack";
+import type { CodeAnnotation } from "@plannotator/ui/types";
 
 export function useAnnotationFactory(prMetadata: PRMetadata | null, diffScope?: PRDiffScope) {
   const prContext = useMemo(() => {
     if (!prMetadata) return {};
     const base = {
       prUrl: prMetadata.url,
-      prNumber: prMetadata.platform === 'github' ? prMetadata.number : prMetadata.iid,
+      prNumber: prMetadata.platform === "github" ? prMetadata.number : prMetadata.iid,
       prTitle: prMetadata.title,
       prRepo: getDisplayRepo(prMetadata),
     };

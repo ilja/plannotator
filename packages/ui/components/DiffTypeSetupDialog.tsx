@@ -1,34 +1,34 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import type { DefaultDiffType } from '@plannotator/shared/config';
-import { markDiffTypeSetupDone } from '../utils/diffTypeSetup';
-import { configStore } from '../config';
-import diffOptionsImg from '../assets/diff-options.png';
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import type { DefaultDiffType } from "@plannotator/shared/config";
+import { markDiffTypeSetupDone } from "../utils/diffTypeSetup";
+import { configStore } from "../config";
+import diffOptionsImg from "../assets/diff-options.png";
 
 const OPTIONS: { value: DefaultDiffType; label: string; description: string }[] = [
   {
-    value: 'uncommitted',
-    label: 'All Changes',
+    value: "uncommitted",
+    label: "All Changes",
     description: "Everything you've changed since your last commit — staged and unstaged",
   },
   {
-    value: 'unstaged',
-    label: 'Unstaged',
+    value: "unstaged",
+    label: "Unstaged",
     description: "Only changes you haven't staged yet (git diff)",
   },
   {
-    value: 'staged',
-    label: 'Staged',
+    value: "staged",
+    label: "Staged",
     description: "Only changes you've staged for commit (git diff --staged)",
   },
   {
-    value: 'merge-base',
-    label: 'Committed',
+    value: "merge-base",
+    label: "Committed",
     description: "Everything you've committed on this branch",
   },
   {
-    value: 'all',
-    label: 'All Files (HEAD)',
+    value: "all",
+    label: "All Files (HEAD)",
     description: "Every tracked file at HEAD, shown as additions",
   },
 ];
@@ -37,16 +37,14 @@ interface DiffTypeSetupDialogProps {
   onComplete: (selected: DefaultDiffType) => void;
 }
 
-export const DiffTypeSetupDialog: React.FC<DiffTypeSetupDialogProps> = ({
-  onComplete,
-}) => {
-  const [selected, setSelected] = useState<DefaultDiffType>(
-    () => configStore.get('defaultDiffType')
+export const DiffTypeSetupDialog: React.FC<DiffTypeSetupDialogProps> = ({ onComplete }) => {
+  const [selected, setSelected] = useState<DefaultDiffType>(() =>
+    configStore.get("defaultDiffType"),
   );
   const [imageHovered, setImageHovered] = useState(false);
 
   const handleDone = () => {
-    configStore.set('defaultDiffType', selected);
+    configStore.set("defaultDiffType", selected);
     markDiffTypeSetupDone();
     onComplete(selected);
   };
@@ -73,16 +71,16 @@ export const DiffTypeSetupDialog: React.FC<DiffTypeSetupDialogProps> = ({
                 onClick={() => setSelected(opt.value)}
                 className={`w-full flex items-start gap-3 p-3 rounded-lg border transition-colors text-left ${
                   selected === opt.value
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-muted-foreground/30 hover:bg-muted/50'
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 }`}
               >
-                <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                  selected === opt.value ? 'border-primary' : 'border-muted-foreground/40'
-                }`}>
-                  {selected === opt.value && (
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                  )}
+                <div
+                  className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                    selected === opt.value ? "border-primary" : "border-muted-foreground/40"
+                  }`}
+                >
+                  {selected === opt.value && <div className="w-2 h-2 rounded-full bg-primary" />}
                 </div>
                 <div>
                   <div className="text-sm font-medium">{opt.label}</div>
@@ -104,11 +102,12 @@ export const DiffTypeSetupDialog: React.FC<DiffTypeSetupDialogProps> = ({
                 alt="Diff type dropdown in the toolbar"
                 className="w-full rounded-lg shadow-sm"
                 style={{
-                  border: `2px solid ${imageHovered ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 30%, transparent)'}`,
-                  transform: imageHovered ? 'scale(1.65)' : 'scale(1)',
+                  border: `2px solid ${imageHovered ? "var(--primary)" : "color-mix(in srgb, var(--primary) 30%, transparent)"}`,
+                  transform: imageHovered ? "scale(1.65)" : "scale(1)",
                   zIndex: imageHovered ? 50 : 0,
-                  position: 'relative',
-                  transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease',
+                  position: "relative",
+                  transition:
+                    "transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease",
                 }}
               />
               {!imageHovered && (
@@ -136,6 +135,6 @@ export const DiffTypeSetupDialog: React.FC<DiffTypeSetupDialogProps> = ({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 };

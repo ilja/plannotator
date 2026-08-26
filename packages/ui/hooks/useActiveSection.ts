@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from "react";
 
 /**
  * Track which heading section is currently visible in the viewport
@@ -18,26 +18,26 @@ export function useActiveSection(
   useEffect(() => {
     const container = scrollElement ?? containerRef.current;
     if (!container) return;
-    
+
     // Find all heading elements with data-block-id
     const headings = container.querySelectorAll('[data-block-type="heading"]');
     if (headings.length === 0) return;
-    
+
     // Track which headings are currently intersecting
     const intersectingHeadings = new Map<Element, boolean>();
-    
+
     // Create observer with configuration to detect headings near top of viewport
     observerRef.current = new IntersectionObserver(
       (entries) => {
         // Update intersection state
-        entries.forEach(entry => {
+        entries.forEach((entry) => {
           intersectingHeadings.set(entry.target, entry.isIntersecting);
         });
-        
+
         // Find the first intersecting heading (topmost in viewport)
         let topHeading: Element | null = null;
         let topPosition = Infinity;
-        
+
         for (const [heading, isIntersecting] of intersectingHeadings) {
           if (isIntersecting) {
             const rect = heading.getBoundingClientRect();
@@ -47,10 +47,10 @@ export function useActiveSection(
             }
           }
         }
-        
+
         // Update active ID
         if (topHeading) {
-          const blockId = topHeading.getAttribute('data-block-id');
+          const blockId = topHeading.getAttribute("data-block-id");
           if (blockId) {
             setActiveId(blockId);
           }
@@ -58,21 +58,21 @@ export function useActiveSection(
       },
       {
         root: container,
-        rootMargin: '-80px 0px -80% 0px', // Activate when heading is near top
+        rootMargin: "-80px 0px -80% 0px", // Activate when heading is near top
         threshold: [0, 0.1, 0.5, 1.0],
-      }
+      },
     );
-    
+
     // Observe all headings
-    headings.forEach(heading => {
+    headings.forEach((heading) => {
       observerRef.current?.observe(heading);
     });
-    
+
     // Cleanup
     return () => {
       observerRef.current?.disconnect();
     };
   }, [containerRef, headingCount, scrollElement]);
-  
+
   return activeId;
 }

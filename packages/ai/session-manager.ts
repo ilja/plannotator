@@ -134,18 +134,14 @@ export class SessionManager {
    * List all tracked sessions, newest first.
    */
   list(): SessionEntry[] {
-    return [...this.sessions.values()].sort(
-      (a, b) => b.lastActiveAt - a.lastActiveAt
-    );
+    return [...this.sessions.values()].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
   }
 
   /**
    * List sessions forked from a specific parent.
    */
   forksOf(parentSessionId: string): SessionEntry[] {
-    return this.list().filter(
-      (e) => e.parentSessionId === parentSessionId
-    );
+    return this.list().filter((e) => e.parentSessionId === parentSessionId);
   }
 
   /**

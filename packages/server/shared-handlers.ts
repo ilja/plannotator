@@ -11,7 +11,13 @@ import { dirname } from "node:path";
 import { Option, Schema } from "effect";
 import { openBrowser as openBrowserImpl } from "./browser";
 import { validateImagePath, validateUploadExtension, UPLOAD_DIR } from "./image";
-import { decodeDraftEnvelope, saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "./draft";
+import {
+  decodeDraftEnvelope,
+  saveDraft,
+  loadDraft,
+  deleteDraft,
+  getDraftGeneration,
+} from "./draft";
 import { FAVICON_SVG } from "@plannotator/shared/favicon";
 import { saveToObsidian, saveToBear, saveToOctarine } from "./integrations";
 import type { IntegrationResult } from "./integrations";
@@ -190,8 +196,6 @@ export function handleDraftDelete(contentKey: string, req?: Request): Response {
   return Response.json({ ok: true });
 }
 
-
-
 /** Serve the app favicon. Used by all 3 servers. */
 export function handleFavicon(): Response {
   return new Response(FAVICON_SVG, {
@@ -250,10 +254,14 @@ export async function handleServerReady(
     process.stderr.write(`\n  Plannotator session ready:\n  ${url}\n\n`);
   }
 
-  const skipBrowserOpen = options.skipBrowserOpen ?? process.env.PLANNOTATOR_SKIP_BROWSER_OPEN === "1";
+  const skipBrowserOpen =
+    options.skipBrowserOpen ?? process.env.PLANNOTATOR_SKIP_BROWSER_OPEN === "1";
   if (skipBrowserOpen) return;
 
-  const opened = await (options.openBrowser ?? openBrowserImpl)(url, { isRemote, useGlimpse: true });
+  const opened = await (options.openBrowser ?? openBrowserImpl)(url, {
+    isRemote,
+    useGlimpse: true,
+  });
 
   // Local fallback lifeline: if the browser couldn't be opened (headless box,
   // devcontainer with no display, broken open/xdg-open), the user otherwise has
@@ -309,7 +317,11 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
       if (Option.isNone(config)) {
         results.obsidian = { success: false, error: "Invalid Obsidian save configuration" };
       } else if (config.value.vaultPath && config.value.plan) {
-        promises.push(saveToObsidian(config.value).then(r => { results.obsidian = r; }));
+        promises.push(
+          saveToObsidian(config.value).then((r) => {
+            results.obsidian = r;
+          }),
+        );
       }
     }
     if (Object.hasOwn(body.value, "bear")) {
@@ -317,7 +329,11 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
       if (Option.isNone(config)) {
         results.bear = { success: false, error: "Invalid Bear save configuration" };
       } else if (config.value.plan) {
-        promises.push(saveToBear(config.value).then(r => { results.bear = r; }));
+        promises.push(
+          saveToBear(config.value).then((r) => {
+            results.bear = r;
+          }),
+        );
       }
     }
     if (Object.hasOwn(body.value, "octarine")) {
@@ -325,7 +341,11 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
       if (Option.isNone(config)) {
         results.octarine = { success: false, error: "Invalid Octarine save configuration" };
       } else if (config.value.plan && config.value.workspace) {
-        promises.push(saveToOctarine(config.value).then(r => { results.octarine = r; }));
+        promises.push(
+          saveToOctarine(config.value).then((r) => {
+            results.octarine = r;
+          }),
+        );
       }
     }
     await Promise.allSettled(promises);

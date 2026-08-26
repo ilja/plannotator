@@ -1,5 +1,9 @@
-import React from 'react';
-import { FeedbackButton, ApproveButton, ExitButton } from '@plannotator/ui/components/ToolbarButtons';
+import React from "react";
+import {
+  FeedbackButton,
+  ApproveButton,
+  ExitButton,
+} from "@plannotator/ui/components/ToolbarButtons";
 
 interface AgentReviewActionsProps {
   totalAnnotationCount: number;
@@ -36,11 +40,7 @@ export const AgentReviewActions: React.FC<AgentReviewActionsProps> = ({
 
   return (
     <>
-      <ExitButton
-        onClick={onExit}
-        disabled={busy}
-        isLoading={isExiting}
-      />
+      <ExitButton onClick={onExit} disabled={busy} isLoading={isExiting} />
 
       {hasAnnotations && (
         <FeedbackButton
@@ -66,7 +66,8 @@ export const AgentReviewActions: React.FC<AgentReviewActionsProps> = ({
           <div className="absolute top-full right-0 mt-2 px-3 py-2 bg-popover border border-border rounded-lg shadow-xl text-xs text-foreground w-56 text-center opacity-0 invisible group-hover/approve:opacity-100 group-hover/approve:visible transition-all pointer-events-none z-50">
             <div className="absolute bottom-full right-4 border-4 border-transparent border-b-border" />
             <div className="absolute bottom-full right-4 mt-px border-4 border-transparent border-b-popover" />
-            Your {totalAnnotationCount} annotation{totalAnnotationCount !== 1 ? 's' : ''} won't be sent if you approve.
+            Your {totalAnnotationCount} annotation{totalAnnotationCount !== 1 ? "s" : ""} won't be
+            sent if you approve.
           </div>
         )}
       </div>

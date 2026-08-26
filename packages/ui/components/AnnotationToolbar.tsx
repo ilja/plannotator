@@ -1,17 +1,17 @@
-import React, {useState, useEffect, useRef, useMemo} from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { AnnotationType } from "../types";
 import { createPortal } from "react-dom";
 import { useDismissOnOutsideAndEscape } from "../hooks/useDismissOnOutsideAndEscape";
 import { type QuickLabel, getQuickLabels } from "../utils/quickLabels";
 import { FloatingQuickLabelPicker } from "./FloatingQuickLabelPicker";
 
-type PositionMode = 'center-above' | 'top-right';
+type PositionMode = "center-above" | "top-right";
 
 const THUMBS_UP_LABEL: QuickLabel = {
-  id: 'thumbs-up',
-  emoji: '👍',
-  text: 'Looks good',
-  color: 'green',
+  id: "thumbs-up",
+  emoji: "👍",
+  text: "Looks good",
+  color: "green",
 };
 
 const isEditableElement = (node: EventTarget | Element | null): boolean => {
@@ -58,30 +58,34 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onMouseEnter,
   onMouseLeave,
 }) => {
-  const [position, setPosition] = useState<{ top: number; left?: number; right?: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left?: number; right?: number } | null>(
+    null,
+  );
   const [copied, setCopied] = useState(false);
   const [showQuickLabels, setShowQuickLabels] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const zapButtonRef = useRef<HTMLButtonElement>(null);
   const quickLabels = useMemo(() => getQuickLabels(), []);
 
-  useEffect(() => { setCopied(false); }, [element]);
+  useEffect(() => {
+    setCopied(false);
+  }, [element]);
 
   const handleCopy = async () => {
     let textToCopy = copyText;
     if (!textToCopy) {
-      const codeEl = element.querySelector('code');
-      textToCopy = codeEl?.textContent || element.textContent || '';
+      const codeEl = element.querySelector("code");
+      textToCopy = codeEl?.textContent || element.textContent || "";
     }
     try {
       await navigator.clipboard.writeText(textToCopy);
     } catch {
-      const textarea = document.createElement('textarea');
+      const textarea = document.createElement("textarea");
       textarea.value = textToCopy;
-      textarea.style.cssText = 'position:fixed;opacity:0';
+      textarea.style.cssText = "position:fixed;opacity:0";
       document.body.appendChild(textarea);
       textarea.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       textarea.remove();
     }
     setCopied(true);
@@ -98,7 +102,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
         return;
       }
 
-      if (positionMode === 'center-above') {
+      if (positionMode === "center-above") {
         setPosition({
           top: rect.top - 48,
           left: rect.left + rect.width / 2,
@@ -136,7 +140,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       }
 
       // Alt+N applies quick label (picker closed)
-      const isDigit = (e.code >= 'Digit1' && e.code <= 'Digit9') || e.code === 'Digit0';
+      const isDigit = (e.code >= "Digit1" && e.code <= "Digit9") || e.code === "Digit0";
       if (isDigit && !e.ctrlKey && !e.metaKey && e.altKey) {
         e.preventDefault();
         const digit = parseInt(e.code.slice(5), 10);
@@ -175,16 +179,16 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   };
 
   const isCentered = position.left !== undefined;
-  const translateX = isCentered ? ' translateX(-50%)' : '';
+  const translateX = isCentered ? " translateX(-50%)" : "";
 
   const style: React.CSSProperties = {
     top: position.top,
     ...(isCentered
-      ? { left: position.left, transform: 'translateX(-50%)' }
+      ? { left: position.left, transform: "translateX(-50%)" }
       : { right: position.right }),
     animation: isExiting
-      ? 'annotation-toolbar-out 0.15s ease-in forwards'
-      : 'annotation-toolbar-in 0.15s ease-out',
+      ? "annotation-toolbar-out 0.15s ease-in forwards"
+      : "annotation-toolbar-in 0.15s ease-out",
   };
 
   return createPortal(
@@ -213,7 +217,11 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
               onClick={handleCopy}
               icon={copied ? <CheckIcon /> : <CopyIcon />}
               label={copied ? "Copied!" : "Copy"}
-              className={copied ? "text-success" : "text-muted-foreground hover:bg-muted hover:text-foreground"}
+              className={
+                copied
+                  ? "text-success"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }
             />
             <div className="w-px h-5 bg-border mx-0.5" />
           </>
@@ -234,10 +242,14 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           <>
             <ToolbarButton
               ref={zapButtonRef}
-              onClick={() => setShowQuickLabels(prev => !prev)}
+              onClick={() => setShowQuickLabels((prev) => !prev)}
               icon={<ZapIcon />}
               label="Quick label"
-              className={showQuickLabels ? "text-amber-500 bg-amber-500/10" : "text-amber-500 hover:bg-amber-500/10"}
+              className={
+                showQuickLabels
+                  ? "text-amber-500 bg-amber-500/10"
+                  : "text-amber-500 hover:bg-amber-500/10"
+              }
             />
             <ToolbarButton
               onClick={() => onQuickLabel(THUMBS_UP_LABEL)}
@@ -266,14 +278,18 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
         />
       </div>
     </div>,
-    document.body
+    document.body,
   );
 };
 
 // Icons
 const CopyIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+    />
   </svg>
 );
 
@@ -285,13 +301,21 @@ const CheckIcon = () => (
 
 const TrashIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+    />
   </svg>
 );
 
 const CommentIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+    />
   </svg>
 );
 
@@ -307,12 +331,15 @@ const CloseIcon = () => (
   </svg>
 );
 
-const ToolbarButton = React.forwardRef<HTMLButtonElement, {
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  className: string;
-}>(({ onClick, icon, label, className }, ref) => (
+const ToolbarButton = React.forwardRef<
+  HTMLButtonElement,
+  {
+    onClick: () => void;
+    icon: React.ReactNode;
+    label: string;
+    className: string;
+  }
+>(({ onClick, icon, label, className }, ref) => (
   <button
     ref={ref}
     onClick={onClick}

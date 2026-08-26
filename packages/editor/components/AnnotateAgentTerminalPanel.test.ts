@@ -1,11 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_DISPLAY_SETTINGS,
   normalizeTerminalDimension,
   sanitizeDisplaySettings,
-} from './AnnotateAgentTerminalPanel';
+} from "./AnnotateAgentTerminalPanel";
 
-describe('normalizeTerminalDimension', () => {
+describe("normalizeTerminalDimension", () => {
   const cases: Array<[number | undefined, number | undefined]> = [
     [1, 1],
     [1000, 1000],
@@ -25,40 +25,46 @@ describe('normalizeTerminalDimension', () => {
   }
 });
 
-describe('sanitizeDisplaySettings', () => {
-  test('keeps a valid record', () => {
-    expect(sanitizeDisplaySettings({
-      fontFamily: 'system',
+describe("sanitizeDisplaySettings", () => {
+  test("keeps a valid record", () => {
+    expect(
+      sanitizeDisplaySettings({
+        fontFamily: "system",
+        fontSize: 16,
+        fontWeight: "medium",
+        lineHeight: 1.1,
+      }),
+    ).toEqual({
+      fontFamily: "system",
       fontSize: 16,
-      fontWeight: 'medium',
-      lineHeight: 1.1,
-    })).toEqual({
-      fontFamily: 'system',
-      fontSize: 16,
-      fontWeight: 'medium',
+      fontWeight: "medium",
       lineHeight: 1.1,
     });
   });
 
-  test('falls back per field when a field is wrong-typed, preserving the others', () => {
-    expect(sanitizeDisplaySettings({
-      fontFamily: 'theme',
-      fontSize: 'huge',
-      fontWeight: 'light',
-      lineHeight: 1.2,
-    })).toEqual({
-      fontFamily: 'theme',
+  test("falls back per field when a field is wrong-typed, preserving the others", () => {
+    expect(
+      sanitizeDisplaySettings({
+        fontFamily: "theme",
+        fontSize: "huge",
+        fontWeight: "light",
+        lineHeight: 1.2,
+      }),
+    ).toEqual({
+      fontFamily: "theme",
       fontSize: DEFAULT_DISPLAY_SETTINGS.fontSize,
-      fontWeight: 'light',
+      fontWeight: "light",
       lineHeight: 1.2,
     });
   });
 
-  test('falls back per field for unknown option values', () => {
-    expect(sanitizeDisplaySettings({
-      fontFamily: 'comic-sans',
-      fontWeight: 'bold',
-    })).toEqual({
+  test("falls back per field for unknown option values", () => {
+    expect(
+      sanitizeDisplaySettings({
+        fontFamily: "comic-sans",
+        fontWeight: "bold",
+      }),
+    ).toEqual({
       fontFamily: DEFAULT_DISPLAY_SETTINGS.fontFamily,
       fontSize: DEFAULT_DISPLAY_SETTINGS.fontSize,
       fontWeight: DEFAULT_DISPLAY_SETTINGS.fontWeight,
@@ -66,7 +72,7 @@ describe('sanitizeDisplaySettings', () => {
     });
   });
 
-  test('falls back when lineHeight is not a listed option', () => {
+  test("falls back when lineHeight is not a listed option", () => {
     expect(sanitizeDisplaySettings({ lineHeight: 1.5 })).toEqual({
       fontFamily: DEFAULT_DISPLAY_SETTINGS.fontFamily,
       fontSize: DEFAULT_DISPLAY_SETTINGS.fontSize,
@@ -75,7 +81,7 @@ describe('sanitizeDisplaySettings', () => {
     });
   });
 
-  test('clamps out-of-range font sizes', () => {
+  test("clamps out-of-range font sizes", () => {
     expect(sanitizeDisplaySettings({ fontSize: 40 })).toEqual({
       fontFamily: DEFAULT_DISPLAY_SETTINGS.fontFamily,
       fontSize: 24,
@@ -90,7 +96,7 @@ describe('sanitizeDisplaySettings', () => {
     });
   });
 
-  test('returns all defaults for an empty record', () => {
+  test("returns all defaults for an empty record", () => {
     expect(sanitizeDisplaySettings({})).toEqual(DEFAULT_DISPLAY_SETTINGS);
   });
 });

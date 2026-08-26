@@ -12,19 +12,19 @@
  * to avoid SSE/polling in static or demo contexts where there is no server.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   decodeExternalAnnotationEventEnvelope,
   decodeExternalAnnotationPollingEnvelope,
   parseExternalAnnotationEvent,
   parseExternalAnnotationPollingSnapshot,
   type ExternalAnnotationDecoder,
-} from '../utils/externalAnnotationDecoding';
-import { Option } from 'effect';
+} from "../utils/externalAnnotationDecoding";
+import { Option } from "effect";
 
 const POLL_INTERVAL_MS = 500;
-const STREAM_URL = '/api/external-annotations/stream';
-const SNAPSHOT_URL = '/api/external-annotations';
+const STREAM_URL = "/api/external-annotations/stream";
+const SNAPSHOT_URL = "/api/external-annotations";
 
 interface UseExternalAnnotationsReturn<T> {
   externalAnnotations: T[];
@@ -61,40 +61,29 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
 
       try {
         const eventData: unknown = JSON.parse(event.data);
-        const eventEnvelope = Option.getOrNull(
-          decodeExternalAnnotationEventEnvelope(eventData),
-        );
+        const eventEnvelope = Option.getOrNull(decodeExternalAnnotationEventEnvelope(eventData));
         if (!eventEnvelope) return;
-        const parsed = parseExternalAnnotationEvent(
-          eventEnvelope,
-          decodeAnnotation,
-        );
+        const parsed = parseExternalAnnotationEvent(eventEnvelope, decodeAnnotation);
         if (!parsed) return;
 
         switch (parsed.type) {
-          case 'snapshot':
+          case "snapshot":
             receivedSnapshotRef.current = true;
             setAnnotations(parsed.annotations);
             break;
-          case 'add':
+          case "add":
             setAnnotations((prev) => [...prev, ...parsed.annotations]);
             break;
-          case 'remove':
+          case "remove":
+            setAnnotations((prev) => prev.filter((a) => !parsed.ids.includes(a.id)));
+            break;
+          case "clear":
             setAnnotations((prev) =>
-              prev.filter((a) => !parsed.ids.includes(a.id)),
+              parsed.source ? prev.filter((a) => a.source !== parsed.source) : [],
             );
             break;
-          case 'clear':
-            setAnnotations((prev) =>
-              parsed.source
-                ? prev.filter((a) => a.source !== parsed.source)
-                : [],
-            );
-            break;
-          case 'update':
-            setAnnotations((prev) =>
-              prev.map((a) => (a.id === parsed.id ? parsed.annotation : a)),
-            );
+          case "update":
+            setAnnotations((prev) => prev.map((a) => (a.id === parsed.id ? parsed.annotation : a)));
             break;
         }
       } catch {
@@ -128,9 +117,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
     async function fetchSnapshot() {
       try {
         const url =
-          versionRef.current > 0
-            ? `${SNAPSHOT_URL}?since=${versionRef.current}`
-            : SNAPSHOT_URL;
+          versionRef.current > 0 ? `${SNAPSHOT_URL}?since=${versionRef.current}` : SNAPSHOT_URL;
 
         const res = await fetch(url);
 
@@ -138,14 +125,9 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
         if (!res.ok) return;
 
         const data: unknown = await res.json();
-        const pollingEnvelope = Option.getOrNull(
-          decodeExternalAnnotationPollingEnvelope(data),
-        );
+        const pollingEnvelope = Option.getOrNull(decodeExternalAnnotationPollingEnvelope(data));
         if (!pollingEnvelope) return;
-        const snapshot = parseExternalAnnotationPollingSnapshot(
-          pollingEnvelope,
-          decodeAnnotation,
-        );
+        const snapshot = parseExternalAnnotationPollingSnapshot(pollingEnvelope, decodeAnnotation);
         if (!snapshot) return;
 
         setAnnotations(snapshot.annotations);
@@ -169,10 +151,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
     // Optimistic update
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
     try {
-      await fetch(
-        `${SNAPSHOT_URL}?id=${encodeURIComponent(id)}`,
-        { method: 'DELETE' },
-      );
+      await fetch(`${SNAPSHOT_URL}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     } catch {
       // SSE will reconcile on next event
     }
@@ -180,12 +159,10 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
 
   const clearExternalAnnotations = useCallback(async (source?: string) => {
     // Optimistic update
-    setAnnotations((prev) =>
-      source ? prev.filter((a) => a.source !== source) : [],
-    );
+    setAnnotations((prev) => (source ? prev.filter((a) => a.source !== source) : []));
     try {
-      const qs = source ? `?source=${encodeURIComponent(source)}` : '';
-      await fetch(`${SNAPSHOT_URL}${qs}`, { method: 'DELETE' });
+      const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+      await fetch(`${SNAPSHOT_URL}${qs}`, { method: "DELETE" });
     } catch {
       // SSE will reconcile on next event
     }
@@ -195,8 +172,8 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
     setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
     try {
       await fetch(`${SNAPSHOT_URL}?id=${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
     } catch {
@@ -204,5 +181,10 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
     }
   }, []);
 
-  return { externalAnnotations: annotations, updateExternalAnnotation, deleteExternalAnnotation, clearExternalAnnotations };
+  return {
+    externalAnnotations: annotations,
+    updateExternalAnnotation,
+    deleteExternalAnnotation,
+    clearExternalAnnotations,
+  };
 }

@@ -12,10 +12,24 @@
 import { Option, Schema } from "effect";
 import { isRemoteSession, getServerHostname, getServerPort } from "./remote";
 import type { Origin } from "@plannotator/shared/agents";
-import { type DiffType, type GitContext, runVcsDiff, getVcsFileContentsForDiff, getVcsDiffFingerprint, canStageFiles, stageFile, unstageFile, resolveVcsCwd, validateFilePath, getVcsContext, detectRemoteDefaultCompareTarget, gitRuntime } from "./vcs";
+import {
+  type DiffType,
+  type GitContext,
+  runVcsDiff,
+  getVcsFileContentsForDiff,
+  getVcsDiffFingerprint,
+  canStageFiles,
+  stageFile,
+  unstageFile,
+  resolveVcsCwd,
+  validateFilePath,
+  getVcsContext,
+  detectRemoteDefaultCompareTarget,
+  gitRuntime,
+} from "./vcs";
 import { basename } from "node:path";
 import { existsSync } from "node:fs";
-import {resolveBaseBranch} from "@plannotator/shared/review-core";
+import { resolveBaseBranch } from "@plannotator/shared/review-core";
 import {
   createDefaultSemanticDiffRuntime,
   getSemanticDiffAvailability,
@@ -25,7 +39,10 @@ import {
   semanticDiffFileExtsFromSearchParams,
   SemanticDiffResponseCache,
 } from "@plannotator/shared/semantic-diff";
-import type { SemanticDiffAvailability, SemanticDiffResponse } from "@plannotator/shared/semantic-diff-types";
+import type {
+  SemanticDiffAvailability,
+  SemanticDiffResponse,
+} from "@plannotator/shared/semantic-diff-types";
 import {
   getPRDiffScopeOptions,
   getPRFullStackFingerprint,
@@ -38,12 +55,40 @@ import {
   type PRDiffScope,
 } from "@plannotator/shared/pr-stack";
 import { getRepoInfo } from "./repo";
-import {handleImage, handleUpload, handleDraftSave, handleDraftLoad, handleDraftDelete, handleFavicon, readDraftGenerationFromBody, readDraftGenerationFromUrl} from "./shared-handlers";
+import {
+  handleImage,
+  handleUpload,
+  handleDraftSave,
+  handleDraftLoad,
+  handleDraftDelete,
+  handleFavicon,
+  readDraftGenerationFromBody,
+  readDraftGenerationFromUrl,
+} from "./shared-handlers";
 import { contentHash, deleteDraft } from "./draft";
 import { createEditorAnnotationHandler } from "./editor-annotations";
 import { createExternalAnnotationHandler } from "./external-annotations";
 import { loadConfig, saveConfig, ConfigPatch, detectGitUser, getServerConfig } from "./config";
-import {type PRMetadata, type PRStackTree, type PRListItem, fetchPR, fetchPRFileContent, fetchPRContext, submitPRReview, fetchPRViewedFiles, markPRFilesViewed, fetchPRStack, fetchPRList, getPRUser, parsePRUrl, prRefFromMetadata, isSameProject, getDisplayRepo, getMRLabel, getMRNumberLabel} from "./pr";
+import {
+  type PRMetadata,
+  type PRStackTree,
+  type PRListItem,
+  fetchPR,
+  fetchPRFileContent,
+  fetchPRContext,
+  submitPRReview,
+  fetchPRViewedFiles,
+  markPRFilesViewed,
+  fetchPRStack,
+  fetchPRList,
+  getPRUser,
+  parsePRUrl,
+  prRefFromMetadata,
+  isSameProject,
+  getDisplayRepo,
+  getMRLabel,
+  getMRNumberLabel,
+} from "./pr";
 import { AI_QUERY_ENDPOINT, createAIRuntime } from "./ai-runtime";
 import type { AIEndpoints } from "@plannotator/ai";
 import { isWSL } from "./browser";
@@ -137,10 +182,12 @@ export interface ReviewServerResult {
 function isWorkspaceDiffType(
   diffType: DiffType | WorkspaceDiffType,
 ): diffType is WorkspaceDiffType {
-  return diffType === "workspace-current"
-    || diffType === "workspace-staged"
-    || diffType === "workspace-unstaged"
-    || diffType === "workspace-last";
+  return (
+    diffType === "workspace-current" ||
+    diffType === "workspace-staged" ||
+    diffType === "workspace-unstaged" ||
+    diffType === "workspace-last"
+  );
 }
 
 interface FreshPayload {
@@ -162,9 +209,7 @@ const RETRY_DELAY_MS = 500;
  * - API routes (/api/diff, /api/feedback)
  * - Port conflict retries
  */
-export async function startReviewServer(
-  options: ReviewServerOptions
-): Promise<ReviewServerResult> {
+export async function startReviewServer(options: ReviewServerOptions): Promise<ReviewServerResult> {
   const { htmlContent, origin, gitContext, sharingEnabled = true, shareBaseUrl, onReady } = options;
 
   let prMetadata = options.prMetadata;
@@ -180,7 +225,8 @@ export async function startReviewServer(
   // Mutable state for diff switching
   let currentPatch = options.rawPatch;
   let currentGitRef = options.gitRef;
-  let currentDiffType: DiffType | WorkspaceDiffType = options.diffType || workspace?.diffType || "uncommitted";
+  let currentDiffType: DiffType | WorkspaceDiffType =
+    options.diffType || workspace?.diffType || "uncommitted";
   let currentError = options.error;
   let currentHideWhitespace = loadConfig().diffOptions?.hideWhitespace ?? false;
   let originalPRPatch = options.rawPatch;
@@ -203,7 +249,10 @@ export async function startReviewServer(
   const layerUpgradeAvailable = !!options.worktreePool;
   let prListCache: PRListItem[] | null = null;
   let prListCacheTime = 0;
-  const prSwitchCache = new Map<string, { metadata: PRMetadata; rawPatch: string; patchIncomplete?: boolean }>();
+  const prSwitchCache = new Map<
+    string,
+    { metadata: PRMetadata; rawPatch: string; patchIncomplete?: boolean }
+  >();
   if (isPRMode && prMetadata) {
     prSwitchCache.set(prMetadata.url, {
       metadata: prMetadata,
@@ -216,7 +265,8 @@ export async function startReviewServer(
   // read this (not gitContext.defaultBranch) so they analyze the same diff
   // the reviewer is currently looking at. Honors an explicit initialBase from
   // the caller — e.g. programmatic Pi callers can request a non-detected base.
-  const detectedCompareTarget = (): string => gitContext?.defaultBranch || gitContext?.compareTarget?.fallback || "main";
+  const detectedCompareTarget = (): string =>
+    gitContext?.defaultBranch || gitContext?.compareTarget?.fallback || "main";
   let currentBase = options.initialBase || detectedCompareTarget();
   let baseEverSwitched = false;
 
@@ -250,7 +300,9 @@ export async function startReviewServer(
   const PR_LOCAL_RETRY_COOLDOWN_MS = 30_000;
   // Await the current PR's checkout: blocks on the in-flight warmup, retries
   // failed same-repo creations, returns undefined when no checkout can exist.
-  const ensurePRLocalCwd = async (meta: PRMetadata | undefined = prMetadata): Promise<string | undefined> => {
+  const ensurePRLocalCwd = async (
+    meta: PRMetadata | undefined = prMetadata,
+  ): Promise<string | undefined> => {
     const pool = options.worktreePool;
     if (pool && meta) {
       const hadEntry = pool.has(meta.url);
@@ -336,9 +388,9 @@ export async function startReviewServer(
   const resolveAgentCwd = (): string => {
     if (workspace) return workspace.root;
     if (options.worktreePool && prMetadata) {
-      return resolvePRLocalCwd()
-        ?? resolveVcsCwd(currentDiffType, gitContext?.cwd)
-        ?? process.cwd();
+      return (
+        resolvePRLocalCwd() ?? resolveVcsCwd(currentDiffType, gitContext?.cwd) ?? process.cwd()
+      );
     }
     return options.agentCwd ?? resolveVcsCwd(currentDiffType, gitContext?.cwd) ?? process.cwd();
   };
@@ -391,7 +443,9 @@ export async function startReviewServer(
     const cached = semanticDiffAvailabilityCache.get(cwd);
     if (cached) return cached;
 
-    const next: Promise<SemanticDiffAvailability> = getSemanticDiffAvailability(createSemanticDiffRuntime(cwd)).catch((error) => ({
+    const next: Promise<SemanticDiffAvailability> = getSemanticDiffAvailability(
+      createSemanticDiffRuntime(cwd),
+    ).catch((error) => ({
       available: false,
       reason: "sem-probe-failed",
       message: error instanceof Error ? error.message : String(error),
@@ -442,11 +496,15 @@ export async function startReviewServer(
 
   // Detect repo info (cached for this session)
   // In PR mode, derive from metadata instead of local git
-  let repoInfo = isPRMode && prMetadata
-    ? { display: getDisplayRepo(prMetadata), branch: `${getMRLabel(prMetadata)} ${getMRNumberLabel(prMetadata)}` }
-    : workspace
-      ? { display: basename(workspace.root), branch: "Workspace" }
-    : await getRepoInfo();
+  let repoInfo =
+    isPRMode && prMetadata
+      ? {
+          display: getDisplayRepo(prMetadata),
+          branch: `${getMRLabel(prMetadata)} ${getMRNumberLabel(prMetadata)}`,
+        }
+      : workspace
+        ? { display: basename(workspace.root), branch: "Workspace" }
+        : await getRepoInfo();
   if (gitContext?.repository?.displayFallback) {
     repoInfo = {
       ...repoInfo,
@@ -475,7 +533,10 @@ export async function startReviewServer(
     const resolved = resolveStackInfo(prMetadata, prStackTree, prStackInfo);
     if (resolved && !prStackInfo) {
       prStackInfo = resolved;
-      prDiffScopeOptions = getPRDiffScopeOptions(prMetadata, !!(options.worktreePool || options.agentCwd));
+      prDiffScopeOptions = getPRDiffScopeOptions(
+        prMetadata,
+        !!(options.worktreePool || options.agentCwd),
+      );
     }
   }
 
@@ -561,7 +622,11 @@ export async function startReviewServer(
                 prDiffScope: currentPRDiffScope,
                 prDiffScopeOptions,
               }),
-              ...(isPRMode && layerPatchIncomplete && { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable }),
+              ...(isPRMode &&
+                layerPatchIncomplete && {
+                  prPatchIncomplete: true,
+                  prPatchUpgradeAvailable: layerUpgradeAvailable,
+                }),
               ...(isPRMode && initialViewedFiles.length > 0 && { viewedFiles: initialViewedFiles }),
               ...(currentError && { error: currentError }),
               semanticDiff: await getSemanticDiffAdvert(),
@@ -599,7 +664,8 @@ export async function startReviewServer(
             // A diff switch landing mid-probe replaces the snapshot (and its
             // fingerprint); report fresh and let the next poll compare
             // against the new baseline.
-            if (currentFingerprint !== baseline) return Response.json({ fresh: true, ...prCwdAdvert });
+            if (currentFingerprint !== baseline)
+              return Response.json({ fresh: true, ...prCwdAdvert });
             const fresh = probe == null || probe === baseline;
             // The probe fingerprint lets the client distinguish "still the
             // same staleness I dismissed" from "ANOTHER change landed since".
@@ -714,8 +780,7 @@ export async function startReviewServer(
               });
             } catch (_e) {
               void _e;
-              const message =
-                _e instanceof Error ? _e.message : "Failed to switch diff";
+              const message = _e instanceof Error ? _e.message : "Failed to switch diff";
               return Response.json({ error: message }, { status: 500 });
             }
           }
@@ -745,7 +810,10 @@ export async function startReviewServer(
                   rawPatch: currentPatch,
                   gitRef: currentGitRef,
                   prDiffScope: currentPRDiffScope,
-                  ...(layerPatchIncomplete && { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable }),
+                  ...(layerPatchIncomplete && {
+                    prPatchIncomplete: true,
+                    prPatchUpgradeAvailable: layerUpgradeAvailable,
+                  }),
                   ...(currentError && { error: currentError }),
                   semanticDiff,
                 });
@@ -763,7 +831,11 @@ export async function startReviewServer(
                 if (layerPatchIncomplete && options.worktreePool && upgradeMetadata) {
                   const upgradeCwd = await ensurePRLocalCwd(upgradeMetadata);
                   if (upgradeCwd && prMetadata === upgradeMetadata) {
-                    const result = await runPRLayerLocalDiff(gitRuntime, upgradeMetadata, upgradeCwd);
+                    const result = await runPRLayerLocalDiff(
+                      gitRuntime,
+                      upgradeMetadata,
+                      upgradeCwd,
+                    );
                     if (prMetadata === upgradeMetadata) {
                       if (!result.error) {
                         originalPRPatch = result.patch;
@@ -795,13 +867,18 @@ export async function startReviewServer(
                   rawPatch: currentPatch,
                   gitRef: currentGitRef,
                   prDiffScope: currentPRDiffScope,
-                  ...(layerPatchIncomplete && { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable }),
+                  ...(layerPatchIncomplete && {
+                    prPatchIncomplete: true,
+                    prPatchUpgradeAvailable: layerUpgradeAvailable,
+                  }),
                   ...((currentError ?? upgradeError) && { error: currentError ?? upgradeError }),
                   semanticDiff: await getSemanticDiffAdvert(),
                 });
               }
 
-              const fullStackOption = prDiffScopeOptions.find((option) => option.id === "full-stack");
+              const fullStackOption = prDiffScopeOptions.find(
+                (option) => option.id === "full-stack",
+              );
               if (!fullStackOption?.enabled || !(options.worktreePool || options.agentCwd)) {
                 return Response.json(
                   { error: "Full stack diff requires a stacked PR and a local checkout" },
@@ -884,11 +961,14 @@ export async function startReviewServer(
                 return Response.json({ error: "Invalid PR URL" }, { status: 400 });
               }
               if (!isSameProject(newRef, prRef!)) {
-                return Response.json({ error: "Cannot switch to a PR in a different repository" }, { status: 400 });
+                return Response.json(
+                  { error: "Cannot switch to a PR in a different repository" },
+                  { status: 400 },
+                );
               }
 
               const cached = prSwitchCache.get(body.url);
-              const pr = cached ?? await fetchPR(newRef);
+              const pr = cached ?? (await fetchPR(newRef));
               if (!cached) prSwitchCache.set(body.url, pr);
 
               // Update mutable server state. Bump the scope epoch so a scope
@@ -970,7 +1050,10 @@ export async function startReviewServer(
                 prStackTree,
                 prDiffScope: currentPRDiffScope,
                 prDiffScopeOptions,
-                ...(layerPatchIncomplete && { prPatchIncomplete: true, prPatchUpgradeAvailable: layerUpgradeAvailable }),
+                ...(layerPatchIncomplete && {
+                  prPatchIncomplete: true,
+                  prPatchUpgradeAvailable: layerUpgradeAvailable,
+                }),
                 repoInfo,
                 ...(switchedViewedFiles.length > 0 && { viewedFiles: switchedViewedFiles }),
                 semanticDiff: await getSemanticDiffAdvert(),
@@ -988,17 +1071,13 @@ export async function startReviewServer(
           // API: Fetch PR context (comments, checks, merge status) — PR mode only
           if (url.pathname === "/api/pr-context" && req.method === "GET") {
             if (!isPRMode) {
-              return Response.json(
-                { error: "Not in PR mode" },
-                { status: 400 },
-              );
+              return Response.json({ error: "Not in PR mode" }, { status: 400 });
             }
             try {
               const context = await fetchPRContext(prRef!);
               return Response.json(context);
             } catch (err) {
-              const message =
-                err instanceof Error ? err.message : "Failed to fetch PR context";
+              const message = err instanceof Error ? err.message : "Failed to fetch PR context";
               return Response.json({ error: message }, { status: 500 });
             }
           }
@@ -1009,12 +1088,16 @@ export async function startReviewServer(
             if (!filePath) {
               return Response.json({ error: "Missing path" }, { status: 400 });
             }
-            try { validateFilePath(filePath); } catch {
+            try {
+              validateFilePath(filePath);
+            } catch {
               return Response.json({ error: "Invalid path" }, { status: 400 });
             }
             const oldPath = url.searchParams.get("oldPath") || undefined;
             if (oldPath) {
-              try { validateFilePath(oldPath); } catch {
+              try {
+                validateFilePath(oldPath);
+              } catch {
                 return Response.json({ error: "Invalid path" }, { status: 400 });
               }
             }
@@ -1046,9 +1129,7 @@ export async function startReviewServer(
                 fileContentCwd,
               );
               if (!baseRef) {
-                return Response.json(
-                  { oldContent: null, newContent: null },
-                );
+                return Response.json({ oldContent: null, newContent: null });
               }
               const result = await getVcsFileContentsForDiff(
                 "merge-base",
@@ -1095,7 +1176,8 @@ export async function startReviewServer(
 
           // API: Code navigation (search-based symbol resolution)
           if (url.pathname === "/api/code-nav/resolve" && req.method === "POST") {
-            const hasCodeNavAccess = !!workspace || !!gitContext || !!options.agentCwd || !!options.worktreePool;
+            const hasCodeNavAccess =
+              !!workspace || !!gitContext || !!options.agentCwd || !!options.worktreePool;
             if (!hasCodeNavAccess) {
               return Response.json(
                 { error: "Code navigation requires local access" },
@@ -1104,9 +1186,10 @@ export async function startReviewServer(
             }
             // PR mode: the checkout must actually exist — ripgrep over a
             // fallback directory returns confidently-wrong results.
-            const navCwd = options.worktreePool && prMetadata
-              ? await ensurePRLocalCwd()
-              : await resolveAgentCwdReady();
+            const navCwd =
+              options.worktreePool && prMetadata
+                ? await ensurePRLocalCwd()
+                : await resolveAgentCwdReady();
             if (!navCwd) {
               return Response.json({ error: "Local checkout unavailable" }, { status: 400 });
             }
@@ -1116,21 +1199,28 @@ export async function startReviewServer(
 
           // API: Code navigation file preview (read file from working tree)
           if (url.pathname === "/api/code-nav/file" && req.method === "GET") {
-            const hasCodeNavAccess = !!workspace || !!gitContext || !!options.agentCwd || !!options.worktreePool;
+            const hasCodeNavAccess =
+              !!workspace || !!gitContext || !!options.agentCwd || !!options.worktreePool;
             if (!hasCodeNavAccess) {
-              return Response.json({ error: "Code navigation requires local access" }, { status: 400 });
+              return Response.json(
+                { error: "Code navigation requires local access" },
+                { status: 400 },
+              );
             }
             const filePath = url.searchParams.get("path");
             if (!filePath) {
               return Response.json({ error: "Missing path" }, { status: 400 });
             }
-            try { validateFilePath(filePath); } catch {
+            try {
+              validateFilePath(filePath);
+            } catch {
               return Response.json({ error: "Invalid path" }, { status: 400 });
             }
             try {
-              const navCwd = options.worktreePool && prMetadata
-                ? await ensurePRLocalCwd()
-                : await resolveAgentCwdReady();
+              const navCwd =
+                options.worktreePool && prMetadata
+                  ? await ensurePRLocalCwd()
+                  : await resolveAgentCwdReady();
               if (!navCwd) {
                 return Response.json({ error: "Local checkout unavailable" }, { status: 400 });
               }
@@ -1151,7 +1241,9 @@ export async function startReviewServer(
               if (!body) {
                 return Response.json({ error: "Missing filePath" }, { status: 400 });
               }
-              try { validateFilePath(body.filePath); } catch {
+              try {
+                validateFilePath(body.filePath);
+              } catch {
                 return Response.json({ error: "Invalid path" }, { status: 400 });
               }
 
@@ -1169,10 +1261,7 @@ export async function startReviewServer(
 
               const stageCwd = resolveVcsCwd(currentDiffType, gitContext?.cwd);
               if (isPRMode || !(await canStageFiles(currentDiffType, stageCwd))) {
-                return Response.json(
-                  { error: "Staging not available" },
-                  { status: 400 },
-                );
+                return Response.json({ error: "Staging not available" }, { status: 400 });
               }
 
               if (body.undo) {
@@ -1253,8 +1342,7 @@ export async function startReviewServer(
 
               return Response.json({ ok: true });
             } catch (err) {
-              const message =
-                err instanceof Error ? err.message : "Failed to process feedback";
+              const message = err instanceof Error ? err.message : "Failed to process feedback";
               return Response.json({ error: message }, { status: 500 });
             }
           }
@@ -1283,7 +1371,10 @@ export async function startReviewServer(
               if (body.targetPrUrl) {
                 const cached = prSwitchCache.get(body.targetPrUrl);
                 if (!cached) {
-                  return Response.json({ error: "Target PR not found in session" }, { status: 400 });
+                  return Response.json(
+                    { error: "Target PR not found in session" },
+                    { status: 400 },
+                  );
                 }
                 targetRef = prRefFromMetadata(cached.metadata);
                 targetHeadSha = cached.metadata.headSha;
@@ -1295,21 +1386,18 @@ export async function startReviewServer(
                 );
               }
 
-              console.error(`[pr-action] ${body.action} with ${body.fileComments.length} file comment(s), target=${targetUrl}, headSha=${targetHeadSha}`);
-
-              await submitPRReview(
-                targetRef,
-                targetHeadSha,
-                body.action,
-                body.body,
-                [...body.fileComments],
+              console.error(
+                `[pr-action] ${body.action} with ${body.fileComments.length} file comment(s), target=${targetUrl}, headSha=${targetHeadSha}`,
               );
+
+              await submitPRReview(targetRef, targetHeadSha, body.action, body.body, [
+                ...body.fileComments,
+              ]);
 
               console.error(`[pr-action] Success`);
               return Response.json({ ok: true, prUrl: targetUrl });
             } catch (err) {
-              const message =
-                err instanceof Error ? err.message : "Failed to submit PR review";
+              const message = err instanceof Error ? err.message : "Failed to submit PR review";
               console.error(`[pr-action] Failed: ${message}`);
               return Response.json({ error: message }, { status: 500 });
             }
@@ -1321,7 +1409,10 @@ export async function startReviewServer(
               return Response.json({ error: "Not in PR mode" }, { status: 400 });
             }
             if (prMetadata.platform !== "github") {
-              return Response.json({ error: "Viewed sync only supported for GitHub" }, { status: 400 });
+              return Response.json(
+                { error: "Viewed sync only supported for GitHub" },
+                { status: 400 },
+              );
             }
             const prNodeId = prMetadata.prNodeId;
             if (!prNodeId) {
@@ -1338,8 +1429,7 @@ export async function startReviewServer(
               await markPRFilesViewed(prRef!, prNodeId, [...body.filePaths], body.viewed);
               return Response.json({ ok: true });
             } catch (err) {
-              const message =
-                err instanceof Error ? err.message : "Failed to update viewed state";
+              const message = err instanceof Error ? err.message : "Failed to update viewed state";
               console.error("[plannotator] /api/pr-viewed error:", message);
               return Response.json({ error: message }, { status: 500 });
             }
@@ -1355,11 +1445,19 @@ export async function startReviewServer(
               // isn't rooted in a transient fallback directory for life.
               // If the checkout can't be produced (warmup failed), refuse
               // instead of starting a session in the wrong directory.
-              if (req.method === "POST" && url.pathname === "/api/ai/session" && options.worktreePool && prMetadata) {
+              if (
+                req.method === "POST" &&
+                url.pathname === "/api/ai/session" &&
+                options.worktreePool &&
+                prMetadata
+              ) {
                 const checkout = await ensurePRLocalCwd();
                 if (!checkout) {
                   return Response.json(
-                    { error: "Local PR checkout unavailable — Ask AI can't read the PR files right now. Retry shortly." },
+                    {
+                      error:
+                        "Local PR checkout unavailable — Ask AI can't read the PR files right now. Retry shortly.",
+                    },
                     { status: 503 },
                   );
                 }
@@ -1392,8 +1490,7 @@ export async function startReviewServer(
 
       break; // Success, exit retry loop
     } catch (err: unknown) {
-      const isAddressInUse =
-        err instanceof Error && err.message.includes("EADDRINUSE");
+      const isAddressInUse = err instanceof Error && err.message.includes("EADDRINUSE");
 
       if (isAddressInUse && attempt < MAX_RETRIES) {
         await Bun.sleep(RETRY_DELAY_MS);
@@ -1433,7 +1530,9 @@ export async function startReviewServer(
         try {
           const result = options.onCleanup();
           if (result instanceof Promise) result.catch(() => {});
-        } catch { /* best effort */ }
+        } catch {
+          /* best effort */
+        }
       }
     },
   };

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from "react";
 
 interface ScrollFadeProps {
   children: React.ReactNode;
@@ -33,16 +33,12 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fad
   }, [update]);
 
   return (
-    <div className={`relative flex-1 min-h-0 ${className ?? ''}`}>
+    <div className={`relative flex-1 min-h-0 ${className ?? ""}`}>
       <div
         className="absolute top-0 left-0 right-0 z-10 pointer-events-none bg-gradient-to-b from-background to-transparent transition-opacity duration-150"
         style={{ height: fadeHeight, opacity: showTop ? 1 : 0 }}
       />
-      <div
-        ref={scrollRef}
-        onScroll={update}
-        className="h-full overflow-y-auto"
-      >
+      <div ref={scrollRef} onScroll={update} className="h-full overflow-y-auto">
         {children}
       </div>
       <div

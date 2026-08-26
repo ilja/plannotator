@@ -1,14 +1,14 @@
-import { useState, useRef, useCallback } from 'react';
-import { storage } from '../utils/storage';
+import { useState, useRef, useCallback } from "react";
+import { storage } from "../utils/storage";
 
 interface UseResizablePanelOptions {
   storageKey: string;
   defaultWidth?: number;
   minWidth?: number;
   maxWidth?: number;
-  side?: 'left' | 'right' | 'top' | 'bottom';
+  side?: "left" | "right" | "top" | "bottom";
   /** Drag axis: 'x' resizes width (default), 'y' resizes height (uses clientY). */
-  axis?: 'x' | 'y';
+  axis?: "x" | "y";
   /**
    * When provided, dragging the panel narrower than `snapCloseRatio * minWidth`
    * snaps it shut (calls this) instead of clamping at minWidth.
@@ -38,8 +38,8 @@ export function useResizablePanel({
   defaultWidth = 288,
   minWidth = 200,
   maxWidth = 600,
-  side = 'right',
-  axis = 'x',
+  side = "right",
+  axis = "x",
   onSnapClose,
   snapCloseRatio = 0.6,
   apply,
@@ -76,7 +76,7 @@ export function useResizablePanel({
     rafRef.current = null;
     if (!draggingRef.current) return;
     const delta =
-      side === 'right' || side === 'bottom'
+      side === "right" || side === "bottom"
         ? startXRef.current - latestXRef.current
         : latestXRef.current - startXRef.current;
     const raw = startWidthRef.current + delta;
@@ -105,7 +105,7 @@ export function useResizablePanel({
       // Only primary button / touch / pen.
       if (e.button !== 0) return;
       e.preventDefault();
-      const pos = axis === 'y' ? e.clientY : e.clientX;
+      const pos = axis === "y" ? e.clientY : e.clientX;
       startXRef.current = pos;
       startWidthRef.current = widthRef.current;
       latestXRef.current = pos;
@@ -119,13 +119,13 @@ export function useResizablePanel({
       // moves once the pointer leaves it).
       const onMove = (ev: PointerEvent) => {
         if (!draggingRef.current) return;
-        latestXRef.current = axis === 'y' ? ev.clientY : ev.clientX;
+        latestXRef.current = axis === "y" ? ev.clientY : ev.clientX;
         if (rafRef.current == null) rafRef.current = requestAnimationFrame(flush);
       };
       const cleanup = () => {
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-        window.removeEventListener('pointercancel', onUp);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
       };
       function onUp() {
         const wasSnapped = snappedRef.current;
@@ -144,9 +144,9 @@ export function useResizablePanel({
         cleanup();
       }
 
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onUp);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
     },
     [flush, storageKey, axis],
   );
@@ -168,7 +168,7 @@ export function useResizablePanel({
       isDragging,
       onPointerDown,
       onDoubleClick: resetWidth,
-      style: { touchAction: 'none' },
+      style: { touchAction: "none" },
     } as ResizeHandleProps,
   };
 }

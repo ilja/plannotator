@@ -1,7 +1,7 @@
-import {useEffect, useState, type RefObject} from 'react';
-import type Highlighter from '@plannotator/web-highlighter';
-import type { InputMethod } from '../types';
-import {resolvePinpointTarget} from '../utils/blockTargeting';
+import { useEffect, useState, type RefObject } from "react";
+import type Highlighter from "@plannotator/web-highlighter";
+import type { InputMethod } from "../types";
+import { resolvePinpointTarget } from "../utils/blockTargeting";
 
 export interface UsePinpointOptions {
   containerRef: RefObject<HTMLElement | null>;
@@ -24,15 +24,17 @@ export function usePinpoint({
   enabled,
   onCodeBlockClick,
 }: UsePinpointOptions): UsePinpointReturn {
-  const [hoverTarget, setHoverTarget] = useState<{ element: HTMLElement; label: string } | null>(null);
+  const [hoverTarget, setHoverTarget] = useState<{ element: HTMLElement; label: string } | null>(
+    null,
+  );
 
-  const isActive = inputMethod === 'pinpoint' && enabled;
+  const isActive = inputMethod === "pinpoint" && enabled;
 
   // Clear hover when deactivated
   useEffect(() => {
     if (!isActive) {
       setHoverTarget((prev) => {
-        if (prev) prev.element.removeAttribute('data-pinpoint-hover');
+        if (prev) prev.element.removeAttribute("data-pinpoint-hover");
         return null;
       });
     }
@@ -50,14 +52,14 @@ export function usePinpoint({
 
       if (resolved) {
         if (resolved.element !== prevElement) {
-          prevElement?.removeAttribute('data-pinpoint-hover');
-          resolved.element.setAttribute('data-pinpoint-hover', '');
+          prevElement?.removeAttribute("data-pinpoint-hover");
+          resolved.element.setAttribute("data-pinpoint-hover", "");
           prevElement = resolved.element;
           setHoverTarget({ element: resolved.element, label: resolved.label });
         }
       } else {
         if (prevElement) {
-          prevElement.removeAttribute('data-pinpoint-hover');
+          prevElement.removeAttribute("data-pinpoint-hover");
           prevElement = null;
           setHoverTarget(null);
         }
@@ -78,20 +80,20 @@ export function usePinpoint({
     };
 
     const handleMouseLeave = () => {
-      prevElement?.removeAttribute('data-pinpoint-hover');
+      prevElement?.removeAttribute("data-pinpoint-hover");
       prevElement = null;
       setHoverTarget(null);
     };
 
-    container.addEventListener('mousemove', handleMouseMove);
-    container.addEventListener('mouseleave', handleMouseLeave);
-    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("mouseleave", handleMouseLeave);
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
 
     return () => {
-      prevElement?.removeAttribute('data-pinpoint-hover');
-      container.removeEventListener('mousemove', handleMouseMove);
-      container.removeEventListener('mouseleave', handleMouseLeave);
-      container.removeEventListener('touchstart', handleTouchStart);
+      prevElement?.removeAttribute("data-pinpoint-hover");
+      container.removeEventListener("mousemove", handleMouseMove);
+      container.removeEventListener("mouseleave", handleMouseLeave);
+      container.removeEventListener("touchstart", handleTouchStart);
     };
   }, [isActive, containerRef]);
 
@@ -110,24 +112,29 @@ export function usePinpoint({
 
       // SAFETY: cast is safe — HTMLElement is expected shape
       const target = e.target as HTMLElement;
-      const resolved = resolvePinpointTarget(target, container, { clientX: e.clientX, clientY: e.clientY });
+      const resolved = resolvePinpointTarget(target, container, {
+        clientX: e.clientX,
+        clientY: e.clientY,
+      });
       if (!resolved) return;
 
       // Prevent link navigation in pinpoint mode
       // SAFETY: cast is safe — HTMLAnchorElement is expected shape
-      const link = (target.closest('a') as HTMLAnchorElement | null);
+      const link = target.closest("a") as HTMLAnchorElement | null;
       if (link && container.contains(link)) {
         e.preventDefault();
       }
 
       // Clear hover state
-      resolved.element.removeAttribute('data-pinpoint-hover');
+      resolved.element.removeAttribute("data-pinpoint-hover");
       setHoverTarget(null);
 
       if (resolved.isCodeBlock) {
         // Route to existing code block annotation path
         // SAFETY: cast is safe — HTMLElement is expected shape
-        const codeBlockContainer = container.querySelector(`[data-block-id="${resolved.blockId}"]`) as HTMLElement;
+        const codeBlockContainer = container.querySelector(
+          `[data-block-id="${resolved.blockId}"]`,
+        ) as HTMLElement;
         if (codeBlockContainer) {
           onCodeBlockClick(resolved.blockId, codeBlockContainer);
         }
@@ -152,10 +159,10 @@ export function usePinpoint({
     };
 
     // Use capture phase so we get the click before links navigate
-    container.addEventListener('click', handleClick, true);
+    container.addEventListener("click", handleClick, true);
 
     return () => {
-      container.removeEventListener('click', handleClick, true);
+      container.removeEventListener("click", handleClick, true);
     };
   }, [isActive, containerRef, highlighterRef, onCodeBlockClick]);
 

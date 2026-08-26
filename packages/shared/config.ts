@@ -11,14 +11,14 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { execSync } from "child_process";
 import { Option, Schema } from "effect";
 
-export type DefaultDiffType = 'uncommitted' | 'unstaged' | 'staged' | 'merge-base' | 'all';
-export type DiffLineBgIntensity = 'subtle' | 'normal' | 'strong';
+export type DefaultDiffType = "uncommitted" | "unstaged" | "staged" | "merge-base" | "all";
+export type DiffLineBgIntensity = "subtle" | "normal" | "strong";
 
 export interface DiffOptions {
-  diffStyle?: 'split' | 'unified';
-  overflow?: 'scroll' | 'wrap';
-  diffIndicators?: 'bars' | 'classic' | 'none';
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none';
+  diffStyle?: "split" | "unified";
+  overflow?: "scroll" | "wrap";
+  diffIndicators?: "bars" | "classic" | "none";
+  lineDiffType?: "word-alt" | "word" | "char" | "none";
   showLineNumbers?: boolean;
   showDiffBackground?: boolean;
   fontFamily?: string;
@@ -102,9 +102,8 @@ export function mergePromptConfig(
       result[section] = {
         ...cur,
         ...par,
-        runtimes: (cur?.runtimes || par?.runtimes)
-          ? { ...cur?.runtimes, ...par?.runtimes }
-          : undefined,
+        runtimes:
+          cur?.runtimes || par?.runtimes ? { ...cur?.runtimes, ...par?.runtimes } : undefined,
       };
     }
   }
@@ -155,7 +154,14 @@ const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 const ConfigString = Schema.String;
 const ConfigBoolean = Schema.Boolean;
 const ConfigNumber = Schema.Number;
-const ConfigDiffType = Schema.Literals(["uncommitted", "unstaged", "staged", "merge-base", "all", "branch"]);
+const ConfigDiffType = Schema.Literals([
+  "uncommitted",
+  "unstaged",
+  "staged",
+  "merge-base",
+  "all",
+  "branch",
+]);
 const ConfigShare = Schema.Literals(["enabled", "disabled"]);
 const ConfigDiffStyle = Schema.Literals(["split", "unified"]);
 const ConfigOverflow = Schema.Literals(["scroll", "wrap"]);
@@ -178,7 +184,11 @@ function decodeConfigRecord(value: ConfigJson | undefined): ConfigRecord | undef
   return Schema.is(ConfigRecord)(value) ? value : undefined;
 }
 
-function defineConfigProperty<Value>(target: ConfigPropertyTarget, key: string, value: Value): void {
+function defineConfigProperty<Value>(
+  target: ConfigPropertyTarget,
+  key: string,
+  value: Value,
+): void {
   Object.defineProperty(target, key, {
     value,
     enumerable: true,
@@ -211,10 +221,18 @@ function decodeDiffOptions(value: ConfigJson | undefined): DiffOptions | undefin
 
   const result: DiffOptions = {};
   copyConfigProperties(result, record);
-  const diffStyle = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffStyle)(record.diffStyle));
-  const overflow = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigOverflow)(record.overflow));
-  const diffIndicators = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffIndicators)(record.diffIndicators));
-  const lineDiffType = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigLineDiffType)(record.lineDiffType));
+  const diffStyle = Option.getOrUndefined(
+    Schema.decodeUnknownOption(ConfigDiffStyle)(record.diffStyle),
+  );
+  const overflow = Option.getOrUndefined(
+    Schema.decodeUnknownOption(ConfigOverflow)(record.overflow),
+  );
+  const diffIndicators = Option.getOrUndefined(
+    Schema.decodeUnknownOption(ConfigDiffIndicators)(record.diffIndicators),
+  );
+  const lineDiffType = Option.getOrUndefined(
+    Schema.decodeUnknownOption(ConfigLineDiffType)(record.lineDiffType),
+  );
   const showLineNumbers = decodeConfigBoolean(record.showLineNumbers);
   const showDiffBackground = decodeConfigBoolean(record.showDiffBackground);
   const fontFamily = decodeConfigString(record.fontFamily);
@@ -222,8 +240,12 @@ function decodeDiffOptions(value: ConfigJson | undefined): DiffOptions | undefin
   const tabSize = decodeConfigNumber(record.tabSize);
   const hideWhitespace = decodeConfigBoolean(record.hideWhitespace);
   const expandUnchanged = decodeConfigBoolean(record.expandUnchanged);
-  const defaultDiffType = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigDiffType)(record.defaultDiffType));
-  const lineBgIntensity = Option.getOrUndefined(Schema.decodeUnknownOption(ConfigLineBgIntensity)(record.lineBgIntensity));
+  const defaultDiffType = Option.getOrUndefined(
+    Schema.decodeUnknownOption(ConfigDiffType)(record.defaultDiffType),
+  );
+  const lineBgIntensity = Option.getOrUndefined(
+    Schema.decodeUnknownOption(ConfigLineBgIntensity)(record.lineBgIntensity),
+  );
 
   delete result.diffStyle;
   delete result.overflow;
@@ -250,7 +272,8 @@ function decodeDiffOptions(value: ConfigJson | undefined): DiffOptions | undefin
   if (tabSize !== undefined) result.tabSize = tabSize;
   if (hideWhitespace !== undefined) result.hideWhitespace = hideWhitespace;
   if (expandUnchanged !== undefined) result.expandUnchanged = expandUnchanged;
-  if (defaultDiffType !== undefined) result.defaultDiffType = defaultDiffType === "branch" ? "merge-base" : defaultDiffType;
+  if (defaultDiffType !== undefined)
+    result.defaultDiffType = defaultDiffType === "branch" ? "merge-base" : defaultDiffType;
   if (lineBgIntensity !== undefined) result.lineBgIntensity = lineBgIntensity;
 
   return result;
@@ -280,7 +303,9 @@ function decodeAnnotationOptions(value: ConfigJson | undefined): AnnotationOptio
   return result;
 }
 
-function decodeConventionalLabels(value: ConfigJson | undefined): CCLabelConfig[] | null | undefined {
+function decodeConventionalLabels(
+  value: ConfigJson | undefined,
+): CCLabelConfig[] | null | undefined {
   if (value === null) return null;
   const labels = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Array(ConfigJson))(value));
   if (!labels) return undefined;
@@ -326,7 +351,10 @@ function decodePromptRuntimes(
   return result;
 }
 
-function decodePromptSection(value: ConfigJson | undefined, fields: readonly string[]): PromptSectionConfig | undefined {
+function decodePromptSection(
+  value: ConfigJson | undefined,
+  fields: readonly string[],
+): PromptSectionConfig | undefined {
   const record = decodeConfigRecord(value);
   if (!record) return undefined;
 
@@ -352,8 +380,17 @@ function decodePrompts(value: ConfigJson | undefined): PromptConfig | undefined 
   const result: PromptConfig = {};
   copyConfigProperties(result, record);
   const review = decodePromptSection(record.review, ["approved", "denied"]);
-  const plan = decodePromptSection(record.plan, ["approved", "approvedWithNotes", "autoApproved", "denied"]);
-  const annotate = decodePromptSection(record.annotate, ["fileFeedback", "messageFeedback", "approved"]);
+  const plan = decodePromptSection(record.plan, [
+    "approved",
+    "approvedWithNotes",
+    "autoApproved",
+    "denied",
+  ]);
+  const annotate = decodePromptSection(record.annotate, [
+    "fileFeedback",
+    "messageFeedback",
+    "approved",
+  ]);
 
   delete result.review;
   delete result.plan;
@@ -441,7 +478,9 @@ export const ConfigPatch = Schema.Struct({
       tabSize: Schema.optionalKey(Schema.Number),
       hideWhitespace: Schema.optionalKey(Schema.Boolean),
       expandUnchanged: Schema.optionalKey(Schema.Boolean),
-      defaultDiffType: Schema.optionalKey(Schema.Literals(["uncommitted", "unstaged", "staged", "merge-base", "all"])),
+      defaultDiffType: Schema.optionalKey(
+        Schema.Literals(["uncommitted", "unstaged", "staged", "merge-base", "all"]),
+      ),
       lineBgIntensity: Schema.optionalKey(Schema.Literals(["subtle", "normal", "strong"])),
     }),
   ),
@@ -475,12 +514,14 @@ export type ConfigPatch = Schema.Schema.Type<typeof ConfigPatch>;
 export function saveConfig(partial: Partial<PlannotatorConfig> | ConfigPatch): void {
   try {
     const current = loadConfig();
-    const mergedDiffOptions = (current.diffOptions || partial.diffOptions)
-      ? { ...current.diffOptions, ...partial.diffOptions }
-      : undefined;
-    const mergedAnnotationOptions = (current.annotationOptions || partial.annotationOptions)
-      ? { ...current.annotationOptions, ...partial.annotationOptions }
-      : undefined;
+    const mergedDiffOptions =
+      current.diffOptions || partial.diffOptions
+        ? { ...current.diffOptions, ...partial.diffOptions }
+        : undefined;
+    const mergedAnnotationOptions =
+      current.annotationOptions || partial.annotationOptions
+        ? { ...current.annotationOptions, ...partial.annotationOptions }
+        : undefined;
     const mergedPrompts = mergePromptConfig(
       current.prompts,
       "prompts" in partial ? partial.prompts : undefined,
@@ -532,7 +573,9 @@ export function getServerConfig(gitUser: string | null): ServerConfigPayload {
     diffOptions: cfg.diffOptions,
     annotationOptions: cfg.annotationOptions,
     gitUser: gitUser ?? undefined,
-    ...(cfg.conventionalComments !== undefined && { conventionalComments: cfg.conventionalComments }),
+    ...(cfg.conventionalComments !== undefined && {
+      conventionalComments: cfg.conventionalComments,
+    }),
     ...(cfg.conventionalLabels !== undefined && { conventionalLabels: cfg.conventionalLabels }),
   };
 }
@@ -542,8 +585,14 @@ export function getServerConfig(gitUser: string | null): ServerConfigPayload {
  */
 export function resolveDefaultDiffType(cfg?: PlannotatorConfig): DefaultDiffType {
   const v: string | undefined = cfg?.diffOptions?.defaultDiffType;
-  if (v === 'branch') return 'merge-base';
-  return v === 'uncommitted' || v === 'unstaged' || v === 'staged' || v === 'merge-base' || v === 'all' ? v : 'unstaged';
+  if (v === "branch") return "merge-base";
+  return v === "uncommitted" ||
+    v === "unstaged" ||
+    v === "staged" ||
+    v === "merge-base" ||
+    v === "all"
+    ? v
+    : "unstaged";
 }
 
 /**

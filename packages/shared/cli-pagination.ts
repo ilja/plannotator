@@ -1,5 +1,3 @@
-
-
 export interface PaginatedArrayResult<T> {
   readonly items: T[];
   readonly rejected: number;
@@ -55,7 +53,8 @@ export function parsePaginatedArray<T>(
     }
   }
 
-  const pages: unknown[] = slices.length > 0 ? slices.map((slice) => JSON.parse(slice)) : [JSON.parse(trimmed)];
+  const pages: unknown[] =
+    slices.length > 0 ? slices.map((slice) => JSON.parse(slice)) : [JSON.parse(trimmed)];
   const items: T[] = [];
   let rejected = 0;
 

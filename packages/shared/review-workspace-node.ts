@@ -113,7 +113,9 @@ function rewritePatchChunk(chunk: string, label: string): string {
     lines[0] = `diff --git ${formatPatchPathToken("a", prefixedOld)} ${formatPatchPathToken("b", prefixedNew)}`;
   }
 
-  return lines.map((line, index) => index === 0 ? line : rewritePatchLine(line, label)).join("\n");
+  return lines
+    .map((line, index) => (index === 0 ? line : rewritePatchLine(line, label)))
+    .join("\n");
 }
 
 export function prefixWorkspacePatchPaths(rawPatch: string, label: string): string {
@@ -224,7 +226,11 @@ export function aggregateWorkspacePatch(repos: WorkspacePatchEntry[]): Workspace
     .map((patch) => patch.replace(/\n+$/, ""));
   return {
     rawPatch: trimmedPatches.join("\n\n"),
-    gitRef: selected.map((repo) => repo.gitRef || repo.label).filter(Boolean).join(" | ") || "Workspace review",
-    errors: repos.flatMap((repo) => repo.error ? [`${repo.label}: ${repo.error}`] : []),
+    gitRef:
+      selected
+        .map((repo) => repo.gitRef || repo.label)
+        .filter(Boolean)
+        .join(" | ") || "Workspace review",
+    errors: repos.flatMap((repo) => (repo.error ? [`${repo.label}: ${repo.error}`] : [])),
   };
 }

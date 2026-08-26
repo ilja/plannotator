@@ -164,10 +164,7 @@ export function createExternalAnnotationHandler(
           }
 
           const created = store.add(parsed.annotations);
-          return Response.json(
-            { ids: created.map((a) => a.id) },
-            { status: 201 },
-          );
+          return Response.json({ ids: created.map((a) => a.id) }, { status: 201 });
         } catch {
           return Response.json({ error: "Invalid JSON" }, { status: 400 });
         }

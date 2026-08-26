@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -76,10 +84,13 @@ function initRepo(): string {
   return repoDir;
 }
 
-function makeMockSem(dir: string, options: {
-  runCwdLogPath?: string;
-  inputLogPath?: string;
-} = {}): string {
+function makeMockSem(
+  dir: string,
+  options: {
+    runCwdLogPath?: string;
+    inputLogPath?: string;
+  } = {},
+): string {
   const semPath = join(dir, "sem");
   writeFileSync(
     semPath,
@@ -91,10 +102,23 @@ function makeMockSem(dir: string, options: {
       "  exit 0",
       "fi",
       ...(options.runCwdLogPath ? [`pwd >> ${JSON.stringify(options.runCwdLogPath)}`] : []),
-      ...(options.inputLogPath ? [`cat > ${JSON.stringify(options.inputLogPath)}`] : ["cat >/dev/null"]),
+      ...(options.inputLogPath
+        ? [`cat > ${JSON.stringify(options.inputLogPath)}`]
+        : ["cat >/dev/null"]),
       "cat <<'JSON'",
       JSON.stringify({
-        summary: { fileCount: 1, added: 1, modified: 0, deleted: 0, moved: 0, renamed: 0, reordered: 0, binary: 0, orphan: 0, total: 1 },
+        summary: {
+          fileCount: 1,
+          added: 1,
+          modified: 0,
+          deleted: 0,
+          moved: 0,
+          renamed: 0,
+          reordered: 0,
+          binary: 0,
+          orphan: 0,
+          total: 1,
+        },
         changes: [
           {
             entityId: "src/app.ts::function::created",
@@ -123,7 +147,10 @@ function initJjRepo(): string {
   git(repoDir, ["add", "spacey.ts"]);
   git(repoDir, ["commit", "-m", "add spacey file"]);
 
-  const init = spawnSync("jj", ["git", "init", "--colocate", repoDir], { encoding: "utf-8", env: childEnv() });
+  const init = spawnSync("jj", ["git", "init", "--colocate", repoDir], {
+    encoding: "utf-8",
+    env: childEnv(),
+  });
   if (init.status !== 0) {
     throw new Error(init.stderr || "jj git init --colocate failed");
   }
@@ -275,14 +302,16 @@ describe("unavailable pi AI endpoint", () => {
       if (!address || !("port" in address)) throw new Error("Failed to start test server");
       const response = await fetch(`http://127.0.0.1:${address.port}/api/ai/capabilities`);
       expect(response.status).toBe(200);
-      expect(await response.text()).toBe(JSON.stringify({
-        available: false,
-        providers: [],
-        defaultProvider: null,
-      }));
+      expect(await response.text()).toBe(
+        JSON.stringify({
+          available: false,
+          providers: [],
+          defaultProvider: null,
+        }),
+      );
     } finally {
       await new Promise<void>((resolve, reject) => {
-        server.close((error) => error ? reject(error) : resolve());
+        server.close((error) => (error ? reject(error) : resolve()));
       });
     }
   });
@@ -529,7 +558,9 @@ describe("pi annotate server", () => {
         body: JSON.stringify({ annotations: [{ id: "draft-approve" }], draftGeneration: 1 }),
       });
 
-      const approveResponse = await fetch(`${server.url}/api/approve?draftGeneration=1`, { method: "POST" });
+      const approveResponse = await fetch(`${server.url}/api/approve?draftGeneration=1`, {
+        method: "POST",
+      });
       expect(approveResponse.status).toBe(200);
 
       await expect(server.waitForDecision()).resolves.toEqual({
@@ -565,7 +596,9 @@ describe("pi annotate server", () => {
         body: JSON.stringify({ annotations: [{ id: "draft-exit" }], draftGeneration: 2 }),
       });
 
-      const exitResponse = await fetch(`${server.url}/api/exit?draftGeneration=2`, { method: "POST" });
+      const exitResponse = await fetch(`${server.url}/api/exit?draftGeneration=2`, {
+        method: "POST",
+      });
       expect(exitResponse.status).toBe(200);
 
       await expect(server.waitForDecision()).resolves.toEqual({
@@ -683,13 +716,13 @@ describe("pi review server", () => {
         status: string;
         summary?: { added: number; fileCount: number };
         changes?: Array<{ entityType: string; entityName: string; filePath: string }>;
-      } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json());
+      } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) =>
+        response.json(),
+      );
       expect(semanticPayload).toMatchObject({
         status: "ok",
         summary: { added: 1, fileCount: 1 },
-        changes: [
-          { entityType: "function", entityName: "created", filePath: "src/app.ts" },
-        ],
+        changes: [{ entityType: "function", entityName: "created", filePath: "src/app.ts" }],
       });
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(
         realpathSync(join(dataDir, "semantic-diff", "patch-only")),
@@ -771,7 +804,9 @@ describe("pi review server", () => {
       } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
       expect(diffPayload.semanticDiff?.available).toBe(false);
 
-      const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
+      const semanticPayload: { status: string } = await fetch(
+        `${server.url}/api/semantic-diff`,
+      ).then((response) => response.json());
       expect(semanticPayload.status).toBe("unavailable");
     } finally {
       server.stop();
@@ -872,7 +907,8 @@ describe("pi review server", () => {
       expect(createdAnnotation.id).toBeTruthy();
 
       const annotationsList = await fetch(`${server.url}/api/editor-annotations`);
-      const annotationsPayload: { annotations: Array<{ id: string }> } = await annotationsList.json();
+      const annotationsPayload: { annotations: Array<{ id: string }> } =
+        await annotationsList.json();
       expect(annotationsPayload.annotations).toHaveLength(1);
       expect(annotationsPayload.annotations[0].id).toBe(createdAnnotation.id);
 
@@ -881,7 +917,6 @@ describe("pi review server", () => {
         { method: "DELETE" },
       );
       expect(annotationDelete.status).toBe(200);
-
 
       const formData = new FormData();
       formData.append("file", new File(["png-bytes"], "diagram.png", { type: "image/png" }));
@@ -1188,7 +1223,10 @@ describe("pi review server", () => {
     mkdirSync(apiDir, { recursive: true });
     process.env.HOME = homeDir;
     process.env.PLANNOTATOR_PORT = String(await reservePort());
-    process.env.PLANNOTATOR_SEM_PATH = makeMockSem(semDir, { runCwdLogPath: cwdLogPath, inputLogPath });
+    process.env.PLANNOTATOR_SEM_PATH = makeMockSem(semDir, {
+      runCwdLogPath: cwdLogPath,
+      inputLogPath,
+    });
 
     git(apiDir, ["init"]);
     git(apiDir, ["branch", "-M", "main"]);
@@ -1199,14 +1237,17 @@ describe("pi review server", () => {
     git(apiDir, ["commit", "-m", "initial"]);
     writeFileSync(join(apiDir, "tracked.txt"), "after\n", "utf-8");
 
-    const workspace = await WorkspaceReviewSession.create({
-      getVcsContext,
-      runVcsDiff,
-      getVcsFileContentsForDiff,
-      canStageFiles,
-      stageFile,
-      unstageFile,
-    }, root);
+    const workspace = await WorkspaceReviewSession.create(
+      {
+        getVcsContext,
+        runVcsDiff,
+        getVcsFileContentsForDiff,
+        canStageFiles,
+        stageFile,
+        unstageFile,
+      },
+      root,
+    );
 
     const server = await startReviewServer({
       rawPatch: workspace.rawPatch,
@@ -1239,7 +1280,9 @@ describe("pi review server", () => {
       } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
       expect(semanticPayload.status).toBe("ok");
       expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(root));
-      expect(readFileSync(inputLogPath, "utf-8")).toContain("diff --git a/api/tracked.txt b/api/tracked.txt");
+      expect(readFileSync(inputLogPath, "utf-8")).toContain(
+        "diff --git a/api/tracked.txt b/api/tracked.txt",
+      );
 
       const switchResponse = await fetch(`${server.url}/api/diff/switch`, {
         method: "POST",
@@ -1262,7 +1305,9 @@ describe("pi review server", () => {
       });
       expect(currentResponse.status).toBe(200);
 
-      const fileContentResponse = await fetch(`${server.url}/api/file-content?path=api/tracked.txt`);
+      const fileContentResponse = await fetch(
+        `${server.url}/api/file-content?path=api/tracked.txt`,
+      );
       expect(fileContentResponse.status).toBe(200);
       const fileContent: {
         oldContent: string | null;
@@ -1440,151 +1485,157 @@ describe("pi review server", () => {
     }
   }, 15_000);
 
-  testIfJj("supports JJ local review modes through the Pi server", async () => {
-    const homeDir = makeTempDir("plannotator-pi-home-");
-    process.env.HOME = homeDir;
-    process.env.XDG_CONFIG_HOME = join(homeDir, ".config");
-    const repoDir = initJjRepo();
-    process.chdir(repoDir);
-    process.env.PLANNOTATOR_PORT = String(await reservePort());
+  testIfJj(
+    "supports JJ local review modes through the Pi server",
+    async () => {
+      const homeDir = makeTempDir("plannotator-pi-home-");
+      process.env.HOME = homeDir;
+      process.env.XDG_CONFIG_HOME = join(homeDir, ".config");
+      const repoDir = initJjRepo();
+      process.chdir(repoDir);
+      process.env.PLANNOTATOR_PORT = String(await reservePort());
 
-    const vcsContext = await getVcsContext(repoDir);
-    expect(vcsContext.vcsType).toBe("jj");
-    const expectedJjBase = vcsContext.defaultBranch;
-    const prepared = await prepareLocalReviewDiff({
-      cwd: repoDir,
-      requestedDiffType: "merge-base",
-      requestedBase: "main",
-      configuredDiffType: "unstaged",
-    });
-    expect(prepared.gitContext.vcsType).toBe("jj");
-    expect(prepared.diffType).toBe("jj-current");
-    expect(prepared.base).toBe(expectedJjBase);
-
-    const forcedGit = await prepareLocalReviewDiff({
-      cwd: repoDir,
-      vcsType: "git",
-      requestedDiffType: "unstaged",
-      configuredDiffType: "unstaged",
-    });
-    expect(forcedGit.gitContext.vcsType).toBe("git");
-    expect(forcedGit.diffType).toBe("unstaged");
-    expect(forcedGit.rawPatch).toContain("tracked.txt");
-
-    const forcedGitServer = await startReviewServer({
-      rawPatch: forcedGit.rawPatch,
-      gitRef: forcedGit.gitRef,
-      error: forcedGit.error,
-      diffType: forcedGit.diffType,
-      gitContext: forcedGit.gitContext,
-      initialBase: forcedGit.base,
-      origin: "pi",
-      htmlContent: "<!doctype html><html><body>review</body></html>",
-    });
-    try {
-      const switchResponse = await fetch(`${forcedGitServer.url}/api/diff/switch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ diffType: "merge-base", base: "main" }),
+      const vcsContext = await getVcsContext(repoDir);
+      expect(vcsContext.vcsType).toBe("jj");
+      const expectedJjBase = vcsContext.defaultBranch;
+      const prepared = await prepareLocalReviewDiff({
+        cwd: repoDir,
+        requestedDiffType: "merge-base",
+        requestedBase: "main",
+        configuredDiffType: "unstaged",
       });
-      expect(switchResponse.status).toBe(200);
-      const switched: {
-        gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-      } = await switchResponse.json();
-      expect(switched.gitContext?.vcsType).toBe("git");
-      expect(switched.gitContext?.diffOptions.map((option) => option.id)).toContain("merge-base");
-      expect(switched.gitContext?.diffOptions.map((option) => option.id)).not.toContain("jj-current");
-    } finally {
-      forcedGitServer.stop();
-    }
+      expect(prepared.gitContext.vcsType).toBe("jj");
+      expect(prepared.diffType).toBe("jj-current");
+      expect(prepared.base).toBe(expectedJjBase);
 
-    process.env.PLANNOTATOR_PORT = String(await reservePort());
-    const server = await startReviewServer({
-      rawPatch: prepared.rawPatch,
-      gitRef: prepared.gitRef,
-      error: prepared.error,
-      diffType: prepared.diffType,
-      gitContext: prepared.gitContext,
-      initialBase: prepared.base,
-      origin: "pi",
-      htmlContent: "<!doctype html><html><body>review</body></html>",
-    });
-
-    try {
-      const initial: {
-        diffType: string;
-        rawPatch: string;
-        base?: string;
-        gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-      } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
-      expect(initial.diffType).toBe("jj-current");
-      expect(initial.base).toBe(expectedJjBase);
-      expect(initial.gitContext?.vcsType).toBe("jj");
-      const optionIds = initial.gitContext?.diffOptions.map((option) => option.id) ?? [];
-      expect(optionIds).toContain("jj-current");
-      expect(optionIds).toContain("jj-last");
-      expect(optionIds).toContain("jj-line");
-      expect(optionIds).toContain("jj-all");
-      expect(initial.rawPatch).toContain("tracked.txt");
-      expect(initial.rawPatch).toContain("+after");
-
-      const lastResponse = await fetch(`${server.url}/api/diff/switch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ diffType: "jj-last" }),
+      const forcedGit = await prepareLocalReviewDiff({
+        cwd: repoDir,
+        vcsType: "git",
+        requestedDiffType: "unstaged",
+        configuredDiffType: "unstaged",
       });
-      expect(lastResponse.status).toBe(200);
-      const last: { rawPatch: string; diffType: string } = await lastResponse.json();
-      expect(last.diffType).toBe("jj-last");
-      expect(last.rawPatch).toContain("last.txt");
+      expect(forcedGit.gitContext.vcsType).toBe("git");
+      expect(forcedGit.diffType).toBe("unstaged");
+      expect(forcedGit.rawPatch).toContain("tracked.txt");
 
-      for (const nextType of ["jj-line", "jj-all"] as const) {
-        const response = await fetch(`${server.url}/api/diff/switch`, {
+      const forcedGitServer = await startReviewServer({
+        rawPatch: forcedGit.rawPatch,
+        gitRef: forcedGit.gitRef,
+        error: forcedGit.error,
+        diffType: forcedGit.diffType,
+        gitContext: forcedGit.gitContext,
+        initialBase: forcedGit.base,
+        origin: "pi",
+        htmlContent: "<!doctype html><html><body>review</body></html>",
+      });
+      try {
+        const switchResponse = await fetch(`${forcedGitServer.url}/api/diff/switch`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ diffType: nextType }),
+          body: JSON.stringify({ diffType: "merge-base", base: "main" }),
         });
-        expect(response.status).toBe(200);
-        const payload: { diffType: string; rawPatch: string } = await response.json();
-        expect(payload.diffType).toBe(nextType);
-        expect(payload.rawPatch).toContain("tracked.txt");
+        expect(switchResponse.status).toBe(200);
+        const switched: {
+          gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
+        } = await switchResponse.json();
+        expect(switched.gitContext?.vcsType).toBe("git");
+        expect(switched.gitContext?.diffOptions.map((option) => option.id)).toContain("merge-base");
+        expect(switched.gitContext?.diffOptions.map((option) => option.id)).not.toContain(
+          "jj-current",
+        );
+      } finally {
+        forcedGitServer.stop();
       }
 
-      const hideWhitespaceResponse = await fetch(`${server.url}/api/diff/switch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ diffType: "jj-current", hideWhitespace: true }),
+      process.env.PLANNOTATOR_PORT = String(await reservePort());
+      const server = await startReviewServer({
+        rawPatch: prepared.rawPatch,
+        gitRef: prepared.gitRef,
+        error: prepared.error,
+        diffType: prepared.diffType,
+        gitContext: prepared.gitContext,
+        initialBase: prepared.base,
+        origin: "pi",
+        htmlContent: "<!doctype html><html><body>review</body></html>",
       });
-      expect(hideWhitespaceResponse.status).toBe(200);
-      const hidden: { rawPatch: string } = await hideWhitespaceResponse.json();
-      expect(hidden.rawPatch).toContain("+after");
-      expect(hidden.rawPatch).not.toContain("+const  x = 1;");
 
-      const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
-      expect(fileContentResponse.status).toBe(200);
-      const fileContent: {
-        oldContent: string | null;
-        newContent: string | null;
-      } = await fileContentResponse.json();
-      expect(fileContent.oldContent).toBe("before\n");
-      expect(fileContent.newContent).toBe("after\n");
+      try {
+        const initial: {
+          diffType: string;
+          rawPatch: string;
+          base?: string;
+          gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
+        } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
+        expect(initial.diffType).toBe("jj-current");
+        expect(initial.base).toBe(expectedJjBase);
+        expect(initial.gitContext?.vcsType).toBe("jj");
+        const optionIds = initial.gitContext?.diffOptions.map((option) => option.id) ?? [];
+        expect(optionIds).toContain("jj-current");
+        expect(optionIds).toContain("jj-last");
+        expect(optionIds).toContain("jj-line");
+        expect(optionIds).toContain("jj-all");
+        expect(initial.rawPatch).toContain("tracked.txt");
+        expect(initial.rawPatch).toContain("+after");
 
-      const stageResponse = await fetch(`${server.url}/api/git-add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filePath: "tracked.txt" }),
-      });
-      expect(stageResponse.status).toBe(400);
-      expect(await stageResponse.json()).toEqual({ error: "Staging not available" });
+        const lastResponse = await fetch(`${server.url}/api/diff/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ diffType: "jj-last" }),
+        });
+        expect(lastResponse.status).toBe(200);
+        const last: { rawPatch: string; diffType: string } = await lastResponse.json();
+        expect(last.diffType).toBe("jj-last");
+        expect(last.rawPatch).toContain("last.txt");
 
-      await fetch(`${server.url}/api/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approved: true, feedback: "LGTM", annotations: [] }),
-      });
-      await server.waitForDecision();
-    } finally {
-      server.stop();
-    }
-  }, 20_000);
+        for (const nextType of ["jj-line", "jj-all"] as const) {
+          const response = await fetch(`${server.url}/api/diff/switch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ diffType: nextType }),
+          });
+          expect(response.status).toBe(200);
+          const payload: { diffType: string; rawPatch: string } = await response.json();
+          expect(payload.diffType).toBe(nextType);
+          expect(payload.rawPatch).toContain("tracked.txt");
+        }
+
+        const hideWhitespaceResponse = await fetch(`${server.url}/api/diff/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ diffType: "jj-current", hideWhitespace: true }),
+        });
+        expect(hideWhitespaceResponse.status).toBe(200);
+        const hidden: { rawPatch: string } = await hideWhitespaceResponse.json();
+        expect(hidden.rawPatch).toContain("+after");
+        expect(hidden.rawPatch).not.toContain("+const  x = 1;");
+
+        const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
+        expect(fileContentResponse.status).toBe(200);
+        const fileContent: {
+          oldContent: string | null;
+          newContent: string | null;
+        } = await fileContentResponse.json();
+        expect(fileContent.oldContent).toBe("before\n");
+        expect(fileContent.newContent).toBe("after\n");
+
+        const stageResponse = await fetch(`${server.url}/api/git-add`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath: "tracked.txt" }),
+        });
+        expect(stageResponse.status).toBe(400);
+        expect(await stageResponse.json()).toEqual({ error: "Staging not available" });
+
+        await fetch(`${server.url}/api/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approved: true, feedback: "LGTM", annotations: [] }),
+        });
+        await server.waitForDecision();
+      } finally {
+        server.stop();
+      }
+    },
+    20_000,
+  );
 });

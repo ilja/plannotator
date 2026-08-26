@@ -1,4 +1,4 @@
-import type { CodeAnnotation, SelectedLineRange } from '@plannotator/ui/types';
+import type { CodeAnnotation, SelectedLineRange } from "@plannotator/ui/types";
 
 /**
  * True when an annotation belongs to the active PR + diff-scope (or carries no
@@ -20,7 +20,7 @@ export function annotationMatchesPrScope(
 
 /** True when an annotation is file-scoped (whole-file comment, not a line/general one). */
 export function isFileScopedAnnotation(a: CodeAnnotation): boolean {
-  return (a.scope ?? 'line') === 'file';
+  return (a.scope ?? "line") === "file";
 }
 
 /**
@@ -34,6 +34,6 @@ export function lineRangeForAnnotation(a: CodeAnnotation): SelectedLineRange {
   return {
     start: Math.min(a.lineStart, a.lineEnd),
     end: Math.max(a.lineStart, a.lineEnd),
-    side: a.side === 'new' ? 'additions' : 'deletions',
+    side: a.side === "new" ? "additions" : "deletions",
   };
 }

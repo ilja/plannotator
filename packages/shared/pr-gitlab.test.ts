@@ -20,8 +20,8 @@ describe("fetchGlMR", () => {
       "--- a/package-lock.json",
       "+++ b/package-lock.json",
       "@@ -1,3 +1,3 @@",
-      "-  \"old\": true",
-      "+  \"new\": true",
+      '-  "old": true',
+      '+  "new": true',
       "diff --git a/tests/snap.png b/tests/snap.png",
       "new file mode 100644",
       "index 0000000000000000000000000000000000000000..4444444444444444444444444444444444444444",
@@ -129,10 +129,18 @@ function gitlabRuntime(opts: {
       calls.push([command, ...args].join(" "));
       const endpoint = args[1] ?? "";
       if (endpoint.endsWith("/raw_diffs")) {
-        return { stdout: opts.rawDiffs.stdout ?? "", stderr: opts.rawDiffs.stderr ?? "", exitCode: opts.rawDiffs.exitCode };
+        return {
+          stdout: opts.rawDiffs.stdout ?? "",
+          stderr: opts.rawDiffs.stderr ?? "",
+          exitCode: opts.rawDiffs.exitCode,
+        };
       }
       if (endpoint.includes("/diffs?per_page=100")) {
-        return { stdout: opts.diffs?.stdout ?? "", stderr: opts.diffs?.stderr ?? "", exitCode: opts.diffs?.exitCode ?? 1 };
+        return {
+          stdout: opts.diffs?.stdout ?? "",
+          stderr: opts.diffs?.stderr ?? "",
+          exitCode: opts.diffs?.exitCode ?? 1,
+        };
       }
       if (/merge_requests\/\d+$/.test(endpoint)) {
         return { stdout: metadata, stderr: "", exitCode: 0 };
@@ -202,9 +210,9 @@ describe("fetchGlMR metadata boundary", () => {
   test("preserves the explicit missing diff refs error", async () => {
     for (const diff_refs of [null, undefined]) {
       const metadata = { ...validMetadata, diff_refs };
-      await expect(fetchGlMR(gitlabMetadataRuntime(JSON.stringify(metadata)).runtime, REF)).rejects.toThrow(
-        /MR has no diff refs/,
-      );
+      await expect(
+        fetchGlMR(gitlabMetadataRuntime(JSON.stringify(metadata)).runtime, REF),
+      ).rejects.toThrow(/MR has no diff refs/);
     }
   });
 
@@ -215,7 +223,12 @@ describe("fetchGlMR metadata boundary", () => {
     const result = await fetchGlMR(runtime, REF);
 
     expect(calls).toContain("glab api projects/123");
-    expect(result.metadata).toMatchObject({ title: "", author: "u", url: "", defaultBranch: "main" });
+    expect(result.metadata).toMatchObject({
+      title: "",
+      author: "u",
+      url: "",
+      defaultBranch: "main",
+    });
   });
 
   test("falls back to the encoded project path for malformed target ids and project metadata", async () => {
@@ -244,7 +257,11 @@ describe("getGlUser", () => {
     ];
 
     for (const response of responses) {
-      const runtime: PRRuntime = { async runCommand() { return { stdout: response.stdout, stderr: "", exitCode: response.exitCode }; } };
+      const runtime: PRRuntime = {
+        async runCommand() {
+          return { stdout: response.stdout, stderr: "", exitCode: response.exitCode };
+        },
+      };
       await expect(getGlUser(runtime, "gitlab.com")).resolves.toBe(response.expected);
     }
   });
@@ -268,9 +285,10 @@ describe("submitGlMRReview diff refs", () => {
   const reviewRef = { platform: "gitlab" as const, host: "gitlab.com", projectPath: "g/p", iid: 1 };
   const fileComments = [{ path: "src/a.ts", line: 3, side: "RIGHT" as const, body: "Review" }];
 
-  async function submitAndReadPosition(
-    metadataResponse: { stdout: string; exitCode: number },
-  ): Promise<{ base_sha: string; start_sha: string }> {
+  async function submitAndReadPosition(metadataResponse: {
+    stdout: string;
+    exitCode: number;
+  }): Promise<{ base_sha: string; start_sha: string }> {
     let position = { base_sha: "", start_sha: "" };
     const runtime: PRRuntime = {
       async runCommand() {
@@ -278,9 +296,11 @@ describe("submitGlMRReview diff refs", () => {
       },
       async runCommandWithInput(command, args, input) {
         const payload = Schema.decodeUnknownSync(
-          Schema.fromJsonString(Schema.Struct({
-            position: Schema.Struct({ base_sha: Schema.String, start_sha: Schema.String }),
-          })),
+          Schema.fromJsonString(
+            Schema.Struct({
+              position: Schema.Struct({ base_sha: Schema.String, start_sha: Schema.String }),
+            }),
+          ),
         )(input);
         position = payload.position;
         return { stdout: "", stderr: "", exitCode: 0 };
@@ -293,7 +313,9 @@ describe("submitGlMRReview diff refs", () => {
   test("uses valid diff refs and independent fallbacks for malformed siblings", async () => {
     const cases = [
       {
-        response: JSON.stringify({ diff_refs: { base_sha: "base", start_sha: "start", head_sha: "ignored" } }),
+        response: JSON.stringify({
+          diff_refs: { base_sha: "base", start_sha: "start", head_sha: "ignored" },
+        }),
         expected: { base_sha: "base", start_sha: "start" },
       },
       {
@@ -304,13 +326,18 @@ describe("submitGlMRReview diff refs", () => {
         response: JSON.stringify({ diff_refs: { base_sha: "base", start_sha: 42 } }),
         expected: { base_sha: "base", start_sha: "head-fallback" },
       },
-      { response: JSON.stringify({ diff_refs: null }), expected: { base_sha: "head-fallback", start_sha: "head-fallback" } },
+      {
+        response: JSON.stringify({ diff_refs: null }),
+        expected: { base_sha: "head-fallback", start_sha: "head-fallback" },
+      },
       { response: "not json", expected: { base_sha: "head-fallback", start_sha: "head-fallback" } },
       { response: "", expected: { base_sha: "head-fallback", start_sha: "head-fallback" } },
     ];
 
     for (const { response, expected } of cases) {
-      await expect(submitAndReadPosition({ stdout: response, exitCode: 0 })).resolves.toMatchObject(expected);
+      await expect(submitAndReadPosition({ stdout: response, exitCode: 0 })).resolves.toMatchObject(
+        expected,
+      );
     }
     await expect(submitAndReadPosition({ stdout: "ignored", exitCode: 1 })).resolves.toMatchObject({
       base_sha: "head-fallback",
@@ -341,7 +368,8 @@ describe("fetchGlMRContext labels and notes", () => {
       const runtime: PRRuntime = {
         async runCommand(command, args) {
           const endpoint = args[1] ?? "";
-          if (endpoint.endsWith("/merge_requests/1")) return { stdout: mrRoot, stderr: "", exitCode: 0 };
+          if (endpoint.endsWith("/merge_requests/1"))
+            return { stdout: mrRoot, stderr: "", exitCode: 0 };
           if (endpoint.endsWith("/notes?sort=asc&per_page=100")) {
             return {
               stdout: JSON.stringify([{ id: 1, body: "note", author: { username: "dev" } }]),
@@ -407,7 +435,8 @@ describe("fetchGlMRContext labels and notes", () => {
           };
         }
         if (endpoint.endsWith("/approvals")) return { stdout: "{}", stderr: "", exitCode: 0 };
-        if (endpoint.endsWith("/pipelines?per_page=5")) return { stdout: "[]", stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/pipelines?per_page=5"))
+          return { stdout: "[]", stderr: "", exitCode: 0 };
         if (endpoint.endsWith("/closes_issues")) return { stdout: "[]", stderr: "", exitCode: 0 };
         return { stdout: "", stderr: "unexpected", exitCode: 1 };
       },
@@ -440,7 +469,12 @@ describe("fetchGlMRContext labels and notes", () => {
 });
 
 describe("fetchGlMRContext approvals, checks, and linked issues", () => {
-  const contextRef = { platform: "gitlab" as const, host: "gitlab.com", projectPath: "g/p", iid: 1 };
+  const contextRef = {
+    platform: "gitlab" as const,
+    host: "gitlab.com",
+    projectPath: "g/p",
+    iid: 1,
+  };
 
   test("retains valid approvers, jobs, and linked issues around malformed siblings", async () => {
     const calls: string[] = [];
@@ -448,7 +482,8 @@ describe("fetchGlMRContext approvals, checks, and linked issues", () => {
       async runCommand(command, args) {
         calls.push([command, ...args].join(" "));
         const endpoint = args[1] ?? "";
-        if (endpoint.endsWith("/merge_requests/1")) return { stdout: JSON.stringify({ state: "opened" }), stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/merge_requests/1"))
+          return { stdout: JSON.stringify({ state: "opened" }), stderr: "", exitCode: 0 };
         if (endpoint.endsWith("/approvals")) {
           return {
             stdout: JSON.stringify({
@@ -488,7 +523,8 @@ describe("fetchGlMRContext approvals, checks, and linked issues", () => {
             exitCode: 0,
           };
         }
-        if (endpoint.endsWith("/notes?sort=asc&per_page=100")) return { stdout: "[]", stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/notes?sort=asc&per_page=100"))
+          return { stdout: "[]", stderr: "", exitCode: 0 };
         return { stdout: "", stderr: "unexpected", exitCode: 1 };
       },
     };
@@ -528,8 +564,10 @@ describe("fetchGlMRContext approvals, checks, and linked issues", () => {
       async runCommand(command, args) {
         calls.push([command, ...args].join(" "));
         const endpoint = args[1] ?? "";
-        if (endpoint.endsWith("/merge_requests/1")) return { stdout: "{}", stderr: "", exitCode: 0 };
-        if (endpoint.endsWith("/pipelines?per_page=5")) return { stdout: JSON.stringify([{ id: {} }, { id: 9 }]), stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/merge_requests/1"))
+          return { stdout: "{}", stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/pipelines?per_page=5"))
+          return { stdout: JSON.stringify([{ id: {} }, { id: 9 }]), stderr: "", exitCode: 0 };
         return { stdout: "[]", stderr: "", exitCode: 0 };
       },
     };
@@ -543,11 +581,17 @@ describe("fetchGlMRContext approvals, checks, and linked issues", () => {
     const runtime: PRRuntime = {
       async runCommand(command, args) {
         const endpoint = args[1] ?? "";
-        if (endpoint.endsWith("/merge_requests/1")) return { stdout: JSON.stringify({ state: "opened" }), stderr: "", exitCode: 0 };
-        if (endpoint.endsWith("/approvals") || endpoint.endsWith("/pipelines?per_page=5") || endpoint.endsWith("/closes_issues")) {
+        if (endpoint.endsWith("/merge_requests/1"))
+          return { stdout: JSON.stringify({ state: "opened" }), stderr: "", exitCode: 0 };
+        if (
+          endpoint.endsWith("/approvals") ||
+          endpoint.endsWith("/pipelines?per_page=5") ||
+          endpoint.endsWith("/closes_issues")
+        ) {
           return { stdout: "not json", stderr: "", exitCode: 0 };
         }
-        if (endpoint.endsWith("/notes?sort=asc&per_page=100")) return { stdout: "[]", stderr: "", exitCode: 0 };
+        if (endpoint.endsWith("/notes?sort=asc&per_page=100"))
+          return { stdout: "[]", stderr: "", exitCode: 0 };
         return { stdout: "", stderr: "unexpected", exitCode: 1 };
       },
     };

@@ -1,18 +1,66 @@
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
+import DOMPurify from "dompurify";
+import { marked } from "marked";
 
 const ALLOWED_TAGS = [
-  'sub', 'sup', 'b', 'i', 'em', 'strong', 'br', 'hr', 'p', 'span',
-  'del', 'ins', 'mark', 'small', 'abbr', 'kbd', 'var', 'samp',
-  'details', 'summary', 'blockquote', 'ul', 'ol', 'li',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code',
-  'table', 'thead', 'tbody', 'tr', 'th', 'td',
-  'a', 'img', 'div', 'section', 'article', 'aside', 'header', 'footer',
+  "sub",
+  "sup",
+  "b",
+  "i",
+  "em",
+  "strong",
+  "br",
+  "hr",
+  "p",
+  "span",
+  "del",
+  "ins",
+  "mark",
+  "small",
+  "abbr",
+  "kbd",
+  "var",
+  "samp",
+  "details",
+  "summary",
+  "blockquote",
+  "ul",
+  "ol",
+  "li",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "pre",
+  "code",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
+  "a",
+  "img",
+  "div",
+  "section",
+  "article",
+  "aside",
+  "header",
+  "footer",
 ];
 
 const ALLOWED_ATTR = [
-  'href', 'src', 'alt', 'title', 'rel', 'target', 'width', 'height', 'align',
-  'open', // preserve <details open> default-expanded state
+  "href",
+  "src",
+  "alt",
+  "title",
+  "rel",
+  "target",
+  "width",
+  "height",
+  "align",
+  "open", // preserve <details open> default-expanded state
 ];
 
 /**

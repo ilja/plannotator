@@ -9,7 +9,7 @@
  */
 export async function openEditorDiff(
   oldPath: string,
-  newPath: string
+  newPath: string,
 ): Promise<{ ok: true } | { error: string }> {
   try {
     const proc = Bun.spawn(["code", "--diff", oldPath, newPath], {

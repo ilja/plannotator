@@ -4,10 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AGENT_TERMINAL_WS_BASE_PATH } from "@plannotator/shared/agent-terminal";
-import {
-  createBunAgentTerminalBridge,
-  parseAgentTerminalReadyLine,
-} from "./agent-terminal";
+import { createBunAgentTerminalBridge, parseAgentTerminalReadyLine } from "./agent-terminal";
 
 describe("agent terminal sidecar readiness", () => {
   test("returns the WebSocket URL from a successful readiness line", () => {
@@ -52,7 +49,9 @@ describe("bun agent terminal bridge", () => {
     const corePath = join(tmp, "webtui-core.mjs");
     const serverPath = join(tmp, "webtui-server.mjs");
 
-    writeFileSync(corePath, `
+    writeFileSync(
+      corePath,
+      `
 export function listBuiltInAgents() {
   return ["claude"];
 }
@@ -69,8 +68,11 @@ export function buildAgentLaunchPlan(options) {
     promptDelivery: "none",
   };
 }
-`);
-    writeFileSync(serverPath, `
+`,
+    );
+    writeFileSync(
+      serverPath,
+      `
 import { writeFileSync } from "node:fs";
 
 export class NodePtyBackend {
@@ -96,7 +98,8 @@ export function createNodePtyWebSocketServer(options) {
     address: () => null,
   };
 }
-`);
+`,
+    );
 
     const sidecarPath = join(import.meta.dir, "agent-terminal-node-sidecar.mjs");
     const proc = Bun.spawn([nodePath, sidecarPath], {
@@ -247,7 +250,10 @@ async function waitForFile(path: string): Promise<void> {
   throw new Error(`Timed out waiting for ${path}`);
 }
 
-async function readFirstLine(stream: ReadableStream<Uint8Array> | null, timeoutMs: number): Promise<string> {
+async function readFirstLine(
+  stream: ReadableStream<Uint8Array> | null,
+  timeoutMs: number,
+): Promise<string> {
   if (!stream) throw new Error("Missing stream");
   const reader = stream.getReader();
   const decoder = new TextDecoder();

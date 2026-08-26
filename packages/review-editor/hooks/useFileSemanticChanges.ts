@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   decodeSemanticDiffResponse,
   type SemanticDiffBinaryChange,
   type SemanticDiffChange,
   type SemanticDiffResponse,
-} from '@plannotator/shared/semantic-diff-types';
-import { isOrphanChange } from '../dock/panels/semanticDiffShared';
+} from "@plannotator/shared/semantic-diff-types";
+import { isOrphanChange } from "../dock/panels/semanticDiffShared";
 
 /**
  * Single shared fetch of the semantic diff, cached by the active patch so every
@@ -28,8 +28,8 @@ const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
 const FAILURE_RETRY_COOLDOWN_MS = 60_000;
 
 async function fetchSemanticDiff(): Promise<SemanticDiffResponse> {
-  const res = await fetch('/api/semantic-diff');
-  if (!res.ok) throw new Error('Semantic diff failed');
+  const res = await fetch("/api/semantic-diff");
+  if (!res.ok) throw new Error("Semantic diff failed");
   const data: unknown = await res.json();
   return decodeSemanticDiffResponse(data);
 }
@@ -45,13 +45,13 @@ function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {
         result = await fetchSemanticDiff();
       } catch (error) {
         result = {
-          status: 'error',
-          reason: 'fetch-failed',
+          status: "error",
+          reason: "fetch-failed",
           message: error instanceof Error ? error.message : String(error),
         };
       }
       // 'unavailable' means sem isn't installed — retrying won't change that.
-      if (result.status !== 'error' || i >= RETRY_DELAYS_MS.length) return result;
+      if (result.status !== "error" || i >= RETRY_DELAYS_MS.length) return result;
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[i]));
       if (cacheKey !== rawPatch) return result; // patch changed mid-retry; let the new fetch win
     }
@@ -60,10 +60,13 @@ function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {
   const promise = attempt().then((data) => {
     // Logged once per patch (the promise is cached) rather than per badge, so a
     // systemic failure leaves a trace instead of every badge vanishing silently.
-    if (data.status !== 'ok') {
-      console.error('Failed to load semantic diff for file badges:', data.message ?? data.reason ?? data.status);
+    if (data.status !== "ok") {
+      console.error(
+        "Failed to load semantic diff for file badges:",
+        data.message ?? data.reason ?? data.status,
+      );
     }
-    if (data.status === 'error' && cacheKey === rawPatch && cachePromise === promise) {
+    if (data.status === "error" && cacheKey === rawPatch && cachePromise === promise) {
       setTimeout(() => {
         if (cacheKey === rawPatch && cachePromise === promise) {
           cacheKey = null;
@@ -91,7 +94,9 @@ export function useFileSemanticChanges(
   rawPatch: string,
   enabled: boolean,
 ): FileSemanticChanges {
-  const [state, setState] = useState<FileSemanticChanges>(enabled ? { ...EMPTY, loading: true } : EMPTY);
+  const [state, setState] = useState<FileSemanticChanges>(
+    enabled ? { ...EMPTY, loading: true } : EMPTY,
+  );
 
   useEffect(() => {
     if (!enabled) {
@@ -104,7 +109,7 @@ export function useFileSemanticChanges(
 
     loadSemanticDiff(rawPatch).then((data) => {
       if (cancelled) return;
-      if (data.status !== 'ok') {
+      if (data.status !== "ok") {
         setState(EMPTY);
         return;
       }

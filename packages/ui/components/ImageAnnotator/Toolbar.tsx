@@ -1,6 +1,6 @@
-import React from 'react';
-import type { Tool } from './types';
-import { COLORS } from './types';
+import React from "react";
+import type { Tool } from "./types";
+import { COLORS } from "./types";
 
 interface ToolbarProps {
   tool: Tool;
@@ -69,9 +69,9 @@ const CheckIcon = () => (
 );
 
 const TOOLS: { id: Tool; icon: React.FC; label: string }[] = [
-  { id: 'pen', icon: PenIcon, label: 'Pen (1)' },
-  { id: 'arrow', icon: ArrowIcon, label: 'Arrow (2)' },
-  { id: 'circle', icon: CircleIcon, label: 'Circle (3)' },
+  { id: "pen", icon: PenIcon, label: "Pen (1)" },
+  { id: "arrow", icon: ArrowIcon, label: "Arrow (2)" },
+  { id: "circle", icon: CircleIcon, label: "Circle (3)" },
 ];
 
 const STROKE_SIZES = [3, 6, 10, 16, 24];
@@ -104,8 +104,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             title={label}
             className={`p-1.5 rounded transition-colors ${
               tool === id
-                ? 'bg-primary text-primary-foreground'
-                : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
             <Icon />
@@ -124,8 +124,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           title="Smaller stroke"
           className={`p-1 rounded transition-colors ${
             canDecrease
-              ? 'hover:bg-muted text-muted-foreground hover:text-foreground'
-              : 'text-muted-foreground/30 cursor-not-allowed'
+              ? "hover:bg-muted text-muted-foreground hover:text-foreground"
+              : "text-muted-foreground/30 cursor-not-allowed"
           }`}
         >
           <MinusIcon />
@@ -150,8 +150,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           title="Larger stroke"
           className={`p-1 rounded transition-colors ${
             canIncrease
-              ? 'hover:bg-muted text-muted-foreground hover:text-foreground'
-              : 'text-muted-foreground/30 cursor-not-allowed'
+              ? "hover:bg-muted text-muted-foreground hover:text-foreground"
+              : "text-muted-foreground/30 cursor-not-allowed"
           }`}
         >
           <PlusIcon />
@@ -168,7 +168,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             onClick={() => onColorChange(c)}
             className={`w-5 h-5 rounded-full border-2 transition-transform ${
-              color === c ? 'scale-110 border-foreground' : 'border-transparent hover:scale-105'
+              color === c ? "scale-110 border-foreground" : "border-transparent hover:scale-105"
             }`}
             style={{ backgroundColor: c }}
           />
@@ -185,8 +185,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         title="Undo (Cmd+Z)"
         className={`p-1.5 rounded transition-colors ${
           canUndo
-            ? 'hover:bg-muted text-muted-foreground hover:text-foreground'
-            : 'text-muted-foreground/30 cursor-not-allowed'
+            ? "hover:bg-muted text-muted-foreground hover:text-foreground"
+            : "text-muted-foreground/30 cursor-not-allowed"
         }`}
       >
         <UndoIcon />

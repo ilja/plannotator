@@ -1,22 +1,27 @@
-import React, { useEffect } from 'react';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { useReviewState } from '../ReviewStateContext';
-import { PRSummaryTab } from '../../components/PRSummaryTab';
-import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea';
+import React, { useEffect } from "react";
+import type { IDockviewPanelProps } from "dockview-react";
+import { useReviewState } from "../ReviewStateContext";
+import { PRSummaryTab } from "../../components/PRSummaryTab";
+import { OverlayScrollArea } from "@plannotator/ui/components/OverlayScrollArea";
 
 /**
  * Dock panel wrapper for PR Summary — renders the existing PRSummaryTab
  * component with data from ReviewStateContext.
  */
 export const ReviewPRSummaryPanel: React.FC<IDockviewPanelProps> = () => {
-  const { prMetadata, prContext, isPRContextLoading, prContextError, fetchPRContext } = useReviewState();
+  const { prMetadata, prContext, isPRContextLoading, prContextError, fetchPRContext } =
+    useReviewState();
 
   useEffect(() => {
     if (!prContext && !prContextError && !isPRContextLoading) fetchPRContext();
   }, [prContext, prContextError, isPRContextLoading, fetchPRContext]);
 
   if (!prMetadata) {
-    return <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No PR metadata</div>;
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+        No PR metadata
+      </div>
+    );
   }
 
   if (isPRContextLoading) {

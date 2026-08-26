@@ -228,7 +228,11 @@ export function parseSemVersion(stdout: string): string | null {
 
 async function resolveSem(runtime: SemanticDiffRuntime): Promise<ResolvedSem | SemResolveFailure> {
   for (const candidate of semCandidates(runtime)) {
-    if (candidate.explicit && isPathLike(candidate.command) && !runtime.fileExists(candidate.command)) {
+    if (
+      candidate.explicit &&
+      isPathLike(candidate.command) &&
+      !runtime.fileExists(candidate.command)
+    ) {
       return {
         status: "unavailable",
         reason: "sem-path-missing",
@@ -297,7 +301,8 @@ function valueAsBoolean(value: any): boolean | null {
 }
 
 function summaryFromJson(value: any): SemanticDiffSummary {
-  const summary: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
+  const summary: SummaryRecord =
+    Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
   return {
     fileCount: valueAsNumber(summary.fileCount) ?? 0,
     added: valueAsNumber(summary.added) ?? 0,
@@ -314,7 +319,8 @@ function summaryFromJson(value: any): SemanticDiffSummary {
 
 function changeFromJson(value: any): SemanticDiffChange | null {
   if (!(value instanceof Object)) return null;
-  const change: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
+  const change: SummaryRecord =
+    Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
   const changeType = valueAsString(change.changeType);
   const entityType = valueAsString(change.entityType);
   const entityName = valueAsString(change.entityName);
@@ -339,7 +345,8 @@ function changeFromJson(value: any): SemanticDiffChange | null {
 
 function binaryChangeFromJson(value: any): SemanticDiffBinaryChange | null {
   if (!(value instanceof Object)) return null;
-  const change: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
+  const change: SummaryRecord =
+    Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
   const filePath = valueAsString(change.filePath);
   if (!filePath) return null;
   return {
@@ -374,12 +381,15 @@ export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): Semanti
     };
   }
 
-  const payload: SummaryRecord = Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(parsed)) ?? {};
+  const payload: SummaryRecord =
+    Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(parsed)) ?? {};
   const changes = Array.isArray(payload.changes)
     ? payload.changes.map(changeFromJson).filter((change): change is SemanticDiffChange => !!change)
     : [];
   const binaryChanges = Array.isArray(payload.binaryChanges)
-    ? payload.binaryChanges.map(binaryChangeFromJson).filter((change): change is SemanticDiffBinaryChange => !!change)
+    ? payload.binaryChanges
+        .map(binaryChangeFromJson)
+        .filter((change): change is SemanticDiffBinaryChange => !!change)
     : [];
 
   return {
@@ -393,10 +403,14 @@ export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): Semanti
 }
 
 export function normalizeSemanticDiffFileExts(fileExts: string[] | undefined): string[] {
-  return Array.from(new Set((fileExts ?? [])
-    .map((ext) => ext.trim())
-    .filter(Boolean)
-    .map((ext) => ext.startsWith(".") ? ext : `.${ext}`)));
+  return Array.from(
+    new Set(
+      (fileExts ?? [])
+        .map((ext) => ext.trim())
+        .filter(Boolean)
+        .map((ext) => (ext.startsWith(".") ? ext : `.${ext}`)),
+    ),
+  );
 }
 
 export function semanticDiffFileExtsFromSearchParams(params: URLSearchParams): string[] {
@@ -423,7 +437,10 @@ export function semanticDiffCacheKey(input: {
 
 export class SemanticDiffResponseCache {
   private readonly cache = new Map<string, SemanticDiffResponse>();
-  private readonly failures = new Map<string, { response: SemanticDiffResponse; expiresAt: number }>();
+  private readonly failures = new Map<
+    string,
+    { response: SemanticDiffResponse; expiresAt: number }
+  >();
   private rawPatch: string | null = null;
 
   constructor(private readonly maxEntries = 8) {}
@@ -461,7 +478,12 @@ export class SemanticDiffResponseCache {
    * scrolling into a process stampede. The TTL keeps failures retryable
    * without letting request rate drive execution rate.
    */
-  setFailure(cacheKey: string, rawPatch: string, response: SemanticDiffResponse, ttlMs = 30_000): void {
+  setFailure(
+    cacheKey: string,
+    rawPatch: string,
+    response: SemanticDiffResponse,
+    ttlMs = 30_000,
+  ): void {
     this.syncPatch(rawPatch);
     this.failures.set(cacheKey, { response, expiresAt: Date.now() + ttlMs });
   }

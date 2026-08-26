@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useRef, useCallback, type ReactNode } from 'react';
-import { Popover, PopoverTrigger, PopoverContent } from './Popover';
+import React, { useState, useMemo, useRef, useCallback, type ReactNode } from "react";
+import { Popover, PopoverTrigger, PopoverContent } from "./Popover";
 
 interface SearchableSelectProps<T extends { id: string }> {
   items: T[];
@@ -11,7 +11,7 @@ interface SearchableSelectProps<T extends { id: string }> {
   headerContent?: ReactNode;
   placeholder?: string;
   emptyMessage?: string;
-  align?: 'start' | 'center' | 'end';
+  align?: "start" | "center" | "end";
   width?: string;
   onOpenChange?: (open: boolean) => void;
 }
@@ -24,14 +24,14 @@ export function SearchableSelect<T extends { id: string }>({
   renderItem,
   renderTrigger,
   headerContent,
-  placeholder = 'Search...',
-  emptyMessage = 'No results',
-  align = 'start',
-  width = 'w-64',
+  placeholder = "Search...",
+  emptyMessage = "No results",
+  align = "start",
+  width = "w-64",
   onOpenChange,
 }: SearchableSelectProps<T>) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,7 +45,7 @@ export function SearchableSelect<T extends { id: string }>({
     (next: boolean) => {
       setOpen(next);
       if (!next) {
-        setSearch('');
+        setSearch("");
         setFocusedIndex(-1);
       }
       onOpenChange?.(next);
@@ -54,7 +54,7 @@ export function SearchableSelect<T extends { id: string }>({
   );
 
   const scrollToIndex = useCallback((i: number) => {
-    listRef.current?.querySelector(`[data-index="${i}"]`)?.scrollIntoView({ block: 'nearest' });
+    listRef.current?.querySelector(`[data-index="${i}"]`)?.scrollIntoView({ block: "nearest" });
   }, []);
 
   const handleKeyDown = useCallback(
@@ -62,17 +62,17 @@ export function SearchableSelect<T extends { id: string }>({
       const len = filtered.length;
       if (len === 0) return;
 
-      if (e.key === 'ArrowDown') {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         const next = focusedIndex < len - 1 ? focusedIndex + 1 : 0;
         setFocusedIndex(next);
         scrollToIndex(next);
-      } else if (e.key === 'ArrowUp') {
+      } else if (e.key === "ArrowUp") {
         e.preventDefault();
         const next = focusedIndex > 0 ? focusedIndex - 1 : len - 1;
         setFocusedIndex(next);
         scrollToIndex(next);
-      } else if (e.key === 'Enter') {
+      } else if (e.key === "Enter") {
         e.preventDefault();
         if (focusedIndex >= 0 && filtered[focusedIndex]) {
           onSelect(filtered[focusedIndex]);
@@ -140,7 +140,7 @@ export function SearchableSelect<T extends { id: string }>({
                 }}
                 onMouseEnter={() => setFocusedIndex(i)}
                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                  focusedIndex === i ? 'bg-muted/50' : 'hover:bg-muted/40'
+                  focusedIndex === i ? "bg-muted/50" : "hover:bg-muted/40"
                 }`}
               >
                 {renderItem(item, {

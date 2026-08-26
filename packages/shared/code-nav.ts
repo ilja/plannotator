@@ -56,19 +56,23 @@ export interface CodeNavRuntime {
 
 /** HTTP request fields required to resolve code navigation. */
 const CodeNavSymbolSchema = Schema.String.pipe(
-  Schema.check(Schema.makeFilter((symbol) =>
-    symbol.trim() ? undefined : "symbol must be nonempty after trimming",
-  )),
+  Schema.check(
+    Schema.makeFilter((symbol) =>
+      symbol.trim() ? undefined : "symbol must be nonempty after trimming",
+    ),
+  ),
 );
 
 /** HTTP file path that remains within the review workspace. */
 const CodeNavFilePathSchema = Schema.String.pipe(
-  Schema.check(Schema.makeFilter((filePath) => {
-    if (!filePath.trim()) return "filePath must be nonempty after trimming";
-    return filePath.includes("..") || filePath.startsWith("/")
-      ? "filePath must be a safe relative path"
-      : undefined;
-  })),
+  Schema.check(
+    Schema.makeFilter((filePath) => {
+      if (!filePath.trim()) return "filePath must be nonempty after trimming";
+      return filePath.includes("..") || filePath.startsWith("/")
+        ? "filePath must be a safe relative path"
+        : undefined;
+    }),
+  ),
 );
 
 /** Code navigation request accepted at the HTTP boundary. Legacy cursor fields remain unvalidated. */
@@ -288,14 +292,10 @@ export function parseRgJsonOutput(
 
     const d = parsed.data;
     const snippet = d.lines.text.trimEnd();
-    const firstSubmatch = Array.isArray(d.submatches)
-      ? d.submatches[0]
-      : undefined;
+    const firstSubmatch = Array.isArray(d.submatches) ? d.submatches[0] : undefined;
     const column = Option.getOrUndefined(decodeRgSubmatch(firstSubmatch))?.start ?? 0;
     const kind = classifyMatch(snippet, symbol, language);
-    const filePath = d.path.text.startsWith("./")
-      ? d.path.text.slice(2)
-      : d.path.text;
+    const filePath = d.path.text.startsWith("./") ? d.path.text.slice(2) : d.path.text;
 
     locations.push({
       kind,
@@ -322,9 +322,7 @@ export function classifyMatch(
   const escaped = escapeRegex(symbol);
 
   if (language) {
-    const langPatterns = DEFINITION_PATTERNS.find((p) =>
-      p.languages.includes(language),
-    );
+    const langPatterns = DEFINITION_PATTERNS.find((p) => p.languages.includes(language));
     if (langPatterns) {
       for (const pattern of langPatterns.patterns) {
         const re = new RegExp(pattern.replace("SYMBOL", escaped));
@@ -414,11 +412,11 @@ interface CodeNavRequestValidationBody {
   readonly side?: unknown;
 }
 
-export function validateCodeNavRequest(
-  body: CodeNavRequestValidationBody | null,
-): string | null {
+export function validateCodeNavRequest(body: CodeNavRequestValidationBody | null): string | null {
   if (!body) return "Invalid request body";
-  const symbol = Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavSymbolSchema)(body.symbol));
+  const symbol = Option.getOrUndefined(
+    Schema.decodeUnknownOption(CodeNavSymbolSchema)(body.symbol),
+  );
   if (!symbol) {
     return "Missing or empty symbol";
   }
@@ -491,11 +489,7 @@ export async function resolveCodeNav(
     };
   }
 
-  const locations = parseRgJsonOutput(
-    result.stdout,
-    request.symbol,
-    request.language,
-  );
+  const locations = parseRgJsonOutput(result.stdout, request.symbol, request.language);
 
   const ranked = rankLocations(locations, {
     sourceFilePath: request.filePath,

@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 const CodeNavFileResponseSchema = Schema.Struct({
   content: Schema.String,

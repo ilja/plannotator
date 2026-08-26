@@ -30,11 +30,13 @@ const ParentSessionSchema = Schema.Struct({
 const CodeReviewContextSchema = Schema.Struct({
   patch: Schema.String,
   filePath: Schema.optionalKey(Schema.String),
-  lineRange: Schema.optionalKey(Schema.Struct({
-    start: Schema.Number,
-    end: Schema.Number,
-    side: Schema.Literals(["old", "new"]),
-  })),
+  lineRange: Schema.optionalKey(
+    Schema.Struct({
+      start: Schema.Number,
+      end: Schema.Number,
+      side: Schema.Literals(["old", "new"]),
+    }),
+  ),
   selectedCode: Schema.optionalKey(Schema.String),
   annotations: Schema.optionalKey(Schema.String),
 });
@@ -101,12 +103,14 @@ const AIModelSchema = Schema.Struct({
 
 export const AICapabilitiesResponseSchema = Schema.Struct({
   available: Schema.Boolean,
-  providers: Schema.Array(Schema.Struct({
-    id: Schema.String,
-    name: Schema.String,
-    capabilities: AIProviderCapabilitiesSchema,
-    models: Schema.Array(AIModelSchema),
-  })),
+  providers: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      capabilities: AIProviderCapabilitiesSchema,
+      models: Schema.Array(AIModelSchema),
+    }),
+  ),
   defaultProvider: Schema.Union([Schema.String, Schema.Null]),
 });
 
@@ -121,15 +125,17 @@ export const AbortResponseSchema = Schema.Struct({
   ok: Schema.Boolean,
 });
 
-export const SessionListResponseSchema = Schema.Array(Schema.Struct({
-  sessionId: Schema.String,
-  mode: Schema.Literals(["code-review", "annotate"]),
-  parentSessionId: Schema.Union([Schema.String, Schema.Null]),
-  createdAt: Schema.Number,
-  lastActiveAt: Schema.Number,
-  isActive: Schema.Boolean,
-  label: Schema.optionalKey(Schema.String),
-}));
+export const SessionListResponseSchema = Schema.Array(
+  Schema.Struct({
+    sessionId: Schema.String,
+    mode: Schema.Literals(["code-review", "annotate"]),
+    parentSessionId: Schema.Union([Schema.String, Schema.Null]),
+    createdAt: Schema.Number,
+    lastActiveAt: Schema.Number,
+    isActive: Schema.Boolean,
+    label: Schema.optionalKey(Schema.String),
+  }),
+);
 
 export type CreateSessionRequest = Schema.Schema.Type<typeof CreateSessionRequestSchema>;
 export type QueryRequest = Schema.Schema.Type<typeof QueryRequestSchema>;
@@ -188,7 +194,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
     "/api/ai/capabilities": async (_req: Request) => {
       await beforeCapabilities?.();
       const defaultEntry = registry.getDefault();
-      const providerDetails = registry.list().map(id => {
+      const providerDetails = registry.list().map((id) => {
         const p = registry.get(id)!;
         return {
           id,
@@ -218,21 +224,16 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       const { context, providerId, model, maxTurns, maxBudgetUsd } = body;
 
       if (!context?.mode) {
-        return Response.json(
-          { error: "Missing context.mode" },
-          { status: 400 }
-        );
+        return Response.json({ error: "Missing context.mode" }, { status: 400 });
       }
 
       // Resolve provider: by ID, or default
-      const provider = providerId
-        ? registry.get(providerId)
-        : registry.getDefault()?.provider;
+      const provider = providerId ? registry.get(providerId) : registry.getDefault()?.provider;
 
       if (!provider) {
         return Response.json(
           { error: providerId ? `Provider "${providerId}" not found` : "No AI provider available" },
-          { status: 503 }
+          { status: 503 },
         );
       }
 
@@ -266,10 +267,9 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       } catch (err) {
         return Response.json(
           {
-            error:
-              err instanceof Error ? err.message : "Failed to create session",
+            error: err instanceof Error ? err.message : "Failed to create session",
           },
-          { status: 500 }
+          { status: 500 },
         );
       }
     },
@@ -288,18 +288,12 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       const { sessionId, prompt, contextUpdate } = body;
 
       if (!sessionId || !prompt) {
-        return Response.json(
-          { error: "Missing sessionId or prompt" },
-          { status: 400 }
-        );
+        return Response.json({ error: "Missing sessionId or prompt" }, { status: 400 });
       }
 
       const entry = sessionManager.get(sessionId);
       if (!entry) {
-        return Response.json(
-          { error: "Session not found" },
-          { status: 404 }
-        );
+        return Response.json({ error: "Session not found" }, { status: 404 });
       }
 
       sessionManager.touch(sessionId);
@@ -321,9 +315,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
           try {
             for await (const message of entry.session.query(effectivePrompt)) {
               const data = JSON.stringify(message);
-              controller.enqueue(
-                encoder.encode(`data: ${data}\n\n`)
-              );
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           } catch (err) {
@@ -332,9 +324,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
               error: err instanceof Error ? err.message : String(err),
               code: "stream_error",
             };
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(errorMsg)}\n\n`)
-            );
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorMsg)}\n\n`));
           } finally {
             controller.close();
           }
@@ -363,10 +353,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
       const entry = sessionManager.get(body.sessionId);
       if (!entry) {
-        return Response.json(
-          { error: "Session not found" },
-          { status: 404 }
-        );
+        return Response.json({ error: "Session not found" }, { status: 404 });
       }
 
       entry.session.abort();
@@ -386,25 +373,15 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       if (!body.sessionId || !body.requestId) {
-        return Response.json(
-          { error: "Missing sessionId or requestId" },
-          { status: 400 }
-        );
+        return Response.json({ error: "Missing sessionId or requestId" }, { status: 400 });
       }
 
       const entry = sessionManager.get(body.sessionId);
       if (!entry) {
-        return Response.json(
-          { error: "Session not found" },
-          { status: 404 }
-        );
+        return Response.json({ error: "Session not found" }, { status: 404 });
       }
 
-      entry.session.respondToPermission?.(
-        body.requestId,
-        body.allow,
-        body.message
-      );
+      entry.session.respondToPermission?.(body.requestId, body.allow, body.message);
 
       return Response.json({ ok: true });
     },
@@ -420,7 +397,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
           lastActiveAt: e.lastActiveAt,
           isActive: e.session.isActive,
           label: e.label,
-        }))
+        })),
       );
     },
   } as const;

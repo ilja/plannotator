@@ -14,17 +14,17 @@
  * Backward compatible: loads old tuple-serialized drafts via fromShareable().
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 import type {
   SourceBackedDocumentDraftData,
   SourceBackedSavedFileChangeDraftData,
-} from '@plannotator/shared/draft';
-import type { Annotation, CodeAnnotation, ImageAttachment } from '../types';
+} from "@plannotator/shared/draft";
+import type { Annotation, CodeAnnotation, ImageAttachment } from "../types";
 import {
   decodeStoredAnnotationDraft,
   decodeStoredDraftGeneration,
   type DecodedStoredAnnotationDraft,
-} from '../utils/annotationDraftDecoding';
+} from "../utils/annotationDraftDecoding";
 
 const DEBOUNCE_MS = 500;
 
@@ -47,13 +47,13 @@ interface DraftData {
 
 function formatTimeAgo(ts: number): string {
   const seconds = Math.floor((Date.now() - ts) / 1000);
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
   const days = Math.floor(hours / 24);
-  return `${days} day${days !== 1 ? 's' : ''} ago`;
+  return `${days} day${days !== 1 ? "s" : ""} ago`;
 }
 
 interface UseAnnotationDraftOptions {
@@ -103,7 +103,11 @@ export function useAnnotationDraft({
   isSharedSession,
   submitted,
 }: UseAnnotationDraftOptions): UseAnnotationDraftResult {
-  const [draftBanner, setDraftBanner] = useState<{ count: number; timeAgo: string; hasEdits: boolean } | null>(null);
+  const [draftBanner, setDraftBanner] = useState<{
+    count: number;
+    timeAgo: string;
+    hasEdits: boolean;
+  } | null>(null);
   const draftDataRef = useRef<RestoredDraft | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMountedRef = useRef(false);
@@ -111,8 +115,22 @@ export function useAnnotationDraft({
 
   // Latest-values ref so the stable scheduleDraftSave reads current data when
   // the debounce fires, without re-creating callbacks per keystroke.
-  const latestRef = useRef({ annotations, codeAnnotations, globalAttachments, getEditedMarkdown, getEditedDocuments, getSavedFileChanges });
-  latestRef.current = { annotations, codeAnnotations, globalAttachments, getEditedMarkdown, getEditedDocuments, getSavedFileChanges };
+  const latestRef = useRef({
+    annotations,
+    codeAnnotations,
+    globalAttachments,
+    getEditedMarkdown,
+    getEditedDocuments,
+    getSavedFileChanges,
+  });
+  latestRef.current = {
+    annotations,
+    codeAnnotations,
+    globalAttachments,
+    getEditedMarkdown,
+    getEditedDocuments,
+    getSavedFileChanges,
+  };
   const canPersist = isApiMode && !isSharedSession && !submitted;
   const canPersistRef = useRef(canPersist);
   canPersistRef.current = canPersist;
@@ -121,8 +139,8 @@ export function useAnnotationDraft({
   useEffect(() => {
     if (!isApiMode || isSharedSession) return;
 
-    fetch('/api/draft')
-      .then(async res => {
+    fetch("/api/draft")
+      .then(async (res) => {
         const rawData = await res.json().catch(() => null);
         if (!res.ok) {
           const generation = decodeStoredDraftGeneration(rawData);
@@ -140,16 +158,11 @@ export function useAnnotationDraft({
         }
 
         if (data.draftGeneration !== null) {
-          draftGenerationRef.current = Math.max(
-            draftGenerationRef.current,
-            data.draftGeneration,
-          );
+          draftGenerationRef.current = Math.max(draftGenerationRef.current, data.draftGeneration);
         }
 
         const totalCount =
-          data.annotations.length +
-          data.codeAnnotations.length +
-          data.globalAttachments.length;
+          data.annotations.length + data.codeAnnotations.length + data.globalAttachments.length;
         const hasEdits =
           data.editedMarkdown !== null ||
           data.editedDocuments.length > 0 ||
@@ -181,18 +194,34 @@ export function useAnnotationDraft({
     // pending — a save landing after submit would resurrect a draft the
     // server just deleted, ghosting it into the next session for this plan.
     if (!canPersistRef.current) return;
-    const { annotations, codeAnnotations, globalAttachments, getEditedMarkdown, getEditedDocuments, getSavedFileChanges } = latestRef.current;
+    const {
+      annotations,
+      codeAnnotations,
+      globalAttachments,
+      getEditedMarkdown,
+      getEditedDocuments,
+      getSavedFileChanges,
+    } = latestRef.current;
     const editedMarkdown = getEditedMarkdown?.() ?? null;
     const editedDocuments = getEditedDocuments?.() ?? [];
     const savedFileChanges = getSavedFileChanges?.() ?? [];
 
-    if (annotations.length === 0 && codeAnnotations.length === 0 && globalAttachments.length === 0 && editedMarkdown === null && editedDocuments.length === 0 && savedFileChanges.length === 0) {
+    if (
+      annotations.length === 0 &&
+      codeAnnotations.length === 0 &&
+      globalAttachments.length === 0 &&
+      editedMarkdown === null &&
+      editedDocuments.length === 0 &&
+      savedFileChanges.length === 0
+    ) {
       // Everything was cleared (last annotation removed, edits discarded).
       // A stale draft left on disk would offer back content the user
       // explicitly threw away.
       const deletedGeneration = draftGenerationRef.current + 1;
       draftGenerationRef.current = deletedGeneration;
-      fetch(`/api/draft?generation=${deletedGeneration}`, { method: 'DELETE', keepalive }).catch(() => {});
+      fetch(`/api/draft?generation=${deletedGeneration}`, { method: "DELETE", keepalive }).catch(
+        () => {},
+      );
       return;
     }
 
@@ -210,12 +239,12 @@ export function useAnnotationDraft({
     if (savedFileChanges.length > 0) payload.savedFileChanges = savedFileChanges;
 
     const body = JSON.stringify(payload);
-    const headers = { 'Content-Type': 'application/json' };
-    fetch('/api/draft', { method: 'POST', headers, body, keepalive }).catch(() => {
+    const headers = { "Content-Type": "application/json" };
+    fetch("/api/draft", { method: "POST", headers, body, keepalive }).catch(() => {
       // Chromium caps keepalive bodies (~64KB); retry without it. Completes
       // fine when the page was only backgrounded, best-effort on close.
       if (keepalive && canPersistRef.current && draftGenerationRef.current === draftGeneration) {
-        fetch('/api/draft', { method: 'POST', headers, body }).catch(() => {});
+        fetch("/api/draft", { method: "POST", headers, body }).catch(() => {});
       }
       // Otherwise silent failure — draft is best-effort.
     });
@@ -251,13 +280,13 @@ export function useAnnotationDraft({
       persistNow(true);
     };
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flush();
+      if (document.visibilityState === "hidden") flush();
     };
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
     return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
     };
   }, [persistNow]);
 
@@ -269,7 +298,14 @@ export function useAnnotationDraft({
     if (!isApiMode || isSharedSession || submitted) return;
     if (!hasMountedRef.current) return;
     scheduleDraftSave();
-  }, [annotations, codeAnnotations, globalAttachments, isApiMode, isSharedSession, scheduleDraftSave]);
+  }, [
+    annotations,
+    codeAnnotations,
+    globalAttachments,
+    isApiMode,
+    isSharedSession,
+    scheduleDraftSave,
+  ]);
 
   // Clear any pending save on unmount.
   useEffect(() => {
@@ -283,7 +319,15 @@ export function useAnnotationDraft({
     setDraftBanner(null);
     draftDataRef.current = null;
 
-    if (!data) return { annotations: [], codeAnnotations: [], globalAttachments: [], editedMarkdown: null, editedDocuments: [], savedFileChanges: [] };
+    if (!data)
+      return {
+        annotations: [],
+        codeAnnotations: [],
+        globalAttachments: [],
+        editedMarkdown: null,
+        editedDocuments: [],
+        savedFileChanges: [],
+      };
 
     return data;
   }, []);
@@ -298,10 +342,17 @@ export function useAnnotationDraft({
     setDraftBanner(null);
     draftDataRef.current = null;
 
-    fetch(`/api/draft?generation=${deletedGeneration}`, { method: 'DELETE' }).catch(() => {
+    fetch(`/api/draft?generation=${deletedGeneration}`, { method: "DELETE" }).catch(() => {
       // Silent failure
     });
   }, []);
 
-  return { draftBanner, restoreDraft, scheduleDraftSave, scheduleDraftSaveAfterSubmitFailure, getDraftGeneration, dismissDraft };
+  return {
+    draftBanner,
+    restoreDraft,
+    scheduleDraftSave,
+    scheduleDraftSaveAfterSubmitFailure,
+    getDraftGeneration,
+    dismissDraft,
+  };
 }

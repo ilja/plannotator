@@ -1,16 +1,24 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import hljs from "highlight.js";
-import { isCodeFilePath, isCodeFilePathStrict, CODE_PATH_BARE_REGEX, parseCodePath } from "@plannotator/shared/code-file";
+import {
+  isCodeFilePath,
+  isCodeFilePathStrict,
+  CODE_PATH_BARE_REGEX,
+  parseCodePath,
+} from "@plannotator/shared/code-file";
 import { transformPlainText } from "../utils/inlineTransforms";
 import { getImageSrc } from "./ImageThumbnail";
-import { useCodePathValidation, type CodePathValidationContextValue } from "./CodePathValidationContext";
+import {
+  useCodePathValidation,
+  type CodePathValidationContextValue,
+} from "./CodePathValidationContext";
 import { CodeFilePicker } from "./CodeFilePicker";
 import { decodeCodeFileSuccessResponse } from "../hooks/codeFileResponse";
 
 const inlineCodeTypographyStyle: React.CSSProperties = {
-  fontFamily: 'var(--annotation-code-font-family, var(--font-mono))',
-  fontSize: 'var(--annotation-code-font-size, 0.875em)',
+  fontFamily: "var(--annotation-code-font-family, var(--font-mono))",
+  fontSize: "var(--annotation-code-font-size, 0.875em)",
 };
 
 /**
@@ -24,32 +32,61 @@ const inlineCodeTypographyStyle: React.CSSProperties = {
 function gateCodePath(
   candidate: string,
   validation: CodePathValidationContextValue | null,
-): { render: 'link'; resolved?: string } | { render: 'ambiguous-link'; matches: string[] } | { render: 'plain' } {
-  if (!validation || !validation.ready) return { render: 'link' };
+):
+  | { render: "link"; resolved?: string }
+  | { render: "ambiguous-link"; matches: string[] }
+  | { render: "plain" } {
+  if (!validation || !validation.ready) return { render: "link" };
   const entry = validation.validated.get(candidate);
   // If the validator is ready but has no entry for this candidate, the
   // extractor intentionally excluded it (e.g., inside an HTML comment or
   // fenced code block). Demote rather than optimistically linking.
-  if (!entry) return { render: 'plain' };
+  if (!entry) return { render: "plain" };
   switch (entry.status) {
-    case 'found':       return { render: 'link', resolved: entry.resolved };
-    case 'ambiguous':   return { render: 'ambiguous-link', matches: entry.matches };
-    case 'unavailable': return { render: 'link' };
-    case 'missing':     return { render: 'plain' };
-    default:            return { render: 'link' }; // unknown status — degrade to optimistic
+    case "found":
+      return { render: "link", resolved: entry.resolved };
+    case "ambiguous":
+      return { render: "ambiguous-link", matches: entry.matches };
+    case "unavailable":
+      return { render: "link" };
+    case "missing":
+      return { render: "plain" };
+    default:
+      return { render: "link" }; // unknown status — degrade to optimistic
   }
 }
 
-interface LanguageMap { [key: string]: string; }
+interface LanguageMap {
+  [key: string]: string;
+}
 
 function extToLanguage(filepath: string): string | undefined {
-  const ext = filepath.split('.').pop()?.toLowerCase();
+  const ext = filepath.split(".").pop()?.toLowerCase();
   const map: LanguageMap = {
-    ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-    py: 'python', rb: 'ruby', rs: 'rust', go: 'go', java: 'java',
-    css: 'css', scss: 'scss', json: 'json', yml: 'yaml', yaml: 'yaml',
-    sql: 'sql', sh: 'bash', bash: 'bash', zsh: 'bash', md: 'markdown',
-    html: 'html', xml: 'xml', toml: 'toml', swift: 'swift', kt: 'kotlin',
+    ts: "typescript",
+    tsx: "typescript",
+    js: "javascript",
+    jsx: "javascript",
+    py: "python",
+    rb: "ruby",
+    rs: "rust",
+    go: "go",
+    java: "java",
+    css: "css",
+    scss: "scss",
+    json: "json",
+    yml: "yaml",
+    yaml: "yaml",
+    sql: "sql",
+    sh: "bash",
+    bash: "bash",
+    zsh: "bash",
+    md: "markdown",
+    html: "html",
+    xml: "xml",
+    toml: "toml",
+    swift: "swift",
+    kt: "kotlin",
   };
   return ext ? map[ext] : undefined;
 }
@@ -63,20 +100,20 @@ const CodeSnippetPreview: React.FC<{
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }> = ({ anchorEl, contents, filepath, line, lineEnd, onMouseEnter, onMouseLeave }) => {
-  const allLines = contents.split('\n');
+  const allLines = contents.split("\n");
   const start = Math.max(0, line - 1);
-  const end = Math.min(allLines.length, (lineEnd ?? line));
-  const snippet = allLines.slice(start, end).join('\n');
+  const end = Math.min(allLines.length, lineEnd ?? line);
+  const snippet = allLines.slice(start, end).join("\n");
 
   const highlightedLines = useMemo(() => {
     const lang = extToLanguage(filepath);
-    const lines = snippet.split('\n');
-    return lines.map(line => {
+    const lines = snippet.split("\n");
+    return lines.map((line) => {
       try {
         if (lang) return hljs.highlight(line, { language: lang }).value;
         return hljs.highlightAuto(line).value;
       } catch {
-        return line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       }
     });
   }, [snippet, filepath]);
@@ -93,23 +130,33 @@ const CodeSnippetPreview: React.FC<{
   return createPortal(
     <div
       className="fixed z-[9999] rounded-lg border border-border bg-card shadow-xl flex flex-col"
-      style={{ top, bottom, left, maxWidth: 'min(600px, 90vw)', maxHeight: '300px' }}
+      style={{ top, bottom, left, maxWidth: "min(600px, 90vw)", maxHeight: "300px" }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
       <div className="px-3 py-1.5 border-b border-border/50 text-[10px] text-muted-foreground font-mono flex items-center justify-between gap-4 flex-shrink-0">
-        <span>{filepath.split('/').pop()}</span>
-        <span className="opacity-60">{lineEnd && lineEnd !== line ? `lines ${line}–${lineEnd}` : `line ${line}`}</span>
+        <span>{filepath.split("/").pop()}</span>
+        <span className="opacity-60">
+          {lineEnd && lineEnd !== line ? `lines ${line}–${lineEnd}` : `line ${line}`}
+        </span>
       </div>
-      <div className="hljs code-snippet-preview overflow-auto text-[12px] leading-5 min-h-0" style={{ padding: 0, background: 'var(--code-bg, #1e293b)' }}>
+      <div
+        className="hljs code-snippet-preview overflow-auto text-[12px] leading-5 min-h-0"
+        style={{ padding: 0, background: "var(--code-bg, #1e293b)" }}
+      >
         <table className="border-collapse w-full">
           <tbody>
-            {snippet.split('\n').map((_, i) => (
+            {snippet.split("\n").map((_, i) => (
               <tr key={start + i} className="hover:bg-white/5">
-                <td className="select-none text-muted-foreground/40 text-right pr-3 pl-3 py-0 align-top font-mono w-8 whitespace-nowrap" style={{ userSelect: 'none' }}>{start + i + 1}</td>
+                <td
+                  className="select-none text-muted-foreground/40 text-right pr-3 pl-3 py-0 align-top font-mono w-8 whitespace-nowrap"
+                  style={{ userSelect: "none" }}
+                >
+                  {start + i + 1}
+                </td>
                 <td
                   className="font-mono pr-3 py-0 whitespace-pre"
-                  dangerouslySetInnerHTML={{ __html: highlightedLines[i] ?? '' }}
+                  dangerouslySetInnerHTML={{ __html: highlightedLines[i] ?? "" }}
                 />
               </tr>
             ))}
@@ -130,7 +177,9 @@ const CodeFileLink: React.FC<{
   const validation = useCodePathValidation();
   const gate = gateCodePath(candidate, validation);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [hoverPreview, setHoverPreview] = useState<{ contents: string; filepath: string } | null>(null);
+  const [hoverPreview, setHoverPreview] = useState<{ contents: string; filepath: string } | null>(
+    null,
+  );
   const hoverPreviewRef = useRef(hoverPreview);
   hoverPreviewRef.current = hoverPreview;
   const anchorRef = useRef<HTMLElement | null>(null);
@@ -140,7 +189,10 @@ const CodeFileLink: React.FC<{
   const hasLineRef = parsed.line != null;
 
   const cancelHide = useCallback(() => {
-    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
   }, []);
 
   const scheduleHide = useCallback(() => {
@@ -151,13 +203,13 @@ const CodeFileLink: React.FC<{
   }, [cancelHide]);
 
   const handleMouseEnter = useCallback(() => {
-    if (!hasLineRef || gate.render === 'plain') return;
+    if (!hasLineRef || gate.render === "plain") return;
     cancelHide();
     if (hoverPreviewRef.current) return;
     showTimerRef.current = setTimeout(async () => {
       try {
         const params = new URLSearchParams({ path: candidate });
-        if (baseDir) params.set('base', baseDir);
+        if (baseDir) params.set("base", baseDir);
         const res = await fetch(`/api/doc?${params}`);
         if (!res.ok) return;
         const data = decodeCodeFileSuccessResponse(await res.json());
@@ -167,7 +219,10 @@ const CodeFileLink: React.FC<{
   }, [candidate, hasLineRef, gate.render, cancelHide, baseDir]);
 
   const handleMouseLeave = useCallback(() => {
-    if (showTimerRef.current) { clearTimeout(showTimerRef.current); showTimerRef.current = null; }
+    if (showTimerRef.current) {
+      clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
     scheduleHide();
   }, [scheduleHide]);
 
@@ -186,35 +241,48 @@ const CodeFileLink: React.FC<{
     };
   }, []);
 
-  if (gate.render === 'plain') {
+  if (gate.render === "plain") {
     return (
-      <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono" style={inlineCodeTypographyStyle}>
+      <code
+        className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono"
+        style={inlineCodeTypographyStyle}
+      >
         {display}
       </code>
     );
   }
 
-  const isAmbiguous = gate.render === 'ambiguous-link';
-  const lineSuffix = parsed.line != null ? `:${parsed.line}${parsed.lineEnd != null ? `-${parsed.lineEnd}` : ''}` : '';
+  const isAmbiguous = gate.render === "ambiguous-link";
+  const lineSuffix =
+    parsed.line != null
+      ? `:${parsed.line}${parsed.lineEnd != null ? `-${parsed.lineEnd}` : ""}`
+      : "";
   const handleClick = () => {
     handleMouseLeave();
     if (isAmbiguous) {
       setPickerOpen(true);
       return;
     }
-    const resolvedPath = gate.render === 'link' && gate.resolved ? gate.resolved : candidate;
-    onOpenCodeFile(gate.render === 'link' && gate.resolved ? resolvedPath + lineSuffix : candidate);
+    const resolvedPath = gate.render === "link" && gate.resolved ? gate.resolved : candidate;
+    onOpenCodeFile(gate.render === "link" && gate.resolved ? resolvedPath + lineSuffix : candidate);
   };
 
   return (
     <>
       <code
-        ref={(el) => { anchorRef.current = el; }}
+        ref={(el) => {
+          anchorRef.current = el;
+        }}
         role="button"
         tabIndex={0}
         data-ambiguous={isAmbiguous ? "true" : undefined}
         onClick={handleClick}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className="code-file-link px-1.5 py-0.5 rounded bg-muted text-sm font-mono cursor-pointer hover:text-primary inline-flex items-center gap-1 transition-colors"
@@ -223,7 +291,7 @@ const CodeFileLink: React.FC<{
       >
         {display}
         <CodeFileIcon />
-        {gate.render === 'ambiguous-link' && (
+        {gate.render === "ambiguous-link" && (
           <sup className="text-[0.6rem] opacity-70 -ml-0.5">{gate.matches.length}</sup>
         )}
       </code>
@@ -238,11 +306,14 @@ const CodeFileLink: React.FC<{
           onMouseLeave={handlePreviewLeave}
         />
       )}
-      {pickerOpen && gate.render === 'ambiguous-link' && (
+      {pickerOpen && gate.render === "ambiguous-link" && (
         <CodeFilePicker
           anchorEl={anchorRef.current}
           matches={gate.matches}
-          onPick={(path) => { setPickerOpen(false); onOpenCodeFile(path + lineSuffix); }}
+          onPick={(path) => {
+            setPickerOpen(false);
+            onOpenCodeFile(path + lineSuffix);
+          }}
           onDismiss={() => setPickerOpen(false)}
         />
       )}
@@ -274,7 +345,8 @@ const CodeFileIcon = () => (
 // https://…/Function_(mathematics) should keep its closing paren).
 export function trimUrlTail(url: string): string {
   const balanced = (u: string, close: string, open: string): boolean => {
-    let opens = 0, closes = 0;
+    let opens = 0,
+      closes = 0;
     for (const c of u) {
       if (c === open) opens++;
       else if (c === close) closes++;
@@ -284,9 +356,9 @@ export function trimUrlTail(url: string): string {
   while (url.length > 0) {
     const last = url[url.length - 1];
     if (!/[.,;:!?)\]}>"']/.test(last)) break;
-    if (last === ')' && balanced(url, ')', '(')) break;
-    if (last === ']' && balanced(url, ']', '[')) break;
-    if (last === '}' && balanced(url, '}', '{')) break;
+    if (last === ")" && balanced(url, ")", "(")) break;
+    if (last === "]" && balanced(url, "]", "[")) break;
+    if (last === "}" && balanced(url, "}", "{")) break;
     url = url.slice(0, -1);
   }
   return url;
@@ -306,8 +378,9 @@ function emitPlainTextWithBareUrls(
 ): void {
   if (text.length === 0) return;
 
-  type Span = { start: number; end: number; kind: 'url'; value: string }
-    | { start: number; end: number; kind: 'path'; value: string };
+  type Span =
+    | { start: number; end: number; kind: "url"; value: string }
+    | { start: number; end: number; kind: "path"; value: string };
   const spans: Span[] = [];
 
   // Collect bare URLs
@@ -319,21 +392,26 @@ function emitPlainTextWithBareUrls(
     const url = trimUrlTail(m[0]);
     const safe = url.length > 0 ? sanitizeLinkUrl(url) : null;
     if (!safe) continue;
-    spans.push({ start: m.index, end: m.index + url.length, kind: 'url', value: url });
+    spans.push({ start: m.index, end: m.index + url.length, kind: "url", value: url });
     urlRe.lastIndex = m.index + url.length;
   }
 
   // Collect bare code file paths (require /)
   if (onOpenCodeFile) {
-    const pathRe = new RegExp(CODE_PATH_BARE_REGEX.source, 'g');
+    const pathRe = new RegExp(CODE_PATH_BARE_REGEX.source, "g");
     while ((m = pathRe.exec(text)) !== null) {
       const before = m.index === 0 ? previousChar : text[m.index - 1];
       if (/\w/.test(before)) continue;
       const candidate = m[0];
       if (!isCodeFilePathStrict(candidate)) continue;
-      const overlaps = spans.some(s => m!.index < s.end && m!.index + candidate.length > s.start);
+      const overlaps = spans.some((s) => m!.index < s.end && m!.index + candidate.length > s.start);
       if (overlaps) continue;
-      spans.push({ start: m.index, end: m.index + candidate.length, kind: 'path', value: candidate });
+      spans.push({
+        start: m.index,
+        end: m.index + candidate.length,
+        kind: "path",
+        value: candidate,
+      });
     }
   }
 
@@ -349,7 +427,7 @@ function emitPlainTextWithBareUrls(
     if (span.start > last) {
       parts.push(transformPlainText(text.slice(last, span.start)));
     }
-    if (span.kind === 'url') {
+    if (span.kind === "url") {
       parts.push(
         <a
           key={nextKey()}
@@ -362,9 +440,9 @@ function emitPlainTextWithBareUrls(
         </a>,
       );
     } else {
-      const cleanPath = span.value.replace(/#.*$/, '');
+      const cleanPath = span.value.replace(/#.*$/, "");
       const gate = gateCodePath(cleanPath, validation ?? null);
-      if (gate.render === 'plain') {
+      if (gate.render === "plain") {
         // Bare prose, file doesn't exist — emit as plain text, no link styling.
         parts.push(transformPlainText(span.value));
       } else {
@@ -402,7 +480,15 @@ export const InlineMarkdown: React.FC<{
   imageBaseDir?: string;
   onImageClick?: (src: string, alt: string) => void;
   githubRepo?: string;
-}> = ({ text, onOpenLinkedDoc, onOpenCodeFile, onNavigateAnchor, imageBaseDir, onImageClick, githubRepo }) => {
+}> = ({
+  text,
+  onOpenLinkedDoc,
+  onOpenCodeFile,
+  onNavigateAnchor,
+  imageBaseDir,
+  onImageClick,
+  githubRepo,
+}) => {
   const validation = useCodePathValidation();
   const parts: React.ReactNode[] = [];
   let remaining = text;
@@ -619,7 +705,7 @@ export const InlineMarkdown: React.FC<{
     if (match) {
       const codeContent = match[1];
       if (isCodeFilePath(codeContent) && onOpenCodeFile) {
-        const cleanPath = codeContent.replace(/#.*$/, '');
+        const cleanPath = codeContent.replace(/#.*$/, "");
         parts.push(
           <CodeFileLink
             key={key++}
@@ -652,16 +738,16 @@ export const InlineMarkdown: React.FC<{
     if (match) {
       const hex = match[1];
       parts.push(
-        <span
-          key={key++}
-          className="inline-flex items-center gap-1 align-middle"
-        >
+        <span key={key++} className="inline-flex items-center gap-1 align-middle">
           <span
             className="inline-block w-3.5 h-3.5 rounded-sm border border-black/20 dark:border-white/20 flex-shrink-0"
             style={{ backgroundColor: hex }}
             title={hex}
           />
-          <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono" style={inlineCodeTypographyStyle}>
+          <code
+            className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono"
+            style={inlineCodeTypographyStyle}
+          >
             {hex}
           </code>
         </span>,
@@ -678,9 +764,10 @@ export const InlineMarkdown: React.FC<{
       match = remaining.match(/^#(\d+)(?!\w)/);
       if (match) {
         const num = match[1];
-        const href = githubRepo && githubRepo.includes('/')
-          ? `https://github.com/${githubRepo}/issues/${num}`
-          : null;
+        const href =
+          githubRepo && githubRepo.includes("/")
+            ? `https://github.com/${githubRepo}/issues/${num}`
+            : null;
         const label = `#${num}`;
         parts.push(
           href ? (
@@ -694,7 +781,9 @@ export const InlineMarkdown: React.FC<{
               {label}
             </a>
           ) : (
-            <span key={key++} className="text-primary font-medium">{label}</span>
+            <span key={key++} className="text-primary font-medium">
+              {label}
+            </span>
           ),
         );
         remaining = remaining.slice(match[0].length);
@@ -708,9 +797,7 @@ export const InlineMarkdown: React.FC<{
       match = remaining.match(/^@([a-zA-Z][a-zA-Z0-9_-]{0,38})(?!\w)/);
       if (match) {
         const handle = match[1];
-        const href = githubRepo && githubRepo.includes('/')
-          ? `https://github.com/${handle}`
-          : null;
+        const href = githubRepo && githubRepo.includes("/") ? `https://github.com/${handle}` : null;
         const label = `@${handle}`;
         parts.push(
           href ? (
@@ -724,7 +811,9 @@ export const InlineMarkdown: React.FC<{
               {label}
             </a>
           ) : (
-            <span key={key++} className="text-primary font-medium">{label}</span>
+            <span key={key++} className="text-primary font-medium">
+              {label}
+            </span>
           ),
         );
         remaining = remaining.slice(match[0].length);
@@ -738,9 +827,7 @@ export const InlineMarkdown: React.FC<{
     if (match) {
       const target = match[1].trim();
       const display = match[2]?.trim() || target;
-      const targetPath = /\.(mdx?|txt|html?)$/i.test(target)
-        ? target
-        : `${target}.md`;
+      const targetPath = /\.(mdx?|txt|html?)$/i.test(target) ? target : `${target}.md`;
 
       if (onOpenLinkedDoc) {
         parts.push(
@@ -788,9 +875,7 @@ export const InlineMarkdown: React.FC<{
     if (match) {
       const alt = match[1];
       const src = match[2];
-      const imgSrc = /^(https?:\/\/|data:|blob:)/i.test(src)
-        ? src
-        : getImageSrc(src, imageBaseDir);
+      const imgSrc = /^(https?:\/\/|data:|blob:)/i.test(src) ? src : getImageSrc(src, imageBaseDir);
       parts.push(
         <img
           key={key++}
@@ -813,27 +898,35 @@ export const InlineMarkdown: React.FC<{
     // /Function_(mathematics)). Plain `[^)]+` would truncate at the first
     // inner close-paren, so we scan the destination manually tracking depth.
     const linkParsed = (() => {
-      if (remaining[0] !== '[') return null;
+      if (remaining[0] !== "[") return null;
       let i = 1;
       let depth = 1;
       while (i < remaining.length && depth > 0) {
         const ch = remaining[i];
-        if (ch === '\\' && i + 1 < remaining.length) { i += 2; continue; }
-        if (ch === '[') depth++;
-        else if (ch === ']') depth--;
+        if (ch === "\\" && i + 1 < remaining.length) {
+          i += 2;
+          continue;
+        }
+        if (ch === "[") depth++;
+        else if (ch === "]") depth--;
         if (depth === 0) break;
         i++;
       }
-      if (depth !== 0 || remaining[i + 1] !== '(') return null;
+      if (depth !== 0 || remaining[i + 1] !== "(") return null;
       const textEnd = i;
       let j = i + 2;
       let parenDepth = 1;
       while (j < remaining.length && parenDepth > 0) {
         const ch = remaining[j];
-        if (ch === '\\' && j + 1 < remaining.length) { j += 2; continue; }
-        if (ch === '(') parenDepth++;
-        else if (ch === ')') { parenDepth--; if (parenDepth === 0) break; }
-        else if (ch === '\n') return null;
+        if (ch === "\\" && j + 1 < remaining.length) {
+          j += 2;
+          continue;
+        }
+        if (ch === "(") parenDepth++;
+        else if (ch === ")") {
+          parenDepth--;
+          if (parenDepth === 0) break;
+        } else if (ch === "\n") return null;
         j++;
       }
       if (parenDepth !== 0) return null;
@@ -850,7 +943,7 @@ export const InlineMarkdown: React.FC<{
       if (safeLinkUrl === null) {
         parts.push(<span key={key++}>{linkText}</span>);
         remaining = remaining.slice(consumed);
-        previousChar = ')';
+        previousChar = ")";
         continue;
       }
 
@@ -862,19 +955,23 @@ export const InlineMarkdown: React.FC<{
         !linkUrl.startsWith("http://") &&
         !linkUrl.startsWith("https://");
       const isCodeFile = !isLocalDoc && isCodeFilePath(linkUrl);
-      const linkedDocPath = isLocalDoc ? linkUrl.replace(/#.*$/, '') : linkUrl;
-      const codeFilePath = isCodeFile ? linkUrl.replace(/#.*$/, '') : linkUrl;
-      const isInPageAnchor = safeLinkUrl.startsWith('#');
+      const linkedDocPath = isLocalDoc ? linkUrl.replace(/#.*$/, "") : linkUrl;
+      const codeFilePath = isCodeFile ? linkUrl.replace(/#.*$/, "") : linkUrl;
+      const isInPageAnchor = safeLinkUrl.startsWith("#");
 
       if (isInPageAnchor) {
         parts.push(
           <a
             key={key++}
             href={safeLinkUrl}
-            onClick={onNavigateAnchor ? (e) => {
-              e.preventDefault();
-              onNavigateAnchor(safeLinkUrl);
-            } : undefined}
+            onClick={
+              onNavigateAnchor
+                ? (e) => {
+                    e.preventDefault();
+                    onNavigateAnchor(safeLinkUrl);
+                  }
+                : undefined
+            }
             className="text-primary underline underline-offset-2 hover:text-primary/80"
           >
             {linkText}
@@ -950,7 +1047,7 @@ export const InlineMarkdown: React.FC<{
         );
       }
       remaining = remaining.slice(consumed);
-      previousChar = ')';
+      previousChar = ")";
       continue;
     }
 
@@ -985,7 +1082,15 @@ export const InlineMarkdown: React.FC<{
     // detected inline via emitPlainTextWithBareUrls() below.
     const nextSpecial = remaining.slice(1).search(/[*_`[!~\\<#@]/);
     const plainText = nextSpecial === -1 ? remaining : remaining.slice(0, nextSpecial + 1);
-    emitPlainTextWithBareUrls(plainText, previousChar, parts, () => key++, onOpenCodeFile, validation, imageBaseDir);
+    emitPlainTextWithBareUrls(
+      plainText,
+      previousChar,
+      parts,
+      () => key++,
+      onOpenCodeFile,
+      validation,
+      imageBaseDir,
+    );
     previousChar = plainText[plainText.length - 1] || previousChar;
     if (nextSpecial === -1) {
       break;

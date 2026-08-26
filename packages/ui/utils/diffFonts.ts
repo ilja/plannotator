@@ -10,43 +10,49 @@ interface FontUrls {
 }
 
 const FONT_URLS: FontUrls = {
-  'Red Hat Mono': 'https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@300..700&display=swap',
-  'Fira Code': 'https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap',
-  'Atkinson Hyperlegible Mono': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@200..700&display=swap',
-  'Source Code Pro': 'https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300..700&display=swap',
-  'JetBrains Mono': 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300..700&display=swap',
-  'IBM Plex Mono': 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300..700&display=swap',
-  'Inconsolata': 'https://fonts.googleapis.com/css2?family=Inconsolata:wght@300..700&display=swap',
-  'Roboto Mono': 'https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300..700&display=swap',
-  'Hack': 'https://cdn.jsdelivr.net/npm/hack-font@3/build/web/hack.css',
+  "Red Hat Mono":
+    "https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@300..700&display=swap",
+  "Fira Code": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap",
+  "Atkinson Hyperlegible Mono":
+    "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@200..700&display=swap",
+  "Source Code Pro":
+    "https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@300..700&display=swap",
+  "JetBrains Mono":
+    "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300..700&display=swap",
+  "IBM Plex Mono":
+    "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300..700&display=swap",
+  Inconsolata: "https://fonts.googleapis.com/css2?family=Inconsolata:wght@300..700&display=swap",
+  "Roboto Mono": "https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300..700&display=swap",
+  Hack: "https://cdn.jsdelivr.net/npm/hack-font@3/build/web/hack.css",
 };
 
 const PROSE_FONT_URLS: FontUrls = {
-  'Atkinson Hyperlegible': 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap',
+  "Atkinson Hyperlegible":
+    "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap",
 };
 
 export const CODE_FONT_OPTIONS = [
-  { value: '', label: 'Theme Default' },
-  { value: 'Fira Code', label: 'Fira Code' },
-  { value: 'Hack', label: 'Hack' },
-  { value: 'IBM Plex Mono', label: 'IBM Plex Mono' },
-  { value: 'Inconsolata', label: 'Inconsolata' },
-  { value: 'JetBrains Mono', label: 'JetBrains Mono' },
-  { value: 'Red Hat Mono', label: 'Red Hat Mono' },
-  { value: 'Roboto Mono', label: 'Roboto Mono' },
-  { value: 'Source Code Pro', label: 'Source Code Pro' },
-  { value: 'Atkinson Hyperlegible Mono', label: 'Atkinson Hyperlegible' },
+  { value: "", label: "Theme Default" },
+  { value: "Fira Code", label: "Fira Code" },
+  { value: "Hack", label: "Hack" },
+  { value: "IBM Plex Mono", label: "IBM Plex Mono" },
+  { value: "Inconsolata", label: "Inconsolata" },
+  { value: "JetBrains Mono", label: "JetBrains Mono" },
+  { value: "Red Hat Mono", label: "Red Hat Mono" },
+  { value: "Roboto Mono", label: "Roboto Mono" },
+  { value: "Source Code Pro", label: "Source Code Pro" },
+  { value: "Atkinson Hyperlegible Mono", label: "Atkinson Hyperlegible" },
 ] as const;
 
 const loaded = new Set<string>();
 
-export function loadCodeFont(fontFamily: string, datasetKey = 'codeFont'): void {
+export function loadCodeFont(fontFamily: string, datasetKey = "codeFont"): void {
   if (!fontFamily || loaded.has(fontFamily)) return;
   const url = FONT_URLS[fontFamily];
   if (!url) return;
 
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
   link.href = url;
   link.dataset[datasetKey] = fontFamily;
   document.head.appendChild(link);
@@ -54,7 +60,7 @@ export function loadCodeFont(fontFamily: string, datasetKey = 'codeFont'): void 
 }
 
 export function loadDiffFont(fontFamily: string): void {
-  loadCodeFont(fontFamily, 'diffFont');
+  loadCodeFont(fontFamily, "diffFont");
 }
 
 export function loadProseFont(fontFamily: string): void {
@@ -62,10 +68,10 @@ export function loadProseFont(fontFamily: string): void {
   const url = PROSE_FONT_URLS[fontFamily];
   if (!url) return;
 
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
   link.href = url;
-  link.dataset['proseFont'] = fontFamily;
+  link.dataset["proseFont"] = fontFamily;
   document.head.appendChild(link);
   loaded.add(fontFamily);
 }

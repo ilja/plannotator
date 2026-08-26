@@ -1,12 +1,12 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AIChatEntry, PendingPermission } from '../../hooks/useAIChat';
-import type { AIProviderOption } from '../../utils/aiProvider';
-import type { AIJsonObject } from '@plannotator/ai';
-import { formatRelativeTime, renderChatMarkdown } from '../../utils/aiChatFormat';
-import { OverlayScrollArea } from '../OverlayScrollArea';
-import { SparklesIcon } from '../SparklesIcon';
-import { AIProviderBar } from './AIProviderBar';
-import { submitHint } from '../../utils/platform';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AIChatEntry, PendingPermission } from "../../hooks/useAIChat";
+import type { AIProviderOption } from "../../utils/aiProvider";
+import type { AIJsonObject } from "@plannotator/ai";
+import { formatRelativeTime, renderChatMarkdown } from "../../utils/aiChatFormat";
+import { OverlayScrollArea } from "../OverlayScrollArea";
+import { SparklesIcon } from "../SparklesIcon";
+import { AIProviderBar } from "./AIProviderBar";
+import { submitHint } from "../../utils/platform";
 
 interface DocumentAIChatPanelProps {
   messages: AIChatEntry[];
@@ -17,7 +17,11 @@ interface DocumentAIChatPanelProps {
   onRespondToPermission?: (requestId: string, allow: boolean) => void;
   aiProviders?: AIProviderOption[];
   aiConfig?: { providerId: string | null; model: string | null; reasoningEffort?: string | null };
-  onAIConfigChange?: (config: { providerId?: string | null; model?: string | null; reasoningEffort?: string | null }) => void;
+  onAIConfigChange?: (config: {
+    providerId?: string | null;
+    model?: string | null;
+    reasoningEffort?: string | null;
+  }) => void;
 }
 
 function truncate(text: string, max = 180): string {
@@ -28,20 +32,48 @@ function truncate(text: string, max = 180): string {
 function formatToolInput(toolName: string, input: AIJsonObject): string | null {
   if (!input || Object.keys(input).length === 0) return null;
 
-  if (toolName === 'Bash' && input.command !== undefined && input.command !== null && input.command === String(input.command)) {
+  if (
+    toolName === "Bash" &&
+    input.command !== undefined &&
+    input.command !== null &&
+    input.command === String(input.command)
+  ) {
     return input.command;
   }
-  if ((toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') && input.file_path !== undefined && input.file_path !== null && input.file_path === String(input.file_path)) {
+  if (
+    (toolName === "Read" || toolName === "Write" || toolName === "Edit") &&
+    input.file_path !== undefined &&
+    input.file_path !== null &&
+    input.file_path === String(input.file_path)
+  ) {
     return input.file_path;
   }
-  if (toolName === 'Glob' && input.pattern !== undefined && input.pattern !== null && input.pattern === String(input.pattern)) {
+  if (
+    toolName === "Glob" &&
+    input.pattern !== undefined &&
+    input.pattern !== null &&
+    input.pattern === String(input.pattern)
+  ) {
     return input.pattern;
   }
-  if (toolName === 'Grep' && input.pattern !== undefined && input.pattern !== null && input.pattern === String(input.pattern)) {
-    const path = input.path !== undefined && input.path !== null && input.path === String(input.path) ? ` in ${input.path}` : '';
+  if (
+    toolName === "Grep" &&
+    input.pattern !== undefined &&
+    input.pattern !== null &&
+    input.pattern === String(input.pattern)
+  ) {
+    const path =
+      input.path !== undefined && input.path !== null && input.path === String(input.path)
+        ? ` in ${input.path}`
+        : "";
     return `${input.pattern}${path}`;
   }
-  if ((toolName === 'WebFetch' || toolName === 'WebSearch') && input.url !== undefined && input.url !== null && input.url === String(input.url)) {
+  if (
+    (toolName === "WebFetch" || toolName === "WebSearch") &&
+    input.url !== undefined &&
+    input.url !== null &&
+    input.url === String(input.url)
+  ) {
     return input.url;
   }
 
@@ -64,21 +96,21 @@ export const DocumentAIChatPanel: React.FC<DocumentAIChatPanelProps> = ({
   onAIConfigChange,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [generalInput, setGeneralInput] = useState('');
+  const [generalInput, setGeneralInput] = useState("");
   const latestMessage = messages[messages.length - 1];
-  const latestResponseText = latestMessage?.response.text ?? '';
+  const latestResponseText = latestMessage?.response.text ?? "";
 
   useEffect(() => {
     if (!scrollRef.current) return;
-    const last = scrollRef.current.querySelector('[data-ai-message]:last-child');
-    last?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const last = scrollRef.current.querySelector("[data-ai-message]:last-child");
+    last?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, latestResponseText]);
 
   const handleGeneralSubmit = useCallback(() => {
     const question = generalInput.trim();
     if (!question || !onAskGeneral) return;
     onAskGeneral(question);
-    setGeneralInput('');
+    setGeneralInput("");
   }, [generalInput, onAskGeneral]);
 
   return (
@@ -92,9 +124,13 @@ export const DocumentAIChatPanel: React.FC<DocumentAIChatPanelProps> = ({
               </div>
               <p className="text-xs">
                 {onAskGeneral ? (
-                  <>Select text and click <strong>Ask AI</strong>, or ask a general question below.</>
+                  <>
+                    Select text and click <strong>Ask AI</strong>, or ask a general question below.
+                  </>
                 ) : (
-                  <>Select text and click <strong>Ask AI</strong>.</>
+                  <>
+                    Select text and click <strong>Ask AI</strong>.
+                  </>
                 )}
               </p>
             </div>
@@ -106,15 +142,17 @@ export const DocumentAIChatPanel: React.FC<DocumentAIChatPanelProps> = ({
             </div>
           )}
 
-          {permissionRequests.filter(p => !p.decided).map(permission => (
-            <PermissionCard
-              key={permission.requestId}
-              permission={permission}
-              onRespond={onRespondToPermission ?? (() => {})}
-            />
-          ))}
+          {permissionRequests
+            .filter((p) => !p.decided)
+            .map((permission) => (
+              <PermissionCard
+                key={permission.requestId}
+                permission={permission}
+                onRespond={onRespondToPermission ?? (() => {})}
+              />
+            ))}
 
-          {messages.map(entry => (
+          {messages.map((entry) => (
             <DocumentQAPair key={entry.question.id} entry={entry} />
           ))}
         </div>
@@ -143,7 +181,7 @@ export const DocumentAIChatPanel: React.FC<DocumentAIChatPanelProps> = ({
 const DocumentQAPair = memo<{ entry: AIChatEntry }>(({ entry }) => {
   const { question, response } = entry;
   const renderedResponse = useMemo(
-    () => response.text ? renderChatMarkdown(response.text) : null,
+    () => (response.text ? renderChatMarkdown(response.text) : null),
     [response.text],
   );
   const scope = question.scope;
@@ -153,15 +191,13 @@ const DocumentQAPair = memo<{ entry: AIChatEntry }>(({ entry }) => {
       <div className="p-2.5 rounded-lg border border-transparent hover:bg-muted/30 transition-colors">
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="flex items-center gap-1.5 min-w-0">
-            {scope?.kind === 'selection' && (
+            {scope?.kind === "selection" && (
               <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                 selection
               </span>
             )}
             {scope?.label && (
-              <span className="text-[10px] text-muted-foreground truncate">
-                {scope.label}
-              </span>
+              <span className="text-[10px] text-muted-foreground truncate">{scope.label}</span>
             )}
           </div>
           <span className="text-[10px] text-muted-foreground/50 flex-shrink-0">
@@ -206,9 +242,7 @@ const PermissionCard: React.FC<{
       <p className="text-[10px] font-medium text-warning uppercase tracking-wider mb-1">
         Permission Request
       </p>
-      <p className="text-xs font-mono text-foreground/80 break-all">
-        {label}
-      </p>
+      <p className="text-xs font-mono text-foreground/80 break-all">{label}</p>
       {toolInput && (
         <p className="mt-1 px-2 py-1 rounded bg-background/60 border border-warning/20 text-[10px] font-mono text-foreground/80 break-all">
           {toolInput}
@@ -246,7 +280,7 @@ const GeneralInput: React.FC<{
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    el.style.height = 'auto';
+    el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [value]);
 
@@ -263,7 +297,12 @@ const GeneralInput: React.FC<{
           style={{ maxHeight: 120 }}
           disabled={disabled}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing && !disabled) {
+            if (
+              event.key === "Enter" &&
+              (event.metaKey || event.ctrlKey) &&
+              !event.nativeEvent.isComposing &&
+              !disabled
+            ) {
               event.preventDefault();
               onSubmit();
             }
@@ -276,8 +315,18 @@ const GeneralInput: React.FC<{
           title={`Send (${submitHint})`}
           aria-label="Send AI question"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+            />
           </svg>
         </button>
       </div>

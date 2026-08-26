@@ -12,10 +12,7 @@ import {
   type PRMetadata,
   type PRRef,
 } from "./pr-types";
-import {
-  getPRDiffScopeOptions,
-  getPRStackInfo,
-} from "./pr-stack";
+import { getPRDiffScopeOptions, getPRStackInfo } from "./pr-stack";
 
 describe("pr-provider platform helpers", () => {
   test("parses GitHub PR URLs including nested suffixes", () => {
@@ -204,12 +201,14 @@ describe("PR stack helpers", () => {
   });
 
   test("does not infer a stack for the bottom PR targeting the default branch", () => {
-    expect(getPRStackInfo({
-      ...stackedMeta,
-      number: 1,
-      baseBranch: "main",
-      headBranch: "stack/base-cleanup",
-    })).toBeNull();
+    expect(
+      getPRStackInfo({
+        ...stackedMeta,
+        number: 1,
+        baseBranch: "main",
+        headBranch: "stack/base-cleanup",
+      }),
+    ).toBeNull();
   });
 
   test("only enables full-stack scope when stacked metadata has a local checkout", () => {
@@ -233,8 +232,19 @@ describe("PR stack helpers", () => {
 });
 
 describe("isSameProject", () => {
-  const ghRef: PRRef = { platform: "github", host: "github.com", owner: "acme", repo: "widgets", number: 1 };
-  const glRef: PRRef = { platform: "gitlab", host: "gitlab.com", projectPath: "acme/widgets", iid: 1 };
+  const ghRef: PRRef = {
+    platform: "github",
+    host: "github.com",
+    owner: "acme",
+    repo: "widgets",
+    number: 1,
+  };
+  const glRef: PRRef = {
+    platform: "gitlab",
+    host: "gitlab.com",
+    projectPath: "acme/widgets",
+    iid: 1,
+  };
 
   test("same GitHub project", () => {
     expect(isSameProject(ghRef, { ...ghRef, number: 99 })).toBe(true);

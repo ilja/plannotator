@@ -1,4 +1,4 @@
-import { Result, Schema } from 'effect';
+import { Result, Schema } from "effect";
 
 const OpenInSuccessResponseSchema = Schema.Struct({
   ok: Schema.Literal(true),

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const DRAG_THRESHOLD = 3;
 const VISIBLE_MIN = 50;
@@ -63,11 +63,11 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
       }
     };
 
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
     return () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
     };
   }, [isDragging, elementRef]);
 
@@ -78,7 +78,7 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
       // Don't drag if clicking on an interactive element inside the handle
       // SAFETY: pointerdown target is HTMLElement — cast to check closest
       const target = e.target as HTMLElement;
-      if (target.closest('button, a, input, textarea, select')) return;
+      if (target.closest("button, a, input, textarea, select")) return;
 
       const el = elementRef.current;
       if (!el) return;
@@ -100,9 +100,9 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
     dragHandleProps: {
       onPointerDown,
       style: {
-        cursor: isDragging ? 'grabbing' : 'grab',
-        userSelect: 'none' as const,
-        touchAction: 'none' as const,
+        cursor: isDragging ? "grabbing" : "grab",
+        userSelect: "none" as const,
+        touchAction: "none" as const,
       },
     },
   };

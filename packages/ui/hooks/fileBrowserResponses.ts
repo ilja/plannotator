@@ -76,7 +76,9 @@ function decodeVaultNode<Input>(input: Input): VaultNode | undefined {
 }
 
 /** Decodes a file browser success response, retaining only structurally valid tree nodes. */
-export function decodeFileBrowserSuccessResponse<Input>(input: Input): FileBrowserSuccessResponse | undefined {
+export function decodeFileBrowserSuccessResponse<Input>(
+  input: Input,
+): FileBrowserSuccessResponse | undefined {
   const response = Option.getOrUndefined(decodeSuccessEnvelope(input));
   if (!response) return undefined;
 

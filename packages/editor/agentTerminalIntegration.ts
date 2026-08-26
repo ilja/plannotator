@@ -45,11 +45,13 @@ export function isMatchingAgentTerminalDelivery(
   delivered: AgentTerminalDeliveryRecord | null,
   current: AgentTerminalDeliveryRecord | null,
 ): boolean {
-  return !!delivered &&
+  return (
+    !!delivered &&
     !!current &&
     delivered.terminalSessionId === current.terminalSessionId &&
     delivered.feedbackKey === current.feedbackKey &&
-    delivered.targetPath === current.targetPath;
+    delivered.targetPath === current.targetPath
+  );
 }
 
 export function shouldSendAgentTerminalFeedback(

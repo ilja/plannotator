@@ -1,12 +1,12 @@
-import React, { useRef, useState } from 'react';
-import * as Popover from '@radix-ui/react-popover';
+import React, { useRef, useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
 import type {
   SemanticDiffBinaryChange,
   SemanticDiffChange,
-} from '@plannotator/shared/semantic-diff-types';
-import { useReviewStateOptional } from '../dock/ReviewStateContext';
-import { useFileSemanticChanges } from '../hooks/useFileSemanticChanges';
-import { SemanticDiffRows, lineSelectionForChange } from '../dock/panels/semanticDiffShared';
+} from "@plannotator/shared/semantic-diff-types";
+import { useReviewStateOptional } from "../dock/ReviewStateContext";
+import { useFileSemanticChanges } from "../hooks/useFileSemanticChanges";
+import { SemanticDiffRows, lineSelectionForChange } from "../dock/panels/semanticDiffShared";
 
 const CLOSE_DELAY_MS = 140;
 
@@ -20,7 +20,7 @@ export const SemanticFileBadge: React.FC<{ filePath: string }> = ({ filePath }) 
   const available = state?.semanticDiffAvailable === true;
   const { loading, changes, binaryChanges } = useFileSemanticChanges(
     filePath,
-    state?.rawPatch ?? '',
+    state?.rawPatch ?? "",
     available,
   );
 
@@ -78,7 +78,7 @@ export const SemanticFileBadge: React.FC<{ filePath: string }> = ({ filePath }) 
             setOpen(true);
           }}
           onMouseLeave={scheduleClose}
-          title={`${count} semantic change${count === 1 ? '' : 's'} in this file`}
+          title={`${count} semantic change${count === 1 ? "" : "s"} in this file`}
           aria-label={`Semantic changes for ${filePath}`}
         >
           <span className="semantic-file-badge-label">sem</span>
@@ -96,7 +96,9 @@ export const SemanticFileBadge: React.FC<{ filePath: string }> = ({ filePath }) 
         >
           <div className="semantic-diff-popover-header">
             <span className="semantic-file-badge-label">sem</span>
-            <span className="semantic-diff-popover-path" title={filePath}>{filePath}</span>
+            <span className="semantic-diff-popover-path" title={filePath}>
+              {filePath}
+            </span>
           </div>
           <div className="semantic-diff-popover-rows">
             <SemanticDiffRows

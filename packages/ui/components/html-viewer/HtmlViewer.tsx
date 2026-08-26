@@ -23,9 +23,11 @@ import { postHtmlBridgeMessage } from "./bridgeMessages";
 import { ANNOTATION_HIGHLIGHT_CSS, BRIDGE_SCRIPT } from "./bridge-script";
 
 const PREFIX = "plannotator-bridge-";
-const decodeHtmlBridgeReadyMessage = Schema.decodeUnknownOption(Schema.Struct({
-  type: Schema.Literal(`${PREFIX}ready`),
-}));
+const decodeHtmlBridgeReadyMessage = Schema.decodeUnknownOption(
+  Schema.Struct({
+    type: Schema.Literal(`${PREFIX}ready`),
+  }),
+);
 
 const THEME_TOKENS = [
   "--background",
@@ -56,8 +58,12 @@ const THEME_TOKENS = [
   "--radius",
 ] as const;
 
-interface ThemeTokens { [key: string]: string; }
-interface TypographyTokens { [key: string]: string; }
+interface ThemeTokens {
+  [key: string]: string;
+}
+interface TypographyTokens {
+  [key: string]: string;
+}
 
 function isStringValue(value: any): value is string {
   return Object.prototype.toString.call(value) === "[object String]";
@@ -174,9 +180,9 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
       themeCSS += "}\n";
       if (isLightTheme()) themeCSS += ":root { color-scheme: light; }\n:root.light, :root { }\n";
 
-      let fontLinks = '';
-      const proseFamily = extractFontFamily(tokens['--annotation-prose-font-family']);
-      const codeFamily = extractFontFamily(tokens['--annotation-code-font-family']);
+      let fontLinks = "";
+      const proseFamily = extractFontFamily(tokens["--annotation-prose-font-family"]);
+      const codeFamily = extractFontFamily(tokens["--annotation-code-font-family"]);
       for (const fam of [proseFamily, codeFamily]) {
         if (!fam) continue;
         const url = getFontUrl(fam);
@@ -301,8 +307,18 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-colors cursor-pointer"
           title="Add global comment"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"
+            />
           </svg>
           <span>Comment</span>
         </button>
@@ -324,7 +340,11 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
 
           <article
             data-print-region="article"
-            className={fullViewport ? "relative overflow-hidden w-full flex-1" : "relative bg-card rounded-xl shadow-xl overflow-hidden w-full"}
+            className={
+              fullViewport
+                ? "relative overflow-hidden w-full flex-1"
+                : "relative bg-card rounded-xl shadow-xl overflow-hidden w-full"
+            }
           >
             {/* Full-viewport mode has no card chrome, so float the same controls
                 over the top-right of the iframe (with a backdrop so they read over
@@ -338,18 +358,18 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
               </div>
             )}
             <iframe
-            ref={iframeRef}
-            srcDoc={srcdoc}
-            sandbox="allow-scripts"
-            style={{
-              width: "100%",
-              height: fullViewport ? "100%" : `${iframeHeight}px`,
-              border: "none",
-              display: "block",
-              colorScheme: "auto",
-            }}
-            title="HTML Plan Viewer"
-          />
+              ref={iframeRef}
+              srcDoc={srcdoc}
+              sandbox="allow-scripts"
+              style={{
+                width: "100%",
+                height: fullViewport ? "100%" : `${iframeHeight}px`,
+                border: "none",
+                display: "block",
+                colorScheme: "auto",
+              }}
+              title="HTML Plan Viewer"
+            />
           </article>
         </div>
 

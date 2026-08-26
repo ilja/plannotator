@@ -62,7 +62,8 @@ export async function createBunAgentTerminalBridge(args: {
     return createDisabledBridge({
       enabled: false,
       reason: "remote-disabled",
-      message: "Agent terminal is disabled in remote mode. Set PLANNOTATOR_AGENT_TERMINAL_REMOTE=1 to enable it.",
+      message:
+        "Agent terminal is disabled in remote mode. Set PLANNOTATOR_AGENT_TERMINAL_REMOTE=1 to enable it.",
     });
   }
 
@@ -114,52 +115,58 @@ export async function createBunAgentTerminalBridge(args: {
     websocket: {
       open(ws) {
         connectingClients += 1;
-        void getSidecar().then((activeSidecar) => {
-          connectingClients = Math.max(0, connectingClients - 1);
-          if (disposed || ws.readyState !== WebSocket.OPEN) {
-            releaseSidecarIfIdle(activeSidecar);
-            return;
-          }
-          const upstream = new WebSocket(activeSidecar.wsUrl);
-          ws.data.upstream = upstream;
-          upstreams.add(upstream);
-
-          upstream.addEventListener("open", () => {
-            const queued = ws.data.pending;
-            ws.data.pending = [];
-            for (const payload of queued) upstream.send(payload);
-          });
-
-          upstream.addEventListener("message", (event) => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(toWebSocketPayload(event.data));
+        void getSidecar()
+          .then((activeSidecar) => {
+            connectingClients = Math.max(0, connectingClients - 1);
+            if (disposed || ws.readyState !== WebSocket.OPEN) {
+              releaseSidecarIfIdle(activeSidecar);
+              return;
             }
-          });
+            const upstream = new WebSocket(activeSidecar.wsUrl);
+            ws.data.upstream = upstream;
+            upstreams.add(upstream);
 
-          upstream.addEventListener("close", () => {
-            upstreams.delete(upstream);
-            if (ws.readyState === WebSocket.OPEN) ws.close();
-            releaseSidecarIfIdle(activeSidecar);
-          });
+            upstream.addEventListener("open", () => {
+              const queued = ws.data.pending;
+              ws.data.pending = [];
+              for (const payload of queued) upstream.send(payload);
+            });
 
-          upstream.addEventListener("error", () => {
-            upstreams.delete(upstream);
+            upstream.addEventListener("message", (event) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(toWebSocketPayload(event.data));
+              }
+            });
+
+            upstream.addEventListener("close", () => {
+              upstreams.delete(upstream);
+              if (ws.readyState === WebSocket.OPEN) ws.close();
+              releaseSidecarIfIdle(activeSidecar);
+            });
+
+            upstream.addEventListener("error", () => {
+              upstreams.delete(upstream);
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(
+                  JSON.stringify({ type: "error", message: "Agent terminal backend failed." }),
+                );
+                ws.close();
+              }
+              releaseSidecarIfIdle(activeSidecar);
+            });
+          })
+          .catch((err) => {
+            connectingClients = Math.max(0, connectingClients - 1);
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "error", message: "Agent terminal backend failed." }));
+              ws.send(
+                JSON.stringify({
+                  type: "error",
+                  message: err instanceof Error ? err.message : String(err),
+                }),
+              );
               ws.close();
             }
-            releaseSidecarIfIdle(activeSidecar);
           });
-        }).catch((err) => {
-          connectingClients = Math.max(0, connectingClients - 1);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: "error",
-              message: err instanceof Error ? err.message : String(err),
-            }));
-            ws.close();
-          }
-        });
       },
       message(ws, raw) {
         const payload = Buffer.isBuffer(raw) ? raw.toString("utf8") : raw;
@@ -169,7 +176,9 @@ export async function createBunAgentTerminalBridge(args: {
           return;
         }
         if (ws.data.pending.length >= MAX_PENDING_MESSAGES) {
-          ws.send(JSON.stringify({ type: "error", message: "Agent terminal backend is still starting." }));
+          ws.send(
+            JSON.stringify({ type: "error", message: "Agent terminal backend is still starting." }),
+          );
           ws.close();
           return;
         }
@@ -199,26 +208,28 @@ export async function createBunAgentTerminalBridge(args: {
     if (sidecar) return Promise.resolve(sidecar);
     if (!sidecarPromise) {
       let promise: Promise<NodeAgentTerminalSidecar>;
-      promise = startNodeAgentTerminalSidecar(args.cwd, resolvedRuntime, wsPath).then((activeSidecar) => {
-        if (disposed) {
-          activeSidecar.dispose();
-          throw new Error("Agent terminal bridge was disposed.");
-        }
-        sidecar = activeSidecar;
-        void activeSidecar.exited.finally(() => {
-          const wasCurrent = sidecar === activeSidecar || sidecarPromise === promise;
-          if (sidecar === activeSidecar) sidecar = null;
-          if (sidecarPromise === promise) sidecarPromise = null;
-          if (wasCurrent) {
-            for (const upstream of upstreams) upstream.close();
-            upstreams.clear();
+      promise = startNodeAgentTerminalSidecar(args.cwd, resolvedRuntime, wsPath)
+        .then((activeSidecar) => {
+          if (disposed) {
+            activeSidecar.dispose();
+            throw new Error("Agent terminal bridge was disposed.");
           }
+          sidecar = activeSidecar;
+          void activeSidecar.exited.finally(() => {
+            const wasCurrent = sidecar === activeSidecar || sidecarPromise === promise;
+            if (sidecar === activeSidecar) sidecar = null;
+            if (sidecarPromise === promise) sidecarPromise = null;
+            if (wasCurrent) {
+              for (const upstream of upstreams) upstream.close();
+              upstreams.clear();
+            }
+          });
+          return activeSidecar;
+        })
+        .catch((err) => {
+          if (sidecarPromise === promise) sidecarPromise = null;
+          throw err;
         });
-        return activeSidecar;
-      }).catch((err) => {
-        if (sidecarPromise === promise) sidecarPromise = null;
-        throw err;
-      });
       sidecarPromise = promise;
     }
     return sidecarPromise;
@@ -233,9 +244,7 @@ export async function createBunAgentTerminalBridge(args: {
   }
 }
 
-function createDisabledBridge(
-  capability: AgentTerminalCapability,
-): BunAgentTerminalBridge {
+function createDisabledBridge(capability: AgentTerminalCapability): BunAgentTerminalBridge {
   return {
     capability,
     matches() {
@@ -276,7 +285,10 @@ async function startNodeAgentTerminalSidecar(
     let didDispose = false;
     return {
       wsUrl,
-      exited: proc.exited.then(() => {}, () => {}),
+      exited: proc.exited.then(
+        () => {},
+        () => {},
+      ),
       dispose() {
         if (didDispose) return;
         didDispose = true;
@@ -331,7 +343,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-function toWebSocketPayload(data: string | ArrayBuffer | Uint8Array | Buffer): string | ArrayBuffer {
+function toWebSocketPayload(
+  data: string | ArrayBuffer | Uint8Array | Buffer,
+): string | ArrayBuffer {
   if (Buffer.isBuffer(data)) return Uint8Array.from(data).buffer;
   if (data instanceof ArrayBuffer) return data;
   if (data instanceof Uint8Array) {

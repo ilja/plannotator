@@ -1,80 +1,88 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from "bun:test";
 import {
   parseAICapabilitiesResponse,
   parsePlanResponse,
   parseSaveNotesResponse,
   parseShareHtmlResponse,
-} from './app-boundaries';
+} from "./app-boundaries";
 
-describe('editor API boundary parsers', () => {
-  test('parses a plan response with source metadata', () => {
+describe("editor API boundary parsers", () => {
+  test("parses a plan response with source metadata", () => {
     const plan = parsePlanResponse({
-      plan: '# Plan',
-      mode: 'annotate',
-      origin: 'pi',
-      sourceSave: { enabled: false, reason: 'not-local-file' },
-      recentMessages: [{ messageId: 'message-1', text: 'Recent message' }],
+      plan: "# Plan",
+      mode: "annotate",
+      origin: "pi",
+      sourceSave: { enabled: false, reason: "not-local-file" },
+      recentMessages: [{ messageId: "message-1", text: "Recent message" }],
     });
 
-    expect(plan.plan).toBe('# Plan');
+    expect(plan.plan).toBe("# Plan");
     expect(plan.sourceSave?.enabled).toBe(false);
-    expect(plan.recentMessages?.[0]?.messageId).toBe('message-1');
+    expect(plan.recentMessages?.[0]?.messageId).toBe("message-1");
   });
 
-  test('accepts an omitted plan from the development API', () => {
-    expect(parsePlanResponse({ origin: 'claude-code', sharingEnabled: true }).plan).toBeUndefined();
+  test("accepts an omitted plan from the development API", () => {
+    expect(parsePlanResponse({ origin: "claude-code", sharingEnabled: true }).plan).toBeUndefined();
   });
 
-  test('rejects malformed plan and share responses', () => {
+  test("rejects malformed plan and share responses", () => {
     expect(() => parsePlanResponse({ plan: 42 })).toThrow();
     expect(() => parseShareHtmlResponse({ shareHtml: 42 })).toThrow();
   });
 
-  test('preserves an empty share-html payload', () => {
-    expect(parseShareHtmlResponse({ shareHtml: '' }).shareHtml).toBe('');
+  test("preserves an empty share-html payload", () => {
+    expect(parseShareHtmlResponse({ shareHtml: "" }).shareHtml).toBe("");
   });
 
-  test('parses unavailable AI capabilities', () => {
-    expect(parseAICapabilitiesResponse({
-      available: false,
-      providers: [],
-      defaultProvider: null,
-    })).toMatchObject({ available: false, defaultProvider: null });
+  test("parses unavailable AI capabilities", () => {
+    expect(
+      parseAICapabilitiesResponse({
+        available: false,
+        providers: [],
+        defaultProvider: null,
+      }),
+    ).toMatchObject({ available: false, defaultProvider: null });
   });
 
-  test('parses AI capabilities and rejects malformed provider fields', () => {
+  test("parses AI capabilities and rejects malformed provider fields", () => {
     const capabilities = parseAICapabilitiesResponse({
       available: true,
-      defaultProvider: 'pi-sdk',
-      providers: [{
-        id: 'pi-sdk',
-        name: 'pi-sdk',
-        capabilities: { fork: false, resume: false, streaming: true, tools: true },
-        models: [{ id: 'provider/model', label: 'Model', default: true }],
-      }],
+      defaultProvider: "pi-sdk",
+      providers: [
+        {
+          id: "pi-sdk",
+          name: "pi-sdk",
+          capabilities: { fork: false, resume: false, streaming: true, tools: true },
+          models: [{ id: "provider/model", label: "Model", default: true }],
+        },
+      ],
     });
 
-    expect(capabilities.defaultProvider).toBe('pi-sdk');
-    expect(capabilities.providers[0]?.models[0]?.id).toBe('provider/model');
-    expect(() => parseAICapabilitiesResponse({
-      available: true,
-      defaultProvider: 42,
-      providers: [],
-    })).toThrow();
+    expect(capabilities.defaultProvider).toBe("pi-sdk");
+    expect(capabilities.providers[0]?.models[0]?.id).toBe("provider/model");
+    expect(() =>
+      parseAICapabilitiesResponse({
+        available: true,
+        defaultProvider: 42,
+        providers: [],
+      }),
+    ).toThrow();
   });
 
-  test('parses save-notes results and rejects malformed success flags', () => {
+  test("parses save-notes results and rejects malformed success flags", () => {
     const response = parseSaveNotesResponse({
       results: {
-        obsidian: { success: true, path: '/tmp/plan.md' },
-        bear: { success: false, error: 'Unavailable' },
+        obsidian: { success: true, path: "/tmp/plan.md" },
+        bear: { success: false, error: "Unavailable" },
       },
     });
 
     expect(response.results?.obsidian?.success).toBe(true);
-    expect(response.results?.bear?.error).toBe('Unavailable');
-    expect(() => parseSaveNotesResponse({
-      results: { octarine: { success: 'yes' } },
-    })).toThrow();
+    expect(response.results?.bear?.error).toBe("Unavailable");
+    expect(() =>
+      parseSaveNotesResponse({
+        results: { octarine: { success: "yes" } },
+      }),
+    ).toThrow();
   });
 });

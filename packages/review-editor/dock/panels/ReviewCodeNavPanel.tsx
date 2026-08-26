@@ -1,19 +1,19 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { useReviewState } from '../ReviewStateContext';
-import { useCodeNavPreview, type PreviewData } from '../../hooks/useCodeNavPreview';
-import { HighlightedCode } from '../../components/HighlightedCode';
-import { detectLanguage } from '../../utils/detectLanguage';
-import type { CodeNavLocation } from '@plannotator/shared/code-nav';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import type { IDockviewPanelProps } from "dockview-react";
+import { useReviewState } from "../ReviewStateContext";
+import { useCodeNavPreview, type PreviewData } from "../../hooks/useCodeNavPreview";
+import { HighlightedCode } from "../../components/HighlightedCode";
+import { detectLanguage } from "../../utils/detectLanguage";
+import type { CodeNavLocation } from "@plannotator/shared/code-nav";
 
 function basename(filePath: string): string {
-  const i = filePath.lastIndexOf('/');
+  const i = filePath.lastIndexOf("/");
   return i === -1 ? filePath : filePath.slice(i + 1);
 }
 
 function dirname(filePath: string): string {
-  const i = filePath.lastIndexOf('/');
-  return i === -1 ? '' : filePath.slice(0, i);
+  const i = filePath.lastIndexOf("/");
+  return i === -1 ? "" : filePath.slice(0, i);
 }
 
 interface FileGroup {
@@ -42,7 +42,7 @@ const CodePreview: React.FC<{
 
   useEffect(() => {
     if (targetRef.current) {
-      targetRef.current.scrollIntoView({ block: 'center' });
+      targetRef.current.scrollIntoView({ block: "center" });
     }
   }, [preview?.targetLine, preview?.filePath]);
   if (isLoading) {
@@ -70,7 +70,7 @@ const CodePreview: React.FC<{
           {preview.lines.map((line, i) => {
             const lineNum = preview.startLine + i;
             const isTarget = lineNum === preview.targetLine;
-            const targetStyle = isTarget ? { backgroundColor: 'var(--muted)' } : undefined;
+            const targetStyle = isTarget ? { backgroundColor: "var(--muted)" } : undefined;
             return (
               <tr key={lineNum} ref={isTarget ? targetRef : undefined}>
                 <td
@@ -79,11 +79,8 @@ const CodePreview: React.FC<{
                 >
                   {lineNum}
                 </td>
-                <td
-                  className="pr-4 whitespace-pre"
-                  style={targetStyle}
-                >
-                  <HighlightedCode code={line || ' '} language={language} />
+                <td className="pr-4 whitespace-pre" style={targetStyle}>
+                  <HighlightedCode code={line || " "} language={language} />
                 </td>
               </tr>
             );
@@ -122,8 +119,11 @@ const ReferenceList: React.FC<{
               title={group.filePath}
             >
               <svg
-                className={`w-3 h-3 text-muted-foreground flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                className={`w-3 h-3 text-muted-foreground flex-shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
@@ -148,17 +148,15 @@ const ReferenceList: React.FC<{
                       key={`${loc.line}-${i}`}
                       className={`w-full text-left pl-7 pr-2 py-0.5 flex items-center gap-1.5 transition-colors ${
                         isSelected
-                          ? 'bg-primary/15 text-primary'
-                          : 'hover:bg-muted/40 text-muted-foreground'
+                          ? "bg-primary/15 text-primary"
+                          : "hover:bg-muted/40 text-muted-foreground"
                       }`}
                       onClick={() => onSelect(loc)}
                     >
                       <span className="font-mono text-[10px] flex-shrink-0 w-8 text-right">
                         :{loc.line}
                       </span>
-                      <span className="truncate font-mono text-[10px]">
-                        {loc.snippet.trim()}
-                      </span>
+                      <span className="truncate font-mono text-[10px]">{loc.snippet.trim()}</span>
                     </button>
                   );
                 })}
@@ -209,13 +207,13 @@ export const ReviewCodeNavPanel: React.FC<IDockviewPanelProps> = (props) => {
     const el = containerRef.current;
     if (!el) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.stopPropagation();
         props.api.close();
       }
     };
-    el.addEventListener('keydown', handler);
-    return () => el.removeEventListener('keydown', handler);
+    el.addEventListener("keydown", handler);
+    return () => el.removeEventListener("keydown", handler);
   }, [props.api]);
 
   if (codeNavIsLoading) {
@@ -227,10 +225,19 @@ export const ReviewCodeNavPanel: React.FC<IDockviewPanelProps> = (props) => {
     );
   }
 
-  if (codeNavResult?.backend === 'unavailable') {
+  if (codeNavResult?.backend === "unavailable") {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground text-xs">
-        Install <a href="https://github.com/BurntSushi/ripgrep" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline mx-1">ripgrep</a> for code navigation
+        Install{" "}
+        <a
+          href="https://github.com/BurntSushi/ripgrep"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline mx-1"
+        >
+          ripgrep
+        </a>{" "}
+        for code navigation
       </div>
     );
   }
@@ -238,7 +245,8 @@ export const ReviewCodeNavPanel: React.FC<IDockviewPanelProps> = (props) => {
   if (!codeNavResult || allLocations.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground text-xs">
-        No results for <code className="bg-muted px-1 py-0.5 rounded ml-1">{codeNavActiveSymbol}</code>
+        No results for{" "}
+        <code className="bg-muted px-1 py-0.5 rounded ml-1">{codeNavActiveSymbol}</code>
       </div>
     );
   }

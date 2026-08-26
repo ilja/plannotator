@@ -1,8 +1,8 @@
-import React from 'react';
-import { HighlightedCode } from './HighlightedCode';
-import { ToolbarState } from '../hooks/useAnnotationToolbar';
-import { useTabIndent } from '../hooks/useTabIndent';
-import { detectLanguage } from '../utils/detectLanguage';
+import React from "react";
+import { HighlightedCode } from "./HighlightedCode";
+import { ToolbarState } from "../hooks/useAnnotationToolbar";
+import { useTabIndent } from "../hooks/useTabIndent";
+import { detectLanguage } from "../utils/detectLanguage";
 
 interface SuggestionModalProps {
   filePath: string;
@@ -10,8 +10,8 @@ interface SuggestionModalProps {
   selectedOriginalCode: string;
   suggestedCode: string;
   setSuggestedCode: React.Dispatch<React.SetStateAction<string>>;
-  modalLayout: 'horizontal' | 'vertical';
-  setModalLayout: (layout: 'horizontal' | 'vertical') => void;
+  modalLayout: "horizontal" | "vertical";
+  setModalLayout: (layout: "horizontal" | "vertical") => void;
   onClose: () => void;
 }
 
@@ -53,17 +53,43 @@ export const SuggestionModal: React.FC<SuggestionModalProps> = ({
           <div className="flex items-center gap-1">
             {/* Layout toggle */}
             <button
-              onClick={() => setModalLayout(modalLayout === 'horizontal' ? 'vertical' : 'horizontal')}
+              onClick={() =>
+                setModalLayout(modalLayout === "horizontal" ? "vertical" : "horizontal")
+              }
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              title={modalLayout === 'horizontal' ? 'Switch to vertical layout' : 'Switch to horizontal layout'}
+              title={
+                modalLayout === "horizontal"
+                  ? "Switch to vertical layout"
+                  : "Switch to horizontal layout"
+              }
             >
-              {modalLayout === 'horizontal' ? (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v7H4zM4 13h16v7H4z" />
+              {modalLayout === "horizontal" ? (
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 4h16v7H4zM4 13h16v7H4z"
+                  />
                 </svg>
               ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h7v16H4zM13 4h7v16h-7z" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 4h7v16H4zM13 4h7v16h-7z"
+                  />
                 </svg>
               )}
             </button>
@@ -71,7 +97,13 @@ export const SuggestionModal: React.FC<SuggestionModalProps> = ({
               onClick={onClose}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -79,33 +111,42 @@ export const SuggestionModal: React.FC<SuggestionModalProps> = ({
         </div>
 
         {/* Two-pane layout */}
-        <div className={`flex flex-1 min-h-0 ${modalLayout === 'vertical' ? 'flex-col' : ''}`}>
+        <div className={`flex flex-1 min-h-0 ${modalLayout === "vertical" ? "flex-col" : ""}`}>
           {/* Original code (read-only) */}
-          <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${modalLayout === 'vertical' ? 'border-b border-border' : 'border-r border-border'}`}>
+          <div
+            className={`flex-1 flex flex-col min-w-0 min-h-0 ${modalLayout === "vertical" ? "border-b border-border" : "border-r border-border"}`}
+          >
             <div className="px-3 py-1.5 border-b border-border/50 bg-muted/30">
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Original</span>
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                Original
+              </span>
             </div>
             <pre className="flex-1 overflow-auto p-3 m-0 text-xs leading-relaxed suggestion-modal-original">
-              <HighlightedCode code={selectedOriginalCode || '(no lines selected)'} language={language} />
+              <HighlightedCode
+                code={selectedOriginalCode || "(no lines selected)"}
+                language={language}
+              />
             </pre>
           </div>
 
           {/* Suggested code input */}
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
             <div className="px-3 py-1.5 border-b border-border/50 bg-muted/30">
-              <span className="text-[10px] font-medium text-success uppercase tracking-wider">Suggestion</span>
+              <span className="text-[10px] font-medium text-success uppercase tracking-wider">
+                Suggestion
+              </span>
             </div>
             <textarea
               value={suggestedCode}
               onChange={(e) => setSuggestedCode(e.target.value)}
-              placeholder={selectedOriginalCode || 'Enter code suggestion...'}
+              placeholder={selectedOriginalCode || "Enter code suggestion..."}
               className="suggested-code-input flex-1 rounded-none border-0 min-h-[300px]"
               autoFocus
               spellCheck={false}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') {
+                if (e.key === "Escape") {
                   onClose();
-                } else if (e.key === 'Tab') {
+                } else if (e.key === "Tab") {
                   handleTabIndent(e);
                 }
               }}
@@ -115,11 +156,10 @@ export const SuggestionModal: React.FC<SuggestionModalProps> = ({
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-          <span className="text-[10px] text-muted-foreground">Tip: Edit the suggestion based on the original code on the left</span>
-          <button
-            onClick={onClose}
-            className="review-toolbar-btn primary"
-          >
+          <span className="text-[10px] text-muted-foreground">
+            Tip: Edit the suggestion based on the original code on the left
+          </span>
+          <button onClick={onClose} className="review-toolbar-btn primary">
             Done
           </button>
         </div>

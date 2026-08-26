@@ -111,16 +111,7 @@ describe("isNoOpBrowserSentinel", () => {
   });
 
   test("recognizes no-op values case- and whitespace-insensitively", () => {
-    for (const value of [
-      "true",
-      "false",
-      "none",
-      ":",
-      "0",
-      "1",
-      "TRUE",
-      "  none  ",
-    ]) {
+    for (const value of ["true", "false", "none", ":", "0", "1", "TRUE", "  none  "]) {
       expect(isNoOpBrowserSentinel(value)).toBe(true);
     }
   });

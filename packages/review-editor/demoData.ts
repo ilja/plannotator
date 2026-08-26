@@ -11,7 +11,7 @@ interface DemoFileContents {
 }
 
 export const DEMO_FILE_CONTENTS: DemoFileContents = {
-  'src/config/settings.ts': {
+  "src/config/settings.ts": {
     oldContent: `import { z } from 'zod';
 
 const envSchema = z.object({

@@ -1,12 +1,12 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { Option, Schema } from 'effect';
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { saveBearSettings } from '../utils/bear';
-import { saveObsidianSettings } from '../utils/obsidian';
-import { saveOctarineSettings } from '../utils/octarine';
-import { storage } from '../utils/storage';
-import { ExportModal } from './ExportModal';
+import { afterEach, describe, expect, test } from "bun:test";
+import { Option, Schema } from "effect";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { saveBearSettings } from "../utils/bear";
+import { saveObsidianSettings } from "../utils/obsidian";
+import { saveOctarineSettings } from "../utils/octarine";
+import { storage } from "../utils/storage";
+import { ExportModal } from "./ExportModal";
 
 const hasDom = globalThis.document !== undefined;
 const realFetch = globalThis.fetch;
@@ -22,7 +22,7 @@ const SaveNotesRequestSchema = Schema.Struct({
 type SaveNotesRequest = Schema.Schema.Type<typeof SaveNotesRequestSchema>;
 const decodeSaveNotesRequest = Schema.decodeUnknownOption(SaveNotesRequestSchema);
 
-if (hasDom) window.location.href = 'http://localhost';
+if (hasDom) window.location.href = "http://localhost";
 
 function installSaveNotesFetch(
   body: JsonResponseBody,
@@ -39,7 +39,7 @@ function installSaveNotesFetch(
       }
       return new Response(JSON.stringify(body), {
         status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     },
     { preconnect: (): void => {} },
@@ -47,36 +47,36 @@ function installSaveNotesFetch(
 }
 
 function installInvalidSaveNotesJson(): void {
-  globalThis.fetch = Object.assign(
-    async (): Promise<Response> => new Response('not json'),
-    { preconnect: (): void => {} },
-  );
+  globalThis.fetch = Object.assign(async (): Promise<Response> => new Response("not json"), {
+    preconnect: (): void => {},
+  });
 }
 
 function saveButton(): HTMLButtonElement {
-  const button = Array.from(document.querySelectorAll('button')).find(
-    (candidate) => candidate.textContent?.trim() === 'Save',
+  const button = Array.from(document.querySelectorAll("button")).find(
+    (candidate) => candidate.textContent?.trim() === "Save",
   );
-  if (button === undefined) throw new Error('Export modal save button not found');
+  if (button === undefined) throw new Error("Export modal save button not found");
   return button;
 }
 
-async function renderExportModal(storedSeparator = 'space'): Promise<void> {
+async function renderExportModal(storedSeparator = "space"): Promise<void> {
   saveObsidianSettings({
     enabled: true,
-    vaultPath: '/notes',
-    folder: 'plannotator',
+    vaultPath: "/notes",
+    folder: "plannotator",
     customPath: undefined,
     filenameFormat: undefined,
-    filenameSeparator: 'space',
+    filenameSeparator: "space",
     autoSave: false,
     vaultBrowserEnabled: false,
   });
-  if (storedSeparator !== 'space') storage.setItem('plannotator-obsidian-filename-separator', storedSeparator);
-  saveBearSettings({ enabled: false, customTags: '', tagPosition: 'append', autoSave: false });
-  saveOctarineSettings({ enabled: false, workspace: '', folder: 'plannotator', autoSave: false });
+  if (storedSeparator !== "space")
+    storage.setItem("plannotator-obsidian-filename-separator", storedSeparator);
+  saveBearSettings({ enabled: false, customTags: "", tagPosition: "append", autoSave: false });
+  saveOctarineSettings({ enabled: false, workspace: "", folder: "plannotator", autoSave: false });
 
-  const host = document.createElement('div');
+  const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   roots.push(root);
@@ -114,66 +114,76 @@ afterEach(async () => {
   globalThis.fetch = realFetch;
 
   if (hasDom) {
-    document.body.innerHTML = '';
+    document.body.innerHTML = "";
     saveObsidianSettings({
       enabled: false,
-      vaultPath: '',
-      folder: 'plannotator',
+      vaultPath: "",
+      folder: "plannotator",
       customPath: undefined,
       filenameFormat: undefined,
-      filenameSeparator: 'space',
+      filenameSeparator: "space",
       autoSave: false,
       vaultBrowserEnabled: false,
     });
-    saveBearSettings({ enabled: false, customTags: '', tagPosition: 'append', autoSave: false });
-    saveOctarineSettings({ enabled: false, workspace: '', folder: 'plannotator', autoSave: false });
+    saveBearSettings({ enabled: false, customTags: "", tagPosition: "append", autoSave: false });
+    saveOctarineSettings({ enabled: false, workspace: "", folder: "plannotator", autoSave: false });
   }
 });
 
-describe('ExportModal save-notes response handling', () => {
-  test.skipIf(!hasDom)('shows the existing Save failed error when the selected result is missing', async () => {
-    installSaveNotesFetch({ results: {} });
-    await renderExportModal();
+describe("ExportModal save-notes response handling", () => {
+  test.skipIf(!hasDom)(
+    "shows the existing Save failed error when the selected result is missing",
+    async () => {
+      installSaveNotesFetch({ results: {} });
+      await renderExportModal();
 
-    await saveToObsidian();
+      await saveToObsidian();
 
-    expect(document.body.textContent).toContain('Failed');
-    expect(document.body.textContent).toContain('Save failed');
-  });
+      expect(document.body.textContent).toContain("Failed");
+      expect(document.body.textContent).toContain("Save failed");
+    },
+  );
 
-  test.skipIf(!hasDom)('omits an invalid persisted filename separator from the save-notes payload', async () => {
-    let requestBody: SaveNotesRequest | undefined;
-    installSaveNotesFetch(
-      { results: { obsidian: { success: true } } },
-      200,
-      (body) => { requestBody = body; },
-    );
-    await renderExportModal('not-a-separator');
+  test.skipIf(!hasDom)(
+    "omits an invalid persisted filename separator from the save-notes payload",
+    async () => {
+      let requestBody: SaveNotesRequest | undefined;
+      installSaveNotesFetch({ results: { obsidian: { success: true } } }, 200, (body) => {
+        requestBody = body;
+      });
+      await renderExportModal("not-a-separator");
 
-    await saveToObsidian();
+      await saveToObsidian();
 
-    expect(requestBody).toEqual({
-      obsidian: { vaultPath: '/notes', folder: 'plannotator', plan: '# Plan' },
-    });
-    expect(storage.getItem('plannotator-obsidian-filename-separator')).toBe('not-a-separator');
-  });
+      expect(requestBody).toEqual({
+        obsidian: { vaultPath: "/notes", folder: "plannotator", plan: "# Plan" },
+      });
+      expect(storage.getItem("plannotator-obsidian-filename-separator")).toBe("not-a-separator");
+    },
+  );
 
-  test.skipIf(!hasDom)('uses a valid selected result even when the response status is not OK', async () => {
-    installSaveNotesFetch({ results: { obsidian: { success: true } } }, 500);
-    await renderExportModal();
+  test.skipIf(!hasDom)(
+    "uses a valid selected result even when the response status is not OK",
+    async () => {
+      installSaveNotesFetch({ results: { obsidian: { success: true } } }, 500);
+      await renderExportModal();
 
-    await saveToObsidian();
+      await saveToObsidian();
 
-    expect(document.body.textContent).toContain('Saved');
-  });
+      expect(document.body.textContent).toContain("Saved");
+    },
+  );
 
-  test.skipIf(!hasDom)('shows the existing Save failed error when the response is not valid JSON', async () => {
-    installInvalidSaveNotesJson();
-    await renderExportModal();
+  test.skipIf(!hasDom)(
+    "shows the existing Save failed error when the response is not valid JSON",
+    async () => {
+      installInvalidSaveNotesJson();
+      await renderExportModal();
 
-    await saveToObsidian();
+      await saveToObsidian();
 
-    expect(document.body.textContent).toContain('Failed');
-    expect(document.body.textContent).toContain('Save failed');
-  });
+      expect(document.body.textContent).toContain("Failed");
+      expect(document.body.textContent).toContain("Save failed");
+    },
+  );
 });

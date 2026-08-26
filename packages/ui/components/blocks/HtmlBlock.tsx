@@ -25,56 +25,56 @@ function rewriteRelativeRefs(
   onOpenLinkedDoc?: (path: string) => void,
   onOpenCodeFile?: (path: string) => void,
   onNavigateAnchor?: (hash: string) => void,
-): (() => void) {
+): () => void {
   const cleanups: (() => void)[] = [];
 
-  root.querySelectorAll('img').forEach((img) => {
-    const src = img.getAttribute('src');
+  root.querySelectorAll("img").forEach((img) => {
+    const src = img.getAttribute("src");
     if (!src) return;
     if (/^(https?:|data:|blob:)/i.test(src)) return;
-    img.setAttribute('src', getImageSrc(src, imageBaseDir));
+    img.setAttribute("src", getImageSrc(src, imageBaseDir));
   });
 
-  root.querySelectorAll('a').forEach((a) => {
-    const href = a.getAttribute('href');
+  root.querySelectorAll("a").forEach((a) => {
+    const href = a.getAttribute("href");
     if (!href) return;
     // External http(s) links: open in a new tab and close the tab-nabbing
     // vector (opener reference back to the plannotator tab). Matches the
     // markdown renderer's behavior for [label](https://...).
     if (/^(https?:|\/\/)/i.test(href)) {
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener noreferrer');
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener noreferrer");
       return;
     }
     if (/^(mailto:|tel:)/i.test(href)) return;
     // In-page anchor: native browser jump doesn't target the scroll viewport,
     // so route through onNavigateAnchor to match InlineMarkdown's behavior.
-    if (href.startsWith('#')) {
+    if (href.startsWith("#")) {
       if (!onNavigateAnchor) return;
       const handler = (e: Event) => {
         e.preventDefault();
         onNavigateAnchor(href);
       };
-      a.addEventListener('click', handler);
-      cleanups.push(() => a.removeEventListener('click', handler));
+      a.addEventListener("click", handler);
+      cleanups.push(() => a.removeEventListener("click", handler));
       return;
     }
     if (onOpenCodeFile && isCodeFilePath(href)) {
       const handler = (e: Event) => {
         e.preventDefault();
-        onOpenCodeFile(href.replace(/#.*$/, ''));
+        onOpenCodeFile(href.replace(/#.*$/, ""));
       };
-      a.addEventListener('click', handler);
-      cleanups.push(() => a.removeEventListener('click', handler));
+      a.addEventListener("click", handler);
+      cleanups.push(() => a.removeEventListener("click", handler));
       return;
     }
     if (onOpenLinkedDoc && /\.(mdx?|txt|html?)(#.*)?$/i.test(href)) {
       const handler = (e: Event) => {
         e.preventDefault();
-        onOpenLinkedDoc(href.replace(/#.*$/, ''));
+        onOpenLinkedDoc(href.replace(/#.*$/, ""));
       };
-      a.addEventListener('click', handler);
-      cleanups.push(() => a.removeEventListener('click', handler));
+      a.addEventListener("click", handler);
+      cleanups.push(() => a.removeEventListener("click", handler));
     }
   });
 
@@ -87,18 +87,27 @@ function rewriteRelativeRefs(
 // re-set on every parent re-render would collapse any open <details> the
 // user just opened. Paired with React.memo below so the component itself
 // stops re-rendering unless the block content actually changes.
-const HtmlBlockImpl: React.FC<HtmlBlockProps> = ({ block, imageBaseDir, onOpenLinkedDoc, onOpenCodeFile, onNavigateAnchor }) => {
+const HtmlBlockImpl: React.FC<HtmlBlockProps> = ({
+  block,
+  imageBaseDir,
+  onOpenLinkedDoc,
+  onOpenCodeFile,
+  onNavigateAnchor,
+}) => {
   const ref = useRef<HTMLDivElement>(null);
-  const sanitized = React.useMemo(
-    () => sanitizeBlockHtml(block.content),
-    [block.content],
-  );
+  const sanitized = React.useMemo(() => sanitizeBlockHtml(block.content), [block.content]);
   useEffect(() => {
     if (!ref.current) return;
     if (ref.current.innerHTML !== sanitized) {
       ref.current.innerHTML = sanitized;
     }
-    const cleanup = rewriteRelativeRefs(ref.current, imageBaseDir, onOpenLinkedDoc, onOpenCodeFile, onNavigateAnchor);
+    const cleanup = rewriteRelativeRefs(
+      ref.current,
+      imageBaseDir,
+      onOpenLinkedDoc,
+      onOpenCodeFile,
+      onNavigateAnchor,
+    );
     return cleanup;
   }, [sanitized, imageBaseDir, onOpenLinkedDoc, onOpenCodeFile, onNavigateAnchor]);
   return (

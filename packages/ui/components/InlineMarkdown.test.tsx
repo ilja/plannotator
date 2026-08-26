@@ -10,9 +10,12 @@ const roots: Root[] = [];
 function installFetch(responses: Response | Response[]): void {
   const queue = Array.isArray(responses) ? responses : [responses];
   let index = 0;
-  globalThis.fetch = Object.assign(async (): Promise<Response> => queue[index++] ?? new Response(null, { status: 500 }), {
-    preconnect: (): void => {},
-  });
+  globalThis.fetch = Object.assign(
+    async (): Promise<Response> => queue[index++] ?? new Response(null, { status: 500 }),
+    {
+      preconnect: (): void => {},
+    },
+  );
 }
 
 async function mountMarkdown(): Promise<HTMLDivElement> {
@@ -57,10 +60,14 @@ afterEach(async () => {
 
 describe("InlineMarkdown code-file preview response handling", () => {
   test.skipIf(!hasDom)("renders a preview only for a validated response", async () => {
-    installFetch(new Response(JSON.stringify({
-      contents: "first line\nsecond line\nthird line",
-      filepath: "/repo/src/example.ts",
-    })));
+    installFetch(
+      new Response(
+        JSON.stringify({
+          contents: "first line\nsecond line\nthird line",
+          filepath: "/repo/src/example.ts",
+        }),
+      ),
+    );
     const host = await mountMarkdown();
 
     await hoverCodeFile(host);
@@ -72,7 +79,12 @@ describe("InlineMarkdown code-file preview response handling", () => {
   test.skipIf(!hasDom)("replaces a malformed preview after a valid retry", async () => {
     installFetch([
       new Response(JSON.stringify({ contents: 42, filepath: "/repo/src/example.ts" })),
-      new Response(JSON.stringify({ contents: "first\nsecond\nvalid after retry", filepath: "/repo/src/example.ts" })),
+      new Response(
+        JSON.stringify({
+          contents: "first\nsecond\nvalid after retry",
+          filepath: "/repo/src/example.ts",
+        }),
+      ),
     ]);
     const host = await mountMarkdown();
 
@@ -85,19 +97,24 @@ describe("InlineMarkdown code-file preview response handling", () => {
     expect(document.body.textContent).toContain("valid after retry");
   });
 
-  test.skipIf(!hasDom)("silently suppresses malformed, invalid-JSON, and non-OK previews", async () => {
-    const responses = [
-      new Response(JSON.stringify({ contents: 42, filepath: "/repo/src/example.ts" })),
-      new Response("{invalid-json"),
-      new Response(JSON.stringify({ contents: "untrusted", filepath: "/repo/src/example.ts" }), { status: 503 }),
-    ];
+  test.skipIf(!hasDom)(
+    "silently suppresses malformed, invalid-JSON, and non-OK previews",
+    async () => {
+      const responses = [
+        new Response(JSON.stringify({ contents: 42, filepath: "/repo/src/example.ts" })),
+        new Response("{invalid-json"),
+        new Response(JSON.stringify({ contents: "untrusted", filepath: "/repo/src/example.ts" }), {
+          status: 503,
+        }),
+      ];
 
-    for (const response of responses) {
-      installFetch(response);
-      const host = await mountMarkdown();
-      await hoverCodeFile(host);
-      expect(document.querySelector(".code-snippet-preview")).toBeNull();
-      host.remove();
-    }
-  });
+      for (const response of responses) {
+        installFetch(response);
+        const host = await mountMarkdown();
+        await hoverCodeFile(host);
+        expect(document.querySelector(".code-snippet-preview")).toBeNull();
+        host.remove();
+      }
+    },
+  );
 });

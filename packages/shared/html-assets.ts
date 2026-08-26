@@ -62,13 +62,8 @@ export function normalizeHtmlAssetRoutePath(routePath: string): string | null {
   return normalizeDecodedLocalAssetPath(decoded);
 }
 
-export function rewriteHtmlAssetReferences(
-  html: string,
-  assetUrlFor: HtmlAssetUrlMapper,
-): string {
-  const tree = looksLikeFullDocument(html)
-    ? parse5.parse(html)
-    : parse5.parseFragment(html);
+export function rewriteHtmlAssetReferences(html: string, assetUrlFor: HtmlAssetUrlMapper): string {
+  const tree = looksLikeFullDocument(html) ? parse5.parse(html) : parse5.parseFragment(html);
   // SAFETY: parse5's Document/DocumentFragment is a superset of HtmlNode's
   // tagName/attrs/childNodes/value subset used by rewriteNodeAssetReferences.
   visit(tree as HtmlNode, (node) => rewriteNodeAssetReferences(node, assetUrlFor));
@@ -101,10 +96,7 @@ export function rewriteCssAssetReferences(
   return rewritten;
 }
 
-function rewriteNodeAssetReferences(
-  node: HtmlNode,
-  assetUrlFor: HtmlAssetUrlMapper,
-): void {
+function rewriteNodeAssetReferences(node: HtmlNode, assetUrlFor: HtmlAssetUrlMapper): void {
   const tagName = node.tagName?.toLowerCase();
   if (!tagName) return;
 
@@ -148,22 +140,14 @@ function visit(node: HtmlNode, fn: (node: HtmlNode) => void): void {
   for (const child of node.childNodes ?? []) visit(child, fn);
 }
 
-function rewriteAttr(
-  node: HtmlNode,
-  name: string,
-  assetUrlFor: HtmlAssetUrlMapper,
-): void {
+function rewriteAttr(node: HtmlNode, name: string, assetUrlFor: HtmlAssetUrlMapper): void {
   const attr = findAttr(node, name);
   if (!attr) return;
   const rewritten = rewriteLocalAssetUrl(attr.value, assetUrlFor);
   if (rewritten !== null) attr.value = rewritten;
 }
 
-function rewriteSrcsetAttr(
-  node: HtmlNode,
-  name: string,
-  assetUrlFor: HtmlAssetUrlMapper,
-): void {
+function rewriteSrcsetAttr(node: HtmlNode, name: string, assetUrlFor: HtmlAssetUrlMapper): void {
   const attr = findAttr(node, name);
   if (!attr) return;
   const rewritten = rewriteSrcset(attr.value, assetUrlFor);
@@ -217,9 +201,7 @@ function rewriteLocalAssetUrl(
   if (shouldSkipUrl(trimmed)) return null;
 
   const { path, suffix } = splitPathSuffix(trimmed);
-  const normalized = normalizeLocalAssetPath(
-    basePath ? pathPosix.join(basePath, path) : path,
-  );
+  const normalized = normalizeLocalAssetPath(basePath ? pathPosix.join(basePath, path) : path);
   if (normalized === null) return null;
   if (htmlAssetContentType(normalized) === null) return null;
 
@@ -228,10 +210,7 @@ function rewriteLocalAssetUrl(
   return /^data:/i.test(next) ? next : `${next}${suffix}`;
 }
 
-function rewriteSrcset(
-  srcset: string,
-  assetUrlFor: HtmlAssetUrlMapper,
-): string {
+function rewriteSrcset(srcset: string, assetUrlFor: HtmlAssetUrlMapper): string {
   const rewritten: string[] = [];
   let changed = false;
   let i = 0;

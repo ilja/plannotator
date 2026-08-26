@@ -64,7 +64,9 @@ const SemanticDiffUnavailableResponseSchema = Schema.Struct({
   reason: Schema.String,
   message: Schema.String,
 });
-export type SemanticDiffUnavailableResponse = Schema.Schema.Type<typeof SemanticDiffUnavailableResponseSchema>;
+export type SemanticDiffUnavailableResponse = Schema.Schema.Type<
+  typeof SemanticDiffUnavailableResponseSchema
+>;
 
 const SemanticDiffErrorResponseSchema = Schema.Struct({
   status: Schema.Literal("error"),
@@ -101,14 +103,18 @@ function decodeSemanticDiffChanges(changes: ReadonlyArray<unknown>): SemanticDif
   });
 }
 
-function decodeSemanticDiffBinaryChanges(changes: ReadonlyArray<unknown>): SemanticDiffBinaryChange[] {
+function decodeSemanticDiffBinaryChanges(
+  changes: ReadonlyArray<unknown>,
+): SemanticDiffBinaryChange[] {
   return changes.flatMap((change) => {
     const result = decodeSemanticDiffBinaryChange(change);
     return Result.isSuccess(result) ? [result.success] : [];
   });
 }
 
-function retainValidSemanticDiffEntries(response: SemanticDiffResponseEnvelope): SemanticDiffResponse {
+function retainValidSemanticDiffEntries(
+  response: SemanticDiffResponseEnvelope,
+): SemanticDiffResponse {
   if (response.status !== "ok") return response;
 
   return {
@@ -132,4 +138,7 @@ export interface SemanticDiffAvailability {
   semSource?: string;
 }
 
-export type SemanticDiffAdvert = Pick<SemanticDiffAvailability, "available" | "semVersion" | "semSource">;
+export type SemanticDiffAdvert = Pick<
+  SemanticDiffAvailability,
+  "available" | "semVersion" | "semSource"
+>;

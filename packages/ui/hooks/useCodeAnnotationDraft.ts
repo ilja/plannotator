@@ -5,13 +5,13 @@
  * (they're already compact — no tuple conversion needed).
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { CodeAnnotation } from '../types';
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { CodeAnnotation } from "../types";
 import {
   decodeMissingCodeAnnotationDraft,
   decodeSuccessfulCodeAnnotationDraft,
   type DecodedSuccessfulCodeAnnotationDraft,
-} from '../utils/codeAnnotationDraftDecoding';
+} from "../utils/codeAnnotationDraftDecoding";
 
 const DEBOUNCE_MS = 500;
 
@@ -29,13 +29,13 @@ interface RestoredDraftData {
 
 function formatTimeAgo(ts: number): string {
   const seconds = Math.floor((Date.now() - ts) / 1000);
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
   const days = Math.floor(hours / 24);
-  return `${days} day${days !== 1 ? 's' : ''} ago`;
+  return `${days} day${days !== 1 ? "s" : ""} ago`;
 }
 
 interface UseCodeAnnotationDraftOptions {
@@ -58,7 +58,11 @@ export function useCodeAnnotationDraft({
   isApiMode,
   submitted,
 }: UseCodeAnnotationDraftOptions): UseCodeAnnotationDraftResult {
-  const [draftBanner, setDraftBanner] = useState<{ count: number; viewedCount: number; timeAgo: string } | null>(null);
+  const [draftBanner, setDraftBanner] = useState<{
+    count: number;
+    viewedCount: number;
+    timeAgo: string;
+  } | null>(null);
   const draftDataRef = useRef<RestoredDraftData | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMountedRef = useRef(false);
@@ -73,8 +77,8 @@ export function useCodeAnnotationDraft({
   useEffect(() => {
     if (!isApiMode) return;
 
-    fetch('/api/draft')
-      .then(async res => {
+    fetch("/api/draft")
+      .then(async (res) => {
         const data = await res.json().catch(() => null);
         if (res.status === 404) {
           const missingDraft = decodeMissingCodeAnnotationDraft(data);
@@ -148,7 +152,7 @@ export function useCodeAnnotationDraft({
         // The user cleared everything (#948). Delete the draft with a generation
         // tombstone so it can't resurface on refresh and a late save can't revive
         // it. Mirrors useAnnotationDraft.persistNow.
-        fetch(`/api/draft?generation=${draftGeneration}`, { method: 'DELETE' }).catch(() => {
+        fetch(`/api/draft?generation=${draftGeneration}`, { method: "DELETE" }).catch(() => {
           // Silent failure
         });
         return;
@@ -161,9 +165,9 @@ export function useCodeAnnotationDraft({
         ts: Date.now(),
       };
 
-      fetch('/api/draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      fetch("/api/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }).catch(() => {
         // Silent failure
@@ -198,7 +202,7 @@ export function useCodeAnnotationDraft({
     draftGenerationRef.current = deletedGeneration;
     setDraftBanner(null);
     draftDataRef.current = null;
-    fetch(`/api/draft?generation=${deletedGeneration}`, { method: 'DELETE' }).catch(() => {});
+    fetch(`/api/draft?generation=${deletedGeneration}`, { method: "DELETE" }).catch(() => {});
   }, []);
 
   return { draftBanner, restoreDraft, getDraftGeneration, dismissDraft };

@@ -17,10 +17,7 @@ import {
 
 // --- P4 command runner ---
 
-async function runP4(
-  args: string[],
-  options?: { cwd?: string },
-): Promise<GitCommandResult> {
+async function runP4(args: string[], options?: { cwd?: string }): Promise<GitCommandResult> {
   try {
     const proc = Bun.spawn(["p4", ...args], {
       cwd: options?.cwd,
@@ -115,9 +112,7 @@ export function parseP4WorkspaceInfo(stdout: string): P4WorkspaceInfo | null {
 const workspaceCache = new Map<string, { info: P4WorkspaceInfo | null; ts: number }>();
 const CACHE_TTL_MS = 30_000;
 
-export async function detectP4Workspace(
-  cwd?: string,
-): Promise<P4WorkspaceInfo | null> {
+export async function detectP4Workspace(cwd?: string): Promise<P4WorkspaceInfo | null> {
   const key = cwd ?? process.cwd();
   const cached = workspaceCache.get(key);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
@@ -156,7 +151,9 @@ export async function getP4Context(cwd?: string): Promise<GitContext> {
   // Check default changelist has files
   const [defaultOpened, changesResult] = await Promise.all([
     runP4(["opened", "-c", "default"], { cwd }),
-    runP4(["changes", "-s", "pending", "-u", workspace.userName, "-c", workspace.clientName], { cwd }),
+    runP4(["changes", "-s", "pending", "-u", workspace.userName, "-c", workspace.clientName], {
+      cwd,
+    }),
   ]);
 
   if (defaultOpened.exitCode === 0 && defaultOpened.stdout.trim()) {
@@ -217,10 +214,7 @@ export async function getP4Context(cwd?: string): Promise<GitContext> {
  *   +++ b/relative/file.cpp
  *   @@ hunks @@
  */
-function convertP4DiffToGitFormat(
-  rawOutput: string,
-  normalizedRoot: string,
-): string {
+function convertP4DiffToGitFormat(rawOutput: string, normalizedRoot: string): string {
   const lines = rawOutput.split("\n");
   const result: string[] = [];
 
@@ -269,10 +263,7 @@ function convertP4DiffToGitFormat(
 /**
  * Get unified diff for new files (p4 add) that have no depot version yet.
  */
-async function getNewFileDiff(
-  localPath: string,
-  relativePath: string,
-): Promise<string> {
+async function getNewFileDiff(localPath: string, relativePath: string): Promise<string> {
   try {
     const content = await Bun.file(localPath).text();
     const lines = content.replace(/\r\n/g, "\n").split("\n");
@@ -337,10 +328,7 @@ async function batchResolveDepotPaths(
   return result;
 }
 
-export async function runP4Diff(
-  diffType: DiffType,
-  cwd?: string,
-): Promise<DiffResult> {
+export async function runP4Diff(diffType: DiffType, cwd?: string): Promise<DiffResult> {
   const workspace = await detectP4Workspace(cwd);
   if (!workspace) {
     return { patch: "", label: "P4 error", error: "Not in a Perforce workspace" };
@@ -352,13 +340,13 @@ export async function runP4Diff(
   }
 
   try {
-    const label = parsed.changelist === "default"
-      ? "Default changelist"
-      : `Changelist ${parsed.changelist}`;
+    const label =
+      parsed.changelist === "default" ? "Default changelist" : `Changelist ${parsed.changelist}`;
 
-    const openedArgs = parsed.changelist === "default"
-      ? ["opened", "-c", "default"]
-      : ["opened", "-c", parsed.changelist];
+    const openedArgs =
+      parsed.changelist === "default"
+        ? ["opened", "-c", "default"]
+        : ["opened", "-c", parsed.changelist];
     const openedResult = await runP4(openedArgs, { cwd });
 
     if (openedResult.exitCode !== 0 || !openedResult.stdout.trim()) {
@@ -427,7 +415,9 @@ export async function getP4FileContentsForDiff(
 
   const [printResult, newContent] = await Promise.all([
     runP4(["print", "-q", `${fullLocalPath}#have`], { cwd }),
-    Bun.file(fullLocalPath).text().catch(() => null),
+    Bun.file(fullLocalPath)
+      .text()
+      .catch(() => null),
   ]);
 
   return {

@@ -3,10 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { handleCodeNavResolve } from "./code-nav";
 
 describe("handleCodeNavResolve", () => {
-  const request = (body: BodyInit): Request => new Request(
-    "http://localhost/api/code-nav/resolve",
-    { method: "POST", headers: { "Content-Type": "application/json" }, body },
-  );
+  const request = (body: BodyInit): Request =>
+    new Request("http://localhost/api/code-nav/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
 
   test("rejects malformed JSON", async () => {
     const response = await handleCodeNavResolve(request("{"), process.cwd(), []);

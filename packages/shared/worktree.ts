@@ -48,7 +48,9 @@ export async function fetchRef(
 ): Promise<void> {
   const result = await runtime.runGit(["fetch", "origin", "--", ref], { cwd: options?.cwd });
   if (result.exitCode !== 0) {
-    throw new Error(`git fetch origin ${ref} failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`);
+    throw new Error(
+      `git fetch origin ${ref} failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`,
+    );
   }
 }
 
@@ -89,7 +91,9 @@ export async function createWorktree(
 
   const result = await runtime.runGit(args, { cwd: options.cwd });
   if (result.exitCode !== 0) {
-    throw new Error(`git worktree add failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`);
+    throw new Error(
+      `git worktree add failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`,
+    );
   }
 
   return { worktreePath: options.path };
@@ -111,9 +115,13 @@ export async function removeWorktree(
   try {
     const result = await runtime.runGit(args, { cwd: options?.cwd });
     if (result.exitCode !== 0) {
-      console.error(`Warning: git worktree remove failed for ${worktreePath}: ${result.stderr.trim()}`);
+      console.error(
+        `Warning: git worktree remove failed for ${worktreePath}: ${result.stderr.trim()}`,
+      );
     }
   } catch (err) {
-    console.error(`Warning: worktree cleanup error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `Warning: worktree cleanup error: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }

@@ -213,7 +213,11 @@ function aggregateRepos(repos: WorkspaceRepoRuntimeState[]): WorkspaceDiffSnapsh
   };
 }
 
-function normalizeAgentPath(root: string, repos: WorkspaceRepoRuntimeState[], filePath: string): string {
+function normalizeAgentPath(
+  root: string,
+  repos: WorkspaceRepoRuntimeState[],
+  filePath: string,
+): string {
   const normalized = normalizeWorkspacePath(filePath);
   if (resolveWorkspaceFilePath(repos, normalized)) return normalized;
 
@@ -231,7 +235,12 @@ function normalizeAgentPath(root: string, repos: WorkspaceRepoRuntimeState[], fi
   }
 
   const changedRepos = repos.filter((repo) => repo.selected && repo.rawPatch.trim());
-  if (!isAbsolute(filePath) && changedRepos.length === 1 && normalized && !normalized.startsWith("..")) {
+  if (
+    !isAbsolute(filePath) &&
+    changedRepos.length === 1 &&
+    normalized &&
+    !normalized.startsWith("..")
+  ) {
     return `${normalizeWorkspacePath(changedRepos[0].label)}/${normalized}`;
   }
 
@@ -277,34 +286,36 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
     const repoPaths = discoverWorkspaceRepoPaths(resolvedRoot);
     const labels = buildWorkspaceRepoLabels(resolvedRoot, repoPaths);
 
-    const repos = await Promise.all(repoPaths.map(async (cwd, index) => {
-      const label = labels[index];
-      try {
-        const gitContext = await runtime.getVcsContext(cwd);
-        const vcsType = normalizeVcsType(gitContext.vcsType);
-        return {
-          id: `repo-${index + 1}`,
-          label,
-          cwd,
-          selected: false,
-          vcsType,
-          gitContext,
-          diffOptions: gitContext.diffOptions,
-          rawPatch: "",
-          gitRef: "",
-        } satisfies WorkspaceRepoRuntimeState;
-      } catch (error) {
-        return {
-          id: `repo-${index + 1}`,
-          label,
-          cwd,
-          selected: false,
-          rawPatch: "",
-          gitRef: "",
-          error: error instanceof Error ? error.message : String(error),
-        } satisfies WorkspaceRepoRuntimeState;
-      }
-    }));
+    const repos = await Promise.all(
+      repoPaths.map(async (cwd, index) => {
+        const label = labels[index];
+        try {
+          const gitContext = await runtime.getVcsContext(cwd);
+          const vcsType = normalizeVcsType(gitContext.vcsType);
+          return {
+            id: `repo-${index + 1}`,
+            label,
+            cwd,
+            selected: false,
+            vcsType,
+            gitContext,
+            diffOptions: gitContext.diffOptions,
+            rawPatch: "",
+            gitRef: "",
+          } satisfies WorkspaceRepoRuntimeState;
+        } catch (error) {
+          return {
+            id: `repo-${index + 1}`,
+            label,
+            cwd,
+            selected: false,
+            rawPatch: "",
+            gitRef: "",
+            error: error instanceof Error ? error.message : String(error),
+          } satisfies WorkspaceRepoRuntimeState;
+        }
+      }),
+    );
 
     const diffType = resolveWorkspaceInitialDiffType(
       repos.filter((repo) => repo.vcsType),
@@ -322,10 +333,12 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
     return session;
   }
 
-  async rebuild(options: {
-    diffType?: DiffType | WorkspaceDiffType;
-    hideWhitespace?: boolean;
-  } = {}): Promise<WorkspaceDiffSnapshot> {
+  async rebuild(
+    options: {
+      diffType?: DiffType | WorkspaceDiffType;
+      hideWhitespace?: boolean;
+    } = {},
+  ): Promise<WorkspaceDiffSnapshot> {
     const requestedMode = mapRepoDiffTypeToWorkspaceMode(options.diffType) ?? this.diffType;
     if (!workspaceModeAvailable(this.repos, requestedMode)) {
       throw new Error(`Workspace diff mode is not available: ${requestedMode}`);
@@ -335,46 +348,53 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
       this.hideWhitespace = options.hideWhitespace;
     }
 
-    const repos = await Promise.all(this.repos.map(async (repo) => {
-      if (!repo.vcsType || !repo.gitContext) {
-        return { ...repo, selected: false, rawPatch: "", gitRef: "" };
-      }
+    const repos = await Promise.all(
+      this.repos.map(async (repo) => {
+        if (!repo.vcsType || !repo.gitContext) {
+          return { ...repo, selected: false, rawPatch: "", gitRef: "" };
+        }
 
-      const repoDiffType = mapWorkspaceModeToRepoDiffType(requestedMode, repo.vcsType);
-      if (!repoDiffType) {
-        return {
-          ...repo,
-          selected: false,
-          diffType: undefined,
-          rawPatch: "",
-          gitRef: "",
-          error: `Workspace diff mode ${requestedMode} is not available for ${repo.vcsType}`,
-        };
-      }
+        const repoDiffType = mapWorkspaceModeToRepoDiffType(requestedMode, repo.vcsType);
+        if (!repoDiffType) {
+          return {
+            ...repo,
+            selected: false,
+            diffType: undefined,
+            rawPatch: "",
+            gitRef: "",
+            error: `Workspace diff mode ${requestedMode} is not available for ${repo.vcsType}`,
+          };
+        }
 
-      try {
-        const diff = await this.runtime.runVcsDiff(repoDiffType, repo.gitContext.defaultBranch, repo.cwd, {
-          hideWhitespace: this.hideWhitespace,
-        });
-        return {
-          ...repo,
-          selected: !!diff.patch.trim(),
-          diffType: repoDiffType,
-          rawPatch: prefixWorkspacePatchPaths(diff.patch, repo.label),
-          gitRef: diff.label,
-          error: diff.error,
-        };
-      } catch (error) {
-        return {
-          ...repo,
-          selected: false,
-          diffType: repoDiffType,
-          rawPatch: "",
-          gitRef: "",
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    }));
+        try {
+          const diff = await this.runtime.runVcsDiff(
+            repoDiffType,
+            repo.gitContext.defaultBranch,
+            repo.cwd,
+            {
+              hideWhitespace: this.hideWhitespace,
+            },
+          );
+          return {
+            ...repo,
+            selected: !!diff.patch.trim(),
+            diffType: repoDiffType,
+            rawPatch: prefixWorkspacePatchPaths(diff.patch, repo.label),
+            gitRef: diff.label,
+            error: diff.error,
+          };
+        } catch (error) {
+          return {
+            ...repo,
+            selected: false,
+            diffType: repoDiffType,
+            rawPatch: "",
+            gitRef: "",
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }),
+    );
 
     this.repos = repos;
     this.diffType = requestedMode;
@@ -441,7 +461,9 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
     }
 
     return this.runtime.getVcsFileContentsForDiff(
-      resolved.repo.diffType ?? mapWorkspaceModeToRepoDiffType(this.diffType, resolved.repo.vcsType) ?? "uncommitted",
+      resolved.repo.diffType ??
+        mapWorkspaceModeToRepoDiffType(this.diffType, resolved.repo.vcsType) ??
+        "uncommitted",
       resolved.repo.gitContext?.defaultBranch ?? "main",
       resolved.repoRelativePath,
       resolvedOld?.repoRelativePath,
@@ -453,7 +475,10 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
     const resolved = resolveWorkspaceFilePath(this.repos, filePath);
     if (!resolved) throw new Error("File is not part of this workspace review");
 
-    const diffType = resolved.repo.diffType ?? mapWorkspaceModeToRepoDiffType(this.diffType, resolved.repo.vcsType) ?? "uncommitted";
+    const diffType =
+      resolved.repo.diffType ??
+      mapWorkspaceModeToRepoDiffType(this.diffType, resolved.repo.vcsType) ??
+      "uncommitted";
     if (!(await this.runtime.canStageFiles(diffType, resolved.repo.cwd))) {
       throw new Error("Staging not available");
     }

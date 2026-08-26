@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'bun:test';
-import { annotateSettingsShortcutRegistry, annotationEditorShortcuts } from '../editor/shortcuts';
-import { reviewSettingsShortcutRegistry } from '../review-editor/shortcuts';
+import { describe, expect, it } from "bun:test";
+import { annotateSettingsShortcutRegistry, annotationEditorShortcuts } from "../editor/shortcuts";
+import { reviewSettingsShortcutRegistry } from "../review-editor/shortcuts";
 import {
   createShortcutRegistry,
   defineShortcutScope,
@@ -13,166 +13,230 @@ import {
   matchesShortcutBinding,
   parseDoubleTapBinding,
   validateShortcutRegistry,
-} from './shortcuts';
+} from "./shortcuts";
 
-describe('shortcuts', () => {
-  it('formats bindings for docs and keycaps', () => {
-    expect(formatShortcutBindingText('Mod+Enter')).toBe('Cmd/Ctrl+Enter');
-    expect(formatShortcutBindingText('Alt hold')).toBe('Hold Alt');
-    expect(formatShortcutBindingText('Alt Alt')).toBe('Double-tap Alt');
-    expect(formatShortcutBindingText('Alt Alt', 'mac')).toBe('Double-tap Option');
-    expect(formatShortcutBindingTokens('Mod+Enter', 'mac')).toEqual(['⌘', '⏎']);
-    expect(formatShortcutBindingTokens('Mod+Enter', 'non-mac')).toEqual(['Ctrl', '↵']);
-    expect(formatShortcutBindingTokens('Alt Alt', 'mac')).toEqual(['⌥', '×2']);
-    expect(formatShortcutBindingTokens('Alt Alt', 'non-mac')).toEqual(['Alt', '×2']);
+describe("shortcuts", () => {
+  it("formats bindings for docs and keycaps", () => {
+    expect(formatShortcutBindingText("Mod+Enter")).toBe("Cmd/Ctrl+Enter");
+    expect(formatShortcutBindingText("Alt hold")).toBe("Hold Alt");
+    expect(formatShortcutBindingText("Alt Alt")).toBe("Double-tap Alt");
+    expect(formatShortcutBindingText("Alt Alt", "mac")).toBe("Double-tap Option");
+    expect(formatShortcutBindingTokens("Mod+Enter", "mac")).toEqual(["⌘", "⏎"]);
+    expect(formatShortcutBindingTokens("Mod+Enter", "non-mac")).toEqual(["Ctrl", "↵"]);
+    expect(formatShortcutBindingTokens("Alt Alt", "mac")).toEqual(["⌥", "×2"]);
+    expect(formatShortcutBindingTokens("Alt Alt", "non-mac")).toEqual(["Alt", "×2"]);
   });
 
-  it('validates duplicate scope ids and non-normalized tokens', () => {
+  it("validates duplicate scope ids and non-normalized tokens", () => {
     const duplicateScope = defineShortcutScope({
-      id: 'dup',
-      title: 'Duplicate',
+      id: "dup",
+      title: "Duplicate",
       shortcuts: {
         submit: {
-          description: 'Submit',
-          bindings: ['Mod+Enter'],
-          section: 'Actions',
+          description: "Submit",
+          bindings: ["Mod+Enter"],
+          section: "Actions",
         },
       },
     });
 
     const badScope = defineShortcutScope({
-      id: 'bad',
-      title: 'Bad',
+      id: "bad",
+      title: "Bad",
       shortcuts: {
         broken: {
-          description: 'Broken',
-          bindings: ['Cmd+Enter'],
-          section: 'Actions',
+          description: "Broken",
+          bindings: ["Cmd+Enter"],
+          section: "Actions",
         },
         missingCopy: {
-          description: '',
-          bindings: ['Mod+C'],
-          section: '',
+          description: "",
+          bindings: ["Mod+C"],
+          section: "",
         },
       },
     });
 
     const errors = validateShortcutRegistry([duplicateScope, duplicateScope, badScope]);
 
-    expect(errors).toContain('Duplicate shortcut scope id: dup');
-    expect(errors.some(error => error.includes('Cmd'))).toBe(true);
-    expect(errors).toContain('Shortcut bad.missingCopy is missing a section.');
-    expect(errors).toContain('Shortcut bad.missingCopy is missing a description.');
+    expect(errors).toContain("Duplicate shortcut scope id: dup");
+    expect(errors.some((error) => error.includes("Cmd"))).toBe(true);
+    expect(errors).toContain("Shortcut bad.missingCopy is missing a section.");
+    expect(errors).toContain("Shortcut bad.missingCopy is missing a description.");
     expect(() => createShortcutRegistry([duplicateScope, duplicateScope])).toThrow();
   });
 
-  it('lists annotate and review sections from assembled registries', () => {
+  it("lists annotate and review sections from assembled registries", () => {
     const annotateSections = listRegistryShortcutSections(annotateSettingsShortcutRegistry);
     const reviewSections = listRegistryShortcutSections(reviewSettingsShortcutRegistry);
 
-    expect(annotateSections.map(section => section.title)).toEqual([
-      'Actions',
-      'Input Method',
-      'Annotations',
-      'Image Annotator',
+    expect(annotateSections.map((section) => section.title)).toEqual([
+      "Actions",
+      "Input Method",
+      "Annotations",
+      "Image Annotator",
     ]);
 
-    expect(getShortcut(annotateSettingsShortcutRegistry, 'annotation-editor-settings', 'submitAnnotations')?.description).toBe('Send annotations');
-    expect(getShortcut(annotateSettingsShortcutRegistry, 'annotation-editor-settings', 'submitPlan')).toBeUndefined();
+    expect(
+      getShortcut(
+        annotateSettingsShortcutRegistry,
+        "annotation-editor-settings",
+        "submitAnnotations",
+      )?.description,
+    ).toBe("Send annotations");
+    expect(
+      getShortcut(annotateSettingsShortcutRegistry, "annotation-editor-settings", "submitPlan"),
+    ).toBeUndefined();
 
-    expect(reviewSections.map(section => section.title)).toEqual([
-      'Actions',
-      'Search',
-      'Layout',
-      'File Actions',
-      'File Navigation',
-      'All-Files View',
-      'Annotations',
-      'Suggestion Editor',
-      'AI Assistant',
-      'PR Comments',
+    expect(reviewSections.map((section) => section.title)).toEqual([
+      "Actions",
+      "Search",
+      "Layout",
+      "File Actions",
+      "File Navigation",
+      "All-Files View",
+      "Annotations",
+      "Suggestion Editor",
+      "AI Assistant",
+      "PR Comments",
     ]);
   });
 
-  it('matches normalized runtime bindings', () => {
+  it("matches normalized runtime bindings", () => {
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const submitEvent = { key: 'Enter', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, code: 'Enter' } as KeyboardEvent;
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const reverseSearchEvent = { key: 'F3', ctrlKey: false, metaKey: false, shiftKey: true, altKey: false, code: 'F3' } as KeyboardEvent;
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const typeEvent = { key: 'A', ctrlKey: false, metaKey: false, shiftKey: true, altKey: false, code: 'KeyA' } as KeyboardEvent;
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const quickLabelEvent = { key: '3', ctrlKey: false, metaKey: false, shiftKey: false, altKey: true, code: 'Digit3' } as KeyboardEvent;
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const macOptionQuickLabelEvent = { key: '£', ctrlKey: false, metaKey: false, shiftKey: false, altKey: true, code: 'Digit3' } as KeyboardEvent;
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const wrongEvent = { key: 'Enter', ctrlKey: false, metaKey: false, shiftKey: false, altKey: true, code: 'Enter' } as KeyboardEvent;
-
-    expect(matchesShortcutBinding(submitEvent, 'Mod+Enter')).toBe(true);
-    expect(matchesShortcutBinding(reverseSearchEvent, 'Shift+F3')).toBe(true);
-    expect(matchesShortcutBinding(typeEvent, 'A-Z')).toBe(true);
-    expect(matchesShortcutBinding(quickLabelEvent, 'Alt+1-0')).toBe(true);
-    expect(matchesShortcutBinding(macOptionQuickLabelEvent, 'Alt+1-0')).toBe(true);
-    expect(matchesShortcutBinding(wrongEvent, 'Mod+Enter')).toBe(false);
-  });
-
-  it('dispatches matching registry actions', () => {
-    const calls: string[] = [];
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const event = { key: 'Enter', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false } as KeyboardEvent;
-
-    const handled = dispatchShortcutEvent(annotateSettingsShortcutRegistry[0], {
-      submitAnnotations: () => calls.push('submitAnnotations'),
-      quickSave: () => calls.push('quickSave'),
-    }, event);
-
-    expect(handled).toBe(true);
-    expect(calls).toEqual(['submitAnnotations']);
-  });
-
-  it('can dispatch guarded annotate submit', () => {
-    const calls: string[] = [];
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    // @ts-expect-error — minimal stub missing KeyboardEvent props, intentionally suppressed
-    const event = {
-      key: 'Enter',
+    const submitEvent = {
+      key: "Enter",
       ctrlKey: true,
       metaKey: false,
       shiftKey: false,
       altKey: false,
-      preventDefault: () => calls.push('preventDefault'),
+      code: "Enter",
+    } as KeyboardEvent;
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    const reverseSearchEvent = {
+      key: "F3",
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: true,
+      altKey: false,
+      code: "F3",
+    } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    const typeEvent = {
+      key: "A",
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: true,
+      altKey: false,
+      code: "KeyA",
+    } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    const quickLabelEvent = {
+      key: "3",
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      altKey: true,
+      code: "Digit3",
+    } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    const macOptionQuickLabelEvent = {
+      key: "£",
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      altKey: true,
+      code: "Digit3",
+    } as KeyboardEvent;
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    const wrongEvent = {
+      key: "Enter",
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      altKey: true,
+      code: "Enter",
     } as KeyboardEvent;
 
-    const handled = dispatchShortcutEvent(annotationEditorShortcuts, {
-      submitAnnotations: {
-        when: () => true,
-        handle: () => {
-          event.preventDefault();
-          calls.push('submitAnnotations');
-        },
-      },
-    }, event);
-
-    expect(handled).toBe(true);
-    expect(calls).toEqual(['preventDefault', 'submitAnnotations']);
+    expect(matchesShortcutBinding(submitEvent, "Mod+Enter")).toBe(true);
+    expect(matchesShortcutBinding(reverseSearchEvent, "Shift+F3")).toBe(true);
+    expect(matchesShortcutBinding(typeEvent, "A-Z")).toBe(true);
+    expect(matchesShortcutBinding(quickLabelEvent, "Alt+1-0")).toBe(true);
+    expect(matchesShortcutBinding(macOptionQuickLabelEvent, "Alt+1-0")).toBe(true);
+    expect(matchesShortcutBinding(wrongEvent, "Mod+Enter")).toBe(false);
   });
 
-  it('supports guarded handlers and continues after a failed guard', () => {
+  it("dispatches matching registry actions", () => {
+    const calls: string[] = [];
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    const event = {
+      key: "Enter",
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent;
+
+    const handled = dispatchShortcutEvent(
+      annotateSettingsShortcutRegistry[0],
+      {
+        submitAnnotations: () => calls.push("submitAnnotations"),
+        quickSave: () => calls.push("quickSave"),
+      },
+      event,
+    );
+
+    expect(handled).toBe(true);
+    expect(calls).toEqual(["submitAnnotations"]);
+  });
+
+  it("can dispatch guarded annotate submit", () => {
+    const calls: string[] = [];
+    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    // @ts-expect-error — minimal stub missing KeyboardEvent props, intentionally suppressed
+    const event = {
+      key: "Enter",
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: () => calls.push("preventDefault"),
+      // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+    } as KeyboardEvent;
+
+    const handled = dispatchShortcutEvent(
+      annotationEditorShortcuts,
+      {
+        submitAnnotations: {
+          when: () => true,
+          handle: () => {
+            event.preventDefault();
+            calls.push("submitAnnotations");
+          },
+        },
+      },
+      event,
+    );
+
+    expect(handled).toBe(true);
+    expect(calls).toEqual(["preventDefault", "submitAnnotations"]);
+  });
+
+  it("supports guarded handlers and continues after a failed guard", () => {
     const guardedScope = defineShortcutScope({
-      id: 'guarded',
-      title: 'Guarded',
+      id: "guarded",
+      title: "Guarded",
       shortcuts: {
         primary: {
-          description: 'Primary',
-          bindings: ['Enter'],
-          section: 'Actions',
+          description: "Primary",
+          bindings: ["Enter"],
+          section: "Actions",
           preventDefault: true,
         },
         fallback: {
-          description: 'Fallback',
-          bindings: ['Enter'],
-          section: 'Actions',
+          description: "Fallback",
+          bindings: ["Enter"],
+          section: "Actions",
           preventDefault: true,
         },
       },
@@ -182,65 +246,69 @@ describe('shortcuts', () => {
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     // @ts-expect-error — minimal stub missing KeyboardEvent props, intentionally suppressed
     const event = {
-      key: 'Enter',
+      key: "Enter",
       ctrlKey: false,
       metaKey: false,
       shiftKey: false,
       altKey: false,
-      preventDefault: () => calls.push('preventDefault'),
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+      preventDefault: () => calls.push("preventDefault"),
+      // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     } as KeyboardEvent;
 
-    const handled = dispatchShortcutEvent(guardedScope, {
-      primary: {
-        when: () => false,
-        handle: () => calls.push('primary'),
+    const handled = dispatchShortcutEvent(
+      guardedScope,
+      {
+        primary: {
+          when: () => false,
+          handle: () => calls.push("primary"),
+        },
+        fallback: {
+          when: () => true,
+          handle: () => calls.push("fallback"),
+        },
       },
-      fallback: {
-        when: () => true,
-        handle: () => calls.push('fallback'),
-      },
-    }, event);
+      event,
+    );
 
     expect(handled).toBe(true);
-    expect(calls).toEqual(['preventDefault', 'fallback']);
+    expect(calls).toEqual(["preventDefault", "fallback"]);
   });
 
-  it('parses double-tap bindings', () => {
-    expect(parseDoubleTapBinding('Alt Alt')).toBe('Alt');
-    expect(parseDoubleTapBinding('Shift Shift')).toBe('Shift');
-    expect(parseDoubleTapBinding('Alt hold')).toBeNull();
-    expect(parseDoubleTapBinding('Mod+Enter')).toBeNull();
-    expect(parseDoubleTapBinding('Alt Shift')).toBeNull(); // different keys
-    expect(parseDoubleTapBinding('Alt+Shift Alt+Shift')).toBeNull(); // multi-key groups
+  it("parses double-tap bindings", () => {
+    expect(parseDoubleTapBinding("Alt Alt")).toBe("Alt");
+    expect(parseDoubleTapBinding("Shift Shift")).toBe("Shift");
+    expect(parseDoubleTapBinding("Alt hold")).toBeNull();
+    expect(parseDoubleTapBinding("Mod+Enter")).toBeNull();
+    expect(parseDoubleTapBinding("Alt Shift")).toBeNull(); // different keys
+    expect(parseDoubleTapBinding("Alt+Shift Alt+Shift")).toBeNull(); // multi-key groups
   });
 
-  it('matches key names for sequential binding support', () => {
+  it("matches key names for sequential binding support", () => {
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const altEvent = { key: 'Alt' } as KeyboardEvent;
+    const altEvent = { key: "Alt" } as KeyboardEvent;
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const shiftEvent = { key: 'Shift' } as KeyboardEvent;
+    const shiftEvent = { key: "Shift" } as KeyboardEvent;
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const metaEvent = { key: 'Meta' } as KeyboardEvent;
+    const metaEvent = { key: "Meta" } as KeyboardEvent;
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
-    const ctrlEvent = { key: 'Control' } as KeyboardEvent;
+    const ctrlEvent = { key: "Control" } as KeyboardEvent;
 
-    expect(matchesKeyName(altEvent, 'Alt')).toBe(true);
-    expect(matchesKeyName(altEvent, 'Shift')).toBe(false);
-    expect(matchesKeyName(shiftEvent, 'Shift')).toBe(true);
-    expect(matchesKeyName(metaEvent, 'Mod')).toBe(true);
-    expect(matchesKeyName(ctrlEvent, 'Mod')).toBe(true);
+    expect(matchesKeyName(altEvent, "Alt")).toBe(true);
+    expect(matchesKeyName(altEvent, "Shift")).toBe(false);
+    expect(matchesKeyName(shiftEvent, "Shift")).toBe(true);
+    expect(matchesKeyName(metaEvent, "Mod")).toBe(true);
+    expect(matchesKeyName(ctrlEvent, "Mod")).toBe(true);
   });
 
-  it('does not handle or prevent default when a guard fails', () => {
+  it("does not handle or prevent default when a guard fails", () => {
     const guardedScope = defineShortcutScope({
-      id: 'guarded-skip',
-      title: 'Guarded Skip',
+      id: "guarded-skip",
+      title: "Guarded Skip",
       shortcuts: {
         save: {
-          description: 'Save',
-          bindings: ['Mod+S'],
-          section: 'Actions',
+          description: "Save",
+          bindings: ["Mod+S"],
+          section: "Actions",
           preventDefault: true,
         },
       },
@@ -249,7 +317,7 @@ describe('shortcuts', () => {
     let preventDefaultCalls = 0;
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const event = {
-      key: 's',
+      key: "s",
       ctrlKey: true,
       metaKey: false,
       shiftKey: false,
@@ -257,17 +325,21 @@ describe('shortcuts', () => {
       preventDefault: () => {
         preventDefaultCalls += 1;
       },
-    // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
+      // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     } as KeyboardEvent;
 
-    const handled = dispatchShortcutEvent(guardedScope, {
-      save: {
-        when: () => false,
-        handle: () => {
-          throw new Error('should not run');
+    const handled = dispatchShortcutEvent(
+      guardedScope,
+      {
+        save: {
+          when: () => false,
+          handle: () => {
+            throw new Error("should not run");
+          },
         },
       },
-    }, event);
+      event,
+    );
 
     expect(handled).toBe(false);
     expect(preventDefaultCalls).toBe(0);

@@ -1,4 +1,4 @@
-import { Option, Result, Schema } from 'effect';
+import { Option, Result, Schema } from "effect";
 import type {
   PRCheck,
   PRComment,
@@ -7,7 +7,7 @@ import type {
   PRReview,
   PRReviewThread,
   PRThreadComment,
-} from '@plannotator/shared/pr-types';
+} from "@plannotator/shared/pr-types";
 
 type PRContextJsonValue = Schema.Schema.Type<typeof Schema.Json>;
 
@@ -66,7 +66,7 @@ const PRReviewThreadSchema = Schema.Struct({
   path: Schema.String,
   line: Schema.NullOr(Schema.Number),
   startLine: Schema.NullOr(Schema.Number),
-  diffSide: Schema.NullOr(Schema.Literals(['LEFT', 'RIGHT'])),
+  diffSide: Schema.NullOr(Schema.Literals(["LEFT", "RIGHT"])),
   comments: Schema.optionalKey(Schema.Json),
 });
 
@@ -93,18 +93,29 @@ const decodeThreadComment = Schema.decodeUnknownOption(PRThreadCommentSchema);
 const decodeReviewThread = Schema.decodeUnknownOption(PRReviewThreadSchema);
 const decodeCheck = Schema.decodeUnknownOption(PRCheckSchema);
 const decodeLinkedIssue = Schema.decodeUnknownOption(PRLinkedIssueSchema);
-const decodeErrorEnvelope = Schema.decodeUnknownOption(Schema.Struct({
-  error: Schema.optionalKey(Schema.Json),
-}));
+const decodeErrorEnvelope = Schema.decodeUnknownOption(
+  Schema.Struct({
+    error: Schema.optionalKey(Schema.Json),
+  }),
+);
 const decodeString = Schema.decodeUnknownOption(Schema.String);
-const decodeLabelItem = (value: PRContextJsonValue): PRContext['labels'][number] | undefined => Option.getOrUndefined(decodeLabel(value));
-const decodeCommentItem = (value: PRContextJsonValue): PRComment | undefined => Option.getOrUndefined(decodeComment(value));
-const decodeReviewItem = (value: PRContextJsonValue): PRReview | undefined => Option.getOrUndefined(decodeReview(value));
-const decodeThreadCommentItem = (value: PRContextJsonValue): PRThreadComment | undefined => Option.getOrUndefined(decodeThreadComment(value));
-const decodeCheckItem = (value: PRContextJsonValue): PRCheck | undefined => Option.getOrUndefined(decodeCheck(value));
-const decodeLinkedIssueItem = (value: PRContextJsonValue): PRLinkedIssue | undefined => Option.getOrUndefined(decodeLinkedIssue(value));
+const decodeLabelItem = (value: PRContextJsonValue): PRContext["labels"][number] | undefined =>
+  Option.getOrUndefined(decodeLabel(value));
+const decodeCommentItem = (value: PRContextJsonValue): PRComment | undefined =>
+  Option.getOrUndefined(decodeComment(value));
+const decodeReviewItem = (value: PRContextJsonValue): PRReview | undefined =>
+  Option.getOrUndefined(decodeReview(value));
+const decodeThreadCommentItem = (value: PRContextJsonValue): PRThreadComment | undefined =>
+  Option.getOrUndefined(decodeThreadComment(value));
+const decodeCheckItem = (value: PRContextJsonValue): PRCheck | undefined =>
+  Option.getOrUndefined(decodeCheck(value));
+const decodeLinkedIssueItem = (value: PRContextJsonValue): PRLinkedIssue | undefined =>
+  Option.getOrUndefined(decodeLinkedIssue(value));
 
-function decodeArrayItems<T>(value: PRContextJsonValue | undefined, decodeItem: (item: PRContextJsonValue) => T | undefined): T[] {
+function decodeArrayItems<T>(
+  value: PRContextJsonValue | undefined,
+  decodeItem: (item: PRContextJsonValue) => T | undefined,
+): T[] {
   const items = Option.getOrUndefined(decodeArray(value));
   if (items === undefined) return [];
 

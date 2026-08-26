@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github-dark.css';
-import { Block } from '../../types';
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import hljs from "highlight.js";
+import "highlight.js/styles/github-dark.css";
+import { Block } from "../../types";
 
 interface CodeBlockProps {
   block: Block;
@@ -10,7 +10,12 @@ interface CodeBlockProps {
   isHovered: boolean;
 }
 
-export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, isHovered: _isHovered }) => {
+export const CodeBlock: React.FC<CodeBlockProps> = ({
+  block,
+  onHover,
+  onLeave,
+  isHovered: _isHovered,
+}) => {
   const [copied, setCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLElement>(null);
@@ -19,8 +24,8 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, i
   useEffect(() => {
     if (codeRef.current) {
       // Reset any previous highlighting
-      codeRef.current.removeAttribute('data-highlighted');
-      codeRef.current.className = `hljs font-mono${block.language ? ` language-${block.language}` : ''}`;
+      codeRef.current.removeAttribute("data-highlighted");
+      codeRef.current.className = `hljs font-mono${block.language ? ` language-${block.language}` : ""}`;
       hljs.highlightElement(codeRef.current);
     }
   }, [block.content, block.language]);
@@ -31,7 +36,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, i
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error("Failed to copy:", err);
     }
   }, [block.content]);
 
@@ -42,7 +47,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, i
   };
 
   // Build className for code element
-  const codeClassName = `hljs font-mono${block.language ? ` language-${block.language}` : ''}`;
+  const codeClassName = `hljs font-mono${block.language ? ` language-${block.language}` : ""}`;
 
   return (
     <div
@@ -55,26 +60,42 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ block, onHover, onLeave, i
       <button
         onClick={handleCopy}
         className="absolute top-2 right-2 p-1.5 rounded-md bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
-        title={copied ? 'Copied!' : 'Copy code'}
+        title={copied ? "Copied!" : "Copy code"}
       >
         {copied ? (
-          <svg className="w-4 h-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg
+            className="w-4 h-4 text-success"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         ) : (
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+            />
           </svg>
         )}
       </button>
       <pre
         className="rounded-lg overflow-x-auto bg-muted/50 border border-border/30"
-        style={{ fontSize: 'var(--annotation-code-font-size, 13px)' }}
+        style={{ fontSize: "var(--annotation-code-font-size, 13px)" }}
       >
         <code
           ref={codeRef}
           className={codeClassName}
-          style={{ fontFamily: 'var(--annotation-code-font-family, var(--font-mono))' }}
+          style={{ fontFamily: "var(--annotation-code-font-family, var(--font-mono))" }}
         >
           {block.content}
         </code>

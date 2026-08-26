@@ -17,15 +17,8 @@ export interface CommandResult {
 }
 
 export interface PRRuntime {
-  runCommand: (
-    cmd: string,
-    args: string[],
-  ) => Promise<CommandResult>;
-  runCommandWithInput?: (
-    cmd: string,
-    args: string[],
-    input: string,
-  ) => Promise<CommandResult>;
+  runCommand: (cmd: string, args: string[]) => Promise<CommandResult>;
+  runCommandWithInput?: (cmd: string, args: string[], input: string) => Promise<CommandResult>;
 }
 
 // --- Platform Types ---
@@ -145,7 +138,7 @@ export interface PRReviewThread {
   path: string;
   line: number | null;
   startLine: number | null;
-  diffSide: 'LEFT' | 'RIGHT' | null;
+  diffSide: "LEFT" | "RIGHT" | null;
   comments: PRThreadComment[];
 }
 
@@ -187,7 +180,13 @@ export interface PRStackInfo {
   baseBranch: string;
   defaultBranch?: string;
   label: string;
-  source: "branch-inferred" | "tree-discovered" | "github-native" | "gitlab-native" | "graphite" | "ghstack";
+  source:
+    | "branch-inferred"
+    | "tree-discovered"
+    | "github-native"
+    | "gitlab-native"
+    | "graphite"
+    | "ghstack";
 }
 
 export interface PRStackNode {
@@ -197,7 +196,7 @@ export interface PRStackNode {
   url?: string;
   isCurrent: boolean;
   isDefaultBranch: boolean;
-  state?: 'open' | 'merged' | 'closed';
+  state?: "open" | "merged" | "closed";
 }
 
 export interface PRStackTree {
@@ -211,7 +210,7 @@ export interface PRListItem {
   author: string;
   url: string;
   baseBranch: string;
-  state: 'open' | 'closed' | 'merged';
+  state: "open" | "closed" | "merged";
 }
 
 // --- Label Helpers ---
@@ -267,9 +266,7 @@ export function getCliName(ref: PRRef): string {
 
 /** Install URL for the platform CLI */
 export function getCliInstallUrl(ref: PRRef): string {
-  return ref.platform === "github"
-    ? "https://cli.github.com"
-    : "https://gitlab.com/gitlab-org/cli";
+  return ref.platform === "github" ? "https://cli.github.com" : "https://gitlab.com/gitlab-org/cli";
 }
 
 /** Encode a file path for use in platform API URLs */
@@ -296,9 +293,7 @@ export function parsePRUrl(url: string): PRRef | null {
 
   // GitLab: https://{host}/{projectPath}/-/merge_requests/{iid}[/...]
   // Checked first — `/-/merge_requests/` is the most specific pattern.
-  const glMatch = url.match(
-    /^https?:\/\/([^/]+)\/(.+?)\/-\/merge_requests\/(\d+)/,
-  );
+  const glMatch = url.match(/^https?:\/\/([^/]+)\/(.+?)\/-\/merge_requests\/(\d+)/);
   if (glMatch) {
     return {
       platform: "gitlab",
@@ -309,9 +304,7 @@ export function parsePRUrl(url: string): PRRef | null {
   }
 
   // GitHub (including GHE): https://{host}/{owner}/{repo}/pull/{number}[/...]
-  const ghMatch = url.match(
-    /^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)\/pull\/(\d+)/,
-  );
+  const ghMatch = url.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
   if (ghMatch) {
     return {
       platform: "github",

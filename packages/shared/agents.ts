@@ -17,22 +17,30 @@ type AgentConfigEntry = {
 };
 
 export const AGENT_ORIGINS = [
-  'claude-code', 'amp', 'droid', 'kiro-cli', 'opencode', 'copilot-cli', 'pi', 'codex', 'gemini-cli',
+  "claude-code",
+  "amp",
+  "droid",
+  "kiro-cli",
+  "opencode",
+  "copilot-cli",
+  "pi",
+  "codex",
+  "gemini-cli",
 ] as const;
 
 /** All recognized origin values. */
-export type Origin = typeof AGENT_ORIGINS[number];
+export type Origin = (typeof AGENT_ORIGINS)[number];
 
 export const AGENT_CONFIG = {
-  'claude-code': { name: 'Claude Code', badge: 'bg-orange-500/15 text-orange-400' },
-  'amp':         { name: 'Amp',         badge: 'bg-lime-500/15 text-lime-400' },
-  'droid':       { name: 'Droid',       badge: 'bg-cyan-500/15 text-cyan-400' },
-  'kiro-cli':    { name: 'Kiro CLI',    badge: 'bg-amber-500/15 text-amber-400' },
-  'opencode':    { name: 'OpenCode',    badge: 'bg-emerald-500/15 text-emerald-400' },
-  'copilot-cli': { name: 'GitHub Copilot', badge: 'bg-blue-500/15 text-blue-400' },
-  'pi':          { name: 'Pi',          badge: 'bg-violet-500/15 text-violet-400', aiProviderTypes: ['pi-sdk'] },
-  'codex':       { name: 'Codex',       badge: 'bg-purple-500/15 text-purple-400' },
-  'gemini-cli':  { name: 'Gemini CLI', badge: 'bg-sky-500/15 text-sky-400' },
+  "claude-code": { name: "Claude Code", badge: "bg-orange-500/15 text-orange-400" },
+  amp: { name: "Amp", badge: "bg-lime-500/15 text-lime-400" },
+  droid: { name: "Droid", badge: "bg-cyan-500/15 text-cyan-400" },
+  "kiro-cli": { name: "Kiro CLI", badge: "bg-amber-500/15 text-amber-400" },
+  opencode: { name: "OpenCode", badge: "bg-emerald-500/15 text-emerald-400" },
+  "copilot-cli": { name: "GitHub Copilot", badge: "bg-blue-500/15 text-blue-400" },
+  pi: { name: "Pi", badge: "bg-violet-500/15 text-violet-400", aiProviderTypes: ["pi-sdk"] },
+  codex: { name: "Codex", badge: "bg-purple-500/15 text-purple-400" },
+  "gemini-cli": { name: "Gemini CLI", badge: "bg-sky-500/15 text-sky-400" },
 } as const satisfies Record<Origin, AgentConfigEntry>;
 
 /** Resolve an origin to a human-readable agent name. */
@@ -41,7 +49,7 @@ export function getAgentName(origin: Origin | null | undefined): string {
     // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
     return AGENT_CONFIG[origin as Origin].name;
   }
-  return 'Coding Agent';
+  return "Coding Agent";
 }
 
 /** Resolve an origin to Tailwind badge classes. */
@@ -50,7 +58,7 @@ export function getAgentBadge(origin: Origin | null | undefined): string {
     // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
     return AGENT_CONFIG[origin as Origin].badge;
   }
-  return 'bg-zinc-500/20 text-zinc-400';
+  return "bg-zinc-500/20 text-zinc-400";
 }
 
 /** Resolve an origin to matching AI provider types, in preference order. */
@@ -58,7 +66,7 @@ export function getAgentAIProviderTypes(origin: Origin | null | undefined): read
   if (origin && origin in AGENT_CONFIG) {
     // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
     const config = AGENT_CONFIG[origin as Origin];
-    return 'aiProviderTypes' in config ? config.aiProviderTypes : [];
+    return "aiProviderTypes" in config ? config.aiProviderTypes : [];
   }
   return [];
 }

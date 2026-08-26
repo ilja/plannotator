@@ -53,7 +53,11 @@ describe("draft generation invalidation", () => {
   test("keeps an object draft when its generation metadata is malformed", () => {
     writeFileSync(
       join(getDraftDir(), `${KEY}.json`),
-      JSON.stringify({ annotations: ["kept"], draftGeneration: "three", extraField: { retained: true } }),
+      JSON.stringify({
+        annotations: ["kept"],
+        draftGeneration: "three",
+        extraField: { retained: true },
+      }),
       "utf-8",
     );
 

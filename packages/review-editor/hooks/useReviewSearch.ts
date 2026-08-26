@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   groupReviewSearchMatches,
   buildSearchIndex,
   findMatchesInIndex,
   type ReviewSearchMatch,
   type ReviewSearchableDiffFile,
-} from '../utils/reviewSearch';
+} from "../utils/reviewSearch";
 
 function getWrappedMatchIndex(matchCount: number, currentIndex: number, direction: 1 | -1): number {
   if (matchCount === 0) return -1;
@@ -16,7 +16,7 @@ function getWrappedMatchIndex(matchCount: number, currentIndex: number, directio
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tagName = target.tagName;
-  return tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || target.isContentEditable;
 }
 
 interface UseReviewSearchOptions {
@@ -25,13 +25,9 @@ interface UseReviewSearchOptions {
   onRevealMatch?: (match: ReviewSearchMatch) => void;
 }
 
-export function useReviewSearch({
-  files,
-  activeFilePath,
-  onRevealMatch,
-}: UseReviewSearchOptions) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseReviewSearchOptions) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeSearchMatchId, setActiveSearchMatchId] = useState<string | null>(null);
 
@@ -39,15 +35,16 @@ export function useReviewSearch({
 
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setDebouncedSearchQuery('');
+      setDebouncedSearchQuery("");
       return;
     }
     const timeoutId = setTimeout(() => setDebouncedSearchQuery(searchQuery), 200);
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  const isSearchPending = searchQuery.trim() !== ''
-    && searchQuery.trim().toLowerCase() !== debouncedSearchQuery.trim().toLowerCase();
+  const isSearchPending =
+    searchQuery.trim() !== "" &&
+    searchQuery.trim().toLowerCase() !== debouncedSearchQuery.trim().toLowerCase();
 
   const searchIndex = useMemo(() => buildSearchIndex(files), [files]);
 
@@ -61,12 +58,12 @@ export function useReviewSearch({
 
   const activeSearchMatch = useMemo(() => {
     if (!activeSearchMatchId) return null;
-    return searchMatches.find(match => match.id === activeSearchMatchId) ?? null;
+    return searchMatches.find((match) => match.id === activeSearchMatchId) ?? null;
   }, [searchMatches, activeSearchMatchId]);
 
   const activeFileSearchMatches = useMemo(() => {
     if (!activeFilePath) return [];
-    return searchMatches.filter(match => match.filePath === activeFilePath);
+    return searchMatches.filter((match) => match.filePath === activeFilePath);
   }, [activeFilePath, searchMatches]);
 
   const openSearch = useCallback(() => {
@@ -79,8 +76,8 @@ export function useReviewSearch({
   }, []);
 
   const clearSearch = useCallback(() => {
-    setSearchQuery('');
-    setDebouncedSearchQuery('');
+    setSearchQuery("");
+    setDebouncedSearchQuery("");
     setActiveSearchMatchId(null);
     setIsSearchOpen(false);
   }, []);
@@ -92,28 +89,37 @@ export function useReviewSearch({
     }
   }, []);
 
-  const activateSearchMatch = useCallback((match: ReviewSearchMatch | null) => {
-    setActiveSearchMatchId(match?.id ?? null);
-    if (match) {
-      onRevealMatch?.(match);
-    }
-  }, [onRevealMatch]);
+  const activateSearchMatch = useCallback(
+    (match: ReviewSearchMatch | null) => {
+      setActiveSearchMatchId(match?.id ?? null);
+      if (match) {
+        onRevealMatch?.(match);
+      }
+    },
+    [onRevealMatch],
+  );
 
-  const handleSelectSearchMatch = useCallback((matchId: string) => {
-    const match = searchMatches.find(candidate => candidate.id === matchId) ?? null;
-    activateSearchMatch(match);
-  }, [searchMatches, activateSearchMatch]);
+  const handleSelectSearchMatch = useCallback(
+    (matchId: string) => {
+      const match = searchMatches.find((candidate) => candidate.id === matchId) ?? null;
+      activateSearchMatch(match);
+    },
+    [searchMatches, activateSearchMatch],
+  );
 
-  const stepSearchMatch = useCallback((direction: 1 | -1) => {
-    if (searchMatches.length === 0) return;
+  const stepSearchMatch = useCallback(
+    (direction: 1 | -1) => {
+      if (searchMatches.length === 0) return;
 
-    const currentIndex = activeSearchMatchId
-      ? searchMatches.findIndex(match => match.id === activeSearchMatchId)
-      : -1;
-    const nextIndex = getWrappedMatchIndex(searchMatches.length, currentIndex, direction);
-    const nextMatch = nextIndex === -1 ? null : (searchMatches[nextIndex] ?? null);
-    activateSearchMatch(nextMatch);
-  }, [searchMatches, activeSearchMatchId, activateSearchMatch]);
+      const currentIndex = activeSearchMatchId
+        ? searchMatches.findIndex((match) => match.id === activeSearchMatchId)
+        : -1;
+      const nextIndex = getWrappedMatchIndex(searchMatches.length, currentIndex, direction);
+      const nextMatch = nextIndex === -1 ? null : (searchMatches[nextIndex] ?? null);
+      activateSearchMatch(nextMatch);
+    },
+    [searchMatches, activeSearchMatchId, activateSearchMatch],
+  );
 
   useEffect(() => {
     if (!debouncedSearchQuery.trim() || searchMatches.length === 0) {
@@ -121,8 +127,9 @@ export function useReviewSearch({
       return;
     }
 
-    const stillExists = activeSearchMatchId != null
-      && searchMatches.some(match => match.id === activeSearchMatchId);
+    const stillExists =
+      activeSearchMatchId != null &&
+      searchMatches.some((match) => match.id === activeSearchMatchId);
 
     if (!stillExists) {
       activateSearchMatch(searchMatches[0]);

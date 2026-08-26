@@ -5,14 +5,14 @@
  * annotation creation, text-based restoration (drafts/shares), scroll-to-selected.
  */
 
-import { useEffect, useRef, useState, useCallback, type RefObject } from 'react';
-import Highlighter from '@plannotator/web-highlighter';
-import type { Annotation, EditorMode, ImageAttachment } from '../types';
-import { AnnotationType } from '../types';
-import type { QuickLabel } from '../utils/quickLabels';
-import { getIdentity } from '../utils/identity';
-import { transformPlainText } from '../utils/inlineTransforms';
-import { isChoiceAnnotation } from '../utils/choiceAnnotations';
+import { useEffect, useRef, useState, useCallback, type RefObject } from "react";
+import Highlighter from "@plannotator/web-highlighter";
+import type { Annotation, EditorMode, ImageAttachment } from "../types";
+import { AnnotationType } from "../types";
+import type { QuickLabel } from "../utils/quickLabels";
+import { getIdentity } from "../utils/identity";
+import { transformPlainText } from "../utils/inlineTransforms";
+import { isChoiceAnnotation } from "../utils/choiceAnnotations";
 
 // --- Exported state types ---
 
@@ -91,15 +91,23 @@ export function useAnnotationHighlighter({
   const [quickLabelPicker, setQuickLabelPicker] = useState<QuickLabelPickerState | null>(null);
 
   // Keep refs in sync
-  useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { onAddAnnotationRef.current = onAddAnnotation; }, [onAddAnnotation]);
-  useEffect(() => { onSelectAnnotationRef.current = onSelectAnnotation; }, [onSelectAnnotation]);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+  useEffect(() => {
+    onAddAnnotationRef.current = onAddAnnotation;
+  }, [onAddAnnotation]);
+  useEffect(() => {
+    onSelectAnnotationRef.current = onSelectAnnotation;
+  }, [onSelectAnnotation]);
 
   // Track mouse position for quick label picker
   useEffect(() => {
-    const track = (e: MouseEvent) => { lastMousePosRef.current = { x: e.clientX, y: e.clientY }; };
-    document.addEventListener('mouseup', track, true);
-    return () => document.removeEventListener('mouseup', track, true);
+    const track = (e: MouseEvent) => {
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    document.addEventListener("mouseup", track, true);
+    return () => document.removeEventListener("mouseup", track, true);
   }, []);
 
   // --- Helpers ---
@@ -113,11 +121,7 @@ export function useAnnotationHighlighter({
       if (!needle || !containerRef.current) return null;
 
       const rangeFromTextOffsets = (startIndex: number, endIndex: number): Range | null => {
-        const walker = document.createTreeWalker(
-          containerRef.current!,
-          NodeFilter.SHOW_TEXT,
-          null
-        );
+        const walker = document.createTreeWalker(containerRef.current!, NodeFilter.SHOW_TEXT, null);
 
         let charCount = 0;
         let startNode: Text | null = null;
@@ -154,9 +158,12 @@ export function useAnnotationHighlighter({
         return null;
       };
 
-      interface NormalizedTextMap { text: string; map: number[]; }
+      interface NormalizedTextMap {
+        text: string;
+        map: number[];
+      }
       const normalizeWithMap = (text: string): NormalizedTextMap => {
-        let normalized = '';
+        let normalized = "";
         const map: number[] = [];
         let inWhitespace = false;
 
@@ -164,7 +171,7 @@ export function useAnnotationHighlighter({
           const ch = text[i];
           if (/\s/.test(ch)) {
             if (!inWhitespace) {
-              normalized += ' ';
+              normalized += " ";
               map.push(i);
               inWhitespace = true;
             }
@@ -177,8 +184,8 @@ export function useAnnotationHighlighter({
 
         let start = 0;
         let end = normalized.length;
-        while (start < end && normalized[start] === ' ') start++;
-        while (end > start && normalized[end - 1] === ' ') end--;
+        while (start < end && normalized[start] === " ") start++;
+        while (end > start && normalized[end - 1] === " ") end--;
 
         return {
           text: normalized.slice(start, end),
@@ -186,16 +193,12 @@ export function useAnnotationHighlighter({
         };
       };
 
-      const walker = document.createTreeWalker(
-        containerRef.current,
-        NodeFilter.SHOW_TEXT,
-        null
-      );
+      const walker = document.createTreeWalker(containerRef.current, NodeFilter.SHOW_TEXT, null);
 
       let node: Text | null;
       // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
       while ((node = walker.nextNode() as Text | null)) {
-        const text = node.textContent || '';
+        const text = node.textContent || "";
         const index = text.indexOf(needle);
         if (index !== -1) {
           const range = document.createRange();
@@ -205,7 +208,7 @@ export function useAnnotationHighlighter({
         }
       }
 
-      const fullText = containerRef.current.textContent || '';
+      const fullText = containerRef.current.textContent || "";
       const searchIndex = fullText.indexOf(needle);
       if (searchIndex !== -1) {
         return rangeFromTextOffsets(searchIndex, searchIndex + needle.length);
@@ -243,13 +246,13 @@ export function useAnnotationHighlighter({
     if (!root || !ann.blockId) return null;
 
     const blockEl = root.querySelector<HTMLElement>(
-      `[data-block-id="${CSS.escape(ann.blockId)}"][data-choice-question="true"]`
+      `[data-block-id="${CSS.escape(ann.blockId)}"][data-choice-question="true"]`,
     );
     if (!blockEl) return null;
 
     if (ann.choiceOptionLabel) {
       const optionEl = blockEl.querySelector<HTMLElement>(
-        `[data-choice-option-label="${CSS.escape(ann.choiceOptionLabel)}"]`
+        `[data-choice-option-label="${CSS.escape(ann.choiceOptionLabel)}"]`,
       );
       if (optionEl) return optionEl;
     }
@@ -257,32 +260,35 @@ export function useAnnotationHighlighter({
     return blockEl;
   }, []);
 
-  const applyChoiceHighlight = useCallback((ann: Annotation): boolean => {
-    const target = findChoiceTarget(ann);
-    if (!target) return false;
+  const applyChoiceHighlight = useCallback(
+    (ann: Annotation): boolean => {
+      const target = findChoiceTarget(ann);
+      if (!target) return false;
 
-    target.classList.add('annotation-highlight', 'comment');
-    target.setAttribute('data-choice-annotation-id', ann.id);
+      target.classList.add("annotation-highlight", "comment");
+      target.setAttribute("data-choice-annotation-id", ann.id);
 
-    if (target.dataset.choiceHighlightBound !== 'true') {
-      target.dataset.choiceHighlightBound = 'true';
-      target.addEventListener('click', (event) => {
-        // SAFETY: click listener bound to HTMLElement — currentTarget is HTMLElement
-        const annotationId = (event.currentTarget as HTMLElement).dataset.choiceAnnotationId;
-        if (annotationId) onSelectAnnotationRef.current?.(annotationId);
-      });
-    }
+      if (target.dataset.choiceHighlightBound !== "true") {
+        target.dataset.choiceHighlightBound = "true";
+        target.addEventListener("click", (event) => {
+          // SAFETY: click listener bound to HTMLElement — currentTarget is HTMLElement
+          const annotationId = (event.currentTarget as HTMLElement).dataset.choiceAnnotationId;
+          if (annotationId) onSelectAnnotationRef.current?.(annotationId);
+        });
+      }
 
-    return true;
-  }, [findChoiceTarget]);
+      return true;
+    },
+    [findChoiceTarget],
+  );
 
   const removeChoiceHighlight = useCallback((id: string) => {
     const nodes = containerRef.current?.querySelectorAll<HTMLElement>(
-      `[data-choice-annotation-id="${CSS.escape(id)}"]`
+      `[data-choice-annotation-id="${CSS.escape(id)}"]`,
     );
-    nodes?.forEach(node => {
-      node.classList.remove('annotation-highlight', 'comment', 'focused');
-      node.removeAttribute('data-choice-annotation-id');
+    nodes?.forEach((node) => {
+      node.classList.remove("annotation-highlight", "comment", "focused");
+      node.removeAttribute("data-choice-annotation-id");
     });
   }, []);
 
@@ -296,7 +302,7 @@ export function useAnnotationHighlighter({
     quickLabelTip?: string,
   ) => {
     const doms = highlighter.getDoms(source.id);
-    let blockId = '';
+    let blockId = "";
     let startOffset = 0;
 
     if (doms?.length > 0) {
@@ -308,7 +314,7 @@ export function useAnnotationHighlighter({
       }
       if (parent?.dataset.blockId) {
         blockId = parent.dataset.blockId;
-        const blockText = parent.textContent || '';
+        const blockText = parent.textContent || "";
         const beforeText = blockText.split(source.text)[0];
         startOffset = beforeText?.length || 0;
       }
@@ -332,9 +338,9 @@ export function useAnnotationHighlighter({
     if (quickLabelTip) newAnnotation.quickLabelTip = quickLabelTip;
 
     if (type === AnnotationType.DELETION) {
-      highlighter.addClass('deletion', source.id);
+      highlighter.addClass("deletion", source.id);
     } else if (type === AnnotationType.COMMENT) {
-      highlighter.addClass('comment', source.id);
+      highlighter.addClass("comment", source.id);
     }
 
     justCreatedIdRef.current = newAnnotation.id;
@@ -343,147 +349,155 @@ export function useAnnotationHighlighter({
 
   // --- Imperative methods ---
 
-  const applyAnnotationsInternal = useCallback((anns: Annotation[]) => {
-    const highlighter = highlighterRef.current;
-    if (!highlighter || !containerRef.current) return;
+  const applyAnnotationsInternal = useCallback(
+    (anns: Annotation[]) => {
+      const highlighter = highlighterRef.current;
+      if (!highlighter || !containerRef.current) return;
 
-    anns.forEach(ann => {
-      if (ann.type === AnnotationType.GLOBAL_COMMENT) return;
+      anns.forEach((ann) => {
+        if (ann.type === AnnotationType.GLOBAL_COMMENT) return;
 
-      if (isChoiceAnnotation(ann)) {
-        applyChoiceHighlight(ann);
-        return;
-      }
-
-      // Skip if already highlighted
-      try {
-        const existingDoms = highlighter.getDoms(ann.id);
-        if (existingDoms && existingDoms.length > 0) return;
-      } catch {}
-      const existingManual = containerRef.current?.querySelector(`[data-bind-id="${ann.id}"]`);
-      if (existingManual) return;
-
-      if (ann.startMeta && ann.endMeta) {
-        try {
-          highlighter.fromStore(ann.startMeta, ann.endMeta, ann.originalText, ann.id);
-          const restoredDoms = highlighter.getDoms(ann.id);
-          if (restoredDoms && restoredDoms.length > 0) {
-            if (ann.type === AnnotationType.DELETION) {
-              highlighter.addClass('deletion', ann.id);
-            } else if (ann.type === AnnotationType.COMMENT) {
-              highlighter.addClass('comment', ann.id);
-            }
-            return;
-          }
-        } catch {}
-      }
-
-      const range = findTextInDOM(ann.originalText);
-      if (!range) {
-        console.warn(`Could not find text for annotation ${ann.id}: "${ann.originalText.slice(0, 50)}..."`);
-        return;
-      }
-
-      try {
-        const textNodes: { node: Text; start: number; end: number }[] = [];
-        const walker = document.createTreeWalker(
-          range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-            ? range.commonAncestorContainer.parentNode!
-            : range.commonAncestorContainer,
-          NodeFilter.SHOW_TEXT,
-          null
-        );
-
-        let node: Text | null;
-        let inRange = false;
-
-        // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
-        while ((node = walker.nextNode() as Text | null)) {
-          if (node === range.startContainer) {
-            inRange = true;
-            const start = range.startOffset;
-            const end = node === range.endContainer ? range.endOffset : node.length;
-            if (end > start) {
-              textNodes.push({ node, start, end });
-            }
-            if (node === range.endContainer) break;
-            continue;
-          }
-
-          if (node === range.endContainer) {
-            if (inRange) {
-              const end = range.endOffset;
-              if (end > 0) {
-                textNodes.push({ node, start: 0, end });
-              }
-            }
-            break;
-          }
-
-          if (inRange && node.length > 0) {
-            textNodes.push({ node, start: 0, end: node.length });
-          }
-        }
-
-        if (textNodes.length === 0) {
-          console.warn(`No text nodes found for annotation ${ann.id}`);
+        if (isChoiceAnnotation(ann)) {
+          applyChoiceHighlight(ann);
           return;
         }
 
-        textNodes.reverse().forEach(({ node, start, end }) => {
+        // Skip if already highlighted
+        try {
+          const existingDoms = highlighter.getDoms(ann.id);
+          if (existingDoms && existingDoms.length > 0) return;
+        } catch {}
+        const existingManual = containerRef.current?.querySelector(`[data-bind-id="${ann.id}"]`);
+        if (existingManual) return;
+
+        if (ann.startMeta && ann.endMeta) {
           try {
-            const nodeRange = document.createRange();
-            nodeRange.setStart(node, start);
-            nodeRange.setEnd(node, end);
+            highlighter.fromStore(ann.startMeta, ann.endMeta, ann.originalText, ann.id);
+            const restoredDoms = highlighter.getDoms(ann.id);
+            if (restoredDoms && restoredDoms.length > 0) {
+              if (ann.type === AnnotationType.DELETION) {
+                highlighter.addClass("deletion", ann.id);
+              } else if (ann.type === AnnotationType.COMMENT) {
+                highlighter.addClass("comment", ann.id);
+              }
+              return;
+            }
+          } catch {}
+        }
 
-            const mark = document.createElement('mark');
-            mark.className = 'annotation-highlight';
-            mark.dataset.bindId = ann.id;
+        const range = findTextInDOM(ann.originalText);
+        if (!range) {
+          console.warn(
+            `Could not find text for annotation ${ann.id}: "${ann.originalText.slice(0, 50)}..."`,
+          );
+          return;
+        }
 
-            if (ann.type === AnnotationType.DELETION) {
-              mark.classList.add('deletion');
-            } else if (ann.type === AnnotationType.COMMENT) {
-              mark.classList.add('comment');
+        try {
+          const textNodes: { node: Text; start: number; end: number }[] = [];
+          const walker = document.createTreeWalker(
+            range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+              ? range.commonAncestorContainer.parentNode!
+              : range.commonAncestorContainer,
+            NodeFilter.SHOW_TEXT,
+            null,
+          );
+
+          let node: Text | null;
+          let inRange = false;
+
+          // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
+          while ((node = walker.nextNode() as Text | null)) {
+            if (node === range.startContainer) {
+              inRange = true;
+              const start = range.startOffset;
+              const end = node === range.endContainer ? range.endOffset : node.length;
+              if (end > start) {
+                textNodes.push({ node, start, end });
+              }
+              if (node === range.endContainer) break;
+              continue;
             }
 
-            nodeRange.surroundContents(mark);
+            if (node === range.endContainer) {
+              if (inRange) {
+                const end = range.endOffset;
+                if (end > 0) {
+                  textNodes.push({ node, start: 0, end });
+                }
+              }
+              break;
+            }
 
-            mark.addEventListener('click', () => {
-              onSelectAnnotationRef.current?.(ann.id);
-            });
-          } catch (e) {
-            console.warn(`Failed to wrap text node for annotation ${ann.id}:`, e);
+            if (inRange && node.length > 0) {
+              textNodes.push({ node, start: 0, end: node.length });
+            }
           }
-        });
-      } catch (e) {
-        console.warn(`Failed to apply highlight for annotation ${ann.id}:`, e);
-      }
-    });
-  }, [applyChoiceHighlight, findTextInDOM]);
 
-  const removeHighlight = useCallback((id: string) => {
-    removeChoiceHighlight(id);
-    highlighterRef.current?.remove(id);
+          if (textNodes.length === 0) {
+            console.warn(`No text nodes found for annotation ${ann.id}`);
+            return;
+          }
 
-    const manualHighlights = containerRef.current?.querySelectorAll(`[data-bind-id="${id}"]`);
-    manualHighlights?.forEach(el => {
-      const parent = el.parentNode;
-      while (el.firstChild) {
-        parent?.insertBefore(el.firstChild, el);
-      }
-      el.remove();
-    });
-  }, [removeChoiceHighlight]);
+          textNodes.reverse().forEach(({ node, start, end }) => {
+            try {
+              const nodeRange = document.createRange();
+              nodeRange.setStart(node, start);
+              nodeRange.setEnd(node, end);
+
+              const mark = document.createElement("mark");
+              mark.className = "annotation-highlight";
+              mark.dataset.bindId = ann.id;
+
+              if (ann.type === AnnotationType.DELETION) {
+                mark.classList.add("deletion");
+              } else if (ann.type === AnnotationType.COMMENT) {
+                mark.classList.add("comment");
+              }
+
+              nodeRange.surroundContents(mark);
+
+              mark.addEventListener("click", () => {
+                onSelectAnnotationRef.current?.(ann.id);
+              });
+            } catch (e) {
+              console.warn(`Failed to wrap text node for annotation ${ann.id}:`, e);
+            }
+          });
+        } catch (e) {
+          console.warn(`Failed to apply highlight for annotation ${ann.id}:`, e);
+        }
+      });
+    },
+    [applyChoiceHighlight, findTextInDOM],
+  );
+
+  const removeHighlight = useCallback(
+    (id: string) => {
+      removeChoiceHighlight(id);
+      highlighterRef.current?.remove(id);
+
+      const manualHighlights = containerRef.current?.querySelectorAll(`[data-bind-id="${id}"]`);
+      manualHighlights?.forEach((el) => {
+        const parent = el.parentNode;
+        while (el.firstChild) {
+          parent?.insertBefore(el.firstChild, el);
+        }
+        el.remove();
+      });
+    },
+    [removeChoiceHighlight],
+  );
 
   const clearAllHighlights = useCallback(() => {
-    const choiceHighlights = containerRef.current?.querySelectorAll('[data-choice-annotation-id]');
-    choiceHighlights?.forEach(el => {
-      el.classList.remove('annotation-highlight', 'comment', 'focused');
-      el.removeAttribute('data-choice-annotation-id');
+    const choiceHighlights = containerRef.current?.querySelectorAll("[data-choice-annotation-id]");
+    choiceHighlights?.forEach((el) => {
+      el.classList.remove("annotation-highlight", "comment", "focused");
+      el.removeAttribute("data-choice-annotation-id");
     });
 
-    const manualHighlights = containerRef.current?.querySelectorAll('[data-bind-id]');
-    manualHighlights?.forEach(el => {
+    const manualHighlights = containerRef.current?.querySelectorAll("[data-bind-id]");
+    manualHighlights?.forEach((el) => {
       const parent = el.parentNode;
       while (el.firstChild) {
         parent?.insertBefore(el.firstChild, el);
@@ -491,8 +505,8 @@ export function useAnnotationHighlighter({
       el.remove();
     });
 
-    const webHighlights = containerRef.current?.querySelectorAll('.annotation-highlight');
-    webHighlights?.forEach(el => {
+    const webHighlights = containerRef.current?.querySelectorAll(".annotation-highlight");
+    webHighlights?.forEach((el) => {
       const parent = el.parentNode;
       while (el.firstChild) {
         parent?.insertBefore(el.firstChild, el);
@@ -509,60 +523,63 @@ export function useAnnotationHighlighter({
 
     const highlighter = new Highlighter({
       $root: containerRef.current,
-      exceptSelectors: ['.annotation-toolbar', 'button'],
-      wrapTag: 'mark',
-      style: { className: 'annotation-highlight' },
+      exceptSelectors: [".annotation-toolbar", "button"],
+      wrapTag: "mark",
+      style: { className: "annotation-highlight" },
     });
 
     highlighterRef.current = highlighter;
 
-    highlighter.on(Highlighter.event.CREATE, ({ sources, type }: { sources: any[]; type?: string }) => {
-      if (type === 'from-store') return;
-      if (sources.length > 0) {
-        const source = sources[0];
-        const doms = highlighter.getDoms(source.id);
-        if (doms?.length > 0) {
-          // Clean up previous pending
-          if (pendingSourceRef.current) {
-            highlighter.remove(pendingSourceRef.current.id);
-            pendingSourceRef.current = null;
-          }
-          setCommentPopover(null);
-          setQuickLabelPicker(null);
+    highlighter.on(
+      Highlighter.event.CREATE,
+      ({ sources, type }: { sources: any[]; type?: string }) => {
+        if (type === "from-store") return;
+        if (sources.length > 0) {
+          const source = sources[0];
+          const doms = highlighter.getDoms(source.id);
+          if (doms?.length > 0) {
+            // Clean up previous pending
+            if (pendingSourceRef.current) {
+              highlighter.remove(pendingSourceRef.current.id);
+              pendingSourceRef.current = null;
+            }
+            setCommentPopover(null);
+            setQuickLabelPicker(null);
 
-          if (modeRef.current === 'redline') {
-            createAnnotationFromSource(highlighter, source, AnnotationType.DELETION);
-            window.getSelection()?.removeAllRanges();
-          } else if (modeRef.current === 'comment') {
-            pendingSourceRef.current = source;
-            // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
-            setCommentPopover({
-              anchorEl: doms[0] as HTMLElement,
-              contextText: source.text.slice(0, 80),
-              selectedText: source.text,
-              source,
-            });
-          } else if (modeRef.current === 'quickLabel') {
-            pendingSourceRef.current = source;
-            // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
-            setQuickLabelPicker({
-              anchorEl: doms[0] as HTMLElement,
-              cursorHint: lastMousePosRef.current,
-              source,
-            });
-          } else {
-            // Selection mode — show toolbar
-            pendingSourceRef.current = source;
-            // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
-            setToolbarState({
-              element: doms[0] as HTMLElement,
-              source,
-              selectionText: source.text,
-            });
+            if (modeRef.current === "redline") {
+              createAnnotationFromSource(highlighter, source, AnnotationType.DELETION);
+              window.getSelection()?.removeAllRanges();
+            } else if (modeRef.current === "comment") {
+              pendingSourceRef.current = source;
+              // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
+              setCommentPopover({
+                anchorEl: doms[0] as HTMLElement,
+                contextText: source.text.slice(0, 80),
+                selectedText: source.text,
+                source,
+              });
+            } else if (modeRef.current === "quickLabel") {
+              pendingSourceRef.current = source;
+              // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
+              setQuickLabelPicker({
+                anchorEl: doms[0] as HTMLElement,
+                cursorHint: lastMousePosRef.current,
+                source,
+              });
+            } else {
+              // Selection mode — show toolbar
+              pendingSourceRef.current = source;
+              // SAFETY: getDoms returns HTMLElements — cast to HTMLElement
+              setToolbarState({
+                element: doms[0] as HTMLElement,
+                source,
+                selectionText: source.text,
+              });
+            }
           }
         }
-      }
-    });
+      },
+    );
 
     highlighter.on(Highlighter.event.CLICK, ({ id }: { id: string }) => {
       onSelectAnnotationRef.current?.(id);
@@ -571,7 +588,7 @@ export function useAnnotationHighlighter({
     highlighter.run();
 
     // Mobile bridge
-    const isTouchPrimary = window.matchMedia('(pointer: coarse)').matches;
+    const isTouchPrimary = window.matchMedia("(pointer: coarse)").matches;
     let selectionTimer: ReturnType<typeof setTimeout>;
     const handleSelectionChange = isTouchPrimary
       ? () => {
@@ -586,13 +603,13 @@ export function useAnnotationHighlighter({
       : null;
 
     if (handleSelectionChange) {
-      document.addEventListener('selectionchange', handleSelectionChange);
+      document.addEventListener("selectionchange", handleSelectionChange);
     }
 
     return () => {
       if (handleSelectionChange) {
         clearTimeout(selectionTimer);
-        document.removeEventListener('selectionchange', handleSelectionChange);
+        document.removeEventListener("selectionchange", handleSelectionChange);
       }
       highlighter.dispose();
     };
@@ -603,14 +620,14 @@ export function useAnnotationHighlighter({
     const highlighter = highlighterRef.current;
     if (!highlighter) return;
 
-    annotations.forEach(ann => {
+    annotations.forEach((ann) => {
       try {
         const doms = highlighter.getDoms(ann.id);
         if (doms && doms.length > 0) {
           if (ann.type === AnnotationType.DELETION) {
-            highlighter.addClass('deletion', ann.id);
+            highlighter.addClass("deletion", ann.id);
           } else if (ann.type === AnnotationType.COMMENT) {
-            highlighter.addClass('comment', ann.id);
+            highlighter.addClass("comment", ann.id);
           }
         }
       } catch {}
@@ -622,8 +639,8 @@ export function useAnnotationHighlighter({
     if (!containerRef.current) return;
 
     // Clear all previously focused highlights
-    containerRef.current.querySelectorAll('.annotation-highlight.focused').forEach(el => {
-      el.classList.remove('focused');
+    containerRef.current.querySelectorAll(".annotation-highlight.focused").forEach((el) => {
+      el.classList.remove("focused");
     });
 
     if (!selectedAnnotationId) return;
@@ -646,25 +663,25 @@ export function useAnnotationHighlighter({
 
     if (targetElements.length === 0) {
       const manualMarks = containerRef.current.querySelectorAll(
-        `[data-bind-id="${selectedAnnotationId}"]`
+        `[data-bind-id="${selectedAnnotationId}"]`,
       );
       if (manualMarks.length > 0) targetElements = Array.from(manualMarks);
     }
 
     if (targetElements.length === 0) {
       const choiceMarks = containerRef.current.querySelectorAll(
-        `[data-choice-annotation-id="${CSS.escape(selectedAnnotationId)}"]`
+        `[data-choice-annotation-id="${CSS.escape(selectedAnnotationId)}"]`,
       );
       if (choiceMarks.length > 0) targetElements = Array.from(choiceMarks);
     }
 
     if (targetElements.length === 0) return;
 
-    targetElements.forEach(el => el.classList.add('focused'));
-    targetElements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetElements.forEach((el) => el.classList.add("focused"));
+    targetElements[0].scrollIntoView({ behavior: "smooth", block: "center" });
 
     const timer = setTimeout(() => {
-      targetElements.forEach(el => el.classList.remove('focused'));
+      targetElements.forEach((el) => el.classList.remove("focused"));
     }, 2000);
     return () => clearTimeout(timer);
   }, [selectedAnnotationId]);
@@ -684,8 +701,13 @@ export function useAnnotationHighlighter({
     const highlighter = highlighterRef.current;
     if (!toolbarState || !highlighter) return;
     createAnnotationFromSource(
-      highlighter, toolbarState.source, AnnotationType.COMMENT,
-      `${label.emoji} ${label.text}`, undefined, true, label.tip
+      highlighter,
+      toolbarState.source,
+      AnnotationType.COMMENT,
+      `${label.emoji} ${label.text}`,
+      undefined,
+      true,
+      label.tip,
     );
     pendingSourceRef.current = null;
     setToolbarState(null);
@@ -717,8 +739,11 @@ export function useAnnotationHighlighter({
     if (!commentPopover) return;
     if (commentPopover.source && highlighterRef.current) {
       createAnnotationFromSource(
-        highlighterRef.current, commentPopover.source,
-        AnnotationType.COMMENT, text, images
+        highlighterRef.current,
+        commentPopover.source,
+        AnnotationType.COMMENT,
+        text,
+        images,
       );
       pendingSourceRef.current = null;
       window.getSelection()?.removeAllRanges();
@@ -727,7 +752,7 @@ export function useAnnotationHighlighter({
   };
 
   const handleCommentClose = useCallback(() => {
-    setCommentPopover(prev => {
+    setCommentPopover((prev) => {
       if (prev?.source && highlighterRef.current) {
         highlighterRef.current.remove(prev.source.id);
         pendingSourceRef.current = null;
@@ -737,16 +762,24 @@ export function useAnnotationHighlighter({
     window.getSelection()?.removeAllRanges();
   }, []);
 
-  const handleFloatingQuickLabel = useCallback((label: QuickLabel) => {
-    if (!quickLabelPicker?.source || !highlighterRef.current) return;
-    createAnnotationFromSource(
-      highlighterRef.current, quickLabelPicker.source, AnnotationType.COMMENT,
-      `${label.emoji} ${label.text}`, undefined, true, label.tip
-    );
-    pendingSourceRef.current = null;
-    setQuickLabelPicker(null);
-    window.getSelection()?.removeAllRanges();
-  }, [quickLabelPicker]);
+  const handleFloatingQuickLabel = useCallback(
+    (label: QuickLabel) => {
+      if (!quickLabelPicker?.source || !highlighterRef.current) return;
+      createAnnotationFromSource(
+        highlighterRef.current,
+        quickLabelPicker.source,
+        AnnotationType.COMMENT,
+        `${label.emoji} ${label.text}`,
+        undefined,
+        true,
+        label.tip,
+      );
+      pendingSourceRef.current = null;
+      setQuickLabelPicker(null);
+      window.getSelection()?.removeAllRanges();
+    },
+    [quickLabelPicker],
+  );
 
   const handleQuickLabelPickerDismiss = useCallback(() => {
     if (quickLabelPicker?.source && highlighterRef.current) {

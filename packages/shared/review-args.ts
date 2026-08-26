@@ -51,7 +51,7 @@ function tokenizeReviewArgs(input: string): string[] {
 
   const tokens: string[] = [];
   let current = "";
-  let quote: "'" | "\"" | undefined;
+  let quote: "'" | '"' | undefined;
 
   for (let i = 0; i < raw.length; i++) {
     const char = raw[i];
@@ -64,7 +64,7 @@ function tokenizeReviewArgs(input: string): string[] {
       continue;
     }
 
-    if (char === "'" || char === "\"") {
+    if (char === "'" || char === '"') {
       quote = char;
       continue;
     }

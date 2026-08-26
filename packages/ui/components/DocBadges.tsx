@@ -10,20 +10,20 @@
  * decorative top-of-doc context.
  */
 
-import React from 'react';
-import { hostnameOrFallback } from '@plannotator/shared/project';
-import { OpenInAppButton } from './OpenInAppButton';
+import React from "react";
+import { hostnameOrFallback } from "@plannotator/shared/project";
+import { OpenInAppButton } from "./OpenInAppButton";
 
 export interface LinkedDocBadgeInfo {
   filepath: string;
   onBack: () => void;
   label?: string;
   backLabel?: string;
-  variant?: 'breadcrumb' | 'folder-file';
+  variant?: "breadcrumb" | "folder-file";
 }
 
 export interface DocBadgesProps {
-  layout: 'column' | 'row';
+  layout: "column" | "row";
   repoInfo?: { display: string; branch?: string } | null;
   showDemoBadge?: boolean;
   linkedDocInfo?: LinkedDocBadgeInfo | null;
@@ -44,9 +44,8 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
   sourceInfo,
   openInAppPath,
 }) => {
-  const isRow = layout === 'row';
-  const canOpenInApp =
-    !!openInAppPath && !/^https?:\/\//i.test(openInAppPath);
+  const isRow = layout === "row";
+  const canOpenInApp = !!openInAppPath && !/^https?:\/\//i.test(openInAppPath);
   const openInButton = canOpenInApp ? (
     <OpenInAppButton filePath={openInAppPath} base={null} />
   ) : null;
@@ -59,8 +58,8 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
 
   // Row layout: single horizontal line. Column layout: stacked rows.
   const outerClass = isRow
-    ? 'flex flex-row items-center gap-1.5 text-[9px] text-muted-foreground/70 font-mono'
-    : 'flex flex-col items-start gap-1 text-[9px] text-muted-foreground/50 font-mono';
+    ? "flex flex-row items-center gap-1.5 text-[9px] text-muted-foreground/70 font-mono"
+    : "flex flex-col items-start gap-1 text-[9px] text-muted-foreground/50 font-mono";
 
   return (
     <div className={outerClass}>
@@ -99,9 +98,7 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
             className="px-1.5 py-0.5 bg-muted/30 rounded truncate max-w-[200px]"
             title={sourceInfo}
           >
-            {/^https?:\/\//i.test(sourceInfo)
-              ? hostnameOrFallback(sourceInfo)
-              : sourceInfo}
+            {/^https?:\/\//i.test(sourceInfo) ? hostnameOrFallback(sourceInfo) : sourceInfo}
           </span>
           {openInButton}
         </div>
@@ -115,8 +112,9 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
       )}
 
       {/* Linked-doc breadcrumb: only in column layout (sticky lane is hidden in linked-doc mode) */}
-      {!isRow && linkedDocInfo && (
-        linkedDocInfo.variant === 'folder-file' ? (
+      {!isRow &&
+        linkedDocInfo &&
+        (linkedDocInfo.variant === "folder-file" ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -129,7 +127,7 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
               className="truncate rounded bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground max-w-[220px]"
               title={linkedDocInfo.filepath}
             >
-              {linkedDocInfo.filepath.split('/').pop()}
+              {linkedDocInfo.filepath.split("/").pop()}
             </span>
             {openInButton}
           </div>
@@ -152,21 +150,20 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
                   d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
                 />
               </svg>
-              {linkedDocInfo.backLabel || 'plan'}
+              {linkedDocInfo.backLabel || "plan"}
             </button>
             <span className="px-1.5 py-0.5 bg-primary/10 text-primary/80 rounded">
-              {linkedDocInfo.label || 'Linked File'}
+              {linkedDocInfo.label || "Linked File"}
             </span>
             <span
               className="px-1.5 py-0.5 bg-muted/50 text-muted-foreground rounded truncate max-w-[200px]"
               title={linkedDocInfo.filepath}
             >
-              {linkedDocInfo.filepath.split('/').pop()}
+              {linkedDocInfo.filepath.split("/").pop()}
             </span>
             {openInButton}
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 };

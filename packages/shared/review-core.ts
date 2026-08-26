@@ -154,28 +154,16 @@ function quoteJjString(value: string): string {
   return JSON.stringify(value);
 }
 
-export async function getCurrentBranch(
-  runtime: ReviewGitRuntime,
-  cwd?: string,
-): Promise<string> {
-  const result = await runtime.runGit(
-    ["rev-parse", "--abbrev-ref", "HEAD"],
-    { cwd },
-  );
+export async function getCurrentBranch(runtime: ReviewGitRuntime, cwd?: string): Promise<string> {
+  const result = await runtime.runGit(["rev-parse", "--abbrev-ref", "HEAD"], { cwd });
   return result.exitCode === 0 ? result.stdout.trim() || "HEAD" : "HEAD";
 }
 
-export async function getDefaultBranch(
-  runtime: ReviewGitRuntime,
-  cwd?: string,
-): Promise<string> {
+export async function getDefaultBranch(runtime: ReviewGitRuntime, cwd?: string): Promise<string> {
   // Prefer the remote tracking ref (e.g. `origin/main`) so diffs run against
   // the upstream tip, not a potentially stale local copy. Only fall back to
   // a local ref when there's no remote configured at all.
-  const remoteHead = await runtime.runGit(
-    ["symbolic-ref", "refs/remotes/origin/HEAD"],
-    { cwd },
-  );
+  const remoteHead = await runtime.runGit(["symbolic-ref", "refs/remotes/origin/HEAD"], { cwd });
   if (remoteHead.exitCode === 0) {
     const ref = remoteHead.stdout.trim();
     if (ref) {
@@ -184,18 +172,12 @@ export async function getDefaultBranch(
       // or partial clones the pointer can be set while the target is
       // missing, in which case a later `git diff origin/main..HEAD` would
       // error. Verify the target exists before trusting it.
-      const verify = await runtime.runGit(
-        ["show-ref", "--verify", "--quiet", ref],
-        { cwd },
-      );
+      const verify = await runtime.runGit(["show-ref", "--verify", "--quiet", ref], { cwd });
       if (verify.exitCode === 0) return ref.replace("refs/remotes/", "");
     }
   }
 
-  const mainBranch = await runtime.runGit(
-    ["show-ref", "--verify", "refs/heads/main"],
-    { cwd },
-  );
+  const mainBranch = await runtime.runGit(["show-ref", "--verify", "refs/heads/main"], { cwd });
   if (mainBranch.exitCode === 0) return "main";
 
   return "master";
@@ -215,10 +197,10 @@ export async function detectRemoteDefaultBranch(
   cwd?: string,
 ): Promise<string | null> {
   try {
-    const lsRemote = await runtime.runGit(
-      ["ls-remote", "--symref", "origin", "HEAD"],
-      { cwd, timeoutMs: 5000 },
-    );
+    const lsRemote = await runtime.runGit(["ls-remote", "--symref", "origin", "HEAD"], {
+      cwd,
+      timeoutMs: 5000,
+    });
     if (lsRemote.exitCode !== 0) return null;
     const match = lsRemote.stdout.match(/^ref:\s+refs\/heads\/(\S+)\s+HEAD/m);
     if (!match) return null;
@@ -280,12 +262,7 @@ export async function listBranches(
   // without guessing from the short form — local branches can contain `/`
   // (e.g. `feature/foo`), so `name.includes("/")` would misclassify them.
   const result = await runtime.runGit(
-    [
-      "for-each-ref",
-      "--format=%(refname)\t%(refname:short)",
-      "refs/heads",
-      "refs/remotes",
-    ],
+    ["for-each-ref", "--format=%(refname)\t%(refname:short)", "refs/heads", "refs/remotes"],
     { cwd },
   );
   if (result.exitCode !== 0) return { local: [], remote: [] };
@@ -325,10 +302,7 @@ export async function listBranches(
  * git errors on the next diff call, which is better than silently producing
  * a patch against the wrong commit.
  */
-export function resolveBaseBranch(
-  requested: string | undefined,
-  detected: string,
-): string {
+export function resolveBaseBranch(requested: string | undefined, detected: string): string {
   return requested || detected;
 }
 
@@ -355,9 +329,7 @@ export async function getWorktrees(
     } else if (line.startsWith("HEAD ")) {
       current.head = line.slice("HEAD ".length);
     } else if (line.startsWith("branch ")) {
-      current.branch = line
-        .slice("branch ".length)
-        .replace("refs/heads/", "");
+      current.branch = line.slice("branch ".length).replace("refs/heads/", "");
     } else if (line === "detached") {
       current.branch = null;
     }
@@ -374,10 +346,7 @@ export async function getWorktrees(
   return entries;
 }
 
-export async function getGitContext(
-  runtime: ReviewGitRuntime,
-  cwd?: string,
-): Promise<GitContext> {
+export async function getGitContext(runtime: ReviewGitRuntime, cwd?: string): Promise<GitContext> {
   const [currentBranch, defaultBranch, availableBranches, recentCommits] = await Promise.all([
     getCurrentBranch(runtime, cwd),
     getDefaultBranch(runtime, cwd),
@@ -413,9 +382,7 @@ export async function getGitContext(
   ]);
 
   const currentTreePath =
-    currentTreePathResult.exitCode === 0
-      ? currentTreePathResult.stdout.trim()
-      : null;
+    currentTreePathResult.exitCode === 0 ? currentTreePathResult.stdout.trim() : null;
 
   return {
     currentBranch,
@@ -453,17 +420,12 @@ async function getUntrackedFileDiffs(
   // unlike git diff HEAD which always covers the full repo with root-relative
   // paths.  Resolve the repo root so untracked files from the entire repo are
   // included and their paths match the tracked-diff output.
-  const toplevelResult = await runtime.runGit(
-    ["rev-parse", "--show-toplevel"],
-    { cwd },
-  );
-  const rootCwd =
-    toplevelResult.exitCode === 0 ? toplevelResult.stdout.trim() : cwd;
+  const toplevelResult = await runtime.runGit(["rev-parse", "--show-toplevel"], { cwd });
+  const rootCwd = toplevelResult.exitCode === 0 ? toplevelResult.stdout.trim() : cwd;
 
-  const lsResult = await runtime.runGit(
-    ["ls-files", "--others", "--exclude-standard"],
-    { cwd: rootCwd },
-  );
+  const lsResult = await runtime.runGit(["ls-files", "--others", "--exclude-standard"], {
+    cwd: rootCwd,
+  });
   if (lsResult.exitCode !== 0) return "";
 
   const files = lsResult.stdout
@@ -503,18 +465,13 @@ function displayRef(ref: string): string {
   return /^[0-9a-f]{7,}$/i.test(ref) ? ref.slice(0, 7) : ref;
 }
 
-function assertGitSuccess(
-  result: GitCommandResult,
-  args: string[],
-): GitCommandResult {
+function assertGitSuccess(result: GitCommandResult, args: string[]): GitCommandResult {
   if (result.exitCode === 0) return result;
 
   const command = `git ${args.join(" ")}`;
   const stderr = result.stderr.trim();
   throw new Error(
-    stderr
-      ? `${command} failed: ${stderr}`
-      : `${command} failed with exit code ${result.exitCode}`,
+    stderr ? `${command} failed: ${stderr}` : `${command} failed with exit code ${result.exitCode}`,
   );
 }
 
@@ -528,9 +485,7 @@ const WORKTREE_SUB_TYPES = new Set([
   "all",
 ]);
 
-export function parseWorktreeDiffType(
-  diffType: string,
-): { path: string; subType: string } | null {
+export function parseWorktreeDiffType(diffType: string): { path: string; subType: string } | null {
   if (!diffType.startsWith("worktree:")) return null;
 
   const rest = diffType.slice("worktree:".length);
@@ -585,21 +540,11 @@ export async function runGitDiff(
           "--dst-prefix=b/",
         ];
         const hasHead =
-          (await runtime.runGit(["rev-parse", "--verify", "HEAD"], { cwd }))
-            .exitCode === 0;
+          (await runtime.runGit(["rev-parse", "--verify", "HEAD"], { cwd })).exitCode === 0;
         const trackedPatch = hasHead
-          ? assertGitSuccess(
-              await runtime.runGit(trackedDiffArgs, { cwd }),
-              trackedDiffArgs,
-            ).stdout
+          ? assertGitSuccess(await runtime.runGit(trackedDiffArgs, { cwd }), trackedDiffArgs).stdout
           : "";
-        const untrackedDiff = await getUntrackedFileDiffs(
-          runtime,
-          "a/",
-          "b/",
-          cwd,
-          options,
-        );
+        const untrackedDiff = await getUntrackedFileDiffs(runtime, "a/", "b/", cwd, options);
         patch = trackedPatch + untrackedDiff;
         label = "Uncommitted changes";
         break;
@@ -635,31 +580,34 @@ export async function runGitDiff(
           await runtime.runGit(trackedDiffArgs, { cwd }),
           trackedDiffArgs,
         );
-        const untrackedDiff = await getUntrackedFileDiffs(
-          runtime,
-          "a/",
-          "b/",
-          cwd,
-          options,
-        );
+        const untrackedDiff = await getUntrackedFileDiffs(runtime, "a/", "b/", cwd, options);
         patch = trackedDiff.stdout + untrackedDiff;
         label = "Unstaged changes";
         break;
       }
 
       case "last-commit": {
-        const hasParent = await runtime.runGit(
-          ["rev-parse", "--verify", "HEAD~1"],
-          { cwd },
-        );
+        const hasParent = await runtime.runGit(["rev-parse", "--verify", "HEAD~1"], { cwd });
         const args =
           hasParent.exitCode === 0
-            ? ["diff", "--no-ext-diff", ...wFlag, "HEAD~1..HEAD", "--src-prefix=a/", "--dst-prefix=b/"]
-            : ["diff", "--no-ext-diff", ...wFlag, "--root", "HEAD", "--src-prefix=a/", "--dst-prefix=b/"];
-        const lastCommitDiff = assertGitSuccess(
-          await runtime.runGit(args, { cwd }),
-          args,
-        );
+            ? [
+                "diff",
+                "--no-ext-diff",
+                ...wFlag,
+                "HEAD~1..HEAD",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
+              ]
+            : [
+                "diff",
+                "--no-ext-diff",
+                ...wFlag,
+                "--root",
+                "HEAD",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
+              ];
+        const lastCommitDiff = assertGitSuccess(await runtime.runGit(args, { cwd }), args);
         patch = lastCommitDiff.stdout;
         label = "Last commit";
         break;
@@ -715,10 +663,13 @@ export async function runGitDiff(
 
       case "all": {
         // Diff from the empty tree to HEAD — shows every tracked file as an addition.
-        const emptyTreeResult = await runtime.runGit(["hash-object", "-t", "tree", "/dev/null"], { cwd });
-        const emptyTree = emptyTreeResult.exitCode === 0
-          ? emptyTreeResult.stdout.trim()
-          : "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+        const emptyTreeResult = await runtime.runGit(["hash-object", "-t", "tree", "/dev/null"], {
+          cwd,
+        });
+        const emptyTree =
+          emptyTreeResult.exitCode === 0
+            ? emptyTreeResult.stdout.trim()
+            : "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
         const allDiffArgs = [
           "diff",
           "--no-ext-diff",
@@ -728,10 +679,7 @@ export async function runGitDiff(
           "--end-of-options",
           `${emptyTree}..HEAD`,
         ];
-        const allDiff = assertGitSuccess(
-          await runtime.runGit(allDiffArgs, { cwd }),
-          allDiffArgs,
-        );
+        const allDiff = assertGitSuccess(await runtime.runGit(allDiffArgs, { cwd }), allDiffArgs);
         patch = allDiff.stdout;
         label = "All files";
         break;
@@ -756,9 +704,7 @@ export async function runGitDiff(
   if (cwd) {
     const branch = await getCurrentBranch(runtime, cwd);
     label =
-      branch && branch !== "HEAD"
-        ? `${branch}: ${label}`
-        : `${cwd.split("/").pop()}: ${label}`;
+      branch && branch !== "HEAD" ? `${branch}: ${label}` : `${cwd.split("/").pop()}: ${label}`;
   }
 
   return { patch, label };
@@ -951,7 +897,10 @@ export async function getFileContentsForDiff(
         newContent: await gitShow("HEAD", filePath),
       };
     case "merge-base": {
-      const mbResult = await runtime.runGit(["merge-base", "--end-of-options", defaultBranch, "HEAD"], { cwd });
+      const mbResult = await runtime.runGit(
+        ["merge-base", "--end-of-options", defaultBranch, "HEAD"],
+        { cwd },
+      );
       const mb = mbResult.exitCode === 0 ? mbResult.stdout.trim() : defaultBranch;
       return {
         oldContent: await gitShow(mb, oldFilePath),
@@ -1003,9 +952,7 @@ export async function gitResetFile(
   await ensureGitSuccess(runtime, ["reset", "HEAD", "--", filePath], cwd);
 }
 
-export function parseP4DiffType(
-  diffType: string,
-): { changelist: string | "default" } | null {
+export function parseP4DiffType(diffType: string): { changelist: string | "default" } | null {
   if (diffType === "p4-default") return { changelist: "default" };
   if (diffType.startsWith("p4-changelist:")) {
     return { changelist: diffType.slice("p4-changelist:".length) };

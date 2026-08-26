@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type {
-  DiffResult,
-  DiffType,
-  GitContext,
-  ReviewGitRuntime,
-} from "./review-core";
+import type { DiffResult, DiffType, GitContext, ReviewGitRuntime } from "./review-core";
 import {
   type VcsProvider,
   createGitProvider,
@@ -40,7 +35,7 @@ function provider(
       return detected;
     },
     async getRoot() {
-      return detected ? root ?? "/repo" : null;
+      return detected ? (root ?? "/repo") : null;
     },
     ownsDiffType(diffType: string) {
       return ownedTypes.includes(diffType);
@@ -79,20 +74,36 @@ describe("createVcsApi", () => {
 
   test("detects the nearest VCS root so nested Git repos beat outer JJ workspaces", async () => {
     const jj = provider("jj", true, ["jj-current"], { cwd: "/repo" }, "/repo");
-    const git = provider("git", true, ["uncommitted"], { cwd: "/repo/packages/tool" }, "/repo/packages/tool");
+    const git = provider(
+      "git",
+      true,
+      ["uncommitted"],
+      { cwd: "/repo/packages/tool" },
+      "/repo/packages/tool",
+    );
     const api = createVcsApi([jj, git]);
 
     await expect(api.detectVcs("/repo/packages/tool")).resolves.toBe(git);
-    await expect(api.getVcsContext("/repo/packages/tool")).resolves.toMatchObject({ vcsType: "git" });
+    await expect(api.getVcsContext("/repo/packages/tool")).resolves.toMatchObject({
+      vcsType: "git",
+    });
   });
 
   test("detects the nearest VCS root so nested JJ workspaces beat outer Git repos", async () => {
-    const jj = provider("jj", true, ["jj-current"], { cwd: "/repo/packages/tool" }, "/repo/packages/tool");
+    const jj = provider(
+      "jj",
+      true,
+      ["jj-current"],
+      { cwd: "/repo/packages/tool" },
+      "/repo/packages/tool",
+    );
     const git = provider("git", true, ["uncommitted"], { cwd: "/repo" }, "/repo");
     const api = createVcsApi([jj, git]);
 
     await expect(api.detectVcs("/repo/packages/tool")).resolves.toBe(jj);
-    await expect(api.getVcsContext("/repo/packages/tool")).resolves.toMatchObject({ vcsType: "jj" });
+    await expect(api.getVcsContext("/repo/packages/tool")).resolves.toMatchObject({
+      vcsType: "jj",
+    });
   });
 
   test("continues probing providers when root detection throws", async () => {
@@ -194,12 +205,14 @@ describe("createVcsApi", () => {
     const git = provider("git", true, ["merge-base", "uncommitted"]);
     const api = createVcsApi([jj, git]);
 
-    await expect(api.prepareLocalReviewDiff({
-      cwd: "/repo",
-      requestedDiffType: "merge-base",
-      requestedBase: "main",
-      configuredDiffType: "unstaged",
-    })).resolves.toMatchObject({
+    await expect(
+      api.prepareLocalReviewDiff({
+        cwd: "/repo",
+        requestedDiffType: "merge-base",
+        requestedBase: "main",
+        configuredDiffType: "unstaged",
+      }),
+    ).resolves.toMatchObject({
       diffType: "jj-current",
       base: "trunk()",
       rawPatch: "jj:jj-current:trunk()",
@@ -217,12 +230,14 @@ describe("createVcsApi", () => {
     });
     const api = createVcsApi([jj]);
 
-    await expect(api.prepareLocalReviewDiff({
-      cwd: "/repo",
-      requestedDiffType: "jj-line",
-      requestedBase: "feature@origin",
-      configuredDiffType: "unstaged",
-    })).resolves.toMatchObject({
+    await expect(
+      api.prepareLocalReviewDiff({
+        cwd: "/repo",
+        requestedDiffType: "jj-line",
+        requestedBase: "feature@origin",
+        configuredDiffType: "unstaged",
+      }),
+    ).resolves.toMatchObject({
       diffType: "jj-line",
       base: "feature@origin",
       rawPatch: "jj:jj-line:feature@origin",
@@ -233,12 +248,14 @@ describe("createVcsApi", () => {
     const git = provider("git", true, ["uncommitted", "merge-base"]);
     const api = createVcsApi([git]);
 
-    await expect(api.prepareLocalReviewDiff({
-      cwd: "/repo",
-      requestedDiffType: "jj-line",
-      requestedBase: "develop",
-      configuredDiffType: "merge-base",
-    })).resolves.toMatchObject({
+    await expect(
+      api.prepareLocalReviewDiff({
+        cwd: "/repo",
+        requestedDiffType: "jj-line",
+        requestedBase: "develop",
+        configuredDiffType: "merge-base",
+      }),
+    ).resolves.toMatchObject({
       diffType: "merge-base",
       base: "develop",
       rawPatch: "git:merge-base:develop",
@@ -254,11 +271,13 @@ describe("createVcsApi", () => {
     const git = provider("git", true, ["uncommitted", "merge-base"]);
     const api = createVcsApi([jj, git]);
 
-    await expect(api.prepareLocalReviewDiff({
-      cwd: "/repo",
-      vcsType: "git",
-      configuredDiffType: "merge-base",
-    })).resolves.toMatchObject({
+    await expect(
+      api.prepareLocalReviewDiff({
+        cwd: "/repo",
+        vcsType: "git",
+        configuredDiffType: "merge-base",
+      }),
+    ).resolves.toMatchObject({
       gitContext: { vcsType: "git" },
       diffType: "merge-base",
       base: "main",
@@ -275,11 +294,13 @@ describe("createVcsApi", () => {
     const git = provider("git", false, ["uncommitted", "merge-base"]);
     const api = createVcsApi([jj, git]);
 
-    await expect(api.prepareLocalReviewDiff({
-      cwd: "/repo",
-      vcsType: "git",
-      configuredDiffType: "merge-base",
-    })).rejects.toThrow("Git workspace not found.");
+    await expect(
+      api.prepareLocalReviewDiff({
+        cwd: "/repo",
+        vcsType: "git",
+        configuredDiffType: "merge-base",
+      }),
+    ).rejects.toThrow("Git workspace not found.");
   });
 
   test("refreshes context and remote defaults with the forced VCS", async () => {

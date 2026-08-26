@@ -113,27 +113,14 @@ export function getFileContentsForDiff(
   oldPath?: string,
   cwd?: string,
 ): Promise<{ oldContent: string | null; newContent: string | null }> {
-  return getFileContentsForDiffCore(
-    runtime,
-    diffType,
-    defaultBranch,
-    filePath,
-    oldPath,
-    cwd,
-  );
+  return getFileContentsForDiffCore(runtime, diffType, defaultBranch, filePath, oldPath, cwd);
 }
 
-export function gitAddFile(
-  filePath: string,
-  cwd?: string,
-): Promise<void> {
+export function gitAddFile(filePath: string, cwd?: string): Promise<void> {
   return gitAddFileCore(runtime, filePath, cwd);
 }
 
-export function gitResetFile(
-  filePath: string,
-  cwd?: string,
-): Promise<void> {
+export function gitResetFile(filePath: string, cwd?: string): Promise<void> {
   return gitResetFileCore(runtime, filePath, cwd);
 }
 

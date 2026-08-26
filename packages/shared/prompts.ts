@@ -16,7 +16,8 @@ export function resolveTemplate(
 
 // ─── Default constants ───────────────────────────────────────────────────────
 
-export const DEFAULT_REVIEW_APPROVED_PROMPT = "# Code Review\n\nCode review completed — all changes approved.";
+export const DEFAULT_REVIEW_APPROVED_PROMPT =
+  "# Code Review\n\nCode review completed — all changes approved.";
 
 export const DEFAULT_REVIEW_DENIED_SUFFIX = [
   "",
@@ -40,8 +41,13 @@ export const DEFAULT_ANNOTATE_APPROVED_PROMPT = "The user approved.";
 // ─── Core resolver ───────────────────────────────────────────────────────────
 
 type PromptSection = "review" | "annotate";
-type PromptKey = "approved" | "approvedWithNotes" | "autoApproved" | "denied"
-  | "fileFeedback" | "messageFeedback";
+type PromptKey =
+  | "approved"
+  | "approvedWithNotes"
+  | "autoApproved"
+  | "denied"
+  | "fileFeedback"
+  | "messageFeedback";
 
 interface PromptLookupOptions {
   section: PromptSection;
@@ -61,12 +67,18 @@ export function getConfiguredPrompt(options: PromptLookupOptions): string {
   const resolvedConfig = options.config ?? loadConfig();
   const section = resolvedConfig.prompts?.[options.section];
   const runtimePrompt = options.runtime
-    ? normalizePrompt(Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(section?.runtimes?.[options.runtime]?.[options.key])))
+    ? normalizePrompt(
+        Option.getOrUndefined(
+          Schema.decodeUnknownOption(Schema.String)(
+            section?.runtimes?.[options.runtime]?.[options.key],
+          ),
+        ),
+      )
     : undefined;
-  const genericPrompt = normalizePrompt(Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(section?.[options.key])));
-  const runtimeFallback = options.runtime
-    ? options.runtimeFallbacks?.[options.runtime]
-    : undefined;
+  const genericPrompt = normalizePrompt(
+    Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(section?.[options.key])),
+  );
+  const runtimeFallback = options.runtime ? options.runtimeFallbacks?.[options.runtime] : undefined;
 
   return runtimePrompt ?? genericPrompt ?? runtimeFallback ?? options.fallback;
 }

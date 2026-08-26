@@ -1,28 +1,28 @@
-import { describe, expect, test } from 'bun:test';
-import { Result, Schema } from 'effect';
+import { describe, expect, test } from "bun:test";
+import { Result, Schema } from "effect";
 import {
   createOpenInAppsLoader,
   decodeOpenInAppsResponse,
   type OpenInAppsResponse,
-} from './openInAppsResponse';
+} from "./openInAppsResponse";
 
 const reveal = {
-  id: 'reveal',
-  label: 'Finder',
-  kind: 'file-manager' as const,
-  icon: 'finder',
+  id: "reveal",
+  label: "Finder",
+  kind: "file-manager" as const,
+  icon: "finder",
 };
 const editor = {
-  id: 'vscode',
-  label: 'VS Code',
-  kind: 'editor' as const,
-  icon: 'vscode',
+  id: "vscode",
+  label: "VS Code",
+  kind: "editor" as const,
+  icon: "vscode",
 };
 const terminal = {
-  id: 'terminal',
-  label: 'Terminal',
-  kind: 'terminal' as const,
-  icon: 'terminal',
+  id: "terminal",
+  label: "Terminal",
+  kind: "terminal" as const,
+  icon: "terminal",
 };
 
 type JsonResponseBody = Schema.Schema.Type<typeof Schema.Json>;
@@ -34,12 +34,12 @@ function availableResponse(apps: JsonResponseBody[]): JsonResponseBody {
 function jsonResponse(body: JsonResponseBody, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
-describe('decodeOpenInAppsResponse', () => {
-  test('decodes valid apps in response order', () => {
+describe("decodeOpenInAppsResponse", () => {
+  test("decodes valid apps in response order", () => {
     const decoded = decodeOpenInAppsResponse(availableResponse([terminal, editor, reveal]));
 
     expect(Result.isSuccess(decoded)).toBeTrue();
@@ -51,15 +51,17 @@ describe('decodeOpenInAppsResponse', () => {
     }
   });
 
-  test('filters malformed app siblings while preserving valid order', () => {
-    const decoded = decodeOpenInAppsResponse(availableResponse([
-      terminal,
-      { id: 'bad', label: 'Bad', kind: 'editor', icon: 42 },
-      editor,
-      null,
-      { id: 'also-bad', label: 'Bad', kind: 'unknown', icon: 'bad' },
-      reveal,
-    ]));
+  test("filters malformed app siblings while preserving valid order", () => {
+    const decoded = decodeOpenInAppsResponse(
+      availableResponse([
+        terminal,
+        { id: "bad", label: "Bad", kind: "editor", icon: 42 },
+        editor,
+        null,
+        { id: "also-bad", label: "Bad", kind: "unknown", icon: "bad" },
+        reveal,
+      ]),
+    );
 
     expect(Result.isSuccess(decoded)).toBeTrue();
     if (Result.isSuccess(decoded)) {
@@ -67,22 +69,22 @@ describe('decodeOpenInAppsResponse', () => {
     }
   });
 
-  test('rejects malformed response roots', () => {
+  test("rejects malformed response roots", () => {
     for (const value of [
       null,
       [],
       42,
-      'response',
+      "response",
       {},
       { available: true },
-      { available: 'yes', apps: [] },
+      { available: "yes", apps: [] },
       { available: true, apps: null },
     ]) {
       expect(Result.isFailure(decodeOpenInAppsResponse(value))).toBeTrue();
     }
   });
 
-  test('preserves valid available and unavailable empty responses', () => {
+  test("preserves valid available and unavailable empty responses", () => {
     const available = decodeOpenInAppsResponse(availableResponse([]));
     const unavailable = decodeOpenInAppsResponse({ available: false, apps: [] });
 
@@ -95,13 +97,13 @@ describe('decodeOpenInAppsResponse', () => {
   });
 });
 
-describe('createOpenInAppsLoader', () => {
-  test('returns unavailable for invalid JSON and retries after the failure', async () => {
+describe("createOpenInAppsLoader", () => {
+  test("returns unavailable for invalid JSON and retries after the failure", async () => {
     let calls = 0;
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
       return calls === 1
-        ? new Response('not json')
+        ? new Response("not json")
         : jsonResponse({ available: true, apps: [editor] });
     });
 
@@ -110,12 +112,12 @@ describe('createOpenInAppsLoader', () => {
     expect(calls).toBe(2);
   });
 
-  test('returns unavailable for a non-OK response without parsing its body', async () => {
-    const response = new Response('not parsed', { status: 503 });
+  test("returns unavailable for a non-OK response without parsing its body", async () => {
+    const response = new Response("not parsed", { status: 503 });
     let jsonCalls = 0;
     response.json = async () => {
       jsonCalls += 1;
-      throw new Error('JSON should not be parsed');
+      throw new Error("JSON should not be parsed");
     };
     const loader = createOpenInAppsLoader(async () => response);
 
@@ -123,11 +125,11 @@ describe('createOpenInAppsLoader', () => {
     expect(jsonCalls).toBe(0);
   });
 
-  test('returns unavailable for a rejected request and retries after the failure', async () => {
+  test("returns unavailable for a rejected request and retries after the failure", async () => {
     let calls = 0;
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
-      if (calls === 1) throw new Error('Network unavailable');
+      if (calls === 1) throw new Error("Network unavailable");
       return jsonResponse({ available: true, apps: [editor] });
     });
 
@@ -136,7 +138,7 @@ describe('createOpenInAppsLoader', () => {
     expect(calls).toBe(2);
   });
 
-  test('returns unavailable for a malformed root and retries after the failure', async () => {
+  test("returns unavailable for a malformed root and retries after the failure", async () => {
     let calls = 0;
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
@@ -150,7 +152,7 @@ describe('createOpenInAppsLoader', () => {
     expect(calls).toBe(2);
   });
 
-  test('memoizes successful responses, including available empty responses', async () => {
+  test("memoizes successful responses, including available empty responses", async () => {
     let calls = 0;
     const response: OpenInAppsResponse = { available: true, apps: [] };
     const loader = createOpenInAppsLoader(async () => {
@@ -167,7 +169,7 @@ describe('createOpenInAppsLoader', () => {
     expect(calls).toBe(1);
   });
 
-  test('memoizes a valid unavailable response', async () => {
+  test("memoizes a valid unavailable response", async () => {
     let calls = 0;
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;

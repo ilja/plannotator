@@ -9,7 +9,8 @@ export function unquoteGitPath(value: string): string {
     // SAFETY: value is a quoted git path string like "\"a/b\""; JSON.parse decodes the quoted string.
     return JSON.parse(value) as string;
   } catch {
-    return value.slice(1, -1)
+    return value
+      .slice(1, -1)
       .replace(/\\"/g, '"')
       .replace(/\\\\/g, "\\")
       .replace(/\\t/g, "\t")
@@ -126,7 +127,9 @@ export function parseDiffMetadataPathLines(lines: string[]): DiffPathPair {
 
   for (const line of lines) {
     if (line.startsWith("rename from ") || line.startsWith("copy from ")) {
-      const parsed = parseDiffMetadataPathToken(line.slice(line.indexOf(" from ") + " from ".length));
+      const parsed = parseDiffMetadataPathToken(
+        line.slice(line.indexOf(" from ") + " from ".length),
+      );
       if (parsed !== "/dev/null") oldPath = parsed;
     } else if (line.startsWith("rename to ") || line.startsWith("copy to ")) {
       const parsed = parseDiffMetadataPathToken(line.slice(line.indexOf(" to ") + " to ".length));

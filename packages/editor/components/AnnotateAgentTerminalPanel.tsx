@@ -11,11 +11,7 @@ import type {
   AgentTerminalAgent,
   AgentTerminalCapability,
 } from "@plannotator/shared/agent-terminal";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@plannotator/ui/components/Popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@plannotator/ui/components/Popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,8 +85,7 @@ const FONT_FAMILY_OPTIONS: {
   {
     value: "system",
     label: "System mono",
-    family:
-      '"SF Mono", Menlo, Monaco, "Cascadia Mono", Consolas, ui-monospace, monospace',
+    family: '"SF Mono", Menlo, Monaco, "Cascadia Mono", Consolas, ui-monospace, monospace',
   },
   {
     value: "geist",
@@ -122,19 +117,14 @@ const AGENT_TERMINAL_FONT_ZOOM = {
 export const AnnotateAgentTerminalPanel = forwardRef<
   AnnotateAgentTerminalPanelHandle,
   AnnotateAgentTerminalPanelProps
->(function AnnotateAgentTerminalPanel({ capability, width, onSessionActiveChange, onSessionReadyChange, onClose }, ref) {
+>(function AnnotateAgentTerminalPanel(
+  { capability, width, onSessionActiveChange, onSessionReadyChange, onClose },
+  ref,
+) {
   const agents = capability.enabled ? capability.agents : [];
-  const availableAgents = useMemo(
-    () => agents.filter((agent) => agent.available),
-    [agents],
-  );
-  const wsUrl = capability.enabled
-    ? resolveAgentTerminalWebSocketUrl(capability.wsPath)
-    : "";
-  const backend = useMemo(
-    () => (wsUrl ? createAgentOnlyBackend(wsUrl) : null),
-    [wsUrl],
-  );
+  const availableAgents = useMemo(() => agents.filter((agent) => agent.available), [agents]);
+  const wsUrl = capability.enabled ? resolveAgentTerminalWebSocketUrl(capability.wsPath) : "";
+  const backend = useMemo(() => (wsUrl ? createAgentOnlyBackend(wsUrl) : null), [wsUrl]);
   const initialAgentId = useMemo(
     () => resolveAnnotateAgentId(agents, getSavedAnnotateAgentId()),
     [agents],
@@ -209,24 +199,20 @@ export const AnnotateAgentTerminalPanel = forwardRef<
     session.resize();
   }, [terminalOptions]);
 
-  const updateDisplaySettings = useCallback(
-    (updates: Partial<AgentTerminalDisplaySettings>) => {
-      setDisplaySettings((current) => {
-        const next = sanitizeDisplaySettings({ ...current, ...updates });
-        writeDisplaySettings(next);
-        return next;
-      });
-    },
-    [],
-  );
+  const updateDisplaySettings = useCallback((updates: Partial<AgentTerminalDisplaySettings>) => {
+    setDisplaySettings((current) => {
+      const next = sanitizeDisplaySettings({ ...current, ...updates });
+      writeDisplaySettings(next);
+      return next;
+    });
+  }, []);
 
   const resetDisplaySettings = useCallback(() => {
     setDisplaySettings(DEFAULT_DISPLAY_SETTINGS);
     writeDisplaySettings(DEFAULT_DISPLAY_SETTINGS);
   }, []);
 
-  const selectedAgent =
-    availableAgents.find((agent) => agent.id === selectedAgentId) ?? null;
+  const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentId) ?? null;
   const canStart =
     capability.enabled &&
     !!backend &&
@@ -248,36 +234,41 @@ export const AnnotateAgentTerminalPanel = forwardRef<
     onSessionReadyChange?.(false);
   }, [canStart, onSessionActiveChange, onSessionReadyChange, saveAsDefault, selectedAgent]);
 
-  const requestStop = useCallback((closeAfterStop: boolean) => {
-    stopRequestedRef.current = true;
-    const session = sessionRef.current;
-    if (!session) {
-      if (startedAgentId) {
-        closeAfterStopRef.current = closeAfterStop;
-        setStatus("stopping");
+  const requestStop = useCallback(
+    (closeAfterStop: boolean) => {
+      stopRequestedRef.current = true;
+      const session = sessionRef.current;
+      if (!session) {
+        if (startedAgentId) {
+          closeAfterStopRef.current = closeAfterStop;
+          setStatus("stopping");
+          return;
+        }
+        clearTimers();
+        stopRequestedRef.current = false;
+        setStartedAgentId(null);
+        setStatus("idle");
+        onSessionActiveChange?.(false);
+        onSessionReadyChange?.(false);
+        if (closeAfterStop) onClose();
         return;
       }
-      clearTimers();
-      stopRequestedRef.current = false;
-      setStartedAgentId(null);
-      setStatus("idle");
-      onSessionActiveChange?.(false);
-      onSessionReadyChange?.(false);
-      if (closeAfterStop) onClose();
-      return;
-    }
 
-    clearTimers();
-    closeAfterStopRef.current = closeAfterStop;
-    setStatus("stopping");
-    onSessionReadyChange?.(false);
-    session.write("\x03");
-    timersRef.current.push(window.setTimeout(() => sessionRef.current?.write("\x03"), 350));
-    timersRef.current.push(window.setTimeout(() => {
-      sessionRef.current?.pty.kill();
-      if (closeAfterStopRef.current) onClose();
-    }, 1400));
-  }, [clearTimers, onClose, onSessionActiveChange, onSessionReadyChange, startedAgentId]);
+      clearTimers();
+      closeAfterStopRef.current = closeAfterStop;
+      setStatus("stopping");
+      onSessionReadyChange?.(false);
+      session.write("\x03");
+      timersRef.current.push(window.setTimeout(() => sessionRef.current?.write("\x03"), 350));
+      timersRef.current.push(
+        window.setTimeout(() => {
+          sessionRef.current?.pty.kill();
+          if (closeAfterStopRef.current) onClose();
+        }, 1400),
+      );
+    },
+    [clearTimers, onClose, onSessionActiveChange, onSessionReadyChange, startedAgentId],
+  );
 
   const sendMessage = useCallback((message: string) => {
     const text = message.trim();
@@ -290,26 +281,33 @@ export const AnnotateAgentTerminalPanel = forwardRef<
     }
   }, []);
 
-  useImperativeHandle(ref, () => ({
-    stop: () => requestStop(true),
-    sendMessage,
-  }), [requestStop, sendMessage]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      stop: () => requestStop(true),
+      sendMessage,
+    }),
+    [requestStop, sendMessage],
+  );
 
-  const handleExit = useCallback((event: PtyExit) => {
-    clearTimers();
-    stopRequestedRef.current = false;
-    sessionRef.current = null;
-    setStartedAgentId(null);
-    onSessionActiveChange?.(false);
-    onSessionReadyChange?.(false);
-    setExitLabel(formatExit(event));
-    if (closeAfterStopRef.current) {
-      closeAfterStopRef.current = false;
-      onClose();
-      return;
-    }
-    setStatus("exited");
-  }, [clearTimers, onClose, onSessionActiveChange, onSessionReadyChange]);
+  const handleExit = useCallback(
+    (event: PtyExit) => {
+      clearTimers();
+      stopRequestedRef.current = false;
+      sessionRef.current = null;
+      setStartedAgentId(null);
+      onSessionActiveChange?.(false);
+      onSessionReadyChange?.(false);
+      setExitLabel(formatExit(event));
+      if (closeAfterStopRef.current) {
+        closeAfterStopRef.current = false;
+        onClose();
+        return;
+      }
+      setStatus("exited");
+    },
+    [clearTimers, onClose, onSessionActiveChange, onSessionReadyChange],
+  );
 
   return (
     <aside
@@ -330,7 +328,12 @@ export const AnnotateAgentTerminalPanel = forwardRef<
             <div className="min-w-0 text-[11px] text-muted-foreground">
               <span className="text-foreground">{formatAgentName(startedAgentId, agents)}</span>
               <span className="mx-1.5 text-muted-foreground/40">in</span>
-              <span className="inline-block max-w-[13rem] truncate align-bottom font-mono" title={capability.cwd}>{capability.cwd}</span>
+              <span
+                className="inline-block max-w-[13rem] truncate align-bottom font-mono"
+                title={capability.cwd}
+              >
+                {capability.cwd}
+              </span>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <AgentTerminalDisplayPopover
@@ -433,8 +436,7 @@ function AgentSelect({
   selectedAgentId: string;
   onSelect: (agentId: string) => void;
 }) {
-  const selectedAgent =
-    agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
 
   return (
     <DropdownMenu>
@@ -686,9 +688,10 @@ function readDisplaySettings(): AgentTerminalDisplaySettings {
   const raw = getItem(DISPLAY_STORAGE_KEY);
   if (!raw) return DEFAULT_DISPLAY_SETTINGS;
   try {
-    const serialized = Option.getOrUndefined(
-      Schema.decodeUnknownOption(SerializedDisplaySettingsSchema)(JSON.parse(raw)),
-    ) ?? {};
+    const serialized =
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(SerializedDisplaySettingsSchema)(JSON.parse(raw)),
+      ) ?? {};
     return sanitizeDisplaySettings(serialized);
   } catch {
     return DEFAULT_DISPLAY_SETTINGS;
@@ -705,13 +708,13 @@ type SerializedDisplaySettings = Schema.Schema.Type<typeof SerializedDisplaySett
 export const AgentTerminalFontFamilySchema = Schema.Literals(["theme", "system", "geist"]);
 export const AgentTerminalFontWeightSchema = Schema.Literals(["light", "regular", "medium"]);
 
-export function sanitizeDisplaySettings(value: SerializedDisplaySettings): AgentTerminalDisplaySettings {
+export function sanitizeDisplaySettings(
+  value: SerializedDisplaySettings,
+): AgentTerminalDisplaySettings {
   const fontFamily = Option.getOrUndefined(
     Schema.decodeUnknownOption(AgentTerminalFontFamilySchema)(value.fontFamily),
   );
-  const fontSize = Option.getOrUndefined(
-    Schema.decodeUnknownOption(Schema.Number)(value.fontSize),
-  );
+  const fontSize = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(value.fontSize));
   const fontWeight = Option.getOrUndefined(
     Schema.decodeUnknownOption(AgentTerminalFontWeightSchema)(value.fontWeight),
   );
@@ -721,10 +724,15 @@ export function sanitizeDisplaySettings(value: SerializedDisplaySettings): Agent
   const lineHeight = lineHeightRaw ?? DEFAULT_DISPLAY_SETTINGS.lineHeight;
   return {
     fontFamily: fontFamily ?? DEFAULT_DISPLAY_SETTINGS.fontFamily,
-    fontSize: clampNumber(fontSize ?? DEFAULT_DISPLAY_SETTINGS.fontSize, MIN_FONT_SIZE, MAX_FONT_SIZE),
+    fontSize: clampNumber(
+      fontSize ?? DEFAULT_DISPLAY_SETTINGS.fontSize,
+      MIN_FONT_SIZE,
+      MAX_FONT_SIZE,
+    ),
     fontWeight: fontWeight ?? DEFAULT_DISPLAY_SETTINGS.fontWeight,
-    lineHeight:
-      LINE_HEIGHT_OPTIONS.includes(lineHeight) ? lineHeight : DEFAULT_DISPLAY_SETTINGS.lineHeight,
+    lineHeight: LINE_HEIGHT_OPTIONS.includes(lineHeight)
+      ? lineHeight
+      : DEFAULT_DISPLAY_SETTINGS.lineHeight,
   };
 }
 
@@ -740,10 +748,7 @@ function resolveDisplayWeight(fontWeight: AgentTerminalFontWeight): {
   fontWeight: number;
   fontWeightBold: number;
 } {
-  return (
-    FONT_WEIGHT_OPTIONS.find((item) => item.value === fontWeight) ??
-    FONT_WEIGHT_OPTIONS[1]
-  );
+  return FONT_WEIGHT_OPTIONS.find((item) => item.value === fontWeight) ?? FONT_WEIGHT_OPTIONS[1];
 }
 
 function clampNumber(value: number, min: number, max: number): number {

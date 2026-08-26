@@ -40,7 +40,13 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
         try {
           const body = await req.json();
           const decoded = Option.getOrUndefined(decodeEditorAnnotationRequest(body));
-          if (!decoded || !decoded.filePath || !decoded.selectedText || !decoded.lineStart || !decoded.lineEnd) {
+          if (
+            !decoded ||
+            !decoded.filePath ||
+            !decoded.selectedText ||
+            !decoded.lineStart ||
+            !decoded.lineEnd
+          ) {
             return Response.json({ error: "Missing required fields" }, { status: 400 });
           }
 

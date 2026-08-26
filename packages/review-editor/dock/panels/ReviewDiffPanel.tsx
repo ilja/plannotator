@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { DiffViewer } from '../../components/DiffViewer';
-import { useReviewState } from '../ReviewStateContext';
-import { getReviewDiffPanelFilePath, type ReviewDiffPanelParams } from '../reviewPanelTypes';
-import { annotationMatchesPrScope } from '../../utils/annotationScope';
+import React, { useMemo } from "react";
+import type { IDockviewPanelProps } from "dockview-react";
+import { DiffViewer } from "../../components/DiffViewer";
+import { useReviewState } from "../ReviewStateContext";
+import { getReviewDiffPanelFilePath, type ReviewDiffPanelParams } from "../reviewPanelTypes";
+import { annotationMatchesPrScope } from "../../utils/annotationScope";
 
 /**
  * Thin adapter between dockview's panel API and the existing DiffViewer.
@@ -16,40 +16,27 @@ export const ReviewDiffPanel: React.FC<IDockviewPanelProps> = (props) => {
   const filePath =
     getReviewDiffPanelFilePath(props.params) ??
     getReviewDiffPanelFilePath(props.api.getParameters<ReviewDiffPanelParams>());
-  const file = filePath
-    ? state.files.find(candidate => candidate.path === filePath)
-    : undefined;
+  const file = filePath ? state.files.find((candidate) => candidate.path === filePath) : undefined;
   const isFocusedFile = !!file && state.focusedFilePath === file.path;
 
-  const fileAnnotations = useMemo(
-    () => {
-      if (!file) return [];
-      const currentPrUrl = state.prMetadata?.url;
-      const currentDiffScope = state.prDiffScope;
-      return state.allAnnotations.filter((a) =>
-        a.filePath === file.path &&
-        annotationMatchesPrScope(a, currentPrUrl, currentDiffScope)
-      );
-    },
-    [state.allAnnotations, file, state.prMetadata, state.prDiffScope]
-  );
+  const fileAnnotations = useMemo(() => {
+    if (!file) return [];
+    const currentPrUrl = state.prMetadata?.url;
+    const currentDiffScope = state.prDiffScope;
+    return state.allAnnotations.filter(
+      (a) =>
+        a.filePath === file.path && annotationMatchesPrScope(a, currentPrUrl, currentDiffScope),
+    );
+  }, [state.allAnnotations, file, state.prMetadata, state.prDiffScope]);
 
   const aiMessagesForFile = useMemo(
-    () =>
-      file
-        ? state.aiMessages.filter(
-            (m) => m.question.filePath === file.path
-          )
-        : [],
-    [state.aiMessages, file]
+    () => (file ? state.aiMessages.filter((m) => m.question.filePath === file.path) : []),
+    [state.aiMessages, file],
   );
 
   const searchMatchesForFile = useMemo(
-    () =>
-      file && isFocusedFile
-        ? state.activeFileSearchMatches
-        : [],
-    [state.activeFileSearchMatches, isFocusedFile, file]
+    () => (file && isFocusedFile ? state.activeFileSearchMatches : []),
+    [state.activeFileSearchMatches, isFocusedFile, file],
   );
 
   if (!file) {
@@ -65,7 +52,10 @@ export const ReviewDiffPanel: React.FC<IDockviewPanelProps> = (props) => {
   // patch, and Pierre briefly reconciles old-patch + new-content → "trailing
   // context mismatch" warnings in the console.
   return (
-    <div key={`${file.path}:${state.reviewBase ?? ''}:${state.activeDiffBase ?? ''}`} className="h-full relative">
+    <div
+      key={`${file.path}:${state.reviewBase ?? ""}:${state.activeDiffBase ?? ""}`}
+      className="h-full relative"
+    >
       <DiffViewer
         patch={file.patch}
         filePath={file.path}
@@ -101,7 +91,7 @@ export const ReviewDiffPanel: React.FC<IDockviewPanelProps> = (props) => {
         onStage={() => state.onStage(file.path)}
         canStage={state.canStageFiles}
         stageError={state.stageError}
-        searchQuery={state.isSearchPending ? '' : state.debouncedSearchQuery}
+        searchQuery={state.isSearchPending ? "" : state.debouncedSearchQuery}
         searchMatches={searchMatchesForFile}
         activeSearchMatchId={isFocusedFile ? state.activeSearchMatchId : null}
         activeSearchMatch={

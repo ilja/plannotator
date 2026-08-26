@@ -17,22 +17,17 @@ type ProviderFactory = (config: AIProviderConfig) => Promise<AIProvider>;
 const factories = new Map<string, ProviderFactory>();
 
 /** Register a factory function for a provider type. */
-export function registerProviderFactory(
-  type: string,
-  factory: ProviderFactory
-): void {
+export function registerProviderFactory(type: string, factory: ProviderFactory): void {
   factories.set(type, factory);
 }
 
 /** Create a provider from config using a registered factory. Does NOT auto-register. */
-export async function createProvider(
-  config: AIProviderConfig
-): Promise<AIProvider> {
+export async function createProvider(config: AIProviderConfig): Promise<AIProvider> {
   const factory = factories.get(config.type);
   if (!factory) {
     throw new Error(
       `No AI provider factory registered for type "${config.type}". ` +
-        `Available: ${[...factories.keys()].join(", ") || "(none)"}`
+        `Available: ${[...factories.keys()].join(", ") || "(none)"}`,
     );
   }
   return factory(config);

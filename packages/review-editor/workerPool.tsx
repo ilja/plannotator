@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState, type ReactNode } from 'react';
-import { WorkerPoolContextProvider, useWorkerPool } from '@pierre/diffs/react';
-import type { WorkerInitializationRenderOptions, WorkerPoolOptions } from '@pierre/diffs/react';
-import './themes/framerLightSyntax';
+import React, { useEffect, useRef, useState, type ReactNode } from "react";
+import { WorkerPoolContextProvider, useWorkerPool } from "@pierre/diffs/react";
+import type { WorkerInitializationRenderOptions, WorkerPoolOptions } from "@pierre/diffs/react";
+import "./themes/framerLightSyntax";
 // Vite-inlined worker (base64 blob) — required by the single-file HTML build:
 // the review UI ships as one self-contained file, so there is no separate
 // asset URL to load a worker script from.
 // @ts-expect-error vite ?worker&inline virtual module (no ambient types here)
-import DiffsWorker from '@pierre/diffs/worker/worker.js?worker&inline';
+import DiffsWorker from "@pierre/diffs/worker/worker.js?worker&inline";
 
 /**
  * Worker-pool syntax highlighting (diffshub parity). Without a pool, Pierre
@@ -25,7 +25,7 @@ const poolOptions: WorkerPoolOptions = {
 };
 
 const highlighterOptions: WorkerInitializationRenderOptions = {
-  preferredHighlighter: 'shiki-js',
+  preferredHighlighter: "shiki-js",
   // Wrap tokens with `data-char` so token-level interactions work (Cmd+click
   // code navigation, token hover). Highlighting runs in the worker, and the
   // worker's render options — NOT the per-component onToken*/useTokenTransformer
@@ -33,7 +33,20 @@ const highlighterOptions: WorkerInitializationRenderOptions = {
   // render highlighted but un-interactable and code-nav silently no-ops.
   useTokenTransformer: true,
   // Preload the common languages; anything else resolves on demand.
-  langs: ['typescript', 'tsx', 'javascript', 'json', 'css', 'html', 'python', 'go', 'rust', 'sh', 'yaml', 'markdown'],
+  langs: [
+    "typescript",
+    "tsx",
+    "javascript",
+    "json",
+    "css",
+    "html",
+    "python",
+    "go",
+    "rust",
+    "sh",
+    "yaml",
+    "markdown",
+  ],
 };
 
 export function ReviewWorkerPoolProvider({ children }: { children: ReactNode }) {
@@ -63,14 +76,16 @@ export function useIsWorkerPoolReadyOrDisabled(): boolean {
     if (workerPool == null) return;
     const timeout = setTimeout(() => {
       if (!isReadyRef.current) {
-        console.warn('Plannotator: highlight worker pool not ready after 5s — rendering without waiting.');
+        console.warn(
+          "Plannotator: highlight worker pool not ready after 5s — rendering without waiting.",
+        );
         isReadyRef.current = true;
         setIsReady(true);
       }
     }, POOL_READY_TIMEOUT_MS);
     // The callback fires immediately with the current state.
     const unsubscribe = workerPool.subscribeToStatChanges((stats) => {
-      const ready = stats.managerState === 'initialized';
+      const ready = stats.managerState === "initialized";
       if (ready && !isReadyRef.current) {
         isReadyRef.current = ready;
         setIsReady(ready);
@@ -87,7 +102,7 @@ export function useIsWorkerPoolReadyOrDisabled(): boolean {
 // The pool is long-lived and shared; multiple surfaces (all-files view,
 // single-file panels) sync the same theme pair. Dedup so each render pass
 // issues at most one setRenderOptions round-trip.
-let lastSyncedTheme = '';
+let lastSyncedTheme = "";
 
 /**
  * Keeps the worker pool's theme pair in step with the UI theme (diffshub's
@@ -103,8 +118,8 @@ export function useWorkerPoolThemeSync(theme: { dark: string; light: string }): 
     workerPool.setRenderOptions({ theme }).catch((err) => {
       // Un-poison the dedup so a later render retries — otherwise one failed
       // round-trip would pin the pool to the wrong theme for the session.
-      if (lastSyncedTheme === key) lastSyncedTheme = '';
-      console.warn('Plannotator: failed to sync highlight theme to worker pool', err);
+      if (lastSyncedTheme === key) lastSyncedTheme = "";
+      console.warn("Plannotator: failed to sync highlight theme to worker pool", err);
     });
   }, [workerPool, theme.dark, theme.light]); // eslint-disable-line react-hooks/exhaustive-deps
 }

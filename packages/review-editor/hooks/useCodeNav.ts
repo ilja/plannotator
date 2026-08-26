@@ -1,10 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
-import { Option } from 'effect';
+import { useState, useCallback, useRef } from "react";
+import { Option } from "effect";
 import {
   decodeCodeNavResponse,
   type CodeNavRequest,
   type CodeNavResponse,
-} from '@plannotator/shared/code-nav';
+} from "@plannotator/shared/code-nav";
 
 export type { CodeNavRequest, CodeNavResponse };
 
@@ -24,17 +24,17 @@ export function useCodeNav() {
     setResult(null);
 
     try {
-      const res = await fetch('/api/code-nav/resolve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/code-nav/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) throw new Error("Failed");
       const data = Option.getOrThrow(decodeCodeNavResponse(await res.json()));
       setResult(data);
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setResult(null);
     } finally {
       if (abortRef.current === controller) {

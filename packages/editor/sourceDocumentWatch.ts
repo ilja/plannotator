@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 /** The EventSource transport surface required by the source document watcher. */
 export interface SourceDocumentWatchEventSource {
@@ -21,7 +21,7 @@ function watchedDirectory(directory: string | undefined, directories: readonly s
 }
 
 const WatchEventSchema = Schema.Struct({
-  type: Schema.Literals(['ready', 'changed']),
+  type: Schema.Literals(["ready", "changed"]),
   dirPath: Schema.optionalKey(Schema.String),
 });
 
@@ -42,8 +42,9 @@ export function createSourceDocumentWatch(options: SourceDocumentWatchOptions): 
 
   const debounceMs = options.debounceMs ?? 120;
   const reconnectDelayMs = options.reconnectDelayMs ?? 1000;
-  const eventSourceFactory = options.eventSourceFactory
-    ?? (globalThis.EventSource === undefined ? undefined : (url: string) => new EventSource(url));
+  const eventSourceFactory =
+    options.eventSourceFactory ??
+    (globalThis.EventSource === undefined ? undefined : (url: string) => new EventSource(url));
   if (!eventSourceFactory) return () => undefined;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -51,19 +52,22 @@ export function createSourceDocumentWatch(options: SourceDocumentWatchOptions): 
   let stopped = false;
 
   const scheduleReconcile = (changedDir?: string) => {
-    const key = changedDir ?? '*';
+    const key = changedDir ?? "*";
     const existing = timers.get(key);
     if (existing) clearTimeout(existing);
-    timers.set(key, setTimeout(() => {
-      timers.delete(key);
-      void options.onReconcile(changedDir);
-    }, debounceMs));
+    timers.set(
+      key,
+      setTimeout(() => {
+        timers.delete(key);
+        void options.onReconcile(changedDir);
+      }, debounceMs),
+    );
   };
 
   const connect = () => {
     if (stopped) return;
     const params = new URLSearchParams();
-    for (const directory of directories) params.append('dirPath', directory);
+    for (const directory of directories) params.append("dirPath", directory);
     const nextSource = eventSourceFactory(`/api/reference/files/stream?${params.toString()}`);
     source = nextSource;
     nextSource.onmessage = (event) => {

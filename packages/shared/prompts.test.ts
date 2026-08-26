@@ -29,28 +29,23 @@ const EXPECTED_REVIEW_DENIED_SUFFIX = [
 
 describe("resolveTemplate", () => {
   test("replaces known variables", () => {
-    expect(resolveTemplate("Hello {{name}}", { name: "world" }))
-      .toBe("Hello world");
+    expect(resolveTemplate("Hello {{name}}", { name: "world" })).toBe("Hello world");
   });
 
   test("leaves unknown {{variables}} as-is", () => {
-    expect(resolveTemplate("Hello {{unknown}}", {}))
-      .toBe("Hello {{unknown}}");
+    expect(resolveTemplate("Hello {{unknown}}", {})).toBe("Hello {{unknown}}");
   });
 
   test("handles empty vars object", () => {
-    expect(resolveTemplate("no vars here", {}))
-      .toBe("no vars here");
+    expect(resolveTemplate("no vars here", {})).toBe("no vars here");
   });
 
   test("handles undefined values in vars", () => {
-    expect(resolveTemplate("Hello {{name}}", { name: undefined }))
-      .toBe("Hello {{name}}");
+    expect(resolveTemplate("Hello {{name}}", { name: undefined })).toBe("Hello {{name}}");
   });
 
   test("handles adjacent and repeated variables", () => {
-    expect(resolveTemplate("{{a}}{{b}} and {{a}}", { a: "X", b: "Y" }))
-      .toBe("XY and X");
+    expect(resolveTemplate("{{a}}{{b}} and {{a}}", { a: "X", b: "Y" })).toBe("XY and X");
   });
 });
 
@@ -103,7 +98,17 @@ describe("getReviewApprovedPrompt", () => {
 
 describe("getReviewDeniedSuffix", () => {
   test("every runtime gets the same review verification default", () => {
-    const runtimes = ["claude-code", "opencode", "pi", "amp", "droid", "codex", "copilot-cli", "gemini-cli", "kiro-cli"] as const;
+    const runtimes = [
+      "claude-code",
+      "opencode",
+      "pi",
+      "amp",
+      "droid",
+      "codex",
+      "copilot-cli",
+      "gemini-cli",
+      "kiro-cli",
+    ] as const;
     for (const runtime of runtimes) {
       expect(getReviewDeniedSuffix(runtime, {})).toBe(EXPECTED_REVIEW_DENIED_SUFFIX);
     }
@@ -111,17 +116,23 @@ describe("getReviewDeniedSuffix", () => {
     expect(DEFAULT_REVIEW_DENIED_SUFFIX).not.toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
 
     const assembled = `# Submitted findings${getReviewDeniedSuffix("pi", {})}`;
-    expect(assembled).toContain("# Submitted findings\n\nTreat the findings above as unverified review input.");
+    expect(assembled).toContain(
+      "# Submitted findings\n\nTreat the findings above as unverified review input.",
+    );
   });
 
   test("returns a configured review override unchanged", () => {
     const configuredPrompt = "\nFix everything.";
-    expect(getReviewDeniedSuffix("claude-code", {
-      prompts: { review: { denied: configuredPrompt } },
-    })).toBe(configuredPrompt);
-    expect(getReviewDeniedSuffix("claude-code", {
-      prompts: { review: { denied: configuredPrompt } },
-    })).not.toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
+    expect(
+      getReviewDeniedSuffix("claude-code", {
+        prompts: { review: { denied: configuredPrompt } },
+      }),
+    ).toBe(configuredPrompt);
+    expect(
+      getReviewDeniedSuffix("claude-code", {
+        prompts: { review: { denied: configuredPrompt } },
+      }),
+    ).not.toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
   });
 });
 
@@ -133,37 +144,57 @@ describe("getAnnotateFileFeedbackPrompt", () => {
   });
 
   test("includes file header and path in default", () => {
-    const result = getAnnotateFileFeedbackPrompt("opencode", {}, {
-      fileHeader: "File", filePath: "/src/app.ts", feedback: "Fix line 5",
-    });
+    const result = getAnnotateFileFeedbackPrompt(
+      "opencode",
+      {},
+      {
+        fileHeader: "File",
+        filePath: "/src/app.ts",
+        feedback: "Fix line 5",
+      },
+    );
     expect(result).toContain("File: /src/app.ts");
     expect(result).toContain("Fix line 5");
     expect(result).toContain("Please address");
   });
 
   test("handles folder header variant", () => {
-    const result = getAnnotateFileFeedbackPrompt("pi", {}, {
-      fileHeader: "Folder", filePath: "/src/", feedback: "Check all files",
-    });
+    const result = getAnnotateFileFeedbackPrompt(
+      "pi",
+      {},
+      {
+        fileHeader: "Folder",
+        filePath: "/src/",
+        feedback: "Check all files",
+      },
+    );
     expect(result).toContain("Folder: /src/");
   });
 
   test("uses configured override", () => {
-    const result = getAnnotateFileFeedbackPrompt("opencode", {
-      prompts: { annotate: { fileFeedback: "Review {{filePath}}: {{feedback}}" } },
-    }, { filePath: "x.ts", feedback: "fix it" });
+    const result = getAnnotateFileFeedbackPrompt(
+      "opencode",
+      {
+        prompts: { annotate: { fileFeedback: "Review {{filePath}}: {{feedback}}" } },
+      },
+      { filePath: "x.ts", feedback: "fix it" },
+    );
     expect(result).toBe(`Review x.ts: fix it\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
   test("runtime-specific override wins over generic", () => {
-    const result = getAnnotateFileFeedbackPrompt("pi", {
-      prompts: {
-        annotate: {
-          fileFeedback: "Generic: {{feedback}}",
-          runtimes: { pi: { fileFeedback: "Pi: {{feedback}}" } },
+    const result = getAnnotateFileFeedbackPrompt(
+      "pi",
+      {
+        prompts: {
+          annotate: {
+            fileFeedback: "Generic: {{feedback}}",
+            runtimes: { pi: { fileFeedback: "Pi: {{feedback}}" } },
+          },
         },
       },
-    }, { feedback: "note" });
+      { feedback: "note" },
+    );
     expect(result).toBe(`Pi: note\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 });
@@ -181,9 +212,13 @@ describe("getAnnotateMessageFeedbackPrompt", () => {
   });
 
   test("keeps the discussion instruction when using a configured override", () => {
-    const result = getAnnotateMessageFeedbackPrompt("pi", {
-      prompts: { annotate: { messageFeedback: "Notes: {{feedback}}" } },
-    }, { feedback: "fix" });
+    const result = getAnnotateMessageFeedbackPrompt(
+      "pi",
+      {
+        prompts: { annotate: { messageFeedback: "Notes: {{feedback}}" } },
+      },
+      { feedback: "fix" },
+    );
     expect(result).toBe(`Notes: fix\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 });
@@ -194,9 +229,11 @@ describe("getAnnotateApprovedPrompt", () => {
   });
 
   test("uses configured override", () => {
-    expect(getAnnotateApprovedPrompt("claude-code", {
-      prompts: { annotate: { approved: "Approved!" } },
-    })).toBe("Approved!");
+    expect(
+      getAnnotateApprovedPrompt("claude-code", {
+        prompts: { annotate: { approved: "Approved!" } },
+      }),
+    ).toBe("Approved!");
   });
 });
 

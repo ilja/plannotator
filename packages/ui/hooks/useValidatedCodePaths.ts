@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { extractCandidateCodePaths } from "@plannotator/shared/extract-code-paths";
 import {
-	decodeCodePathValidationResponse,
-	type ValidationEntry,
+  decodeCodePathValidationResponse,
+  type ValidationEntry,
 } from "./codePathValidationResponse";
 
 export type { ValidationEntry } from "./codePathValidationResponse";
@@ -27,53 +27,53 @@ export type ValidatedMap = Map<string, ValidationEntry>;
  * demoted to plain text.
  */
 export function useValidatedCodePaths(
-	markdown: string,
-	baseDir?: string,
+  markdown: string,
+  baseDir?: string,
 ): { validated: ValidatedMap; ready: boolean } {
-	const [validated, setValidated] = useState<ValidatedMap>(new Map());
-	const [ready, setReady] = useState<boolean>(false);
+  const [validated, setValidated] = useState<ValidatedMap>(new Map());
+  const [ready, setReady] = useState<boolean>(false);
 
-	useEffect(() => {
-		setValidated(new Map());
-		setReady(false);
+  useEffect(() => {
+    setValidated(new Map());
+    setReady(false);
 
-		const candidates = extractCandidateCodePaths(markdown);
-		if (candidates.length === 0) {
-			setReady(true);
-			return;
-		}
+    const candidates = extractCandidateCodePaths(markdown);
+    if (candidates.length === 0) {
+      setReady(true);
+      return;
+    }
 
-		let cancelled = false;
-		(async () => {
-			try {
-				const res = await fetch("/api/doc/exists", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(
-						baseDir ? { paths: candidates, base: baseDir } : { paths: candidates },
-					),
-				});
-				if (cancelled) return;
-				if (!res.ok) {
-					setReady(true);
-					return;
-				}
-				const data: unknown = await res.json();
-				if (cancelled) return;
-				setValidated(decodeCodePathValidationResponse(data));
-				setReady(true);
-			} catch {
-				if (!cancelled) setReady(true);
-			}
-		})();
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/doc/exists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            baseDir ? { paths: candidates, base: baseDir } : { paths: candidates },
+          ),
+        });
+        if (cancelled) return;
+        if (!res.ok) {
+          setReady(true);
+          return;
+        }
+        const data: unknown = await res.json();
+        if (cancelled) return;
+        setValidated(decodeCodePathValidationResponse(data));
+        setReady(true);
+      } catch {
+        if (!cancelled) setReady(true);
+      }
+    })();
 
-		return () => {
-			cancelled = true;
-		};
-	}, [markdown, baseDir]);
+    return () => {
+      cancelled = true;
+    };
+  }, [markdown, baseDir]);
 
-	// Stable reference: only changes when validated/ready actually change.
-	// Without memoization, the parent provider's value is a fresh object every
-	// render, forcing all context consumers (every InlineMarkdown) to re-render.
-	return useMemo(() => ({ validated, ready }), [validated, ready]);
+  // Stable reference: only changes when validated/ready actually change.
+  // Without memoization, the parent provider's value is a fresh object every
+  // render, forcing all context consumers (every InlineMarkdown) to re-render.
+  return useMemo(() => ({ validated, ready }), [validated, ready]);
 }

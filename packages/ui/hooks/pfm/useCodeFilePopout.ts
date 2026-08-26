@@ -1,9 +1,6 @@
 import { useState, useCallback } from "react";
 import { parseCodePath } from "@plannotator/shared/code-file";
-import {
-  decodeCodeFileErrorResponse,
-  decodeCodeFileSuccessResponse,
-} from "../codeFileResponse";
+import { decodeCodeFileErrorResponse, decodeCodeFileSuccessResponse } from "../codeFileResponse";
 
 interface CodeFileState {
   filepath: string;
@@ -36,9 +33,7 @@ export interface UseCodeFilePopoutReturn {
   } | null;
 }
 
-export function useCodeFilePopout(
-  options: UseCodeFilePopoutOptions
-): UseCodeFilePopoutReturn {
+export function useCodeFilePopout(options: UseCodeFilePopoutOptions): UseCodeFilePopoutReturn {
   const { buildUrl } = options;
   const [state, setState] = useState<CodeFileState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,7 +80,7 @@ export function useCodeFilePopout(
         setIsLoading(false);
       }
     },
-    [buildUrl]
+    [buildUrl],
   );
 
   return {

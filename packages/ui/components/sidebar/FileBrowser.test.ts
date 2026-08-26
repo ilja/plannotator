@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import type { VaultNode } from "../../types";
-import type { WorkspaceFileChange, WorkspaceStatusPayload } from "@plannotator/shared/workspace-status";
-import { getAggregateWorkspaceChange, getFileEditStatus, getWorkspaceChange, isFileTreeSelectionDisabled, normalizePathForLookup } from "./FileBrowser";
+import type {
+  WorkspaceFileChange,
+  WorkspaceStatusPayload,
+} from "@plannotator/shared/workspace-status";
+import {
+  getAggregateWorkspaceChange,
+  getFileEditStatus,
+  getWorkspaceChange,
+  isFileTreeSelectionDisabled,
+  normalizePathForLookup,
+} from "./FileBrowser";
 
 describe("FileBrowser workspace status lookup", () => {
   test("matches Windows status keys when the UI path uses mixed separators", () => {

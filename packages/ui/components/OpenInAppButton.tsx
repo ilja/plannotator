@@ -1,16 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Check, Copy, MoreHorizontal } from 'lucide-react';
-import { AppIcon } from './icons/AppIcon';
-import { loadOpenInApps, type OpenInAppsResponse } from '../utils/openInAppsResponse';
-import { readOpenInResponse } from '../utils/openInResponse';
-import { getLastOpenInApp, setLastOpenInApp } from '../utils/storage';
+import React, { useEffect, useRef, useState } from "react";
+import { ChevronDown, Check, Copy, MoreHorizontal } from "lucide-react";
+import { AppIcon } from "./icons/AppIcon";
+import { loadOpenInApps, type OpenInAppsResponse } from "../utils/openInAppsResponse";
+import { readOpenInResponse } from "../utils/openInResponse";
+import { getLastOpenInApp, setLastOpenInApp } from "../utils/storage";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from './ui/dropdown-menu';
+} from "./ui/dropdown-menu";
 
 /**
  * OpenInAppButton — split button + file-actions menu.
@@ -27,7 +27,7 @@ import {
  * nothing when there is neither an app to open nor a diff to copy.
  */
 
-type DetectedApp = OpenInAppsResponse['apps'][number];
+type DetectedApp = OpenInAppsResponse["apps"][number];
 
 interface OpenInAppButtonProps {
   filePath: string | null | undefined;
@@ -85,8 +85,7 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
   const list = apps ?? [];
   // Apps are launchable: server says available, the surface allows it, the path
   // is resolvable, and at least one app was detected.
-  const openable =
-    available === true && canOpen && !!filePath && list.length > 0;
+  const openable = available === true && canOpen && !!filePath && list.length > 0;
 
   // Nothing to do: can't open AND nothing to copy. Also preserve the
   // "hide when unavailable" behavior for surfaces whose only copy action is the
@@ -97,9 +96,9 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
   // Resolve the active app: last-used if still detected, else reveal, else first.
   const resolvedId = list.some((a) => a.id === currentId)
     ? currentId
-    : list.some((a) => a.id === 'reveal')
-      ? 'reveal'
-      : (list[0]?.id ?? 'reveal');
+    : list.some((a) => a.id === "reveal")
+      ? "reveal"
+      : (list[0]?.id ?? "reveal");
   const currentApp = list.find((a) => a.id === resolvedId) ?? list[0];
 
   const flashError = (msg: string) => {
@@ -113,19 +112,19 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/open-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/open-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filePath, base: base ?? null, appId }),
       });
       const data = await readOpenInResponse(res);
       if (!data) {
-        flashError('Failed to open');
+        flashError("Failed to open");
       } else if (data.ok === false) {
-        flashError(data.error || 'Failed to open');
+        flashError(data.error || "Failed to open");
       }
     } catch {
-      flashError('Failed to open');
+      flashError("Failed to open");
     } finally {
       setBusy(false);
     }
@@ -149,9 +148,9 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
 
   // Menu groups: file manager first, then editors, then terminals.
   const grouped = [
-    list.filter((a) => a.kind === 'file-manager'),
-    list.filter((a) => a.kind === 'editor'),
-    list.filter((a) => a.kind === 'terminal'),
+    list.filter((a) => a.kind === "file-manager"),
+    list.filter((a) => a.kind === "editor"),
+    list.filter((a) => a.kind === "terminal"),
   ].filter((g) => g.length > 0);
 
   const Spinner = (
@@ -177,7 +176,7 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
             onClick={() => open(resolvedId)}
             disabled={isDisabled}
             className={`text-xs flex items-center gap-1 py-1 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed ${
-              showLabel ? 'pl-2 pr-1.5' : 'px-1.5'
+              showLabel ? "pl-2 pr-1.5" : "px-1.5"
             }`}
             title={error ?? currentApp.label}
             aria-label={`Open in ${currentApp.label}`}
@@ -193,10 +192,10 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
               type="button"
               disabled={isDisabled}
               className={`text-xs flex items-center py-1 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed ${
-                openable ? 'px-1 border-l border-border/50' : 'px-1.5'
+                openable ? "px-1 border-l border-border/50" : "px-1.5"
               }`}
-              title={openable ? 'Open in…' : 'File actions'}
-              aria-label={openable ? 'Choose app to open in' : 'File actions'}
+              title={openable ? "Open in…" : "File actions"}
+              aria-label={openable ? "Choose app to open in" : "File actions"}
             >
               {openable ? (
                 <ChevronDown className="w-3 h-3" />

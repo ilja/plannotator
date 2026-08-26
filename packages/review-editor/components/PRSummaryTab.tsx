@@ -1,8 +1,8 @@
-import React, { useMemo, useRef, useEffect } from 'react';
-import DOMPurify from 'dompurify';
-import { parseMarkdownToBlocks } from '@plannotator/ui/utils/parser';
-import { renderInlineMarkdown } from '../utils/renderInlineMarkdown';
-import type { PRContext, PRMetadata } from '@plannotator/shared/pr-types';
+import React, { useMemo, useRef, useEffect } from "react";
+import DOMPurify from "dompurify";
+import { parseMarkdownToBlocks } from "@plannotator/ui/utils/parser";
+import { renderInlineMarkdown } from "../utils/renderInlineMarkdown";
+import type { PRContext, PRMetadata } from "@plannotator/shared/pr-types";
 
 interface PRSummaryTabProps {
   context: PRContext;
@@ -17,25 +17,63 @@ const containsHtml = (text: string) => HTML_TAG_RE.test(text);
 function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
-      'sub', 'sup', 'b', 'i', 'em', 'strong', 'br', 'hr', 'p', 'span',
-      'del', 'ins', 'mark', 'small', 'abbr', 'kbd', 'var', 'samp',
-      'details', 'summary', 'blockquote', 'ul', 'ol', 'li',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'code',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td',
-      'a', 'img', 'div',
+      "sub",
+      "sup",
+      "b",
+      "i",
+      "em",
+      "strong",
+      "br",
+      "hr",
+      "p",
+      "span",
+      "del",
+      "ins",
+      "mark",
+      "small",
+      "abbr",
+      "kbd",
+      "var",
+      "samp",
+      "details",
+      "summary",
+      "blockquote",
+      "ul",
+      "ol",
+      "li",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "pre",
+      "code",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
+      "a",
+      "img",
+      "div",
     ],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'rel', 'target', 'width', 'height', 'align'],
+    ALLOWED_ATTR: ["href", "src", "alt", "title", "rel", "target", "width", "height", "align"],
   });
 }
 
 /** Renders sanitized HTML and hides broken images via ref (no inline event handlers). */
-function SafeHtml({ html, as: Tag = 'div' }: { html: string; as?: 'div' | 'span' }) {
+function SafeHtml({ html, as: Tag = "div" }: { html: string; as?: "div" | "span" }) {
   const ref = useRef<HTMLDivElement | HTMLSpanElement>(null);
   useEffect(() => {
     if (!ref.current) return;
-    const imgs = ref.current.querySelectorAll('img');
+    const imgs = ref.current.querySelectorAll("img");
     imgs.forEach((img) => {
-      img.onerror = () => { img.style.display = 'none'; img.onerror = null; };
+      img.onerror = () => {
+        img.style.display = "none";
+        img.onerror = null;
+      };
     });
   }, [html]);
   return <Tag ref={ref} dangerouslySetInnerHTML={{ __html: html }} />;
@@ -60,44 +98,60 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
     <div className="space-y-2.5 text-xs text-foreground/90 leading-relaxed">
       {blocks.map((block) => {
         switch (block.type) {
-          case 'heading': {
+          case "heading": {
             // SAFETY: level is clamped to 1..6, so the template literal is always a valid heading tag.
-            const Tag = `h${Math.min(Math.max(block.level ?? 1, 1), 6)}` as keyof JSX.IntrinsicElements;
+            const Tag =
+              `h${Math.min(Math.max(block.level ?? 1, 1), 6)}` as keyof JSX.IntrinsicElements;
             interface HeadingSizeMap {
-  [level: number]: string;
-}
+              [level: number]: string;
+            }
 
-const sizes: HeadingSizeMap = {
-              1: 'text-base font-bold',
-              2: 'text-sm font-semibold',
-              3: 'text-xs font-semibold',
+            const sizes: HeadingSizeMap = {
+              1: "text-base font-bold",
+              2: "text-sm font-semibold",
+              3: "text-xs font-semibold",
             };
             return (
-              <Tag key={block.id} className={`${sizes[block.level ?? 1] ?? 'text-xs font-medium'} text-foreground`}>
+              <Tag
+                key={block.id}
+                className={`${sizes[block.level ?? 1] ?? "text-xs font-medium"} text-foreground`}
+              >
                 {renderContent(block.content)}
               </Tag>
             );
           }
-          case 'code':
+          case "code":
             return (
-              <pre key={block.id} className="bg-muted/50 rounded-md p-2 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap">
+              <pre
+                key={block.id}
+                className="bg-muted/50 rounded-md p-2 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap"
+              >
                 <code>{block.content}</code>
               </pre>
             );
-          case 'list-item':
+          case "list-item":
             return (
-              <div key={block.id} className="flex gap-1.5" style={{ paddingLeft: (block.level ?? 0) * 12 }}>
-                <span className="text-muted-foreground shrink-0">{block.checked !== undefined ? (block.checked ? '☑' : '☐') : '•'}</span>
+              <div
+                key={block.id}
+                className="flex gap-1.5"
+                style={{ paddingLeft: (block.level ?? 0) * 12 }}
+              >
+                <span className="text-muted-foreground shrink-0">
+                  {block.checked !== undefined ? (block.checked ? "☑" : "☐") : "•"}
+                </span>
                 <span>{renderContent(block.content)}</span>
               </div>
             );
-          case 'blockquote':
+          case "blockquote":
             return (
-              <blockquote key={block.id} className="border-l-2 border-border pl-2 text-muted-foreground italic">
+              <blockquote
+                key={block.id}
+                className="border-l-2 border-border pl-2 text-muted-foreground italic"
+              >
                 {renderContent(block.content)}
               </blockquote>
             );
-          case 'hr':
+          case "hr":
             return <hr key={block.id} className="border-border/50" />;
           default:
             if (!block.content) return null;
@@ -118,16 +172,18 @@ export const PRSummaryTab: React.FC<PRSummaryTabProps> = React.memo(({ context, 
       {/* PR title + state */}
       <div className="space-y-2">
         <div className="flex items-start gap-2">
-          <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${
-            context.state === 'MERGED'
-              ? 'bg-violet-500/15 text-violet-400'
-              : context.state === 'CLOSED'
-                ? 'bg-destructive/15 text-destructive'
-                : context.isDraft
-                  ? 'bg-muted text-muted-foreground'
-                  : 'bg-success/15 text-success'
-          }`}>
-            {context.isDraft ? 'Draft' : context.state}
+          <span
+            className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${
+              context.state === "MERGED"
+                ? "bg-violet-500/15 text-violet-400"
+                : context.state === "CLOSED"
+                  ? "bg-destructive/15 text-destructive"
+                  : context.isDraft
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-success/15 text-success"
+            }`}
+          >
+            {context.isDraft ? "Draft" : context.state}
           </span>
           <a
             href={metadata.url}
@@ -140,13 +196,16 @@ export const PRSummaryTab: React.FC<PRSummaryTabProps> = React.memo(({ context, 
         </div>
 
         <div className="text-[10px] text-muted-foreground font-mono">
-          {metadata.author} wants to merge <code className="bg-muted px-1 rounded">{metadata.headBranch}</code> into <code className="bg-muted px-1 rounded">{metadata.baseBranch}</code>
+          {metadata.author} wants to merge{" "}
+          <code className="bg-muted px-1 rounded">{metadata.headBranch}</code> into{" "}
+          <code className="bg-muted px-1 rounded">{metadata.baseBranch}</code>
         </div>
         {metadata.defaultBranch && metadata.baseBranch !== metadata.defaultBranch && (
           <div className="inline-flex items-center gap-1.5 rounded border border-accent/20 bg-accent/10 px-2 py-1 text-[10px] text-accent">
             <span className="font-medium uppercase tracking-wide">Stacked</span>
             <span className="text-accent/80">
-              Diffs against <code className="font-mono">{metadata.baseBranch}</code>, default branch is <code className="font-mono">{metadata.defaultBranch}</code>
+              Diffs against <code className="font-mono">{metadata.baseBranch}</code>, default branch
+              is <code className="font-mono">{metadata.defaultBranch}</code>
             </span>
           </div>
         )}
@@ -188,7 +247,9 @@ export const PRSummaryTab: React.FC<PRSummaryTabProps> = React.memo(({ context, 
                 <path d="M448 64C200.562 64 0 264.562 0 512c0 247.438 200.562 448 448 448 247.438 0 448-200.562 448-448C896 264.562 695.438 64 448 64zM448 832c-176.781 0-320-143.25-320-320 0-176.781 143.219-320 320-320 176.75 0 320 143.219 320 320C768 688.75 624.75 832 448 832zM384 768h128V640H384V768zM384 576h128V256H384V576z" />
               </svg>
               #{issue.number}
-              {issue.repo && <span className="text-muted-foreground text-[10px]">({issue.repo})</span>}
+              {issue.repo && (
+                <span className="text-muted-foreground text-[10px]">({issue.repo})</span>
+              )}
             </a>
           ))}
         </div>

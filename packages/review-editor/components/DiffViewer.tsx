@@ -1,156 +1,170 @@
-import React, { useMemo, useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
-import { FileDiff, type DiffLineAnnotation } from '@pierre/diffs/react';
-import { getSingularPatch, processFile } from '@pierre/diffs';
-import { CodeAnnotation, CodeAnnotationType, SelectedLineRange, DiffAnnotationMetadata, TokenAnnotationMeta, ConventionalLabel, ConventionalDecoration } from '@plannotator/ui/types';
-import type { DiffTokenEventBaseProps } from '@pierre/diffs';
-import { usePierreTheme, type PierreTheme } from '../hooks/usePierreTheme';
-import { useWorkerPoolThemeSync } from '../workerPool';
-import { CommentPopover } from '@plannotator/ui/components/CommentPopover';
-import { storage } from '@plannotator/ui/utils/storage';
-import { detectLanguage } from '../utils/detectLanguage';
-import { buildCodeNavRequest } from '../utils/buildCodeNavRequest';
-import { ToolbarHost, type ToolbarHostHandle } from './ToolbarHost';
-import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea';
-import { useOverlayViewport } from '@plannotator/ui/hooks/useOverlayViewport';
-import { FileHeader } from './FileHeader';
-import { FileCommentBanner } from './FileCommentBanner';
-import { isFileScopedAnnotation, lineRangeForAnnotation } from '../utils/annotationScope';
-import { lineAnnotationMetadata } from '../utils/annotationDisplay';
-import type { AnnotationScrollTarget } from '../types';
-import { getLineNumberFromNode, getSideFromNode, getDiffSelection } from '../utils/diffSelection';
-import { isContentConsistentWithPatch } from '../utils/patchConsistency';
-import { loadFileContentResponse } from '../utils/file-content-response';
-import { InlineAnnotation } from './InlineAnnotation';
-import { InlineAIMarker } from './InlineAIMarker';
-import { ReviewGutterActions, type HoveredDiffLine } from './ReviewGutterActions';
-import type { AIChatEntry } from '../hooks/useAIChat';
-import { type ReviewSearchMatch } from '../utils/reviewSearch';
+import React, { useMemo, useRef, useEffect, useLayoutEffect, useCallback, useState } from "react";
+import { FileDiff, type DiffLineAnnotation } from "@pierre/diffs/react";
+import { getSingularPatch, processFile } from "@pierre/diffs";
+import {
+  CodeAnnotation,
+  CodeAnnotationType,
+  SelectedLineRange,
+  DiffAnnotationMetadata,
+  TokenAnnotationMeta,
+  ConventionalLabel,
+  ConventionalDecoration,
+} from "@plannotator/ui/types";
+import type { DiffTokenEventBaseProps } from "@pierre/diffs";
+import { usePierreTheme, type PierreTheme } from "../hooks/usePierreTheme";
+import { useWorkerPoolThemeSync } from "../workerPool";
+import { CommentPopover } from "@plannotator/ui/components/CommentPopover";
+import { storage } from "@plannotator/ui/utils/storage";
+import { detectLanguage } from "../utils/detectLanguage";
+import { buildCodeNavRequest } from "../utils/buildCodeNavRequest";
+import { ToolbarHost, type ToolbarHostHandle } from "./ToolbarHost";
+import { OverlayScrollArea } from "@plannotator/ui/components/OverlayScrollArea";
+import { useOverlayViewport } from "@plannotator/ui/hooks/useOverlayViewport";
+import { FileHeader } from "./FileHeader";
+import { FileCommentBanner } from "./FileCommentBanner";
+import { isFileScopedAnnotation, lineRangeForAnnotation } from "../utils/annotationScope";
+import { lineAnnotationMetadata } from "../utils/annotationDisplay";
+import type { AnnotationScrollTarget } from "../types";
+import { getLineNumberFromNode, getSideFromNode, getDiffSelection } from "../utils/diffSelection";
+import { isContentConsistentWithPatch } from "../utils/patchConsistency";
+import { loadFileContentResponse } from "../utils/file-content-response";
+import { InlineAnnotation } from "./InlineAnnotation";
+import { InlineAIMarker } from "./InlineAIMarker";
+import { ReviewGutterActions, type HoveredDiffLine } from "./ReviewGutterActions";
+import type { AIChatEntry } from "../hooks/useAIChat";
+import { type ReviewSearchMatch } from "../utils/reviewSearch";
 import {
   applySearchHighlights,
   clearSearchHighlights,
   getSearchRoots,
   retryScrollToSearchMatch,
   swapActiveSearchHighlight,
-} from '../utils/reviewSearchHighlight';
+} from "../utils/reviewSearchHighlight";
 
 interface PierreDiffContentProps {
   filePath: string;
   fileDiff: ReturnType<typeof getSingularPatch>;
   pierreTheme: PierreTheme;
-  diffStyle: 'split' | 'unified';
-  diffOverflow?: 'scroll' | 'wrap';
-  diffIndicators?: 'bars' | 'classic' | 'none';
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none';
+  diffStyle: "split" | "unified";
+  diffOverflow?: "scroll" | "wrap";
+  diffIndicators?: "bars" | "classic" | "none";
+  lineDiffType?: "word-alt" | "word" | "char" | "none";
   disableLineNumbers?: boolean;
   disableBackground?: boolean;
   expandUnchanged?: boolean;
   mergedAnnotations: DiffLineAnnotation<DiffAnnotationMetadata>[];
   pendingSelection: SelectedLineRange | null;
   onLineSelectionEnd: (range: SelectedLineRange | null) => void;
-  renderGutterUtility: NonNullable<React.ComponentProps<typeof FileDiff>['renderGutterUtility']>;
-  renderAnnotation: (annotation: { side: string; lineNumber: number; metadata?: DiffAnnotationMetadata }) => React.ReactNode;
+  renderGutterUtility: NonNullable<React.ComponentProps<typeof FileDiff>["renderGutterUtility"]>;
+  renderAnnotation: (annotation: {
+    side: string;
+    lineNumber: number;
+    metadata?: DiffAnnotationMetadata;
+  }) => React.ReactNode;
   onTokenClick?: (props: DiffTokenEventBaseProps, event: MouseEvent) => void;
   onTokenEnter?: (props: DiffTokenEventBaseProps, event: PointerEvent) => void;
   onTokenLeave?: (props: DiffTokenEventBaseProps, event: PointerEvent) => void;
 }
 
-const PierreDiffContent = React.memo(({
-  filePath,
-  fileDiff,
-  pierreTheme,
-  diffStyle,
-  diffOverflow,
-  diffIndicators,
-  lineDiffType,
-  disableLineNumbers,
-  disableBackground,
-  expandUnchanged,
-  mergedAnnotations,
-  pendingSelection,
-  onLineSelectionEnd,
-  renderGutterUtility,
-  renderAnnotation,
-  onTokenClick,
-  onTokenEnter,
-  onTokenLeave,
-}: PierreDiffContentProps) => {
-  return (
-    <FileDiff
-      key={filePath}
-      fileDiff={fileDiff}
-      options={{
-        themeType: pierreTheme.type,
-        unsafeCSS: pierreTheme.css,
-        theme: pierreTheme.syntaxTheme,
-        // We render our own FileHeader above this view; suppress Pierre's
-        // built-in header (and its file-status symbol) so it doesn't double up.
-        disableFileHeader: true,
-        diffStyle,
-        overflow: diffOverflow,
-        diffIndicators,
-        lineDiffType,
-        disableLineNumbers,
-        disableBackground,
-        expandUnchanged,
-        hunkSeparators: 'line-info',
-        enableLineSelection: true,
-        enableGutterUtility: true,
-        onLineSelectionEnd,
-        // Pierre's renderer-options builder drops onToken* before it evaluates
-        // shouldUseTokenTransformer, so passing the handlers alone never wraps
-        // tokens (no data-char) and code-nav/token events never fire. Enable
-        // the token transformer explicitly.
-        useTokenTransformer: true,
-        onTokenClick,
-        onTokenEnter,
-        onTokenLeave,
-      }}
-      lineAnnotations={mergedAnnotations}
-      selectedLines={pendingSelection || undefined}
-      renderAnnotation={renderAnnotation}
-      renderGutterUtility={renderGutterUtility}
-    />
-  );
-}, (prev, next) => (
-  prev.filePath === next.filePath &&
-  prev.fileDiff === next.fileDiff &&
-  prev.pierreTheme.type === next.pierreTheme.type &&
-  prev.pierreTheme.css === next.pierreTheme.css &&
-  prev.pierreTheme.syntaxTheme.dark === next.pierreTheme.syntaxTheme.dark &&
-  prev.pierreTheme.syntaxTheme.light === next.pierreTheme.syntaxTheme.light &&
-  prev.diffStyle === next.diffStyle &&
-  prev.diffOverflow === next.diffOverflow &&
-  prev.diffIndicators === next.diffIndicators &&
-  prev.lineDiffType === next.lineDiffType &&
-  prev.disableLineNumbers === next.disableLineNumbers &&
-  prev.disableBackground === next.disableBackground &&
-  prev.expandUnchanged === next.expandUnchanged &&
-  prev.mergedAnnotations === next.mergedAnnotations &&
-  prev.pendingSelection === next.pendingSelection &&
-  prev.onLineSelectionEnd === next.onLineSelectionEnd &&
-  prev.renderGutterUtility === next.renderGutterUtility &&
-  prev.renderAnnotation === next.renderAnnotation &&
-  prev.onTokenClick === next.onTokenClick &&
-  prev.onTokenEnter === next.onTokenEnter &&
-  prev.onTokenLeave === next.onTokenLeave
-));
+const PierreDiffContent = React.memo(
+  ({
+    filePath,
+    fileDiff,
+    pierreTheme,
+    diffStyle,
+    diffOverflow,
+    diffIndicators,
+    lineDiffType,
+    disableLineNumbers,
+    disableBackground,
+    expandUnchanged,
+    mergedAnnotations,
+    pendingSelection,
+    onLineSelectionEnd,
+    renderGutterUtility,
+    renderAnnotation,
+    onTokenClick,
+    onTokenEnter,
+    onTokenLeave,
+  }: PierreDiffContentProps) => {
+    return (
+      <FileDiff
+        key={filePath}
+        fileDiff={fileDiff}
+        options={{
+          themeType: pierreTheme.type,
+          unsafeCSS: pierreTheme.css,
+          theme: pierreTheme.syntaxTheme,
+          // We render our own FileHeader above this view; suppress Pierre's
+          // built-in header (and its file-status symbol) so it doesn't double up.
+          disableFileHeader: true,
+          diffStyle,
+          overflow: diffOverflow,
+          diffIndicators,
+          lineDiffType,
+          disableLineNumbers,
+          disableBackground,
+          expandUnchanged,
+          hunkSeparators: "line-info",
+          enableLineSelection: true,
+          enableGutterUtility: true,
+          onLineSelectionEnd,
+          // Pierre's renderer-options builder drops onToken* before it evaluates
+          // shouldUseTokenTransformer, so passing the handlers alone never wraps
+          // tokens (no data-char) and code-nav/token events never fire. Enable
+          // the token transformer explicitly.
+          useTokenTransformer: true,
+          onTokenClick,
+          onTokenEnter,
+          onTokenLeave,
+        }}
+        lineAnnotations={mergedAnnotations}
+        selectedLines={pendingSelection || undefined}
+        renderAnnotation={renderAnnotation}
+        renderGutterUtility={renderGutterUtility}
+      />
+    );
+  },
+  (prev, next) =>
+    prev.filePath === next.filePath &&
+    prev.fileDiff === next.fileDiff &&
+    prev.pierreTheme.type === next.pierreTheme.type &&
+    prev.pierreTheme.css === next.pierreTheme.css &&
+    prev.pierreTheme.syntaxTheme.dark === next.pierreTheme.syntaxTheme.dark &&
+    prev.pierreTheme.syntaxTheme.light === next.pierreTheme.syntaxTheme.light &&
+    prev.diffStyle === next.diffStyle &&
+    prev.diffOverflow === next.diffOverflow &&
+    prev.diffIndicators === next.diffIndicators &&
+    prev.lineDiffType === next.lineDiffType &&
+    prev.disableLineNumbers === next.disableLineNumbers &&
+    prev.disableBackground === next.disableBackground &&
+    prev.expandUnchanged === next.expandUnchanged &&
+    prev.mergedAnnotations === next.mergedAnnotations &&
+    prev.pendingSelection === next.pendingSelection &&
+    prev.onLineSelectionEnd === next.onLineSelectionEnd &&
+    prev.renderGutterUtility === next.renderGutterUtility &&
+    prev.renderAnnotation === next.renderAnnotation &&
+    prev.onTokenClick === next.onTokenClick &&
+    prev.onTokenEnter === next.onTokenEnter &&
+    prev.onTokenLeave === next.onTokenLeave,
+);
 
 interface DiffViewerProps {
   patch: string;
   filePath: string;
   oldPath?: string;
   /** Change type for the header icon + rename display. */
-  status?: import('../types').DiffFileStatus;
+  status?: import("../types").DiffFileStatus;
   /** Base branch override used for file-content lookups (branch / merge-base modes only). */
   reviewBase?: string;
   /** Current PR url + diff scope — used to namespace file-comment drafts so they don't leak across in-place PR switches. */
   prUrl?: string;
   prDiffScope?: string;
   isFocused?: boolean;
-  diffStyle: 'split' | 'unified';
-  diffOverflow?: 'scroll' | 'wrap';
-  diffIndicators?: 'bars' | 'classic' | 'none';
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none';
+  diffStyle: "split" | "unified";
+  diffOverflow?: "scroll" | "wrap";
+  diffIndicators?: "bars" | "classic" | "none";
+  lineDiffType?: "word-alt" | "word" | "char" | "none";
   disableLineNumbers?: boolean;
   disableBackground?: boolean;
   expandUnchanged?: boolean;
@@ -161,9 +175,24 @@ interface DiffViewerProps {
   scrollTargetAnnotation: AnnotationScrollTarget | null;
   pendingSelection: SelectedLineRange | null;
   onLineSelection: (range: SelectedLineRange | null) => void;
-  onAddAnnotation: (type: CodeAnnotationType, text?: string, suggestedCode?: string, originalCode?: string, conventionalLabel?: ConventionalLabel, decorations?: ConventionalDecoration[], tokenMeta?: TokenAnnotationMeta) => void;
+  onAddAnnotation: (
+    type: CodeAnnotationType,
+    text?: string,
+    suggestedCode?: string,
+    originalCode?: string,
+    conventionalLabel?: ConventionalLabel,
+    decorations?: ConventionalDecoration[],
+    tokenMeta?: TokenAnnotationMeta,
+  ) => void;
   onAddFileComment: (text: string) => void;
-  onEditAnnotation: (id: string, text?: string, suggestedCode?: string, originalCode?: string, conventionalLabel?: ConventionalLabel | null, decorations?: ConventionalDecoration[]) => void;
+  onEditAnnotation: (
+    id: string,
+    text?: string,
+    suggestedCode?: string,
+    originalCode?: string,
+    conventionalLabel?: ConventionalLabel | null,
+    decorations?: ConventionalDecoration[],
+  ) => void;
   onSelectAnnotation: (id: string | null) => void;
   onDeleteAnnotation: (id: string) => void;
   isViewed?: boolean;
@@ -181,9 +210,9 @@ interface DiffViewerProps {
   aiAvailable?: boolean;
   aiMessages?: AIChatEntry[];
   onClickAIMarker?: (questionId: string) => void;
-  onAttachAIContext?: (lineNumber: number, side: 'additions' | 'deletions') => void;
+  onAttachAIContext?: (lineNumber: number, side: "additions" | "deletions") => void;
   // Code navigation
-  onCodeNavRequest?: (request: import('@plannotator/shared/code-nav').CodeNavRequest) => void;
+  onCodeNavRequest?: (request: import("@plannotator/shared/code-nav").CodeNavRequest) => void;
 }
 
 export const DiffViewer: React.FC<DiffViewerProps> = ({
@@ -197,7 +226,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   isFocused = false,
   diffStyle,
   diffOverflow,
-  diffIndicators = 'bars',
+  diffIndicators = "bars",
   lineDiffType,
   disableLineNumbers,
   disableBackground,
@@ -221,7 +250,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   onStage,
   canStage = false,
   stageError,
-  searchQuery = '',
+  searchQuery = "",
   searchMatches = [],
   activeSearchMatchId = null,
   activeSearchMatch = null,
@@ -239,8 +268,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   // containerRef must point at the actual scrolling element (the
   // OverlayScrollbars viewport), not the OverlayScrollArea host. `viewport`
   // is state so effects re-run once the library has mounted the viewport.
-  const { ref: containerRef, viewport, onViewportReady } =
-    useOverlayViewport<HTMLDivElement>();
+  const { ref: containerRef, viewport, onViewportReady } = useOverlayViewport<HTMLDivElement>();
   const splitSurfaceRef = useRef<HTMLDivElement>(null);
   const diffContentRef = useRef<HTMLDivElement>(null);
   const [fileCommentAnchor, setFileCommentAnchor] = useState<HTMLElement | null>(null);
@@ -249,18 +277,19 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   // (files with both additions and deletions). Add-only or delete-only files
   // render as a single column even in split mode.
   const isSplitLayout = useMemo(() => {
-    if (diffStyle !== 'split') return false;
-    let hasAdd = false, hasDel = false;
-    for (const line of patch.split('\n')) {
-      if (line[0] === '+' && !line.startsWith('+++')) hasAdd = true;
-      else if (line[0] === '-' && !line.startsWith('---')) hasDel = true;
+    if (diffStyle !== "split") return false;
+    let hasAdd = false,
+      hasDel = false;
+    for (const line of patch.split("\n")) {
+      if (line[0] === "+" && !line.startsWith("+++")) hasAdd = true;
+      else if (line[0] === "-" && !line.startsWith("---")) hasDel = true;
       if (hasAdd && hasDel) return true;
     }
     return false;
   }, [patch, diffStyle]);
 
   const [splitRatio, setSplitRatio] = useState(() => {
-    const saved = storage.getItem('review-split-ratio');
+    const saved = storage.getItem("review-split-ratio");
     const n = saved ? Number(saved) : NaN;
     return !Number.isNaN(n) && n >= 0.2 && n <= 0.8 ? n : 0.5;
   });
@@ -282,18 +311,18 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
     const onUp = () => {
       setIsDraggingSplit(false);
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      storage.setItem('review-split-ratio', String(splitRatioRef.current));
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      storage.setItem("review-split-ratio", String(splitRatioRef.current));
     };
 
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
   }, []);
 
   const resetSplitRatio = useCallback(() => {
     setSplitRatio(0.5);
-    storage.setItem('review-split-ratio', '0.5');
+    storage.setItem("review-split-ratio", "0.5");
   }, []);
 
   const toolbarHostRef = useRef<ToolbarHostHandle>(null);
@@ -302,14 +331,18 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const fileDiff = useMemo(() => getSingularPatch(patch), [patch]);
 
   // Fetch full file contents for expandable context
-  const [fileContents, setFileContents] = useState<{ forPath: string; old: string | null; new: string | null } | null>(null);
+  const [fileContents, setFileContents] = useState<{
+    forPath: string;
+    old: string | null;
+    new: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     setFileContents(null);
     const params = new URLSearchParams({ path: filePath });
-    if (oldPath) params.set('oldPath', oldPath);
-    if (reviewBase) params.set('base', reviewBase);
+    if (oldPath) params.set("oldPath", oldPath);
+    if (reviewBase) params.set("base", reviewBase);
     fetch(`/api/file-content?${params}`, { signal: controller.signal })
       .then(loadFileContentResponse)
       .then((data) => {
@@ -324,7 +357,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   // Re-parse the patch with full file contents so hunk indices are computed
   // against the complete file (isPartial: false), enabling expansion.
   const augmentedDiff = useMemo(() => {
-    if (!fileContents || fileContents.forPath !== filePath || (fileContents.old == null && fileContents.new == null)) return fileDiff;
+    if (
+      !fileContents ||
+      fileContents.forPath !== filePath ||
+      (fileContents.old == null && fileContents.new == null)
+    )
+      return fileDiff;
     // Stale-content guard (same as AllFilesCodeView): the file may have
     // changed on disk since the diff was captured — augmenting with contents
     // that don't reconcile with the patch breaks Pierre's line math. Fall back
@@ -337,8 +375,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     }
     try {
       const result = processFile(patch, {
-        oldFile: fileContents.old != null ? { name: oldPath || filePath, contents: fileContents.old } : undefined,
-        newFile: fileContents.new != null ? { name: filePath, contents: fileContents.new } : undefined,
+        oldFile:
+          fileContents.old != null
+            ? { name: oldPath || filePath, contents: fileContents.old }
+            : undefined,
+        newFile:
+          fileContents.new != null ? { name: filePath, contents: fileContents.new } : undefined,
       });
       return result || fileDiff;
     } catch {
@@ -354,7 +396,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     // otherwise a file switch landing before the OverlayScrollbars viewport
     // has attached would leave the viewport stale on old content.
     if (!containerRef.current) return;
-    containerRef.current.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    containerRef.current.scrollTo({ top: 0, left: 0, behavior: "auto" });
     previousScrollFilePathRef.current = filePath;
   }, [filePath, viewport]);
 
@@ -381,7 +423,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   useEffect(() => {
     if (!viewport) return;
     const ua = navigator.userAgent;
-    const isWebKit = ua.includes('Safari') && !ua.includes('Chrome');
+    const isWebKit = ua.includes("Safari") && !ua.includes("Chrome");
     if (!isWebKit) return;
 
     let lastGoodST = 0;
@@ -403,8 +445,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       }
     };
 
-    viewport.addEventListener('scroll', onScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', onScroll);
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", onScroll);
   }, [viewport, filePath]);
 
   // Scroll to a comment ONLY on sidebar navigation (scrollTargetAnnotation),
@@ -416,10 +458,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
     const timeoutId = setTimeout(() => {
       const annotationEl = containerRef.current?.querySelector(
-        `[data-annotation-id="${targetId}"]`
+        `[data-annotation-id="${targetId}"]`,
       );
       if (annotationEl) {
-        annotationEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        annotationEl.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, 100);
 
@@ -437,15 +479,26 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
     if (!query.trim() || matches.length === 0) {
       const roots = getSearchRoots(containerRef.current);
-      roots.forEach(root => clearSearchHighlights(root));
+      roots.forEach((root) => clearSearchHighlights(root));
       return;
     }
 
     const roots = getSearchRoots(containerRef.current);
-    roots.forEach(root =>
-      applySearchHighlights(root, query, matches, activeSearchMatchId)
-    );
-  }, [searchQuery, searchMatches, filePath, diffStyle, diffOverflow, diffIndicators, lineDiffType, disableLineNumbers, disableBackground, expandUnchanged, augmentedDiff, viewport]);
+    roots.forEach((root) => applySearchHighlights(root, query, matches, activeSearchMatchId));
+  }, [
+    searchQuery,
+    searchMatches,
+    filePath,
+    diffStyle,
+    diffOverflow,
+    diffIndicators,
+    lineDiffType,
+    disableLineNumbers,
+    disableBackground,
+    expandUnchanged,
+    augmentedDiff,
+    viewport,
+  ]);
 
   // Swap active search highlight instantly when stepping between matches.
   // This avoids a full rebuild just to change two elements' background color.
@@ -458,7 +511,18 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   useEffect(() => {
     if (!activeSearchMatch || !containerRef.current) return;
     return retryScrollToSearchMatch(containerRef.current, activeSearchMatch);
-  }, [activeSearchMatch, filePath, diffStyle, diffOverflow, diffIndicators, lineDiffType, disableLineNumbers, disableBackground, expandUnchanged, viewport]);
+  }, [
+    activeSearchMatch,
+    filePath,
+    diffStyle,
+    diffOverflow,
+    diffIndicators,
+    lineDiffType,
+    disableLineNumbers,
+    disableBackground,
+    expandUnchanged,
+    viewport,
+  ]);
 
   // Scroll to the selected line range — drives "jump to entity" from semantic-diff
   // clicks and AI "scroll to lines". Mirrors the scroll-to-annotation behavior used
@@ -479,14 +543,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     const tryScroll = () => {
       if (cancelled) return;
       const target = getSearchRoots(container)
-        .map((root) => root.querySelector?.('[data-selected-line]') ?? null)
+        .map((root) => root.querySelector?.("[data-selected-line]") ?? null)
         .find((el): el is Element => el != null);
       if (target) {
         const targetRect = target.getBoundingClientRect();
         const viewRect = container.getBoundingClientRect();
         const fullyVisible = targetRect.top >= viewRect.top && targetRect.bottom <= viewRect.bottom;
         if (!fullyVisible) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
         }
         return;
       }
@@ -504,34 +568,34 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   // Map annotations to @pierre/diffs format
   const lineAnnotations = useMemo(() => {
     return annotations
-      .filter(ann => (ann.scope ?? 'line') === 'line')
-      .map(ann => ({
-        side: ann.side === 'new' ? 'additions' as const : 'deletions' as const,
+      .filter((ann) => (ann.scope ?? "line") === "line")
+      .map((ann) => ({
+        side: ann.side === "new" ? ("additions" as const) : ("deletions" as const),
         lineNumber: ann.lineEnd,
         metadata: lineAnnotationMetadata(ann),
       }));
   }, [annotations]);
 
   interface AiLineAnnotation {
-  side: 'additions' | 'deletions';
-  lineNumber: number;
-  metadata: DiffAnnotationMetadata;
-}
+    side: "additions" | "deletions";
+    lineNumber: number;
+    metadata: DiffAnnotationMetadata;
+  }
 
-// Derive AI markers for the current file's lines
+  // Derive AI markers for the current file's lines
   const aiLineAnnotations = useMemo(() => {
     if (!aiMessages.length) return [];
     return aiMessages
-      .filter(m => m.question.lineStart != null && m.question.lineEnd != null)
+      .filter((m) => m.question.lineStart != null && m.question.lineEnd != null)
       .map(({ question, response }): AiLineAnnotation => ({
-        side: question.side === 'new' ? 'additions' : 'deletions',
+        side: question.side === "new" ? "additions" : "deletions",
         lineNumber: question.lineEnd!,
         metadata: {
           annotationId: question.id,
-          type: 'comment',
-          kind: 'ai-marker',
+          type: "comment",
+          kind: "ai-marker",
           questionId: question.id,
-          promptPreview: question.prompt.slice(0, 40) + (question.prompt.length > 40 ? '...' : ''),
+          promptPreview: question.prompt.slice(0, 40) + (question.prompt.length > 40 ? "..." : ""),
           hasResponse: !!response.text && !response.error,
           isStreaming: response.isStreaming,
         },
@@ -544,47 +608,63 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   );
 
   // Handle edit: find annotation and start editing in toolbar
-  const handleEdit = useCallback((id: string) => {
-    const ann = annotations.find(a => a.id === id);
-    if (ann) toolbarHostRef.current?.startEdit(ann);
-  }, [annotations]);
+  const handleEdit = useCallback(
+    (id: string) => {
+      const ann = annotations.find((a) => a.id === id);
+      if (ann) toolbarHostRef.current?.startEdit(ann);
+    },
+    [annotations],
+  );
 
   // Render annotation or AI marker in diff
-  const renderAnnotation = useCallback((annotation: { side: string; lineNumber: number; metadata?: DiffAnnotationMetadata }) => {
-    if (!annotation.metadata) return null;
+  const renderAnnotation = useCallback(
+    (annotation: { side: string; lineNumber: number; metadata?: DiffAnnotationMetadata }) => {
+      if (!annotation.metadata) return null;
 
-    if (annotation.metadata.kind === 'ai-marker') {
+      if (annotation.metadata.kind === "ai-marker") {
+        return (
+          <InlineAIMarker
+            questionId={annotation.metadata.questionId!}
+            promptPreview={annotation.metadata.promptPreview!}
+            hasResponse={annotation.metadata.hasResponse!}
+            isStreaming={annotation.metadata.isStreaming!}
+            onClick={onClickAIMarker ?? (() => {})}
+          />
+        );
+      }
+
       return (
-        <InlineAIMarker
-          questionId={annotation.metadata.questionId!}
-          promptPreview={annotation.metadata.promptPreview!}
-          hasResponse={annotation.metadata.hasResponse!}
-          isStreaming={annotation.metadata.isStreaming!}
-          onClick={onClickAIMarker ?? (() => {})}
+        <InlineAnnotation
+          metadata={annotation.metadata}
+          language={detectLanguage(filePath)}
+          isSelected={annotation.metadata.annotationId === selectedAnnotationId}
+          onSelect={onSelectAnnotation}
+          onEdit={handleEdit}
+          onDelete={onDeleteAnnotation}
         />
       );
-    }
+    },
+    [
+      filePath,
+      selectedAnnotationId,
+      onSelectAnnotation,
+      handleEdit,
+      onDeleteAnnotation,
+      onClickAIMarker,
+    ],
+  );
 
-    return (
-      <InlineAnnotation
-        metadata={annotation.metadata}
-        language={detectLanguage(filePath)}
-        isSelected={annotation.metadata.annotationId === selectedAnnotationId}
-        onSelect={onSelectAnnotation}
-        onEdit={handleEdit}
-        onDelete={onDeleteAnnotation}
+  const renderGutterUtility = useCallback(
+    (getHoveredLine: () => HoveredDiffLine | undefined) => (
+      <ReviewGutterActions
+        getHoveredLine={getHoveredLine}
+        aiAvailable={aiAvailable}
+        onComment={(range) => toolbarHostRef.current?.handleLineSelectionEnd(range)}
+        onAttachAI={(line) => onAttachAIContext?.(line.lineNumber, line.side)}
       />
-    );
-  }, [filePath, selectedAnnotationId, onSelectAnnotation, handleEdit, onDeleteAnnotation, onClickAIMarker]);
-
-  const renderGutterUtility = useCallback((getHoveredLine: () => HoveredDiffLine | undefined) => (
-    <ReviewGutterActions
-      getHoveredLine={getHoveredLine}
-      aiAvailable={aiAvailable}
-      onComment={(range) => toolbarHostRef.current?.handleLineSelectionEnd(range)}
-      onAttachAI={(line) => onAttachAIContext?.(line.lineNumber, line.side)}
-    />
-  ), [aiAvailable, onAttachAIContext]);
+    ),
+    [aiAvailable, onAttachAIContext],
+  );
 
   useEffect(() => {
     const root = diffContentRef.current;
@@ -606,8 +686,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         selection.removeAllRanges();
       });
     };
-    root.addEventListener('mouseup', handler, true);
-    return () => root.removeEventListener('mouseup', handler, true);
+    root.addEventListener("mouseup", handler, true);
+    return () => root.removeEventListener("mouseup", handler, true);
   }, []);
 
   const handlePierreLineSelectionEnd = useCallback((range: SelectedLineRange | null) => {
@@ -615,40 +695,43 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   }, []);
 
   // Token interaction handlers (code area clicks)
-  const handleTokenClick = useCallback((props: DiffTokenEventBaseProps, event: MouseEvent) => {
-    if ((event.metaKey || event.ctrlKey) && onCodeNavRequest) {
-      onCodeNavRequest(buildCodeNavRequest(props, filePath));
-      return;
-    }
-    toolbarHostRef.current?.handleTokenClick(props, event);
-  }, [filePath, onCodeNavRequest]);
+  const handleTokenClick = useCallback(
+    (props: DiffTokenEventBaseProps, event: MouseEvent) => {
+      if ((event.metaKey || event.ctrlKey) && onCodeNavRequest) {
+        onCodeNavRequest(buildCodeNavRequest(props, filePath));
+        return;
+      }
+      toolbarHostRef.current?.handleTokenClick(props, event);
+    },
+    [filePath, onCodeNavRequest],
+  );
 
-  const handleTokenEnter = useCallback((props: DiffTokenEventBaseProps, event: PointerEvent) => {
-    props.tokenElement.classList.add('pn-token-hover');
-    if ((event.metaKey || event.ctrlKey) && onCodeNavRequest) {
-      props.tokenElement.classList.add('pn-token-nav');
-    }
-  }, [onCodeNavRequest]);
+  const handleTokenEnter = useCallback(
+    (props: DiffTokenEventBaseProps, event: PointerEvent) => {
+      props.tokenElement.classList.add("pn-token-hover");
+      if ((event.metaKey || event.ctrlKey) && onCodeNavRequest) {
+        props.tokenElement.classList.add("pn-token-nav");
+      }
+    },
+    [onCodeNavRequest],
+  );
 
   const handleTokenLeave = useCallback((props: DiffTokenEventBaseProps) => {
-    props.tokenElement.classList.remove('pn-token-hover');
-    props.tokenElement.classList.remove('pn-token-nav');
+    props.tokenElement.classList.remove("pn-token-hover");
+    props.tokenElement.classList.remove("pn-token-nav");
   }, []);
 
   const splitGridStyle = useMemo((): React.CSSProperties | undefined => {
-    if (!isSplitLayout || diffOverflow === 'wrap') return undefined;
+    if (!isSplitLayout || diffOverflow === "wrap") return undefined;
     return {
-      '--split-left': `${splitRatio}fr`,
-      '--split-right': `${1 - splitRatio}fr`,
+      "--split-left": `${splitRatio}fr`,
+      "--split-right": `${1 - splitRatio}fr`,
     };
   }, [diffOverflow, isSplitLayout, splitRatio]);
 
   // File-scoped comments render below the path, above the hunks (full text, no
   // truncation) — line-scoped annotations stay inline in the gutter.
-  const fileComments = useMemo(
-    () => annotations.filter(isFileScopedAnnotation),
-    [annotations],
-  );
+  const fileComments = useMemo(() => annotations.filter(isFileScopedAnnotation), [annotations]);
 
   // Replay a selected line/range comment's anchor as the controlled highlight so
   // clicking it (inline card or sidebar) lights up its lines. A live compose
@@ -679,7 +762,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       />
 
       <OverlayScrollArea
-        className={`flex-1 min-h-0 relative ${isDraggingSplit ? 'select-none' : ''}`}
+        className={`flex-1 min-h-0 relative ${isDraggingSplit ? "select-none" : ""}`}
         overflowX="scroll"
         onViewportReady={onViewportReady}
       >
@@ -692,7 +775,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         />
         <div className="p-4" ref={diffContentRef}>
           <div ref={splitSurfaceRef} className="relative min-w-0" style={splitGridStyle}>
-            {isSplitLayout && diffOverflow !== 'wrap' && (
+            {isSplitLayout && diffOverflow !== "wrap" && (
               <div
                 className="absolute top-0 bottom-0 z-10 cursor-col-resize group"
                 style={{ left: `${splitRatio * 100}%`, width: 9, marginLeft: -4 }}
@@ -725,29 +808,29 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           </div>
         </div>
 
-      <ToolbarHost
-        ref={toolbarHostRef}
-        patch={patch}
-        filePath={filePath}
-        isFocused={isFocused}
-        onLineSelection={onLineSelection}
-        onAddAnnotation={onAddAnnotation}
-        onEditAnnotation={onEditAnnotation}
-      />
-
-      {fileCommentAnchor && (
-        <CommentPopover
-          anchorEl={fileCommentAnchor}
-          contextText={filePath.split('/').pop() || filePath}
-          isGlobal={false}
-          draftKey={`file:${prUrl ?? ''}:${prDiffScope ?? ''}:${filePath}`}
-          onSubmit={(text) => {
-            onAddFileComment(text);
-            setFileCommentAnchor(null);
-          }}
-          onClose={() => setFileCommentAnchor(null)}
+        <ToolbarHost
+          ref={toolbarHostRef}
+          patch={patch}
+          filePath={filePath}
+          isFocused={isFocused}
+          onLineSelection={onLineSelection}
+          onAddAnnotation={onAddAnnotation}
+          onEditAnnotation={onEditAnnotation}
         />
-      )}
+
+        {fileCommentAnchor && (
+          <CommentPopover
+            anchorEl={fileCommentAnchor}
+            contextText={filePath.split("/").pop() || filePath}
+            isGlobal={false}
+            draftKey={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${filePath}`}
+            onSubmit={(text) => {
+              onAddFileComment(text);
+              setFileCommentAnchor(null);
+            }}
+            onClose={() => setFileCommentAnchor(null)}
+          />
+        )}
       </OverlayScrollArea>
     </div>
   );

@@ -1,5 +1,5 @@
-import { parseDiffFilePathLines, parseDiffGitHeader } from '@plannotator/shared/diff-paths';
-import type { DiffFile, DiffFileStatus } from '../types';
+import { parseDiffFilePathLines, parseDiffGitHeader } from "@plannotator/shared/diff-paths";
+import type { DiffFile, DiffFileStatus } from "../types";
 
 function splitDiffChunks(rawPatch: string): string[] {
   const matches = [...rawPatch.matchAll(/^diff --git /gm)];
@@ -19,22 +19,22 @@ function splitDiffChunks(rawPatch: string): string[] {
  */
 function deriveStatus(lines: string[], oldPath: string, newPath: string): DiffFileStatus {
   for (const line of lines) {
-    if (line.startsWith('@@') || line.startsWith('--- ') || line.startsWith('+++ ')) break;
-    if (line.startsWith('new file mode')) return 'added';
-    if (line.startsWith('deleted file mode')) return 'deleted';
-    if (line.startsWith('rename from ') || line.startsWith('copy from ')) return 'renamed';
+    if (line.startsWith("@@") || line.startsWith("--- ") || line.startsWith("+++ ")) break;
+    if (line.startsWith("new file mode")) return "added";
+    if (line.startsWith("deleted file mode")) return "deleted";
+    if (line.startsWith("rename from ") || line.startsWith("copy from ")) return "renamed";
   }
   // Reconstructed/odd patches may carry distinct paths without rename lines.
-  return oldPath !== newPath ? 'renamed' : 'modified';
+  return oldPath !== newPath ? "renamed" : "modified";
 }
 
 export function parseDiffToFiles(rawPatch: string): DiffFile[] {
   const files: DiffFile[] = [];
 
   for (const chunk of splitDiffChunks(rawPatch)) {
-    const lines = chunk.split('\n');
+    const lines = chunk.split("\n");
     const fromFileLines = parseDiffFilePathLines(lines);
-    const fromHeader = parseDiffGitHeader(lines[0] ?? '');
+    const fromHeader = parseDiffGitHeader(lines[0] ?? "");
     const oldPath = fromFileLines.oldPath ?? fromFileLines.newPath ?? fromHeader.oldPath;
     const newPath = fromFileLines.newPath ?? fromFileLines.oldPath ?? fromHeader.newPath;
     if (!oldPath || !newPath) continue;
@@ -43,8 +43,8 @@ export function parseDiffToFiles(rawPatch: string): DiffFile[] {
     let deletions = 0;
 
     for (const line of lines) {
-      if (line.startsWith('+') && !line.startsWith('+++')) additions += 1;
-      if (line.startsWith('-') && !line.startsWith('---')) deletions += 1;
+      if (line.startsWith("+") && !line.startsWith("+++")) additions += 1;
+      if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
     }
 
     files.push({

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { buildBearQuickSavePayload, getBearSettings, normalizeTags, saveBearSettings } from "./bear";
+import {
+  buildBearQuickSavePayload,
+  getBearSettings,
+  normalizeTags,
+  saveBearSettings,
+} from "./bear";
 import { storage } from "./storage";
 
 const STORAGE_KEY = "plannotator-bear-tag-position";
@@ -12,8 +17,12 @@ const realStorageMethods = {
 
 beforeEach(() => {
   storage.getItem = (key) => storedValues.get(key) ?? null;
-  storage.setItem = (key, value) => { storedValues.set(key, value); };
-  storage.removeItem = (key) => { storedValues.delete(key); };
+  storage.setItem = (key, value) => {
+    storedValues.set(key, value);
+  };
+  storage.removeItem = (key) => {
+    storedValues.delete(key);
+  };
 });
 
 afterEach(() => {
@@ -49,7 +58,9 @@ describe("normalizeTags", () => {
   });
 
   test("mixed nested and flat tags", () => {
-    expect(normalizeTags("plannotator/plans, work, code/review")).toBe("plannotator/plans, work, code/review");
+    expect(normalizeTags("plannotator/plans, work, code/review")).toBe(
+      "plannotator/plans, work, code/review",
+    );
   });
 
   test("collapses consecutive slashes", () => {

@@ -27,12 +27,14 @@ export function composeImproveContext(input: {
   }
 
   if (input.improvementHookContent) {
-    sections.push([
-      "[Plannotator Improvement Hook]",
-      "The following corrective instructions were generated from analysis of previous plan denial patterns.",
-      "Apply these guidelines when writing your plan:\n",
-      input.improvementHookContent,
-    ].join("\n"));
+    sections.push(
+      [
+        "[Plannotator Improvement Hook]",
+        "The following corrective instructions were generated from analysis of previous plan denial patterns.",
+        "Apply these guidelines when writing your plan:\n",
+        input.improvementHookContent,
+      ].join("\n"),
+    );
   }
 
   if (sections.length === 0) return null;

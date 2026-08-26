@@ -56,9 +56,7 @@ export function getServerPort(): number {
     if (!isNaN(parsed) && parsed >= 0 && parsed < 65536) {
       return parsed;
     }
-    console.error(
-      `[Plannotator] Warning: Invalid PLANNOTATOR_PORT "${envPort}", using default`
-    );
+    console.error(`[Plannotator] Warning: Invalid PLANNOTATOR_PORT "${envPort}", using default`);
   }
 
   // Remote sessions use fixed port for port forwarding; local uses random

@@ -10,7 +10,8 @@ describe("annotate raw HTML assets", () => {
     const htmlPath = join(dir, "page.html");
     const cssPath = join(dir, "style.css");
     const imagePath = join(dir, "logo.png");
-    const html = '<!doctype html><html><head><link rel="stylesheet" href="./style.css"></head><body><img src="./logo.png"></body></html>';
+    const html =
+      '<!doctype html><html><head><link rel="stylesheet" href="./style.css"></head><body><img src="./logo.png"></body></html>';
     writeFileSync(htmlPath, html, "utf-8");
     writeFileSync(cssPath, "body { color: red; }", "utf-8");
     writeFileSync(imagePath, "png-bytes", "utf-8");
@@ -33,7 +34,10 @@ describe("annotate raw HTML assets", () => {
     expect(await cssResponse?.text()).toBe("body { color: red; }");
 
     const imageRequestUrl = new URL(imageUrl!, "http://localhost");
-    const imageResponse = await assets.handle(new Request(String(imageRequestUrl)), imageRequestUrl);
+    const imageResponse = await assets.handle(
+      new Request(String(imageRequestUrl)),
+      imageRequestUrl,
+    );
     expect(imageResponse?.status).toBe(200);
     expect(imageResponse?.headers.get("content-type")).toBe("image/png");
     expect(await imageResponse?.text()).toBe("png-bytes");
@@ -47,8 +51,13 @@ describe("annotate raw HTML assets", () => {
     mkdirSync(cssDir);
     mkdirSync(imageDir);
     writeFileSync(join(imageDir, "bg.png"), Buffer.from([1, 2, 3]));
-    writeFileSync(join(cssDir, "style.css"), 'body { background: url("../images/bg.png"); }', "utf-8");
-    const html = '<!doctype html><html><head><link rel="stylesheet" href="./styles/style.css?v=1"></head><body><img src="./images/bg.png?cache=1"></body></html>';
+    writeFileSync(
+      join(cssDir, "style.css"),
+      'body { background: url("../images/bg.png"); }',
+      "utf-8",
+    );
+    const html =
+      '<!doctype html><html><head><link rel="stylesheet" href="./styles/style.css?v=1"></head><body><img src="./images/bg.png?cache=1"></body></html>';
     writeFileSync(htmlPath, html, "utf-8");
 
     const shareHtml = inlineHtmlLocalAssets(html, htmlPath);
@@ -73,7 +82,8 @@ describe("annotate raw HTML assets", () => {
     writeFileSync(secretPath, "SECRET_OUTSIDE_CONTENT", "utf-8");
     symlinkSync(secretPath, join(htmlDir, "evil.css"));
     const htmlPath = join(htmlDir, "page.html");
-    const html = '<!doctype html><html><head><link rel="stylesheet" href="./evil.css"></head><body></body></html>';
+    const html =
+      '<!doctype html><html><head><link rel="stylesheet" href="./evil.css"></head><body></body></html>';
     writeFileSync(htmlPath, html, "utf-8");
 
     const assets = createHtmlAssetRegistry();
@@ -95,7 +105,8 @@ describe("annotate raw HTML assets", () => {
     writeFileSync(secretPath, "SECRET_OUTSIDE_CONTENT", "utf-8");
     symlinkSync(secretPath, join(htmlDir, "evil.css"));
     const htmlPath = join(htmlDir, "page.html");
-    const html = '<!doctype html><html><head><link rel="stylesheet" href="./evil.css"></head><body></body></html>';
+    const html =
+      '<!doctype html><html><head><link rel="stylesheet" href="./evil.css"></head><body></body></html>';
     writeFileSync(htmlPath, html, "utf-8");
 
     const shareHtml = inlineHtmlLocalAssets(html, htmlPath);

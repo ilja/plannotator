@@ -112,9 +112,13 @@ describe("review-core", () => {
     const result = await runGitDiff(runtime, "uncommitted", "main");
 
     expect(result.patch).toContain("diff --git a/tracked.txt b/tracked.txt");
-    expect(result.patch).toContain("diff --git a/packages/infra/lib/Stack.ts b/packages/infra/lib/Stack.ts");
+    expect(result.patch).toContain(
+      "diff --git a/packages/infra/lib/Stack.ts b/packages/infra/lib/Stack.ts",
+    );
     expect(result.patch).toContain("diff --git a/root-new.txt b/root-new.txt");
-    expect(result.patch).toContain("diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml");
+    expect(result.patch).toContain(
+      "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml",
+    );
   });
 
   test("unstaged diff includes untracked files", async () => {
@@ -185,9 +189,9 @@ describe("review-core", () => {
     expect(context.diffOptions.map((option) => option.id)).toEqual(
       expect.arrayContaining(["uncommitted", "staged", "unstaged", "last-commit"]),
     );
-    expect(
-      context.worktrees.some((worktree) => worktree.path.endsWith("/feature-worktree")),
-    ).toBe(true);
+    expect(context.worktrees.some((worktree) => worktree.path.endsWith("/feature-worktree"))).toBe(
+      true,
+    );
 
     const trackedContents = await getFileContentsForDiff(
       runtime,

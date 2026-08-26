@@ -18,14 +18,16 @@ interface MockCommand {
   exitCode?: number;
 }
 
-function makeRuntime(options: {
-  cwd?: string;
-  env?: Record<string, string | undefined>;
-  files?: string[];
-  commands?: Record<string, MockCommand>;
-  pathDelimiter?: string;
-  platform?: NodeJS.Platform;
-} = {}): SemanticDiffRuntime & { calls: Array<{ command: string; args: string[]; input?: string }> } {
+function makeRuntime(
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+    files?: string[];
+    commands?: Record<string, MockCommand>;
+    pathDelimiter?: string;
+    platform?: NodeJS.Platform;
+  } = {},
+): SemanticDiffRuntime & { calls: Array<{ command: string; args: string[]; input?: string }> } {
   const calls: Array<{ command: string; args: string[]; input?: string }> = [];
   const files = new Set(options.files ?? []);
   const commands = options.commands ?? {};
@@ -76,7 +78,9 @@ describe("semantic diff runner", () => {
       env: { PLANNOTATOR_SEM_PATH: "/missing/sem" },
     });
 
-    await expect(runSemanticDiff({ rawPatch: "diff --git a/a.ts b/a.ts\n" }, runtime)).resolves.toMatchObject({
+    await expect(
+      runSemanticDiff({ rawPatch: "diff --git a/a.ts b/a.ts\n" }, runtime),
+    ).resolves.toMatchObject({
       status: "unavailable",
       reason: "sem-path-missing",
     });
@@ -106,10 +110,13 @@ describe("semantic diff runner", () => {
       },
     });
 
-    const result = await runSemanticDiff({
-      rawPatch: "diff --git a/src/a.ts b/src/a.ts\n@@ -0,0 +1 @@\n+export function hello() {}\n",
-      fileExts: ["ts", ".tsx", "ts"],
-    }, runtime);
+    const result = await runSemanticDiff(
+      {
+        rawPatch: "diff --git a/src/a.ts b/src/a.ts\n@@ -0,0 +1 @@\n+export function hello() {}\n",
+        fileExts: ["ts", ".tsx", "ts"],
+      },
+      runtime,
+    );
 
     expect(result).toMatchObject({
       status: "ok",
@@ -140,9 +147,12 @@ describe("semantic diff runner", () => {
       },
     });
 
-    await runSemanticDiff({
-      rawPatch: "diff --git a/src/a.py b/src/a.py\n@@ -1 +1 @@\n-a\n+b\n",
-    }, runtime);
+    await runSemanticDiff(
+      {
+        rawPatch: "diff --git a/src/a.py b/src/a.py\n@@ -1 +1 @@\n-a\n+b\n",
+      },
+      runtime,
+    );
 
     expect(runtime.calls[1]).toMatchObject({
       command: "mock-sem",
@@ -174,14 +184,20 @@ describe("semantic diff runner", () => {
       },
     });
 
-    await expect(runSemanticDiff({
-      rawPatch: "diff --git a/src/a.ts b/src/a.ts\n@@ -0,0 +1 @@\n+export function fromRepoPackage() {}\n",
-      cwd: "/repo",
-    }, runtime)).resolves.toMatchObject({
+    await expect(
+      runSemanticDiff(
+        {
+          rawPatch:
+            "diff --git a/src/a.ts b/src/a.ts\n@@ -0,0 +1 @@\n+export function fromRepoPackage() {}\n",
+          cwd: "/repo",
+        },
+        runtime,
+      ),
+    ).resolves.toMatchObject({
       status: "unavailable",
       reason: "sem-not-found",
     });
-    expect(runtime.calls.map(call => call.command)).not.toContain(repoSem);
+    expect(runtime.calls.map((call) => call.command)).not.toContain(repoSem);
   });
 
   test("returns error instead of throwing when sem exits nonzero", async () => {
@@ -196,7 +212,9 @@ describe("semantic diff runner", () => {
       },
     });
 
-    await expect(runSemanticDiff({ rawPatch: "diff --git a/a.ts b/a.ts\n" }, runtime)).resolves.toMatchObject({
+    await expect(
+      runSemanticDiff({ rawPatch: "diff --git a/a.ts b/a.ts\n" }, runtime),
+    ).resolves.toMatchObject({
       status: "error",
       reason: "sem-exit",
       exitCode: 2,
@@ -215,7 +233,9 @@ describe("semantic diff runner", () => {
       },
     });
 
-    await expect(runSemanticDiff({ rawPatch: "diff --git a/a.ts b/a.ts\n" }, runtime)).resolves.toMatchObject({
+    await expect(
+      runSemanticDiff({ rawPatch: "diff --git a/a.ts b/a.ts\n" }, runtime),
+    ).resolves.toMatchObject({
       status: "error",
       reason: "invalid-json",
     });
@@ -292,11 +312,9 @@ describe("semantic diff runner", () => {
 
   test("parses requested file extensions without applying a default filter", () => {
     expect(semanticDiffFileExtsFromSearchParams(new URLSearchParams())).toEqual([]);
-    expect(semanticDiffFileExtsFromSearchParams(new URLSearchParams("fileExt=ts&fileExts=.tsx,jsx"))).toEqual([
-      ".ts",
-      ".tsx",
-      ".jsx",
-    ]);
+    expect(
+      semanticDiffFileExtsFromSearchParams(new URLSearchParams("fileExt=ts&fileExts=.tsx,jsx")),
+    ).toEqual([".ts", ".tsx", ".jsx"]);
   });
 
   test("response cache clears when the patch changes and evicts oldest entries", () => {

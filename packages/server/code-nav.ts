@@ -59,35 +59,29 @@ export async function handleCodeNavResolve(
 
   const decodedRequest = Option.getOrUndefined(decodeCodeNavRequest(body));
   if (!decodedRequest) {
-    const error = Predicate.isObject(body)
-      ? validateCodeNavRequest(body)
-      : "Invalid request body";
+    const error = Predicate.isObject(body) ? validateCodeNavRequest(body) : "Invalid request body";
     return Response.json({ error: error ?? "Invalid request body" }, { status: 400 });
   }
 
   const language = Option.getOrUndefined(
     Schema.decodeUnknownOption(Schema.String)(decodedRequest.language),
   );
-  const resolveRequest: CodeNavResolveRequest = language === undefined
-    ? {
-      symbol: decodedRequest.symbol,
-      filePath: decodedRequest.filePath,
-      side: decodedRequest.side,
-    }
-    : {
-      symbol: decodedRequest.symbol,
-      filePath: decodedRequest.filePath,
-      side: decodedRequest.side,
-      language,
-    };
+  const resolveRequest: CodeNavResolveRequest =
+    language === undefined
+      ? {
+          symbol: decodedRequest.symbol,
+          filePath: decodedRequest.filePath,
+          side: decodedRequest.side,
+        }
+      : {
+          symbol: decodedRequest.symbol,
+          filePath: decodedRequest.filePath,
+          side: decodedRequest.side,
+          language,
+        };
 
   try {
-    const result = await resolveCodeNav(
-      bunCodeNavRuntime,
-      resolveRequest,
-      cwd,
-      changedFiles,
-    );
+    const result = await resolveCodeNav(bunCodeNavRuntime, resolveRequest, cwd, changedFiles);
 
     return Response.json(result);
   } catch (err) {

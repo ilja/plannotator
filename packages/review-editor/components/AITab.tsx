@@ -1,18 +1,18 @@
-import React, { useRef, useEffect, useState, useMemo, memo } from 'react';
-import type { AIChatEntry, PendingPermission } from '../hooks/useAIChat';
-import { renderChatMarkdown } from '../utils/renderChatMarkdown';
-import { formatLineRange } from '../utils/formatLineRange';
-import { formatRelativeTime } from '../utils/formatRelativeTime';
-import { FileNameChip } from './FileNameChip';
-import { SparklesIcon } from '@plannotator/ui/components/SparklesIcon';
-import { CountBadge } from './CountBadge';
-import { CopyButton } from './CopyButton';
-import { PermissionCard } from './PermissionCard';
-import { AIConfigBar } from './AIConfigBar';
-import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea';
-import type { AIProviderOption } from '@plannotator/ui/utils/aiProvider';
-import { AIChatComposer } from './AIChatComposer';
-import type { PendingAIContext } from '../utils/pendingAIContext';
+import React, { useRef, useEffect, useState, useMemo, memo } from "react";
+import type { AIChatEntry, PendingPermission } from "../hooks/useAIChat";
+import { renderChatMarkdown } from "../utils/renderChatMarkdown";
+import { formatLineRange } from "../utils/formatLineRange";
+import { formatRelativeTime } from "../utils/formatRelativeTime";
+import { FileNameChip } from "./FileNameChip";
+import { SparklesIcon } from "@plannotator/ui/components/SparklesIcon";
+import { CountBadge } from "./CountBadge";
+import { CopyButton } from "./CopyButton";
+import { PermissionCard } from "./PermissionCard";
+import { AIConfigBar } from "./AIConfigBar";
+import { OverlayScrollArea } from "@plannotator/ui/components/OverlayScrollArea";
+import type { AIProviderOption } from "@plannotator/ui/utils/aiProvider";
+import { AIChatComposer } from "./AIChatComposer";
+import type { PendingAIContext } from "../utils/pendingAIContext";
 
 interface AITabProps {
   messages: AIChatEntry[];
@@ -20,7 +20,12 @@ interface AITabProps {
   isStreaming: boolean;
   activeFilePath?: string;
   scrollToQuestionId?: string | null;
-  onScrollToLines: (filePath: string, lineStart: number, lineEnd: number, side: 'old' | 'new') => void;
+  onScrollToLines: (
+    filePath: string,
+    lineStart: number,
+    lineEnd: number,
+    side: "old" | "new",
+  ) => void;
   onAskChat?: (question: string) => void;
   pendingAIContext?: PendingAIContext | null;
   aiComposerFocusToken?: number;
@@ -29,7 +34,11 @@ interface AITabProps {
   onRespondToPermission?: (requestId: string, allow: boolean) => void;
   aiProviders?: AIProviderOption[];
   aiConfig?: { providerId: string | null; model: string | null; reasoningEffort?: string | null };
-  onAIConfigChange?: (config: { providerId?: string | null; model?: string | null; reasoningEffort?: string | null }) => void;
+  onAIConfigChange?: (config: {
+    providerId?: string | null;
+    model?: string | null;
+    reasoningEffort?: string | null;
+  }) => void;
   hasAISession?: boolean;
 }
 
@@ -38,10 +47,10 @@ interface FileGroup {
   messages: AIChatEntry[];
 }
 
-function getQuestionScope(q: AIChatEntry['question']): 'general' | 'file' | 'line' {
-  if (!q.filePath) return 'general';
-  if (q.lineStart == null) return 'file';
-  return 'line';
+function getQuestionScope(q: AIChatEntry["question"]): "general" | "file" | "line" {
+  if (!q.filePath) return "general";
+  if (q.lineStart == null) return "file";
+  return "line";
 }
 
 export const AITab: React.FC<AITabProps> = ({
@@ -64,7 +73,7 @@ export const AITab: React.FC<AITabProps> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  const [generalInput, setGeneralInput] = useState('');
+  const [generalInput, setGeneralInput] = useState("");
   const [highlightFilePath, setHighlightFilePath] = useState<string | null>(null);
 
   // Group messages by file
@@ -87,7 +96,7 @@ export const AITab: React.FC<AITabProps> = ({
       msgs.sort((a, b) => {
         const aScope = getQuestionScope(a.question);
         const bScope = getQuestionScope(b.question);
-        if (aScope !== bScope) return aScope === 'file' ? -1 : 1;
+        if (aScope !== bScope) return aScope === "file" ? -1 : 1;
         return (a.question.lineStart ?? 0) - (b.question.lineStart ?? 0);
       });
       fileGroups.push({ filePath, messages: msgs });
@@ -99,7 +108,7 @@ export const AITab: React.FC<AITabProps> = ({
   // Auto-expand active file's group
   useEffect(() => {
     if (activeFilePath) {
-      setExpandedFiles(prev => {
+      setExpandedFiles((prev) => {
         if (prev.has(activeFilePath)) return prev;
         const next = new Set(prev);
         next.add(activeFilePath);
@@ -112,13 +121,13 @@ export const AITab: React.FC<AITabProps> = ({
   useEffect(() => {
     if (!scrollToQuestionId || !scrollRef.current) return;
 
-    const msg = messages.find(m => m.question.id === scrollToQuestionId);
+    const msg = messages.find((m) => m.question.id === scrollToQuestionId);
     const filePath = msg?.question.filePath;
 
     if (filePath) {
       const header = scrollRef.current.querySelector(`[data-file-group="${CSS.escape(filePath)}"]`);
       if (header) {
-        header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        header.scrollIntoView({ behavior: "smooth", block: "start" });
       }
       setHighlightFilePath(filePath);
       setTimeout(() => setHighlightFilePath(null), 1200);
@@ -127,24 +136,26 @@ export const AITab: React.FC<AITabProps> = ({
     if (filePath && expandedFiles.has(filePath)) {
       setTimeout(() => {
         const el = scrollRef.current?.querySelector(`[data-question-id="${scrollToQuestionId}"]`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 300);
     }
   }, [scrollToQuestionId]);
 
   // Auto-scroll when new messages arrive or the latest response streams in.
   const latestMessage = messages[messages.length - 1];
-  const latestResponseText = latestMessage?.response.text ?? '';
+  const latestResponseText = latestMessage?.response.text ?? "";
   useEffect(() => {
     if (!scrollRef.current) return;
     if (latestMessage) {
-      const latestQA = scrollRef.current.querySelector(`[data-question-id="${CSS.escape(latestMessage.question.id)}"]`);
-      latestQA?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      const latestQA = scrollRef.current.querySelector(
+        `[data-question-id="${CSS.escape(latestMessage.question.id)}"]`,
+      );
+      latestQA?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [latestMessage?.question.id, latestResponseText, messages.length]);
 
   const toggleFile = (filePath: string) => {
-    setExpandedFiles(prev => {
+    setExpandedFiles((prev) => {
       const next = new Set(prev);
       if (next.has(filePath)) next.delete(filePath);
       else next.add(filePath);
@@ -155,7 +166,7 @@ export const AITab: React.FC<AITabProps> = ({
   const handleChatSubmit = () => {
     if (!generalInput.trim() || !onAskChat) return;
     onAskChat(generalInput.trim());
-    setGeneralInput('');
+    setGeneralInput("");
   };
 
   // Empty state
@@ -180,7 +191,18 @@ export const AITab: React.FC<AITabProps> = ({
           onReasoningEffortChange={(effort) => onAIConfigChange?.({ reasoningEffort: effort })}
           hasSession={hasAISession}
         />
-        {onAskChat && <AIChatComposer value={generalInput} pendingContext={pendingAIContext} focusToken={aiComposerFocusToken} onChange={setGeneralInput} onSubmit={handleChatSubmit} onRemoveContext={onRemovePendingAIContext ?? (() => {})} disabled={isStreaming} isStreaming={isStreaming} />}
+        {onAskChat && (
+          <AIChatComposer
+            value={generalInput}
+            pendingContext={pendingAIContext}
+            focusToken={aiComposerFocusToken}
+            onChange={setGeneralInput}
+            onSubmit={handleChatSubmit}
+            onRemoveContext={onRemovePendingAIContext ?? (() => {})}
+            disabled={isStreaming}
+            isStreaming={isStreaming}
+          />
+        )}
       </div>
     );
   }
@@ -188,79 +210,99 @@ export const AITab: React.FC<AITabProps> = ({
   return (
     <div className="flex flex-col h-full">
       <OverlayScrollArea className="flex-1 min-h-0">
-      <div ref={scrollRef} className="p-2">
-        {isCreatingSession && messages.length === 0 && (
-          <div className="text-xs text-muted-foreground text-center py-4">
-            <span className="ai-streaming-cursor" /> Starting AI session...
-          </div>
-        )}
+        <div ref={scrollRef} className="p-2">
+          {isCreatingSession && messages.length === 0 && (
+            <div className="text-xs text-muted-foreground text-center py-4">
+              <span className="ai-streaming-cursor" /> Starting AI session...
+            </div>
+          )}
 
-        {/* File-grouped questions */}
-        {fileGroups.map(({ filePath, messages: fileMessages }) => {
-          const isExpanded = expandedFiles.has(filePath);
-          const basename = filePath.split('/').pop() || filePath;
+          {/* File-grouped questions */}
+          {fileGroups.map(({ filePath, messages: fileMessages }) => {
+            const isExpanded = expandedFiles.has(filePath);
+            const basename = filePath.split("/").pop() || filePath;
 
-          return (
-            <div key={filePath} className="mb-1">
-              <button
-                data-file-group={filePath}
-                className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs hover:bg-muted transition-colors ${highlightFilePath === filePath ? 'ai-file-group-highlight' : ''}`}
-                onClick={() => toggleFile(filePath)}
-              >
-                <svg
-                  className={`w-3 h-3 text-muted-foreground/50 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            return (
+              <div key={filePath} className="mb-1">
+                <button
+                  data-file-group={filePath}
+                  className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs hover:bg-muted transition-colors ${highlightFilePath === filePath ? "ai-file-group-highlight" : ""}`}
+                  onClick={() => toggleFile(filePath)}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-                <span className="truncate text-foreground font-medium">{basename}</span>
-                <CountBadge count={fileMessages.length} className="ml-auto flex-shrink-0 text-muted-foreground/50" />
-              </button>
+                  <svg
+                    className={`w-3 h-3 text-muted-foreground/50 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="truncate text-foreground font-medium">{basename}</span>
+                  <CountBadge
+                    count={fileMessages.length}
+                    className="ml-auto flex-shrink-0 text-muted-foreground/50"
+                  />
+                </button>
 
-              {isExpanded && (
-                <div className="ml-3 border-l border-border/30 pl-2 space-y-2 mt-1">
-                  {fileMessages.map(({ question, response }) => (
-                    <QAPair key={question.id} question={question} response={response} onScrollToLines={onScrollToLines} />
-                  ))}
+                {isExpanded && (
+                  <div className="ml-3 border-l border-border/30 pl-2 space-y-2 mt-1">
+                    {fileMessages.map(({ question, response }) => (
+                      <QAPair
+                        key={question.id}
+                        question={question}
+                        response={response}
+                        onScrollToLines={onScrollToLines}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Pending permission requests */}
+          {permissionRequests
+            .filter((p) => !p.decided)
+            .map((perm) => (
+              <div key={perm.requestId} className="mb-2">
+                <PermissionCard
+                  requestId={perm.requestId}
+                  toolName={perm.toolName}
+                  toolInput={perm.toolInput}
+                  title={perm.title}
+                  displayName={perm.displayName}
+                  description={perm.description}
+                  onRespond={onRespondToPermission ?? (() => {})}
+                />
+              </div>
+            ))}
+
+          {/* General questions */}
+          {generalMessages.length > 0 && (
+            <div className="mb-3 mt-2">
+              {fileGroups.length > 0 && (
+                <div className="flex items-center gap-2 px-2 mb-1.5">
+                  <div className="flex-1 border-t border-border/40" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                    General
+                  </span>
+                  <div className="flex-1 border-t border-border/40" />
                 </div>
               )}
-            </div>
-          );
-        })}
-
-        {/* Pending permission requests */}
-        {permissionRequests.filter(p => !p.decided).map(perm => (
-          <div key={perm.requestId} className="mb-2">
-            <PermissionCard
-              requestId={perm.requestId}
-              toolName={perm.toolName}
-              toolInput={perm.toolInput}
-              title={perm.title}
-              displayName={perm.displayName}
-              description={perm.description}
-              onRespond={onRespondToPermission ?? (() => {})}
-            />
-          </div>
-        ))}
-
-        {/* General questions */}
-        {generalMessages.length > 0 && (
-          <div className="mb-3 mt-2">
-            {fileGroups.length > 0 && (
-              <div className="flex items-center gap-2 px-2 mb-1.5">
-                <div className="flex-1 border-t border-border/40" />
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">General</span>
-                <div className="flex-1 border-t border-border/40" />
+              <div className="space-y-2">
+                {generalMessages.map(({ question, response }) => (
+                  <QAPair
+                    key={question.id}
+                    question={question}
+                    response={response}
+                    onScrollToLines={onScrollToLines}
+                  />
+                ))}
               </div>
-            )}
-            <div className="space-y-2">
-              {generalMessages.map(({ question, response }) => (
-                <QAPair key={question.id} question={question} response={response} onScrollToLines={onScrollToLines} />
-              ))}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       </OverlayScrollArea>
 
       {/* Config bar */}
@@ -276,21 +318,31 @@ export const AITab: React.FC<AITabProps> = ({
       />
 
       {/* General question input */}
-      {onAskChat && <AIChatComposer value={generalInput} pendingContext={pendingAIContext} focusToken={aiComposerFocusToken} onChange={setGeneralInput} onSubmit={handleChatSubmit} onRemoveContext={onRemovePendingAIContext ?? (() => {})} disabled={isStreaming} isStreaming={isStreaming} />}
-
+      {onAskChat && (
+        <AIChatComposer
+          value={generalInput}
+          pendingContext={pendingAIContext}
+          focusToken={aiComposerFocusToken}
+          onChange={setGeneralInput}
+          onSubmit={handleChatSubmit}
+          onRemoveContext={onRemovePendingAIContext ?? (() => {})}
+          disabled={isStreaming}
+          isStreaming={isStreaming}
+        />
+      )}
     </div>
   );
 };
 
 /** Single Q&A pair — memoized to avoid re-parsing markdown on sibling updates */
 const QAPair = memo<{
-  question: AIChatEntry['question'];
-  response: AIChatEntry['response'];
-  onScrollToLines: AITabProps['onScrollToLines'];
+  question: AIChatEntry["question"];
+  response: AIChatEntry["response"];
+  onScrollToLines: AITabProps["onScrollToLines"];
 }>(({ question, response, onScrollToLines }) => {
   const scope = getQuestionScope(question);
   const renderedResponse = useMemo(
-    () => response.text ? renderChatMarkdown(response.text) : null,
+    () => (response.text ? renderChatMarkdown(response.text) : null),
     [response.text],
   );
 
@@ -300,17 +352,25 @@ const QAPair = memo<{
       <div className="p-2.5 rounded-lg border border-transparent hover:bg-muted/30 transition-colors">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-1.5">
-            {scope === 'line' && question.filePath && question.lineStart != null && question.lineEnd != null && (
-              <button
-                className="ai-line-ref"
-                onClick={() => onScrollToLines(question.filePath!, question.lineStart!, question.lineEnd!, question.side ?? 'new')}
-              >
-                {formatLineRange(question.lineStart, question.lineEnd)}
-              </button>
-            )}
-            {scope === 'file' && question.filePath && (
-              <FileNameChip path={question.filePath} />
-            )}
+            {scope === "line" &&
+              question.filePath &&
+              question.lineStart != null &&
+              question.lineEnd != null && (
+                <button
+                  className="ai-line-ref"
+                  onClick={() =>
+                    onScrollToLines(
+                      question.filePath!,
+                      question.lineStart!,
+                      question.lineEnd!,
+                      question.side ?? "new",
+                    )
+                  }
+                >
+                  {formatLineRange(question.lineStart, question.lineEnd)}
+                </button>
+              )}
+            {scope === "file" && question.filePath && <FileNameChip path={question.filePath} />}
           </div>
           <span className="text-[10px] text-muted-foreground/50">
             {formatRelativeTime(question.createdAt)}

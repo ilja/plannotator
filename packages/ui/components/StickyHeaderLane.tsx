@@ -24,11 +24,11 @@
  * No state is duplicated — all props are passed through from App.tsx.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { AnnotationToolstrip } from './AnnotationToolstrip';
-import { DocBadges } from './DocBadges';
-import { useScrollViewport } from '../hooks/useScrollViewport';
-import type { EditorMode, InputMethod } from '../types';
+import React, { useEffect, useRef, useState } from "react";
+import { AnnotationToolstrip } from "./AnnotationToolstrip";
+import { DocBadges } from "./DocBadges";
+import { useScrollViewport } from "../hooks/useScrollViewport";
+import type { EditorMode, InputMethod } from "../types";
 
 // Snap a measured pixel width to a 16px grid. ResizeObserver fires every
 // frame during a drag; without quantization the sticky bar would
@@ -105,8 +105,7 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
   // Tight = shared lane still fits, but only if the toolstrip drops its
   // active labels and goes icon-only. Lets us stay horizontally aligned
   // for an extra ~160px of width before stacking.
-  const isToolstripIconOnly =
-    measured && !isNarrow && availableForBar < WIDE_BAR_WIDTH;
+  const isToolstripIconOnly = measured && !isNarrow && availableForBar < WIDE_BAR_WIDTH;
 
   useEffect(() => {
     if (!wrapperRef.current) return;
@@ -131,7 +130,7 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
     // "no maxWidth cap" path for the one frame between Viewer remounting
     // and the new observer firing its first callback.
     setActionsWidth(0);
-    const el = document.querySelector<HTMLElement>('[data-sticky-actions]');
+    const el = document.querySelector<HTMLElement>("[data-sticky-actions]");
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       const next = snap(entry.contentRect.width);
@@ -151,10 +150,11 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
   // viewport from context, NOT <main> (which doesn't actually scroll).
   useEffect(() => {
     if (!sentinelRef.current || !scrollViewport) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsStuck(!entry.isIntersecting),
-      { root: scrollViewport, rootMargin: '80px 0px 0px 0px', threshold: 0 }
-    );
+    const observer = new IntersectionObserver(([entry]) => setIsStuck(!entry.isIntersecting), {
+      root: scrollViewport,
+      rootMargin: "80px 0px 0px 0px",
+      threshold: 0,
+    });
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
   }, [scrollViewport]);
@@ -181,7 +181,7 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
         ref={wrapperRef}
         data-sticky-header-lane="true"
         className={`sticky z-[60] w-full self-center pointer-events-none ${
-          isNarrow ? 'top-[52px] md:top-[60px]' : 'top-3'
+          isNarrow ? "top-[52px] md:top-[60px]" : "top-3"
         }`}
         style={maxWidth == null ? { height: 0 } : { maxWidth, height: 0 }}
       >
@@ -203,20 +203,20 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
           inert={!isStuck || undefined}
           className={`absolute left-3 md:left-5 top-0 inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0 overflow-hidden rounded-lg py-1 md:py-1.5 bg-card/95 backdrop-blur-sm shadow-sm border border-border/30 motion-reduce:transform-none ${
             isStuck
-              ? 'opacity-100 translate-y-0 pointer-events-auto'
-              : 'opacity-0 -translate-y-1 pointer-events-none'
+              ? "opacity-100 translate-y-0 pointer-events-auto"
+              : "opacity-0 -translate-y-1 pointer-events-none"
           }`}
           style={{
             paddingLeft: 12,
             paddingRight: 12,
             maxWidth: isNarrow
-              ? 'calc(100% - 24px)'
+              ? "calc(100% - 24px)"
               : availableForBar > 0
                 ? availableForBar
                 : undefined,
             transition:
-              'opacity 180ms cubic-bezier(0.2, 0, 0, 1), transform 180ms cubic-bezier(0.2, 0, 0, 1)',
-            willChange: 'opacity, transform',
+              "opacity 180ms cubic-bezier(0.2, 0, 0, 1), transform 180ms cubic-bezier(0.2, 0, 0, 1)",
+            willChange: "opacity, transform",
           }}
         >
           <div className="flex-shrink-0">
@@ -229,10 +229,7 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
               iconOnly={isNarrow || isToolstripIconOnly}
             />
           </div>
-          <DocBadges
-            layout="row"
-            repoInfo={repoInfo}
-          />
+          <DocBadges layout="row" repoInfo={repoInfo} />
         </div>
       </div>
     </>

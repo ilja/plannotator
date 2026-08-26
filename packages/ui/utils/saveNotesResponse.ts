@@ -1,4 +1,4 @@
-import { Result, Schema } from 'effect';
+import { Result, Schema } from "effect";
 
 const SaveNotesTargetSchema = Schema.Struct({
   success: Schema.Boolean,
@@ -10,10 +10,8 @@ const SaveNotesResponseEnvelopeSchema = Schema.Struct({
   results: Schema.Record(Schema.String, Schema.Unknown),
 });
 
-const saveNotesTargets = ['obsidian', 'bear', 'octarine'] as const;
-const decodeSaveNotesResponseEnvelope = Schema.decodeUnknownResult(
-  SaveNotesResponseEnvelopeSchema,
-);
+const saveNotesTargets = ["obsidian", "bear", "octarine"] as const;
+const decodeSaveNotesResponseEnvelope = Schema.decodeUnknownResult(SaveNotesResponseEnvelopeSchema);
 const decodeSaveNotesTarget = Schema.decodeUnknownResult(SaveNotesTargetSchema);
 
 type SaveNotesTarget = (typeof saveNotesTargets)[number];

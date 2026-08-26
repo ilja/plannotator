@@ -42,7 +42,9 @@ function normalizeValidationEntry(entry: DecodedValidationEntry): ValidationEntr
 }
 
 /** Decodes code-path validation results while retaining only valid entries. */
-export function decodeCodePathValidationResponse<Input>(input: Input): Map<string, ValidationEntry> {
+export function decodeCodePathValidationResponse<Input>(
+  input: Input,
+): Map<string, ValidationEntry> {
   const envelope = Option.getOrUndefined(decodeEnvelope(input));
   if (!envelope) return new Map();
 

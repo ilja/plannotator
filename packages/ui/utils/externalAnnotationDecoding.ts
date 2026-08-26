@@ -1,5 +1,5 @@
-import type { ExternalAnnotationEvent } from '@plannotator/shared/external-annotation';
-import { Option, Schema } from 'effect';
+import type { ExternalAnnotationEvent } from "@plannotator/shared/external-annotation";
+import { Option, Schema } from "effect";
 
 const ExternalAnnotationEventEnvelopeSchema = Schema.Struct({
   type: Schema.String,
@@ -75,25 +75,25 @@ export function parseExternalAnnotationEvent<T extends { id: string; source?: st
   decodeAnnotation: ExternalAnnotationDecoder<T>,
 ): ExternalAnnotationEvent<T> | null {
   switch (envelope.type) {
-    case 'snapshot':
-    case 'add':
+    case "snapshot":
+    case "add":
       if (!envelope.annotations) return null;
       return {
         type: envelope.type,
         annotations: decodeAnnotationSiblings(envelope.annotations, decodeAnnotation),
       };
-    case 'remove':
+    case "remove":
       if (!envelope.ids) return null;
-      return { type: 'remove', ids: decodeAnnotationIdSiblings(envelope.ids) };
-    case 'clear':
+      return { type: "remove", ids: decodeAnnotationIdSiblings(envelope.ids) };
+    case "clear":
       return envelope.source === undefined
-        ? { type: 'clear' }
-        : { type: 'clear', source: envelope.source };
-    case 'update': {
+        ? { type: "clear" }
+        : { type: "clear", source: envelope.source };
+    case "update": {
       if (!envelope.id || envelope.annotation === undefined) return null;
       const annotation = decodeAnnotation(envelope.annotation);
       if (Option.isNone(annotation) || annotation.value.id !== envelope.id) return null;
-      return { type: 'update', id: envelope.id, annotation: annotation.value };
+      return { type: "update", id: envelope.id, annotation: annotation.value };
     }
     default:
       return null;

@@ -1,16 +1,16 @@
-import { describe, expect, test } from 'bun:test';
-import { Result } from 'effect';
-import { decodeHooksStatusResponse } from './hooksStatusResponse';
+import { describe, expect, test } from "bun:test";
+import { Result } from "effect";
+import { decodeHooksStatusResponse } from "./hooksStatusResponse";
 
 const improvementHook = {
   present: true,
-  filePath: '/Users/example/.plannotator/hooks/compound/enterplanmode-improve-hook.txt',
+  filePath: "/Users/example/.plannotator/hooks/compound/enterplanmode-improve-hook.txt",
   fileSize: 2_048,
-  content: 'Prefer focused tests.',
+  content: "Prefer focused tests.",
 };
 
-describe('decodeHooksStatusResponse', () => {
-  test('decodes a complete hooks status response', () => {
+describe("decodeHooksStatusResponse", () => {
+  test("decodes a complete hooks status response", () => {
     const decoded = decodeHooksStatusResponse({
       pfmReminder: { enabled: true },
       improvementHook,
@@ -27,7 +27,7 @@ describe('decodeHooksStatusResponse', () => {
     }
   });
 
-  test('defaults absent optional sections for the component', () => {
+  test("defaults absent optional sections for the component", () => {
     const decoded = decodeHooksStatusResponse({});
 
     expect(Result.isSuccess(decoded)).toBeTrue();
@@ -45,10 +45,10 @@ describe('decodeHooksStatusResponse', () => {
     }
   });
 
-  test('retains valid PFM and composed length when the improvement hook is malformed', () => {
+  test("retains valid PFM and composed length when the improvement hook is malformed", () => {
     const decoded = decodeHooksStatusResponse({
       pfmReminder: { enabled: true },
-      improvementHook: { present: 'yes' },
+      improvementHook: { present: "yes" },
       composedLength: 512,
     });
 
@@ -67,11 +67,11 @@ describe('decodeHooksStatusResponse', () => {
     }
   });
 
-  test('retains a valid improvement hook when PFM and composed siblings are malformed', () => {
+  test("retains a valid improvement hook when PFM and composed siblings are malformed", () => {
     const decoded = decodeHooksStatusResponse({
-      pfmReminder: { enabled: 'yes' },
+      pfmReminder: { enabled: "yes" },
       improvementHook,
-      composedLength: '512',
+      composedLength: "512",
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
@@ -84,16 +84,16 @@ describe('decodeHooksStatusResponse', () => {
     }
   });
 
-  test('accepts nullable fields without coercing wrong primitive types', () => {
+  test("accepts nullable fields without coercing wrong primitive types", () => {
     const decoded = decodeHooksStatusResponse({
       pfmReminder: { enabled: 1 },
       improvementHook: {
         present: true,
         filePath: 42,
-        fileSize: '2048',
+        fileSize: "2048",
         content: false,
       },
-      composedLength: '4096',
+      composedLength: "4096",
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
@@ -133,8 +133,8 @@ describe('decodeHooksStatusResponse', () => {
     }
   });
 
-  test('rejects invalid response roots', () => {
-    for (const value of [null, [], 42, 'status']) {
+  test("rejects invalid response roots", () => {
+    for (const value of [null, [], 42, "status"]) {
       expect(Result.isFailure(decodeHooksStatusResponse(value))).toBeTrue();
     }
   });

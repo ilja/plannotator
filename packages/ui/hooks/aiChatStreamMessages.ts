@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 const AIJsonObjectSchema = Schema.Record(Schema.String, Schema.Json);
 
@@ -11,23 +11,23 @@ const AIChatErrorSchema = Schema.Struct({
 
 const AIChatStreamMessageSchema = Schema.Union([
   Schema.Struct({
-    type: Schema.Literal('text_delta'),
+    type: Schema.Literal("text_delta"),
     delta: Schema.String,
   }),
   Schema.Struct({
-    type: Schema.Literal('text'),
+    type: Schema.Literal("text"),
     text: Schema.String,
   }),
   Schema.Struct({
-    type: Schema.Literal('error'),
+    type: Schema.Literal("error"),
     error: Schema.String,
   }),
   Schema.Struct({
-    type: Schema.Literal('result'),
+    type: Schema.Literal("result"),
     result: Schema.optionalKey(Schema.String),
   }),
   Schema.Struct({
-    type: Schema.Literal('permission_request'),
+    type: Schema.Literal("permission_request"),
     requestId: Schema.String,
     toolName: Schema.String,
     toolInput: AIJsonObjectSchema,

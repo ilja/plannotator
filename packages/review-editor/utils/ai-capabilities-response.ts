@@ -1,5 +1,9 @@
-import { Option, Schema } from 'effect';
-import { isPiProvider, type AIProviderModel, type AIProviderOption } from '@plannotator/ui/utils/aiProvider';
+import { Option, Schema } from "effect";
+import {
+  isPiProvider,
+  type AIProviderModel,
+  type AIProviderOption,
+} from "@plannotator/ui/utils/aiProvider";
 
 const AIProviderCapabilitiesSchema = Schema.Struct({
   fork: Schema.Boolean,
@@ -66,7 +70,9 @@ function decodeProvider(value: UnknownValue): ReviewAICapabilitiesProvider | und
 }
 
 /** Decode the unknown value returned by the review server's AI capabilities endpoint. */
-export function decodeReviewAICapabilitiesResponse(value: UnknownValue): ReviewAICapabilitiesState | undefined {
+export function decodeReviewAICapabilitiesResponse(
+  value: UnknownValue,
+): ReviewAICapabilitiesState | undefined {
   const root = Option.getOrUndefined(decodeRoot(value));
   if (!root) return undefined;
 
@@ -93,10 +99,11 @@ export async function loadReviewAICapabilitiesState(
     }
 
     const providers = decoded.providers.filter(isPiProvider);
-    const defaultProvider = decoded.defaultProvider !== null &&
+    const defaultProvider =
+      decoded.defaultProvider !== null &&
       providers.some((provider) => provider.id === decoded.defaultProvider)
-      ? decoded.defaultProvider
-      : null;
+        ? decoded.defaultProvider
+        : null;
 
     return {
       available: providers.length > 0,

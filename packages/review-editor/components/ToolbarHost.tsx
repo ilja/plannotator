@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo } from "react";
 import type {
   CodeAnnotation,
   CodeAnnotationType,
@@ -6,13 +6,13 @@ import type {
   ConventionalLabel,
   SelectedLineRange,
   TokenAnnotationMeta,
-} from '@plannotator/ui/types';
-import type { DiffTokenEventBaseProps } from '@pierre/diffs';
-import { useConfigValue } from '@plannotator/ui/config';
-import { useAnnotationToolbar } from '../hooks/useAnnotationToolbar';
-import { AnnotationToolbar } from './AnnotationToolbar';
-import { SuggestionModal } from './SuggestionModal';
-import { getEnabledLabels } from './ConventionalLabelPicker';
+} from "@plannotator/ui/types";
+import type { DiffTokenEventBaseProps } from "@pierre/diffs";
+import { useConfigValue } from "@plannotator/ui/config";
+import { useAnnotationToolbar } from "../hooks/useAnnotationToolbar";
+import { AnnotationToolbar } from "./AnnotationToolbar";
+import { SuggestionModal } from "./SuggestionModal";
+import { getEnabledLabels } from "./ConventionalLabelPicker";
 
 export interface ToolbarHostHandle {
   handleLineSelectionEnd: (range: SelectedLineRange | null) => void;
@@ -49,14 +49,7 @@ interface ToolbarHostProps {
  * the parent diff list. Parents talk to it through the imperative handle.
  */
 export const ToolbarHost = forwardRef<ToolbarHostHandle, ToolbarHostProps>(function ToolbarHost(
-  {
-    patch,
-    filePath,
-    isFocused,
-    onLineSelection,
-    onAddAnnotation,
-    onEditAnnotation,
-  },
+  { patch, filePath, isFocused, onLineSelection, onAddAnnotation, onEditAnnotation },
   ref,
 ) {
   const toolbar = useAnnotationToolbar({
@@ -68,17 +61,20 @@ export const ToolbarHost = forwardRef<ToolbarHostHandle, ToolbarHostProps>(funct
     onEditAnnotation,
   });
 
-  const conventionalCommentsEnabled = useConfigValue('conventionalComments');
-  const conventionalLabelsJson = useConfigValue('conventionalLabels');
-  const enabledLabels = useMemo(() => getEnabledLabels(conventionalLabelsJson), [conventionalLabelsJson]);
+  const conventionalCommentsEnabled = useConfigValue("conventionalComments");
+  const conventionalLabelsJson = useConfigValue("conventionalLabels");
+  const enabledLabels = useMemo(
+    () => getEnabledLabels(conventionalLabelsJson),
+    [conventionalLabelsJson],
+  );
 
   // Replaces the parent's `onMouseMove={toolbar.handleMouseMove}` on its scroll
   // container — the hook only stashes clientX/Y for toolbar placement, so a
   // window-level listener is functionally equivalent for that purpose.
   const handleMouseMove = toolbar.handleMouseMove;
   useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [handleMouseMove]);
 
   useImperativeHandle(
@@ -91,7 +87,10 @@ export const ToolbarHost = forwardRef<ToolbarHostHandle, ToolbarHostProps>(funct
     [toolbar.handleLineSelectionEnd, toolbar.handleTokenClick, toolbar.startEdit],
   );
 
-  const handleCloseCodeModal = useCallback(() => toolbar.setShowCodeModal(false), [toolbar.setShowCodeModal]);
+  const handleCloseCodeModal = useCallback(
+    () => toolbar.setShowCodeModal(false),
+    [toolbar.setShowCodeModal],
+  );
 
   return (
     <>

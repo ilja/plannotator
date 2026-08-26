@@ -12,17 +12,26 @@
  * Requires DOM_TESTS=1 (happy-dom preload). Run:
  *   DOM_TESTS=1 bun test annotationDraftPersistence
  */
-import { describe, test, expect, beforeAll, afterAll, afterEach } from 'bun:test';
-import React from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { useAnnotationDraft } from './hooks/useAnnotationDraft';
-import type { SourceBackedDocumentDraftData, SourceBackedSavedFileChangeDraftData } from '../shared/draft';
-import { AnnotationType, type Annotation } from './types';
-import { saveDraft, loadDraft, deleteDraft, contentHash, getDraftGeneration } from '../shared/draft';
+import { describe, test, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import React from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { useAnnotationDraft } from "./hooks/useAnnotationDraft";
+import type {
+  SourceBackedDocumentDraftData,
+  SourceBackedSavedFileChangeDraftData,
+} from "../shared/draft";
+import { AnnotationType, type Annotation } from "./types";
+import {
+  saveDraft,
+  loadDraft,
+  deleteDraft,
+  contentHash,
+  getDraftGeneration,
+} from "../shared/draft";
 
 const hasDom = globalThis.document !== undefined;
 
@@ -53,64 +62,64 @@ the second step
 const a = 2; // touched
 \`\`\`
 
-new paragraph with trailing space${' '}
+new paragraph with trailing space${" "}
 and "smart" quotes…
 `;
 
 const ANNOTATION: Annotation = {
-  id: 'ann-1',
-  blockId: 'block-2',
+  id: "ann-1",
+  blockId: "block-2",
   startOffset: 4,
   endOffset: 19,
   type: AnnotationType.COMMENT,
-  text: 'tighten this step',
-  originalText: 'the second step',
+  text: "tighten this step",
+  originalText: "the second step",
   createdA: 1718000000000,
-  author: 'tater',
+  author: "tater",
 };
 
 const CHOICE_ANNOTATION: Annotation = {
-  id: 'ann-choice-1718000000000-1',
-  blockId: 'block-0',
+  id: "ann-choice-1718000000000-1",
+  blockId: "block-0",
   startOffset: 0,
   endOffset: 4,
   type: AnnotationType.COMMENT,
-  text: '👍 Selected Option',
-  originalText: 'Beta',
+  text: "👍 Selected Option",
+  originalText: "Beta",
   isQuickLabel: true,
-  choiceOptionLabel: 'B',
+  choiceOptionLabel: "B",
   choiceValidationEvidence: {
-    question: 'Pick one',
+    question: "Pick one",
     options: [
-      { label: 'A', text: 'Alpha' },
-      { label: 'B', text: 'Beta' },
+      { label: "A", text: "Alpha" },
+      { label: "B", text: "Beta" },
     ],
   },
   createdA: 1718000000000,
-  author: 'tater',
+  author: "tater",
 };
 
 const SOURCE_SAVE = {
   enabled: true,
-  kind: 'local-text-file',
-  scope: 'folder-file',
-  path: '/repo/docs/a.md',
-  basename: 'a.md',
-  language: 'markdown',
-  hash: 'sha256:after',
+  kind: "local-text-file",
+  scope: "folder-file",
+  path: "/repo/docs/a.md",
+  basename: "a.md",
+  language: "markdown",
+  hash: "sha256:after",
   mtimeMs: 1718000001000,
   size: 6,
-  eol: 'lf',
+  eol: "lf",
 } as const;
 
 const SAVED_FILE_CHANGE: SourceBackedSavedFileChangeDraftData = {
-  key: 'file:/repo/docs/a.md',
-  path: '/repo/docs/a.md',
-  basename: 'a.md',
-  beforeText: 'before\n',
-  afterText: 'after\n',
-  beforeHash: 'sha256:before',
-  afterHash: 'sha256:after',
+  key: "file:/repo/docs/a.md",
+  path: "/repo/docs/a.md",
+  basename: "a.md",
+  beforeText: "before\n",
+  afterText: "after\n",
+  beforeHash: "sha256:before",
+  afterHash: "sha256:after",
   sourceSave: SOURCE_SAVE,
 };
 
@@ -124,48 +133,56 @@ const DEBOUNCE_WAIT_MS = 650; // hook debounce is 500ms
 // ---------------------------------------------------------------------------
 
 const realFetch = globalThis.fetch;
-let dataDir = '';
+let dataDir = "";
 let prevDataDirEnv: string | undefined;
 
 function installFetchShim() {
   // SAFETY: test shim implements fetch for draft API; mock returns compatible Response
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request || input instanceof URL ? input.toString() : String(input);
-    if (url.startsWith('/api/draft')) {
-      const parsedUrl = new URL(url, 'http://localhost');
-      const method = init?.method ?? 'GET';
-      if (method === 'GET') {
+    if (url.startsWith("/api/draft")) {
+      const parsedUrl = new URL(url, "http://localhost");
+      const method = init?.method ?? "GET";
+      if (method === "GET") {
         const data = loadDraft(DRAFT_KEY);
         return data
-          ? new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } })
+          ? new Response(JSON.stringify(data), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            })
           : new Response(
-              JSON.stringify((() => {
-                const body: any = { found: false };
-                const draftGeneration = getDraftGeneration(DRAFT_KEY);
-                if (draftGeneration !== null) body.draftGeneration = draftGeneration;
-                return body;
-              })()),
-              { status: 404, headers: { 'Content-Type': 'application/json' } },
+              JSON.stringify(
+                (() => {
+                  const body: any = { found: false };
+                  const draftGeneration = getDraftGeneration(DRAFT_KEY);
+                  if (draftGeneration !== null) body.draftGeneration = draftGeneration;
+                  return body;
+                })(),
+              ),
+              { status: 404, headers: { "Content-Type": "application/json" } },
             );
       }
-      if (method === 'POST') {
+      if (method === "POST") {
         saveDraft(DRAFT_KEY, JSON.parse(String(init?.body)));
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
-      if (method === 'DELETE') {
-        const rawGeneration = parsedUrl.searchParams.get('generation');
+      if (method === "DELETE") {
+        const rawGeneration = parsedUrl.searchParams.get("generation");
         const generation = rawGeneration === null ? undefined : Number(rawGeneration);
-        deleteDraft(DRAFT_KEY, Number.isFinite(generation) && generation >= 0 ? generation : undefined);
+        deleteDraft(
+          DRAFT_KEY,
+          Number.isFinite(generation) && generation >= 0 ? generation : undefined,
+        );
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
     }
-    return new Response('Not found', { status: 404 });
+    return new Response("Not found", { status: 404 });
   }) as typeof fetch;
 }
 
 beforeAll(() => {
   if (!hasDom) return;
-  dataDir = mkdtempSync(join(tmpdir(), 'plannotator-draft-test-'));
+  dataDir = mkdtempSync(join(tmpdir(), "plannotator-draft-test-"));
   prevDataDirEnv = process.env.PLANNOTATOR_DATA_DIR;
   process.env.PLANNOTATOR_DATA_DIR = dataDir;
   installFetchShim();
@@ -227,7 +244,7 @@ const tick = (ms: number) => act(async () => new Promise((r) => setTimeout(r, ms
 
 /** Mounts a fresh hook instance and flushes the on-mount draft GET. */
 async function mountSession(opts: HookOptions): Promise<Session> {
-  const host = document.createElement('div');
+  const host = document.createElement("div");
   document.body.appendChild(host);
   const resultRef: ResultRef = { current: null };
   let root: Root;
@@ -256,44 +273,49 @@ async function mountSession(opts: HookOptions): Promise<Session> {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('direct-edit draft persistence', () => {
-  test.skipIf(!hasDom)('full lifecycle: edits + annotation persist to disk and survive a reload', async () => {
-    // Session 1: an annotation exists and the user has direct edits.
-    const s1 = await mountSession(options({
-      annotations: [ANNOTATION],
-      getEditedMarkdown: () => EDITED,
-    }));
-    act(() => s1.result.current!.scheduleDraftSave());
-    await tick(DEBOUNCE_WAIT_MS);
-    await s1.unmount();
+describe("direct-edit draft persistence", () => {
+  test.skipIf(!hasDom)(
+    "full lifecycle: edits + annotation persist to disk and survive a reload",
+    async () => {
+      // Session 1: an annotation exists and the user has direct edits.
+      const s1 = await mountSession(
+        options({
+          annotations: [ANNOTATION],
+          getEditedMarkdown: () => EDITED,
+        }),
+      );
+      act(() => s1.result.current!.scheduleDraftSave());
+      await tick(DEBOUNCE_WAIT_MS);
+      await s1.unmount();
 
-    // The bytes on disk are the contract between sessions.
-    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
-    const onDisk: any = loadDraft(DRAFT_KEY);
-    expect(onDisk).not.toBeNull();
-    expect(onDisk!.annotations).toEqual([ANNOTATION]);
-    expect(onDisk!.editedMarkdown).toBe(EDITED);
-    expect(onDisk!.ts).toBeTypeOf('number');
+      // The bytes on disk are the contract between sessions.
+      // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+      const onDisk: any = loadDraft(DRAFT_KEY);
+      expect(onDisk).not.toBeNull();
+      expect(onDisk!.annotations).toEqual([ANNOTATION]);
+      expect(onDisk!.editedMarkdown).toBe(EDITED);
+      expect(onDisk!.ts).toBeTypeOf("number");
 
-    // Session 2: fresh page — no in-memory state, only the draft on disk.
-    const s2 = await mountSession(options());
-    expect(s2.result.current!.draftBanner).toEqual({
-      count: 1,
-      timeAgo: 'just now',
-      hasEdits: true,
-    });
+      // Session 2: fresh page — no in-memory state, only the draft on disk.
+      const s2 = await mountSession(options());
+      expect(s2.result.current!.draftBanner).toEqual({
+        count: 1,
+        timeAgo: "just now",
+        hasEdits: true,
+      });
 
-    let restored: ReturnType<HookResult['restoreDraft']>;
-    act(() => {
-      restored = s2.result.current!.restoreDraft();
-    });
-    expect(restored!.annotations).toEqual([ANNOTATION]);
-    expect(restored!.editedMarkdown).toBe(EDITED); // byte-identical
-    expect(s2.result.current!.draftBanner).toBeNull();
-    await s2.unmount();
-  });
+      let restored: ReturnType<HookResult["restoreDraft"]>;
+      act(() => {
+        restored = s2.result.current!.restoreDraft();
+      });
+      expect(restored!.annotations).toEqual([ANNOTATION]);
+      expect(restored!.editedMarkdown).toBe(EDITED); // byte-identical
+      expect(s2.result.current!.draftBanner).toBeNull();
+      await s2.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('choice annotation metadata survives draft save and restore', async () => {
+  test.skipIf(!hasDom)("choice annotation metadata survives draft save and restore", async () => {
     const s1 = await mountSession(options({ annotations: [CHOICE_ANNOTATION] }));
     act(() => s1.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
@@ -305,57 +327,64 @@ describe('direct-edit draft persistence', () => {
     expect(onDisk!.annotations).toEqual([CHOICE_ANNOTATION]);
 
     const s2 = await mountSession(options());
-    let restored: ReturnType<HookResult['restoreDraft']>;
+    let restored: ReturnType<HookResult["restoreDraft"]>;
     act(() => {
       restored = s2.result.current!.restoreDraft();
     });
-    expect(restored!.annotations).toContainEqual(expect.objectContaining({
-      id: CHOICE_ANNOTATION.id,
-      isQuickLabel: true,
-      choiceOptionLabel: 'B',
-      choiceValidationEvidence: {
-        question: 'Pick one',
-        options: [
-          { label: 'A', text: 'Alpha' },
-          { label: 'B', text: 'Beta' },
-        ],
-      },
-    }));
+    expect(restored!.annotations).toContainEqual(
+      expect.objectContaining({
+        id: CHOICE_ANNOTATION.id,
+        isQuickLabel: true,
+        choiceOptionLabel: "B",
+        choiceValidationEvidence: {
+          question: "Pick one",
+          options: [
+            { label: "A", text: "Alpha" },
+            { label: "B", text: "Beta" },
+          ],
+        },
+      }),
+    );
     await s2.unmount();
   });
 
-  test.skipIf(!hasDom)('edits-only draft saves despite zero annotations and banners as edits', async () => {
-    // Regression trap: the old all-empty skip guard would have dropped this.
-    const s1 = await mountSession(options({ getEditedMarkdown: () => EDITED }));
-    act(() => s1.result.current!.scheduleDraftSave());
-    await tick(DEBOUNCE_WAIT_MS);
-    await s1.unmount();
+  test.skipIf(!hasDom)(
+    "edits-only draft saves despite zero annotations and banners as edits",
+    async () => {
+      // Regression trap: the old all-empty skip guard would have dropped this.
+      const s1 = await mountSession(options({ getEditedMarkdown: () => EDITED }));
+      act(() => s1.result.current!.scheduleDraftSave());
+      await tick(DEBOUNCE_WAIT_MS);
+      await s1.unmount();
 
-    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
-    const onDisk: any = loadDraft(DRAFT_KEY);
-    expect(onDisk).not.toBeNull();
-    expect(onDisk!.annotations).toEqual([]);
-    expect(onDisk!.editedMarkdown).toBe(EDITED);
+      // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+      const onDisk: any = loadDraft(DRAFT_KEY);
+      expect(onDisk).not.toBeNull();
+      expect(onDisk!.annotations).toEqual([]);
+      expect(onDisk!.editedMarkdown).toBe(EDITED);
 
-    const s2 = await mountSession(options());
-    expect(s2.result.current!.draftBanner).toEqual({
-      count: 0,
-      timeAgo: 'just now',
-      hasEdits: true,
-    });
-    let restored: ReturnType<HookResult['restoreDraft']>;
-    act(() => {
-      restored = s2.result.current!.restoreDraft();
-    });
-    expect(restored!.editedMarkdown).toBe(EDITED);
-    expect(restored!.annotations).toEqual([]);
-    await s2.unmount();
-  });
+      const s2 = await mountSession(options());
+      expect(s2.result.current!.draftBanner).toEqual({
+        count: 0,
+        timeAgo: "just now",
+        hasEdits: true,
+      });
+      let restored: ReturnType<HookResult["restoreDraft"]>;
+      act(() => {
+        restored = s2.result.current!.restoreDraft();
+      });
+      expect(restored!.editedMarkdown).toBe(EDITED);
+      expect(restored!.annotations).toEqual([]);
+      await s2.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('saved file changes persist and restore after a reload', async () => {
-    const s1 = await mountSession(options({
-      getSavedFileChanges: () => [SAVED_FILE_CHANGE],
-    }));
+  test.skipIf(!hasDom)("saved file changes persist and restore after a reload", async () => {
+    const s1 = await mountSession(
+      options({
+        getSavedFileChanges: () => [SAVED_FILE_CHANGE],
+      }),
+    );
     act(() => s1.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
@@ -369,11 +398,11 @@ describe('direct-edit draft persistence', () => {
     const s2 = await mountSession(options());
     expect(s2.result.current!.draftBanner).toEqual({
       count: 0,
-      timeAgo: 'just now',
+      timeAgo: "just now",
       hasEdits: true,
     });
 
-    let restored: ReturnType<HookResult['restoreDraft']>;
+    let restored: ReturnType<HookResult["restoreDraft"]>;
     act(() => {
       restored = s2.result.current!.restoreDraft();
     });
@@ -383,26 +412,28 @@ describe('direct-edit draft persistence', () => {
     await s2.unmount();
   });
 
-  test.skipIf(!hasDom)('dirty source drafts carry their already-saved edit context', async () => {
+  test.skipIf(!hasDom)("dirty source drafts carry their already-saved edit context", async () => {
     const dirtyWithSavedChange: SourceBackedDocumentDraftData = {
       key: SAVED_FILE_CHANGE.key,
       sourceSave: SOURCE_SAVE,
       sessionOpenText: SAVED_FILE_CHANGE.beforeText,
       diskBaseline: SAVED_FILE_CHANGE.afterText,
-      currentText: 'after\nmore unsaved work\n',
+      currentText: "after\nmore unsaved work\n",
       savedChange: SAVED_FILE_CHANGE,
     };
 
-    const s1 = await mountSession(options({
-      getEditedDocuments: () => [dirtyWithSavedChange],
-      getSavedFileChanges: () => [SAVED_FILE_CHANGE],
-    }));
+    const s1 = await mountSession(
+      options({
+        getEditedDocuments: () => [dirtyWithSavedChange],
+        getSavedFileChanges: () => [SAVED_FILE_CHANGE],
+      }),
+    );
     act(() => s1.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
 
     const s2 = await mountSession(options());
-    let restored: ReturnType<HookResult['restoreDraft']>;
+    let restored: ReturnType<HookResult["restoreDraft"]>;
     act(() => {
       restored = s2.result.current!.restoreDraft();
     });
@@ -412,102 +443,115 @@ describe('direct-edit draft persistence', () => {
     await s2.unmount();
   });
 
-  test.skipIf(!hasDom)('missing source state survives draft serialization and restoration', async () => {
-    const missingDraft: SourceBackedDocumentDraftData = {
-      key: SAVED_FILE_CHANGE.key,
-      sourceSave: SOURCE_SAVE,
-      sessionOpenText: SAVED_FILE_CHANGE.beforeText,
-      diskBaseline: SAVED_FILE_CHANGE.afterText,
-      currentText: 'after\nlocal work\n',
-      missingOnDisk: true,
-    };
-    const s1 = await mountSession(options({ getEditedDocuments: () => [missingDraft] }));
-    act(() => s1.result.current!.scheduleDraftSave());
-    await tick(DEBOUNCE_WAIT_MS);
-    await s1.unmount();
+  test.skipIf(!hasDom)(
+    "missing source state survives draft serialization and restoration",
+    async () => {
+      const missingDraft: SourceBackedDocumentDraftData = {
+        key: SAVED_FILE_CHANGE.key,
+        sourceSave: SOURCE_SAVE,
+        sessionOpenText: SAVED_FILE_CHANGE.beforeText,
+        diskBaseline: SAVED_FILE_CHANGE.afterText,
+        currentText: "after\nlocal work\n",
+        missingOnDisk: true,
+      };
+      const s1 = await mountSession(options({ getEditedDocuments: () => [missingDraft] }));
+      act(() => s1.result.current!.scheduleDraftSave());
+      await tick(DEBOUNCE_WAIT_MS);
+      await s1.unmount();
 
-    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
-    const onDisk: any = loadDraft(DRAFT_KEY);
-    expect(onDisk?.editedDocuments).toEqual([missingDraft]);
+      // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+      const onDisk: any = loadDraft(DRAFT_KEY);
+      expect(onDisk?.editedDocuments).toEqual([missingDraft]);
 
-    const s2 = await mountSession(options());
-    let restored: ReturnType<HookResult['restoreDraft']>;
-    act(() => {
-      restored = s2.result.current!.restoreDraft();
-    });
-    expect(restored!.editedDocuments).toEqual([missingDraft]);
-    await s2.unmount();
-  });
+      const s2 = await mountSession(options());
+      let restored: ReturnType<HookResult["restoreDraft"]>;
+      act(() => {
+        restored = s2.result.current!.restoreDraft();
+      });
+      expect(restored!.editedDocuments).toEqual([missingDraft]);
+      await s2.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('bad saved-change metadata does not drop the dirty source draft', async () => {
-    const dirtyDraft = {
-      key: SAVED_FILE_CHANGE.key,
-      sourceSave: SOURCE_SAVE,
-      sessionOpenText: SAVED_FILE_CHANGE.beforeText,
-      diskBaseline: SAVED_FILE_CHANGE.afterText,
-      currentText: 'after\nmore unsaved work\n',
-      savedChange: { key: SAVED_FILE_CHANGE.key },
-    };
-    saveDraft(DRAFT_KEY, {
-      annotations: [],
-      globalAttachments: [],
-      editedDocuments: [dirtyDraft],
-      ts: Date.now(),
-    });
+  test.skipIf(!hasDom)(
+    "bad saved-change metadata does not drop the dirty source draft",
+    async () => {
+      const dirtyDraft = {
+        key: SAVED_FILE_CHANGE.key,
+        sourceSave: SOURCE_SAVE,
+        sessionOpenText: SAVED_FILE_CHANGE.beforeText,
+        diskBaseline: SAVED_FILE_CHANGE.afterText,
+        currentText: "after\nmore unsaved work\n",
+        savedChange: { key: SAVED_FILE_CHANGE.key },
+      };
+      saveDraft(DRAFT_KEY, {
+        annotations: [],
+        globalAttachments: [],
+        editedDocuments: [dirtyDraft],
+        ts: Date.now(),
+      });
 
-    const session = await mountSession(options());
-    let restored: ReturnType<HookResult['restoreDraft']>;
-    act(() => {
-      restored = session.result.current!.restoreDraft();
-    });
+      const session = await mountSession(options());
+      let restored: ReturnType<HookResult["restoreDraft"]>;
+      act(() => {
+        restored = session.result.current!.restoreDraft();
+      });
 
-    expect(restored!.editedDocuments).toEqual([{
-      key: dirtyDraft.key,
-      sourceSave: SOURCE_SAVE,
-      sessionOpenText: dirtyDraft.sessionOpenText,
-      diskBaseline: dirtyDraft.diskBaseline,
-      currentText: dirtyDraft.currentText,
-    }]);
-    expect(restored!.savedFileChanges).toEqual([]);
-    await session.unmount();
-  });
+      expect(restored!.editedDocuments).toEqual([
+        {
+          key: dirtyDraft.key,
+          sourceSave: SOURCE_SAVE,
+          sessionOpenText: dirtyDraft.sessionOpenText,
+          diskBaseline: dirtyDraft.diskBaseline,
+          currentText: dirtyDraft.currentText,
+        },
+      ]);
+      expect(restored!.savedFileChanges).toEqual([]);
+      await session.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('dirty source drafts restore older nested saved-change records from the document source', async () => {
-    const { sourceSave: _sourceSave, ...olderSavedChange } = SAVED_FILE_CHANGE;
-    const dirtyDraft = {
-      key: SAVED_FILE_CHANGE.key,
-      sourceSave: SOURCE_SAVE,
-      sessionOpenText: SAVED_FILE_CHANGE.beforeText,
-      diskBaseline: SAVED_FILE_CHANGE.afterText,
-      currentText: 'after\nmore unsaved work\n',
-      savedChange: olderSavedChange,
-    };
-    saveDraft(DRAFT_KEY, {
-      annotations: [],
-      globalAttachments: [],
-      editedDocuments: [dirtyDraft],
-      ts: Date.now(),
-    });
+  test.skipIf(!hasDom)(
+    "dirty source drafts restore older nested saved-change records from the document source",
+    async () => {
+      const { sourceSave: _sourceSave, ...olderSavedChange } = SAVED_FILE_CHANGE;
+      const dirtyDraft = {
+        key: SAVED_FILE_CHANGE.key,
+        sourceSave: SOURCE_SAVE,
+        sessionOpenText: SAVED_FILE_CHANGE.beforeText,
+        diskBaseline: SAVED_FILE_CHANGE.afterText,
+        currentText: "after\nmore unsaved work\n",
+        savedChange: olderSavedChange,
+      };
+      saveDraft(DRAFT_KEY, {
+        annotations: [],
+        globalAttachments: [],
+        editedDocuments: [dirtyDraft],
+        ts: Date.now(),
+      });
 
-    const session = await mountSession(options());
-    let restored: ReturnType<HookResult['restoreDraft']>;
-    act(() => {
-      restored = session.result.current!.restoreDraft();
-    });
+      const session = await mountSession(options());
+      let restored: ReturnType<HookResult["restoreDraft"]>;
+      act(() => {
+        restored = session.result.current!.restoreDraft();
+      });
 
-    expect(restored!.editedDocuments).toEqual([{
-      key: dirtyDraft.key,
-      sourceSave: SOURCE_SAVE,
-      sessionOpenText: dirtyDraft.sessionOpenText,
-      diskBaseline: dirtyDraft.diskBaseline,
-      currentText: dirtyDraft.currentText,
-      savedChange: SAVED_FILE_CHANGE,
-    }]);
-    expect(restored!.savedFileChanges).toEqual([]);
-    await session.unmount();
-  });
+      expect(restored!.editedDocuments).toEqual([
+        {
+          key: dirtyDraft.key,
+          sourceSave: SOURCE_SAVE,
+          sessionOpenText: dirtyDraft.sessionOpenText,
+          diskBaseline: dirtyDraft.diskBaseline,
+          currentText: dirtyDraft.currentText,
+          savedChange: SAVED_FILE_CHANGE,
+        },
+      ]);
+      expect(restored!.savedFileChanges).toEqual([]);
+      await session.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('discarding everything deletes the draft from disk', async () => {
+  test.skipIf(!hasDom)("discarding everything deletes the draft from disk", async () => {
     // The user committed edits, then discarded them (no annotations either).
     // A stale draft must not resurrect the discarded content on refresh.
     const edits: EditsBox = { value: EDITED };
@@ -527,7 +571,7 @@ describe('direct-edit draft persistence', () => {
     await s2.unmount();
   });
 
-  test.skipIf(!hasDom)('clearing saved file changes deletes an edits-only draft', async () => {
+  test.skipIf(!hasDom)("clearing saved file changes deletes an edits-only draft", async () => {
     const saved: SavedBox = { value: [SAVED_FILE_CHANGE] };
     const session = await mountSession(options({ getSavedFileChanges: () => saved.value }));
     act(() => session.result.current!.scheduleDraftSave());
@@ -541,115 +585,135 @@ describe('direct-edit draft persistence', () => {
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('legacy tuple drafts still load, with no edits', async () => {
-    saveDraft(DRAFT_KEY, { a: [['C', 'orig text', 'a comment', null]], ts: Date.now() });
+  test.skipIf(!hasDom)("legacy tuple drafts still load, with no edits", async () => {
+    saveDraft(DRAFT_KEY, { a: [["C", "orig text", "a comment", null]], ts: Date.now() });
 
     const session = await mountSession(options());
     expect(session.result.current!.draftBanner).toEqual({
       count: 1,
-      timeAgo: 'just now',
+      timeAgo: "just now",
       hasEdits: false,
     });
-    let restored: ReturnType<HookResult['restoreDraft']>;
+    let restored: ReturnType<HookResult["restoreDraft"]>;
     act(() => {
       restored = session.result.current!.restoreDraft();
     });
     expect(restored!.editedMarkdown).toBeNull();
     expect(restored!.annotations).toHaveLength(1);
-    expect(restored!.annotations[0].originalText).toBe('orig text');
-    expect(restored!.annotations[0].text).toBe('a comment');
+    expect(restored!.annotations[0].originalText).toBe("orig text");
+    expect(restored!.annotations[0].text).toBe("a comment");
     expect(restored!.annotations[0].type).toBe(AnnotationType.COMMENT);
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('closing the page flushes a pending save — no lost debounce window', async () => {
-    // Tab close inside the 500ms debounce would silently drop the last
-    // keystrokes; pagehide/visibilitychange must flush the pending save.
-    const session = await mountSession(options({
-      annotations: [ANNOTATION],
-      getEditedMarkdown: () => EDITED,
-    }));
-    act(() => session.result.current!.scheduleDraftSave());
-    expect(loadDraft(DRAFT_KEY)).toBeNull(); // debounce hasn't elapsed
-    await act(async () => {
-      window.dispatchEvent(new Event('pagehide'));
-    });
-    await tick(0); // immediate — far inside the 500ms window
-    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
-    const onDisk: any = loadDraft(DRAFT_KEY);
-    expect(onDisk).not.toBeNull();
-    expect(onDisk!.editedMarkdown).toBe(EDITED);
-    await session.unmount();
-  });
+  test.skipIf(!hasDom)(
+    "closing the page flushes a pending save — no lost debounce window",
+    async () => {
+      // Tab close inside the 500ms debounce would silently drop the last
+      // keystrokes; pagehide/visibilitychange must flush the pending save.
+      const session = await mountSession(
+        options({
+          annotations: [ANNOTATION],
+          getEditedMarkdown: () => EDITED,
+        }),
+      );
+      act(() => session.result.current!.scheduleDraftSave());
+      expect(loadDraft(DRAFT_KEY)).toBeNull(); // debounce hasn't elapsed
+      await act(async () => {
+        window.dispatchEvent(new Event("pagehide"));
+      });
+      await tick(0); // immediate — far inside the 500ms window
+      // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection
+      const onDisk: any = loadDraft(DRAFT_KEY);
+      expect(onDisk).not.toBeNull();
+      expect(onDisk!.editedMarkdown).toBe(EDITED);
+      await session.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('submitting cancels a pending save — no ghost draft after approve', async () => {
-    // The server deletes the draft when handling approve/deny. A debounced
-    // save landing after that would re-create it and ghost a "Draft
-    // Recovered" banner into the NEXT session for this same plan.
-    const session = await mountSession(options({
-      annotations: [ANNOTATION],
-      getEditedMarkdown: () => EDITED,
-    }));
-    act(() => session.result.current!.scheduleDraftSave());
-    // Submit lands inside the debounce window.
-    await session.rerender(options({
-      annotations: [ANNOTATION],
-      getEditedMarkdown: () => EDITED,
-      submitted: true,
-    }));
-    await tick(DEBOUNCE_WAIT_MS);
-    expect(loadDraft(DRAFT_KEY)).toBeNull();
-    await session.unmount();
-  });
+  test.skipIf(!hasDom)(
+    "submitting cancels a pending save — no ghost draft after approve",
+    async () => {
+      // The server deletes the draft when handling approve/deny. A debounced
+      // save landing after that would re-create it and ghost a "Draft
+      // Recovered" banner into the NEXT session for this same plan.
+      const session = await mountSession(
+        options({
+          annotations: [ANNOTATION],
+          getEditedMarkdown: () => EDITED,
+        }),
+      );
+      act(() => session.result.current!.scheduleDraftSave());
+      // Submit lands inside the debounce window.
+      await session.rerender(
+        options({
+          annotations: [ANNOTATION],
+          getEditedMarkdown: () => EDITED,
+          submitted: true,
+        }),
+      );
+      await tick(DEBOUNCE_WAIT_MS);
+      expect(loadDraft(DRAFT_KEY)).toBeNull();
+      await session.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('fresh session after a tombstone saves with a newer draft generation', async () => {
-    deleteDraft(DRAFT_KEY, 2);
+  test.skipIf(!hasDom)(
+    "fresh session after a tombstone saves with a newer draft generation",
+    async () => {
+      deleteDraft(DRAFT_KEY, 2);
 
-    const session = await mountSession(options({
-      annotations: [ANNOTATION],
-      getEditedMarkdown: () => EDITED,
-    }));
-    expect(session.result.current!.getDraftGeneration()).toBeGreaterThan(2);
-    act(() => session.result.current!.scheduleDraftSave());
-    await tick(DEBOUNCE_WAIT_MS);
+      const session = await mountSession(
+        options({
+          annotations: [ANNOTATION],
+          getEditedMarkdown: () => EDITED,
+        }),
+      );
+      expect(session.result.current!.getDraftGeneration()).toBeGreaterThan(2);
+      act(() => session.result.current!.scheduleDraftSave());
+      await tick(DEBOUNCE_WAIT_MS);
 
-    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
-    const onDisk: any = loadDraft(DRAFT_KEY);
-    expect(onDisk).not.toBeNull();
-    expect(onDisk!.draftGeneration).toBeGreaterThan(2);
-    expect(onDisk!.annotations).toEqual([ANNOTATION]);
-    await session.unmount();
-  });
+      // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
+      const onDisk: any = loadDraft(DRAFT_KEY);
+      expect(onDisk).not.toBeNull();
+      expect(onDisk!.draftGeneration).toBeGreaterThan(2);
+      expect(onDisk!.annotations).toEqual([ANNOTATION]);
+      await session.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)('restored generated drafts continue saving with newer generations', async () => {
-    const original = { ...ANNOTATION, text: 'old note' };
-    const updated = { ...ANNOTATION, text: 'updated note' };
-    deleteDraft(DRAFT_KEY, 2);
-    saveDraft(DRAFT_KEY, {
-      annotations: [original],
-      globalAttachments: [],
-      draftGeneration: 3,
-      ts: Date.now(),
-    });
+  test.skipIf(!hasDom)(
+    "restored generated drafts continue saving with newer generations",
+    async () => {
+      const original = { ...ANNOTATION, text: "old note" };
+      const updated = { ...ANNOTATION, text: "updated note" };
+      deleteDraft(DRAFT_KEY, 2);
+      saveDraft(DRAFT_KEY, {
+        annotations: [original],
+        globalAttachments: [],
+        draftGeneration: 3,
+        ts: Date.now(),
+      });
 
-    const session = await mountSession(options());
-    expect(session.result.current!.draftBanner).toEqual({
-      count: 1,
-      timeAgo: 'just now',
-      hasEdits: false,
-    });
-    act(() => {
-      session.result.current!.restoreDraft();
-    });
-    await session.rerender(options({ annotations: [updated] }));
-    act(() => session.result.current!.scheduleDraftSave());
-    await tick(DEBOUNCE_WAIT_MS);
+      const session = await mountSession(options());
+      expect(session.result.current!.draftBanner).toEqual({
+        count: 1,
+        timeAgo: "just now",
+        hasEdits: false,
+      });
+      act(() => {
+        session.result.current!.restoreDraft();
+      });
+      await session.rerender(options({ annotations: [updated] }));
+      act(() => session.result.current!.scheduleDraftSave());
+      await tick(DEBOUNCE_WAIT_MS);
 
-    // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
-    const onDisk: any = loadDraft(DRAFT_KEY);
-    expect(onDisk).not.toBeNull();
-    expect(onDisk!.draftGeneration).toBeGreaterThan(3);
-    expect(onDisk!.annotations).toEqual([updated]);
-    await session.unmount();
-  });
+      // SAFETY: loadDraft returns JSON-parsed draft record; shape asserted for test inspection.
+      const onDisk: any = loadDraft(DRAFT_KEY);
+      expect(onDisk).not.toBeNull();
+      expect(onDisk!.draftGeneration).toBeGreaterThan(3);
+      expect(onDisk!.annotations).toEqual([updated]);
+      await session.unmount();
+    },
+  );
 });

@@ -1,10 +1,10 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from '@plannotator/review-editor';
-import { ReviewWorkerPoolProvider } from '@plannotator/review-editor/worker-pool';
-import '@plannotator/review-editor/styles';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "@plannotator/review-editor";
+import { ReviewWorkerPoolProvider } from "@plannotator/review-editor/worker-pool";
+import "@plannotator/review-editor/styles";
 
-const rootElement = document.getElementById('root');
+const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
@@ -18,5 +18,5 @@ root.render(
     <ReviewWorkerPoolProvider>
       <App />
     </ReviewWorkerPoolProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

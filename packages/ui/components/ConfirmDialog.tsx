@@ -2,7 +2,7 @@
  * Reusable confirmation dialog component
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect } from "react";
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ export interface ConfirmDialogProps {
   subMessage?: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
-  variant?: 'info' | 'warning';
+  variant?: "info" | "warning";
   showCancel?: boolean;
   wide?: boolean;
 }
@@ -25,52 +25,72 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   title,
   message,
   subMessage,
-  confirmText = 'Got it',
-  cancelText = 'Cancel',
-  variant = 'info',
+  confirmText = "Got it",
+  cancelText = "Cancel",
+  variant = "info",
   showCancel = false,
   wide = false,
 }) => {
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         event.stopPropagation();
         if (onConfirm) onConfirm();
         else onClose();
       }
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [isOpen, onConfirm, onClose]);
 
   if (!isOpen) return null;
 
   const iconColors = {
-    info: 'bg-accent/20 text-accent',
-    warning: 'bg-warning/20 text-warning',
+    info: "bg-accent/20 text-accent",
+    warning: "bg-warning/20 text-warning",
   };
 
   const buttonColors = {
-    info: 'bg-primary text-primary-foreground hover:opacity-90',
-    warning: 'bg-warning text-warning-foreground hover:opacity-90',
+    info: "bg-primary text-primary-foreground hover:opacity-90",
+    warning: "bg-warning text-warning-foreground hover:opacity-90",
   };
 
   const icons = {
     info: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+      <svg
+        className="w-5 h-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+        />
       </svg>
     ),
     warning: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      <svg
+        className="w-5 h-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+        />
       </svg>
     ),
   };
@@ -83,22 +103,18 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <div
         role="dialog"
         aria-modal="true"
-        className={`bg-card border border-border rounded-xl w-full shadow-2xl p-6 ${wide ? 'max-w-md' : 'max-w-sm'}`}
+        className={`bg-card border border-border rounded-xl w-full shadow-2xl p-6 ${wide ? "max-w-md" : "max-w-sm"}`}
       >
         <div className="flex items-center gap-3 mb-4">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${iconColors[variant]}`}>
+          <div
+            className={`w-10 h-10 rounded-full flex items-center justify-center ${iconColors[variant]}`}
+          >
             {icons[variant]}
           </div>
           <h3 className="font-semibold">{title}</h3>
         </div>
-        <div className="text-sm text-muted-foreground mb-2">
-          {message}
-        </div>
-        {subMessage && (
-          <div className="text-xs text-muted-foreground mb-6">
-            {subMessage}
-          </div>
-        )}
+        <div className="text-sm text-muted-foreground mb-2">{message}</div>
+        {subMessage && <div className="text-xs text-muted-foreground mb-6">{subMessage}</div>}
         {!subMessage && <div className="mb-4" />}
         <div className="flex justify-end gap-2">
           {showCancel && (

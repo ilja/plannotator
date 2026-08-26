@@ -1,8 +1,8 @@
-import React from 'react';
-import type { ConventionalLabel, ConventionalDecoration } from '@plannotator/ui/types';
-import { isCurrentUser } from '@plannotator/ui/utils/identity';
-import { ConventionalLabelBadge } from './ConventionalLabelPicker';
-import { formatRelativeTime } from '../utils/formatRelativeTime';
+import React from "react";
+import type { ConventionalLabel, ConventionalDecoration } from "@plannotator/ui/types";
+import { isCurrentUser } from "@plannotator/ui/utils/identity";
+import { ConventionalLabelBadge } from "./ConventionalLabelPicker";
+import { formatRelativeTime } from "../utils/formatRelativeTime";
 
 interface CommentMetaProps {
   /** Surface-specific leading element(s): severity dot, scope/file/line badge,
@@ -51,11 +51,11 @@ export const CommentMeta: React.FC<CommentMetaProps> = ({
       {author && (
         <span
           className={`text-[10px] truncate max-w-[120px] ${
-            isCurrentUser(author) ? 'text-muted-foreground/50' : 'text-muted-foreground/70'
+            isCurrentUser(author) ? "text-muted-foreground/50" : "text-muted-foreground/70"
           }`}
         >
           {author}
-          {isCurrentUser(author) && ' (me)'}
+          {isCurrentUser(author) && " (me)"}
         </span>
       )}
     </div>

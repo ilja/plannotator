@@ -14,26 +14,46 @@ describe("agent terminal integration helpers", () => {
       targetPath: "/repo/a.md",
     });
 
-    expect(isMatchingAgentTerminalDelivery(delivered, buildAgentTerminalDeliveryRecord({
-      terminalSessionId: 1,
-      feedback: "Fix this section",
-      targetPath: "/repo/a.md",
-    }))).toBe(true);
-    expect(isMatchingAgentTerminalDelivery(delivered, buildAgentTerminalDeliveryRecord({
-      terminalSessionId: 2,
-      feedback: "Fix this section",
-      targetPath: "/repo/a.md",
-    }))).toBe(false);
-    expect(isMatchingAgentTerminalDelivery(delivered, buildAgentTerminalDeliveryRecord({
-      terminalSessionId: 1,
-      feedback: "Fix this other section",
-      targetPath: "/repo/a.md",
-    }))).toBe(false);
-    expect(isMatchingAgentTerminalDelivery(delivered, buildAgentTerminalDeliveryRecord({
-      terminalSessionId: 1,
-      feedback: "Fix this section",
-      targetPath: "/repo/b.md",
-    }))).toBe(false);
+    expect(
+      isMatchingAgentTerminalDelivery(
+        delivered,
+        buildAgentTerminalDeliveryRecord({
+          terminalSessionId: 1,
+          feedback: "Fix this section",
+          targetPath: "/repo/a.md",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isMatchingAgentTerminalDelivery(
+        delivered,
+        buildAgentTerminalDeliveryRecord({
+          terminalSessionId: 2,
+          feedback: "Fix this section",
+          targetPath: "/repo/a.md",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isMatchingAgentTerminalDelivery(
+        delivered,
+        buildAgentTerminalDeliveryRecord({
+          terminalSessionId: 1,
+          feedback: "Fix this other section",
+          targetPath: "/repo/a.md",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isMatchingAgentTerminalDelivery(
+        delivered,
+        buildAgentTerminalDeliveryRecord({
+          terminalSessionId: 1,
+          feedback: "Fix this section",
+          targetPath: "/repo/b.md",
+        }),
+      ),
+    ).toBe(false);
   });
 
   test("duplicate terminal feedback sends are blocked for an already delivered record", () => {
@@ -43,16 +63,26 @@ describe("agent terminal integration helpers", () => {
       targetPath: "/repo/a.md",
     });
 
-    expect(shouldSendAgentTerminalFeedback(delivered, buildAgentTerminalDeliveryRecord({
-      terminalSessionId: 1,
-      feedback: "Fix this section",
-      targetPath: "/repo/a.md",
-    }))).toBe(false);
-    expect(shouldSendAgentTerminalFeedback(delivered, buildAgentTerminalDeliveryRecord({
-      terminalSessionId: 1,
-      feedback: "Fix this section",
-      targetPath: "/repo/b.md",
-    }))).toBe(true);
+    expect(
+      shouldSendAgentTerminalFeedback(
+        delivered,
+        buildAgentTerminalDeliveryRecord({
+          terminalSessionId: 1,
+          feedback: "Fix this section",
+          targetPath: "/repo/a.md",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      shouldSendAgentTerminalFeedback(
+        delivered,
+        buildAgentTerminalDeliveryRecord({
+          terminalSessionId: 1,
+          feedback: "Fix this section",
+          targetPath: "/repo/b.md",
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("file-backed Ask AI prompts force the terminal agent to read the file and keep selected context", () => {
@@ -61,7 +91,8 @@ describe("agent terminal integration helpers", () => {
       readableFilePath: "/repo/README.md",
       annotationsContext: "Comment on intro",
       inlineDocument: { label: "Current document text", content: "# Should not be inlined" },
-      scopedQuestion: "Re: Intro\nSource: /repo/README.md\n\nSelected text:\n```\nold intro\n```\n\nWhat should change?",
+      scopedQuestion:
+        "Re: Intro\nSource: /repo/README.md\n\nSelected text:\n```\nold intro\n```\n\nWhat should change?",
     });
 
     expect(prompt).toContain("read this file from the current workspace: /repo/README.md");

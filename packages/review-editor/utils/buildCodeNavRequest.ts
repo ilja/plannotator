@@ -1,6 +1,6 @@
-import type { CodeNavRequest } from '@plannotator/shared/code-nav';
-import type { DiffTokenEventBaseProps } from '@pierre/diffs';
-import { detectLanguage } from './detectLanguage';
+import type { CodeNavRequest } from "@plannotator/shared/code-nav";
+import type { DiffTokenEventBaseProps } from "@pierre/diffs";
+import { detectLanguage } from "./detectLanguage";
 
 export function buildCodeNavRequest(
   props: DiffTokenEventBaseProps,
@@ -11,7 +11,7 @@ export function buildCodeNavRequest(
     filePath,
     line: props.lineNumber,
     charStart: props.lineCharStart,
-    side: props.side === 'additions' ? 'new' : 'old',
+    side: props.side === "additions" ? "new" : "old",
     language: detectLanguage(filePath),
   };
 }

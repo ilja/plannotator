@@ -64,7 +64,11 @@ function Button({
   const Comp = asChild ? Slot : "button";
 
   return (
-    <Comp data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props}>
+    <Comp
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    >
       {iconLeft ? (
         <span data-slot="button-icon" data-side="left" aria-hidden="true" className="shrink-0">
           {iconLeft}

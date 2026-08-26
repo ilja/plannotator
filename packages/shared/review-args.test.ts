@@ -40,7 +40,9 @@ describe("parseReviewArgs", () => {
   });
 
   test("accepts argv arrays from the compiled CLI", () => {
-    expect(parseReviewArgs(["--git", "--no-local", "https://github.com/acme/repo/pull/12"])).toEqual({
+    expect(
+      parseReviewArgs(["--git", "--no-local", "https://github.com/acme/repo/pull/12"]),
+    ).toEqual({
       prUrl: "https://github.com/acme/repo/pull/12",
       vcsType: "git",
       useLocal: false,
@@ -48,10 +50,12 @@ describe("parseReviewArgs", () => {
   });
 
   test("strips wrapping quotes from string and argv inputs", () => {
-    expect(parseReviewArgs(`--git "https://github.com/acme/repo/pull/12"`).prUrl)
-      .toBe("https://github.com/acme/repo/pull/12");
-    expect(parseReviewArgs(["--git", "\"https://github.com/acme/repo/pull/12\""]).prUrl)
-      .toBe("https://github.com/acme/repo/pull/12");
+    expect(parseReviewArgs(`--git "https://github.com/acme/repo/pull/12"`).prUrl).toBe(
+      "https://github.com/acme/repo/pull/12",
+    );
+    expect(parseReviewArgs(["--git", '"https://github.com/acme/repo/pull/12"']).prUrl).toBe(
+      "https://github.com/acme/repo/pull/12",
+    );
   });
 
   test("keeps non-url positional input as local review mode", () => {

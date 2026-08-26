@@ -22,9 +22,9 @@ const HUNK_HEADER_RE = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/gm;
 
 function countLines(content: string): number {
   if (content.length === 0) return 0;
-  const segments = content.split('\n').length;
+  const segments = content.split("\n").length;
   // A trailing newline does not start an extra line (git semantics).
-  return content.endsWith('\n') ? segments - 1 : segments;
+  return content.endsWith("\n") ? segments - 1 : segments;
 }
 
 export function isContentConsistentWithPatch(

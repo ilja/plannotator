@@ -80,7 +80,7 @@ describe("FsPasteStore", () => {
     const expiredPath = writePasteFile(
       directory,
       "expired.json",
-      JSON.stringify({ data: "expired", expiresAt: -0.5 })
+      JSON.stringify({ data: "expired", expiresAt: -0.5 }),
     );
 
     await expect(store.get("expired")).resolves.toBeNull();
@@ -92,22 +92,22 @@ describe("FsPasteStore", () => {
     const negativePath = writePasteFile(
       directory,
       "negative.json",
-      JSON.stringify({ data: "negative", expiresAt: -1 })
+      JSON.stringify({ data: "negative", expiresAt: -1 }),
     );
     const zeroPath = writePasteFile(
       directory,
       "zero.json",
-      JSON.stringify({ data: "zero", expiresAt: 0 })
+      JSON.stringify({ data: "zero", expiresAt: 0 }),
     );
     const fractionalPath = writePasteFile(
       directory,
       "fractional.json",
-      JSON.stringify({ data: "fractional", expiresAt: 0.5 })
+      JSON.stringify({ data: "fractional", expiresAt: 0.5 }),
     );
     const freshPath = writePasteFile(
       directory,
       "fresh.json",
-      JSON.stringify({ data: "fresh", expiresAt: Date.now() + 60_000 })
+      JSON.stringify({ data: "fresh", expiresAt: Date.now() + 60_000 }),
     );
     const corruptPath = writePasteFile(directory, "corrupt.json", "not json");
 

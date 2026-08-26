@@ -69,14 +69,16 @@ export function createWorktreePool(
     );
     pending.set(initial.prUrl, tracked);
     creationChain = tracked.catch(() => {});
-    tracked
-      .then(() => pending.delete(initial.prUrl))
-      .catch(() => {}); // warmup may complete with nobody awaiting it
+    tracked.then(() => pending.delete(initial.prUrl)).catch(() => {}); // warmup may complete with nobody awaiting it
   }
 
   return {
-    get(prUrl) { return pool.get(prUrl); },
-    has(prUrl) { return pool.has(prUrl); },
+    get(prUrl) {
+      return pool.get(prUrl);
+    },
+    has(prUrl) {
+      return pool.has(prUrl);
+    },
     resolve(prUrl) {
       const entry = pool.get(prUrl);
       return entry?.ready ? entry.path : undefined;
@@ -96,9 +98,10 @@ export function createWorktreePool(
       const create = async (): Promise<PoolEntry> => {
         const number = metadata.platform === "github" ? metadata.number : metadata.iid;
         const worktreePath = join(config.sessionDir, "pool", `pr-${number}`);
-        const refSpec = metadata.platform === "github"
-          ? `refs/pull/${number}/head`
-          : `refs/merge-requests/${number}/head`;
+        const refSpec =
+          metadata.platform === "github"
+            ? `refs/pull/${number}/head`
+            : `refs/merge-requests/${number}/head`;
 
         await fetchRef(runtime, metadata.baseBranch, { cwd: config.repoDir });
         await ensureObjectAvailable(runtime, metadata.baseSha, { cwd: config.repoDir });
@@ -127,7 +130,9 @@ export function createWorktreePool(
       }
     },
 
-    entries() { return pool.values(); },
+    entries() {
+      return pool.values();
+    },
 
     async cleanup(runtime) {
       // Wait out in-flight creations first: a warmup or queued ensure() that

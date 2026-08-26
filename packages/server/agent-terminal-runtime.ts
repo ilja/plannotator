@@ -68,9 +68,7 @@ type CommandResult = {
   timedOut: boolean;
 };
 
-export function getAgentTerminalManagedRuntimeDir(
-  dataDir = getPlannotatorDataDir(),
-): string {
+export function getAgentTerminalManagedRuntimeDir(dataDir = getPlannotatorDataDir()): string {
   return join(dataDir, "vendor", "agent-terminal", `webtui-${AGENT_TERMINAL_WEBTUI_VERSION}`);
 }
 
@@ -78,11 +76,15 @@ export function isAgentTerminalRemoteEnabled(env: NodeJS.ProcessEnv = process.en
   return isTruthy(env.PLANNOTATOR_AGENT_TERMINAL_REMOTE);
 }
 
-export function shouldSkipAgentTerminalRuntimeInstall(env: NodeJS.ProcessEnv = process.env): boolean {
+export function shouldSkipAgentTerminalRuntimeInstall(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
   return isTruthy(env.PLANNOTATOR_SKIP_AGENT_TERMINAL_INSTALL);
 }
 
-export async function resolveAgentTerminalRuntime(): Promise<ResolvedAgentTerminalRuntime | UnresolvedAgentTerminalRuntime> {
+export async function resolveAgentTerminalRuntime(): Promise<
+  ResolvedAgentTerminalRuntime | UnresolvedAgentTerminalRuntime
+> {
   const nodePath = Bun.which("node");
   if (!nodePath) {
     return {
@@ -180,17 +182,22 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
       ok: true,
       status: "skipped",
       runtimeDir,
-      message: "Skipping agent terminal runtime install (PLANNOTATOR_SKIP_AGENT_TERMINAL_INSTALL is set).",
+      message:
+        "Skipping agent terminal runtime install (PLANNOTATOR_SKIP_AGENT_TERMINAL_INSTALL is set).",
     };
   }
 
   const nodePath = Bun.which("node");
   if (!nodePath) {
-    return fail(runtimeDir, "Skipping agent terminal runtime install (Node.js 20 or newer was not found).");
+    return fail(
+      runtimeDir,
+      "Skipping agent terminal runtime install (Node.js 20 or newer was not found).",
+    );
   }
 
   const nodeCheck = await checkNodeVersion(nodePath);
-  if (!nodeCheck.ok) return fail(runtimeDir, `Skipping agent terminal runtime install (${nodeCheck.message})`);
+  if (!nodeCheck.ok)
+    return fail(runtimeDir, `Skipping agent terminal runtime install (${nodeCheck.message})`);
 
   const npmPath = Bun.which("npm");
   if (!npmPath) {
@@ -202,7 +209,10 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
     writeRuntimePackageJson(runtimeDir);
     materializeAgentTerminalSidecar(runtimeDir);
   } catch (err) {
-    return fail(runtimeDir, `Skipping agent terminal runtime install (${formatError(err instanceof Error ? err : new Error(String(err)))}).`);
+    return fail(
+      runtimeDir,
+      `Skipping agent terminal runtime install (${formatError(err instanceof Error ? err : new Error(String(err)))}).`,
+    );
   }
 
   if (readInstalledWebTuiVersion(runtimeDir) === AGENT_TERMINAL_WEBTUI_VERSION) {
@@ -233,7 +243,10 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
     { cwd: runtimeDir, timeoutMs: NPM_INSTALL_TIMEOUT_MS },
   );
   if (install.exitCode !== 0) {
-    return fail(runtimeDir, `Skipping agent terminal runtime install (${summarizeCommandFailure(install)}).`);
+    return fail(
+      runtimeDir,
+      `Skipping agent terminal runtime install (${summarizeCommandFailure(install)}).`,
+    );
   }
 
   const preflight = await preflightNodeImports(nodePath, {
@@ -241,7 +254,8 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
     webtuiCoreUrl: "@plannotator/webtui/core",
     webtuiServerUrl: "@plannotator/webtui/server",
   });
-  if (!preflight.ok) return fail(runtimeDir, `Skipping agent terminal runtime install (${preflight.message})`);
+  if (!preflight.ok)
+    return fail(runtimeDir, `Skipping agent terminal runtime install (${preflight.message})`);
 
   return {
     ok: true,
@@ -289,11 +303,19 @@ const VersionInfoSchema = Schema.Struct({
 });
 
 function readInstalledWebTuiVersion(runtimeDir: string): string | null {
-  const packageJsonPath = join(runtimeDir, "node_modules", "@plannotator", "webtui", "package.json");
+  const packageJsonPath = join(
+    runtimeDir,
+    "node_modules",
+    "@plannotator",
+    "webtui",
+    "package.json",
+  );
   if (!existsSync(packageJsonPath)) return null;
   try {
     const parsed = Option.getOrUndefined(
-      Schema.decodeUnknownOption(VersionInfoSchema)(JSON.parse(readFileSync(packageJsonPath, "utf8"))),
+      Schema.decodeUnknownOption(VersionInfoSchema)(
+        JSON.parse(readFileSync(packageJsonPath, "utf8")),
+      ),
     );
     return parsed?.version ?? null;
   } catch {
@@ -301,11 +323,17 @@ function readInstalledWebTuiVersion(runtimeDir: string): string | null {
   }
 }
 
-async function checkNodeVersion(nodePath: string): Promise<{ ok: true } | UnresolvedAgentTerminalRuntime> {
-  const result = await runCommand(nodePath, [
-    "-e",
-    "const major = Number(process.versions.node.split('.')[0]); process.exit(major >= 20 ? 0 : 1);",
-  ], { timeoutMs: NODE_VERSION_TIMEOUT_MS });
+async function checkNodeVersion(
+  nodePath: string,
+): Promise<{ ok: true } | UnresolvedAgentTerminalRuntime> {
+  const result = await runCommand(
+    nodePath,
+    [
+      "-e",
+      "const major = Number(process.versions.node.split('.')[0]); process.exit(major >= 20 ? 0 : 1);",
+    ],
+    { timeoutMs: NODE_VERSION_TIMEOUT_MS },
+  );
   if (result.exitCode === 0) return { ok: true };
   return {
     ok: false,
@@ -420,9 +448,11 @@ function resolveImportUrl(specifier: string): string {
 
 function isBunVirtualPath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/");
-  return normalized.startsWith("/$bunfs/") ||
+  return (
+    normalized.startsWith("/$bunfs/") ||
     /^[A-Za-z]:\/(?:\$bunfs|~BUN)\//i.test(normalized) ||
-    /^\/[A-Za-z]:\/(?:\$bunfs|~BUN)\//i.test(normalized);
+    /^\/[A-Za-z]:\/(?:\$bunfs|~BUN)\//i.test(normalized)
+  );
 }
 
 function isTruthy(value: string | undefined): boolean {

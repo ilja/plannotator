@@ -1,17 +1,17 @@
-export type ReviewSearchSide = 'addition' | 'deletion' | 'context';
+export type ReviewSearchSide = "addition" | "deletion" | "context";
 
 const DIFF_METADATA_PREFIXES = [
-  'diff ',
-  'index ',
-  '--- ',
-  '+++ ',
-  'new file mode ',
-  'deleted file mode ',
-  'similarity index ',
-  'rename from ',
-  'rename to ',
-  'old mode ',
-  'new mode ',
+  "diff ",
+  "index ",
+  "--- ",
+  "+++ ",
+  "new file mode ",
+  "deleted file mode ",
+  "similarity index ",
+  "rename from ",
+  "rename to ",
+  "old mode ",
+  "new mode ",
 ] as const;
 
 const SNIPPET_CONTEXT = 28;
@@ -52,11 +52,11 @@ export interface SearchableLine {
 }
 
 function isDiffMetadataLine(line: string): boolean {
-  return DIFF_METADATA_PREFIXES.some(prefix => line.startsWith(prefix));
+  return DIFF_METADATA_PREFIXES.some((prefix) => line.startsWith(prefix));
 }
 
 function buildSearchableLinesForPatch(file: ReviewSearchableDiffFile): SearchableLine[] {
-  const lines = file.patch.split('\n');
+  const lines = file.patch.split("\n");
   const searchableLines: SearchableLine[] = [];
 
   let oldLine = 0;
@@ -76,12 +76,12 @@ function buildSearchableLinesForPatch(file: ReviewSearchableDiffFile): Searchabl
 
     const prefix = line[0];
     const text = line.slice(1);
-    if (prefix === ' ') {
+    if (prefix === " ") {
       oldLine += 1;
       newLine += 1;
       searchableLines.push({
         filePath: file.path,
-        side: 'context',
+        side: "context",
         lineNumber: newLine,
         altLineNumber: oldLine,
         text,
@@ -90,11 +90,11 @@ function buildSearchableLinesForPatch(file: ReviewSearchableDiffFile): Searchabl
       continue;
     }
 
-    if (prefix === '-') {
+    if (prefix === "-") {
       oldLine += 1;
       searchableLines.push({
         filePath: file.path,
-        side: 'deletion',
+        side: "deletion",
         lineNumber: oldLine,
         text,
         normalizedText: text.toLowerCase(),
@@ -102,11 +102,11 @@ function buildSearchableLinesForPatch(file: ReviewSearchableDiffFile): Searchabl
       continue;
     }
 
-    if (prefix === '+') {
+    if (prefix === "+") {
       newLine += 1;
       searchableLines.push({
         filePath: file.path,
-        side: 'addition',
+        side: "addition",
         lineNumber: newLine,
         text,
         normalizedText: text.toLowerCase(),
@@ -118,14 +118,14 @@ function buildSearchableLinesForPatch(file: ReviewSearchableDiffFile): Searchabl
 }
 
 export function buildSearchIndex(files: ReviewSearchableDiffFile[]): SearchableLine[] {
-  return files.flatMap(file => buildSearchableLinesForPatch(file));
+  return files.flatMap((file) => buildSearchableLinesForPatch(file));
 }
 
 function buildSnippet(text: string, start: number, end: number): string {
   const snippetStart = Math.max(0, start - SNIPPET_CONTEXT);
   const snippetEnd = Math.min(text.length, end + SNIPPET_CONTEXT);
-  const prefix = snippetStart > 0 ? '...' : '';
-  const suffix = snippetEnd < text.length ? '...' : '';
+  const prefix = snippetStart > 0 ? "..." : "";
+  const suffix = snippetEnd < text.length ? "..." : "";
   return `${prefix}${text.slice(snippetStart, snippetEnd)}${suffix}`;
 }
 
@@ -165,7 +165,10 @@ export function findMatchesInIndex(index: SearchableLine[], query: string): Revi
   return matches;
 }
 
-export function findReviewSearchMatches(files: ReviewSearchableDiffFile[], query: string): ReviewSearchMatch[] {
+export function findReviewSearchMatches(
+  files: ReviewSearchableDiffFile[],
+  query: string,
+): ReviewSearchMatch[] {
   return findMatchesInIndex(buildSearchIndex(files), query);
 }
 
@@ -193,14 +196,15 @@ export function groupReviewSearchMatches(
   return files
     .map((file, _fileIndex) => groups.get(file.path) ?? null)
     .filter((group): group is ReviewSearchFileGroup => group !== null)
-    .map(group => ({
+    .map((group) => ({
       ...group,
-      fileIndex: group.fileIndex >= 0 ? group.fileIndex : (fileIndexByPath.get(group.filePath) ?? -1),
+      fileIndex:
+        group.fileIndex >= 0 ? group.fileIndex : (fileIndexByPath.get(group.filePath) ?? -1),
     }));
 }
 
 export function getReviewSearchSideLabel(side: ReviewSearchSide): string {
-  if (side === 'addition') return 'new';
-  if (side === 'deletion') return 'old';
-  return 'ctx';
+  if (side === "addition") return "new";
+  if (side === "deletion") return "old";
+  return "ctx";
 }

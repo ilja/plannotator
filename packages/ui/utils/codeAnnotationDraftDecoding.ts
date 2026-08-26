@@ -1,6 +1,6 @@
-import { Option, Schema } from 'effect';
-import type { CodeAnnotation } from '../types';
-import { decodeCodeAnnotation } from './annotationSchemas';
+import { Option, Schema } from "effect";
+import type { CodeAnnotation } from "../types";
+import { decodeCodeAnnotation } from "./annotationSchemas";
 
 const SuccessfulCodeAnnotationDraftSchema = Schema.Struct({
   codeAnnotations: Schema.optionalKey(Schema.Unknown),

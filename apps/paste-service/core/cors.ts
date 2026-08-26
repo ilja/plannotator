@@ -25,7 +25,7 @@ export function getAllowedOrigins(envValue?: string): string[] {
 
 export function corsHeaders(
   requestOrigin: string,
-  allowedOrigins: string[]
+  allowedOrigins: string[],
 ): CorsHeaders | Record<never, never> {
   const isLocalhost = /^https?:\/\/localhost(:\d+)?$/.test(requestOrigin);
   if (isLocalhost || allowedOrigins.includes(requestOrigin) || allowedOrigins.includes("*")) {

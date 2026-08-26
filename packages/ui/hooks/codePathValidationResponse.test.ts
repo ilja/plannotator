@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  decodeCodePathValidationResponse,
-} from "./codePathValidationResponse";
+import { decodeCodePathValidationResponse } from "./codePathValidationResponse";
 
 describe("decodeCodePathValidationResponse", () => {
   test("decodes every result variant", () => {
@@ -46,10 +44,11 @@ describe("decodeCodePathValidationResponse", () => {
     expect(decodeCodePathValidationResponse({})).toEqual(new Map());
     expect(decodeCodePathValidationResponse({ results: [] })).toEqual(new Map());
 
-    const response = decodeCodePathValidationResponse(JSON.parse(
-      '{"results":{"__proto__":{"status":"found","resolved":"/unsafe"},"constructor":{"status":"missing"}}}',
-    ));
-
+    const response = decodeCodePathValidationResponse(
+      JSON.parse(
+        '{"results":{"__proto__":{"status":"found","resolved":"/unsafe"},"constructor":{"status":"missing"}}}',
+      ),
+    );
 
     expect(response.get("__proto__")).toEqual({ status: "found", resolved: "/unsafe" });
     expect(response.get("constructor")).toEqual({ status: "missing" });

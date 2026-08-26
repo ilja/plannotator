@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { File, type LineAnnotation } from '@pierre/diffs/react';
-import type { SelectedLineRange as PierreSelectedLineRange, LineEventBaseProps } from '@pierre/diffs';
-import { PopoutDialog } from './PopoutDialog';
-import { useTheme } from './ThemeProvider';
-import { CommentPopover } from './CommentPopover';
-import { ImageThumbnail } from './ImageThumbnail';
-import type { CodeAnnotation, ImageAttachment } from '../types';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { File, type LineAnnotation } from "@pierre/diffs/react";
+import type {
+  SelectedLineRange as PierreSelectedLineRange,
+  LineEventBaseProps,
+} from "@pierre/diffs";
+import { PopoutDialog } from "./PopoutDialog";
+import { useTheme } from "./ThemeProvider";
+import { CommentPopover } from "./CommentPopover";
+import { ImageThumbnail } from "./ImageThumbnail";
+import type { CodeAnnotation, ImageAttachment } from "../types";
 
 export interface CodeFileAnnotationInput {
   filePath: string;
@@ -42,23 +45,23 @@ interface PendingComment {
 }
 
 const gutterButtonStyle: React.CSSProperties = {
-  appearance: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '1lh',
-  height: '1lh',
-  fontSize: 'var(--diffs-font-size, 13px)',
-  lineHeight: 'var(--diffs-line-height, 20px)',
-  border: 'none',
+  appearance: "none",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "1lh",
+  height: "1lh",
+  fontSize: "var(--diffs-font-size, 13px)",
+  lineHeight: "var(--diffs-line-height, 20px)",
+  border: "none",
   borderRadius: 4,
-  backgroundColor: 'var(--diffs-modified-base)',
-  color: 'var(--diffs-bg)',
-  cursor: 'pointer',
-  position: 'relative',
+  backgroundColor: "var(--diffs-modified-base)",
+  color: "var(--diffs-bg)",
+  cursor: "pointer",
+  position: "relative",
   zIndex: 4,
   padding: 0,
-  marginRight: 'calc(1ch - 1lh)',
+  marginRight: "calc(1ch - 1lh)",
 };
 
 interface ThemeColors {
@@ -70,16 +73,16 @@ function getThemeColors(): ThemeColors {
   try {
     const styles = getComputedStyle(document.documentElement);
     return {
-      bg: styles.getPropertyValue('--background').trim(),
-      fg: styles.getPropertyValue('--foreground').trim(),
+      bg: styles.getPropertyValue("--background").trim(),
+      fg: styles.getPropertyValue("--foreground").trim(),
     };
   } catch {
-    return { bg: '', fg: '' };
+    return { bg: "", fg: "" };
   }
 }
 
-function buildPierreCSS(mode: 'dark' | 'light', bg: string, fg: string): string {
-  if (!bg || !fg) return '';
+function buildPierreCSS(mode: "dark" | "light", bg: string, fg: string): string {
+  if (!bg || !fg) return "";
   return `
     :host {
       color-scheme: ${mode};
@@ -103,9 +106,9 @@ function buildPierreCSS(mode: 'dark' | 'light', bg: string, fg: string): string 
 
 function getLineSlice(contents: string, start: number, end: number): string {
   return contents
-    .split('\n')
+    .split("\n")
     .slice(Math.max(0, start - 1), Math.max(0, end))
-    .join('\n');
+    .join("\n");
 }
 
 function lineLabel(start: number, end: number): string {
@@ -118,7 +121,7 @@ function getLineNumberFromSelectionNode(node: Node | null): number | null {
 
   while (current) {
     if (current instanceof HTMLElement) {
-      const line = current.closest('[data-line]')?.getAttribute('data-line');
+      const line = current.closest("[data-line]")?.getAttribute("data-line");
       if (line) {
         const parsed = Number(line);
         return Number.isFinite(parsed) ? parsed : null;
@@ -131,13 +134,12 @@ function getLineNumberFromSelectionNode(node: Node | null): number | null {
 }
 
 function getPierreSelection(root: HTMLElement | null): Selection | null {
-  const shadowRoot = root?.querySelector('diffs-container')?.shadowRoot;
+  const shadowRoot = root?.querySelector("diffs-container")?.shadowRoot;
   // SAFETY: shadowRoot may expose getSelection in Pierre's shadow DOM
-  const shadowSelection = (shadowRoot as (ShadowRoot & { getSelection?: () => Selection | null }) | null)
-    ?.getSelection?.();
-  return shadowSelection && !shadowSelection.isCollapsed
-    ? shadowSelection
-    : window.getSelection();
+  const shadowSelection = (
+    shadowRoot as (ShadowRoot & { getSelection?: () => Selection | null }) | null
+  )?.getSelection?.();
+  return shadowSelection && !shadowSelection.isCollapsed ? shadowSelection : window.getSelection();
 }
 
 const CodeInlineAnnotation: React.FC<{
@@ -148,11 +150,11 @@ const CodeInlineAnnotation: React.FC<{
   onDelete?: (id: string) => void;
 }> = ({ annotation, isSelected, onSelect, onEdit, onDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState(annotation.text ?? '');
+  const [editText, setEditText] = useState(annotation.text ?? "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!isEditing) setEditText(annotation.text ?? '');
+    if (!isEditing) setEditText(annotation.text ?? "");
   }, [annotation.text, isEditing]);
 
   useEffect(() => {
@@ -172,11 +174,13 @@ const CodeInlineAnnotation: React.FC<{
       data-code-annotation-id={annotation.id}
       onClick={() => onSelect?.(annotation.id)}
       className={`group my-2 mx-3 rounded-lg border px-3 py-2 text-xs shadow-sm cursor-pointer transition-colors ${
-        isSelected ? 'border-primary/50' : 'border-border hover:border-border/80'
+        isSelected ? "border-primary/50" : "border-border hover:border-border/80"
       }`}
       style={{
-        backgroundColor: isSelected ? 'color-mix(in oklab, var(--primary) 12%, var(--popover))' : 'var(--popover)',
-        color: 'var(--foreground)',
+        backgroundColor: isSelected
+          ? "color-mix(in oklab, var(--primary) 12%, var(--popover))"
+          : "var(--popover)",
+        color: "var(--foreground)",
         opacity: 1,
       }}
     >
@@ -197,8 +201,18 @@ const CodeInlineAnnotation: React.FC<{
               className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="Edit comment"
             >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
               </svg>
             </button>
           )}
@@ -212,7 +226,13 @@ const CodeInlineAnnotation: React.FC<{
               className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               title="Delete comment"
             >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -228,16 +248,20 @@ const CodeInlineAnnotation: React.FC<{
             onChange={(e) => setEditText(e.target.value)}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') {
+              if (e.key === "Escape") {
                 e.preventDefault();
                 setIsEditing(false);
-                setEditText(annotation.text ?? '');
-              } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+                setEditText(annotation.text ?? "");
+              } else if (
+                e.key === "Enter" &&
+                (e.metaKey || e.ctrlKey) &&
+                !e.nativeEvent.isComposing
+              ) {
                 e.preventDefault();
                 save();
               }
             }}
-            rows={Math.min(editText.split('\n').length + 1, 8)}
+            rows={Math.min(editText.split("\n").length + 1, 8)}
             className="w-full resize-none rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
           <div className="flex items-center gap-2">
@@ -256,7 +280,7 @@ const CodeInlineAnnotation: React.FC<{
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(false);
-                setEditText(annotation.text ?? '');
+                setEditText(annotation.text ?? "");
               }}
               className="rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/80"
             >
@@ -277,7 +301,10 @@ const CodeInlineAnnotation: React.FC<{
           {annotation.images.map((img) => (
             <div key={img.path} className="text-center">
               <ImageThumbnail path={img.path} size="sm" showRemove={false} />
-              <div className="max-w-[3rem] truncate text-[9px] text-muted-foreground" title={img.name}>
+              <div
+                className="max-w-[3rem] truncate text-[9px] text-muted-foreground"
+                title={img.name}
+              >
                 {img.name}
               </div>
             </div>
@@ -305,11 +332,11 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   container,
 }) => {
   const { resolvedMode } = useTheme();
-  const mode = resolvedMode ?? 'dark';
+  const mode = resolvedMode ?? "dark";
   const colors = getThemeColors();
   const [pierreTheme, setPierreTheme] = useState(() => ({
     // SAFETY: resolvedMode is 'dark' | 'light' from theme provider
-    type: mode as 'dark' | 'light',
+    type: mode as "dark" | "light",
     css: buildPierreCSS(mode, colors.bg, colors.fg),
   }));
   const [copied, setCopied] = useState(false);
@@ -332,9 +359,9 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
     setPendingComment(null);
   }, [filepath]);
 
-  const displayName = filepath.split('/').pop() || filepath;
-  const relativePath = filepath.replace(/.*\/(?=.*\/)/, '');
-  const lineCount = useMemo(() => contents.split('\n').length, [contents]);
+  const displayName = filepath.split("/").pop() || filepath;
+  const relativePath = filepath.replace(/.*\/(?=.*\/)/, "");
+  const lineCount = useMemo(() => contents.split("\n").length, [contents]);
   const selectedCodeAnnotation = useMemo(
     () => annotations.find((ann) => ann.id === selectedAnnotationId),
     [annotations, selectedAnnotationId],
@@ -343,7 +370,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   // TODO: add token-level annotation support (charStart/charEnd) — for now only line-scope
   const lineAnnotations = useMemo((): LineAnnotation<CodeAnnotation>[] => {
     return annotations
-      .filter((ann) => (ann.scope ?? 'line') === 'line')
+      .filter((ann) => (ann.scope ?? "line") === "line")
       .map((ann) => ({
         lineNumber: ann.lineEnd,
         metadata: ann,
@@ -366,26 +393,29 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
     const timer = setTimeout(() => {
       fileAreaRef.current
         ?.querySelector(`[data-code-annotation-id="${selectedAnnotationId}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
     return () => clearTimeout(timer);
   }, [selectedAnnotationId, filepath]);
 
-  const openCommentForRange = useCallback((
-    range: { start: number; end: number },
-    anchorEl?: HTMLElement,
-    anchorRect?: DOMRect,
-  ) => {
-    const start = Math.min(range.start, range.end);
-    const end = Math.max(range.start, range.end);
-    setPendingComment({
-      range: { start, end },
-      anchorEl,
-      anchorRect: anchorRect ?? anchorEl?.getBoundingClientRect() ?? lastPointerRectRef.current ?? undefined,
-      contextText: `${relativePath} ${lineLabel(start, end)}`,
-      originalCode: getLineSlice(contents, start, end),
-    });
-  }, [contents, relativePath]);
+  const openCommentForRange = useCallback(
+    (range: { start: number; end: number }, anchorEl?: HTMLElement, anchorRect?: DOMRect) => {
+      const start = Math.min(range.start, range.end);
+      const end = Math.max(range.start, range.end);
+      setPendingComment({
+        range: { start, end },
+        anchorEl,
+        anchorRect:
+          anchorRect ??
+          anchorEl?.getBoundingClientRect() ??
+          lastPointerRectRef.current ??
+          undefined,
+        contextText: `${relativePath} ${lineLabel(start, end)}`,
+        originalCode: getLineSlice(contents, start, end),
+      });
+    },
+    [contents, relativePath],
+  );
 
   const openCommentForBrowserSelection = useCallback(() => {
     if (!onAddAnnotation) return;
@@ -401,67 +431,83 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
     openCommentForRange(
       { start: anchorLine, end: focusLine },
       undefined,
-      lastPointerRectRef.current
-        ?? (selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : undefined),
+      lastPointerRectRef.current ??
+        (selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : undefined),
     );
     selection.removeAllRanges();
   }, [onAddAnnotation, openCommentForRange]);
 
-  const renderAnnotation = useCallback((annotation: LineAnnotation<CodeAnnotation>) => {
-    if (!annotation.metadata) return null;
-    return (
-      <CodeInlineAnnotation
-        annotation={annotation.metadata}
-        isSelected={selectedAnnotationId === annotation.metadata.id}
-        onSelect={onSelectAnnotation}
-        onEdit={onEditAnnotation}
-        onDelete={onDeleteAnnotation}
-      />
-    );
-  }, [onDeleteAnnotation, onEditAnnotation, onSelectAnnotation, selectedAnnotationId]);
+  const renderAnnotation = useCallback(
+    (annotation: LineAnnotation<CodeAnnotation>) => {
+      if (!annotation.metadata) return null;
+      return (
+        <CodeInlineAnnotation
+          annotation={annotation.metadata}
+          isSelected={selectedAnnotationId === annotation.metadata.id}
+          onSelect={onSelectAnnotation}
+          onEdit={onEditAnnotation}
+          onDelete={onDeleteAnnotation}
+        />
+      );
+    },
+    [onDeleteAnnotation, onEditAnnotation, onSelectAnnotation, selectedAnnotationId],
+  );
 
-  const renderGutterUtility = useCallback((getHoveredLine: () => { lineNumber: number } | undefined) => {
-    return (
-      <button
-        type="button"
-        style={gutterButtonStyle}
-        title="Add code comment"
-        onMouseEnter={(e) => {
-          e.currentTarget.style.filter = 'brightness(1.2)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.filter = '';
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          const line = getHoveredLine();
-          if (!line) return;
-          openCommentForRange({ start: line.lineNumber, end: line.lineNumber }, e.currentTarget);
-        }}
-      >
-        +
-      </button>
-    );
-  }, [openCommentForRange]);
+  const renderGutterUtility = useCallback(
+    (getHoveredLine: () => { lineNumber: number } | undefined) => {
+      return (
+        <button
+          type="button"
+          style={gutterButtonStyle}
+          title="Add code comment"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.filter = "brightness(1.2)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.filter = "";
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            const line = getHoveredLine();
+            if (!line) return;
+            openCommentForRange({ start: line.lineNumber, end: line.lineNumber }, e.currentTarget);
+          }}
+        >
+          +
+        </button>
+      );
+    },
+    [openCommentForRange],
+  );
 
-  const handleLineSelectionEnd = useCallback((range: PierreSelectedLineRange | null) => {
-    if (!onAddAnnotation) return;
-    if (!range) return;
-    if (range.start !== range.end) {
-      suppressLineClickUntilRef.current = Date.now() + 300;
-    }
-    openCommentForRange({ start: range.start, end: range.end }, undefined, lastPointerRectRef.current ?? undefined);
-  }, [onAddAnnotation, openCommentForRange]);
+  const handleLineSelectionEnd = useCallback(
+    (range: PierreSelectedLineRange | null) => {
+      if (!onAddAnnotation) return;
+      if (!range) return;
+      if (range.start !== range.end) {
+        suppressLineClickUntilRef.current = Date.now() + 300;
+      }
+      openCommentForRange(
+        { start: range.start, end: range.end },
+        undefined,
+        lastPointerRectRef.current ?? undefined,
+      );
+    },
+    [onAddAnnotation, openCommentForRange],
+  );
 
-  const handleLineClick = useCallback((props: LineEventBaseProps & { event: PointerEvent }) => {
-    if (!onAddAnnotation) return;
-    if (Date.now() < suppressLineClickUntilRef.current) return;
-    openCommentForRange(
-      { start: props.lineNumber, end: props.lineNumber },
-      undefined,
-      props.lineElement.getBoundingClientRect(),
-    );
-  }, [onAddAnnotation, openCommentForRange]);
+  const handleLineClick = useCallback(
+    (props: LineEventBaseProps & { event: PointerEvent }) => {
+      if (!onAddAnnotation) return;
+      if (Date.now() < suppressLineClickUntilRef.current) return;
+      openCommentForRange(
+        { start: props.lineNumber, end: props.lineNumber },
+        undefined,
+        props.lineElement.getBoundingClientRect(),
+      );
+    },
+    [onAddAnnotation, openCommentForRange],
+  );
 
   const handleCopy = async () => {
     try {
@@ -469,7 +515,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error("Failed to copy:", err);
     }
   };
 
@@ -495,8 +541,8 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
           </code>
           {isNotFound && (
             <p className="text-xs text-muted-foreground mt-1">
-              The path was referenced in the document but no matching file was found
-              in this project. It may describe a planned/future file.
+              The path was referenced in the document but no matching file was found in this
+              project. It may describe a planned/future file.
             </p>
           )}
         </div>
@@ -514,31 +560,55 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
     >
       <div className="flex items-center gap-3 px-5 pt-4 pb-3 pr-12">
         <div className="flex items-center gap-2 min-w-0">
-          <svg className="w-4 h-4 flex-shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          <svg
+            className="w-4 h-4 flex-shrink-0 text-muted-foreground"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+            />
           </svg>
           <span className="text-sm font-medium text-foreground truncate" title={filepath}>
             {relativePath}
           </span>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {lineCount} lines
-          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">{lineCount} lines</span>
           <button
             onClick={handleCopy}
-            title={copied ? 'Copied!' : 'Copy file contents'}
+            title={copied ? "Copied!" : "Copy file contents"}
             className={`p-1.5 rounded-md transition-colors ${
-              copied ? 'text-success' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              copied ? "text-success" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
             {copied ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
               </svg>
             )}
           </button>
@@ -568,20 +638,20 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
           style={
             // SAFETY: CSS variable map matches CSSProperties; React typing is closed
             {
-            '--diffs-dark-bg': colors.bg,
-            '--diffs-light-bg': colors.bg,
-            '--diffs-dark': colors.fg,
-            '--diffs-light': colors.fg,
-          } as React.CSSProperties
+              "--diffs-dark-bg": colors.bg,
+              "--diffs-light-bg": colors.bg,
+              "--diffs-dark": colors.fg,
+              "--diffs-light": colors.fg,
+            } as React.CSSProperties
           }
           options={{
             themeType: pierreTheme.type,
             unsafeCSS: pierreTheme.css,
-            overflow: 'scroll',
+            overflow: "scroll",
             disableFileHeader: true,
             enableLineSelection: true,
             enableGutterUtility: !!onAddAnnotation,
-            lineHoverHighlight: onAddAnnotation ? 'line' : 'disabled',
+            lineHoverHighlight: onAddAnnotation ? "line" : "disabled",
             onLineClick: handleLineClick,
             onLineSelectionEnd: handleLineSelectionEnd,
           }}

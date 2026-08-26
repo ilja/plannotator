@@ -3,8 +3,8 @@
  * an AI question about specific lines. Rendered inside @pierre/diffs via
  * the DiffViewer's widget slot — clicking it scrolls to the Q&A in the sidebar.
  */
-import React from 'react';
-import { SparklesIcon } from '@plannotator/ui/components/SparklesIcon';
+import React from "react";
+import { SparklesIcon } from "@plannotator/ui/components/SparklesIcon";
 
 interface InlineAIMarkerProps {
   questionId: string;
@@ -25,18 +25,18 @@ export const InlineAIMarker: React.FC<InlineAIMarkerProps> = ({
     <button
       data-ai-question-id={questionId}
       onClick={() => onClick(questionId)}
-      className={`ai-marker ${hasResponse ? 'ai-marker-answered' : ''}`}
+      className={`ai-marker ${hasResponse ? "ai-marker-answered" : ""}`}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.375rem',
-        padding: '0.1875rem 0.625rem',
-        fontSize: '0.6875rem',
-        border: 'none',
-        background: 'none',
-        width: '100%',
-        textAlign: 'left',
-        cursor: 'pointer',
+        display: "flex",
+        alignItems: "center",
+        gap: "0.375rem",
+        padding: "0.1875rem 0.625rem",
+        fontSize: "0.6875rem",
+        border: "none",
+        background: "none",
+        width: "100%",
+        textAlign: "left",
+        cursor: "pointer",
       }}
     >
       <SparklesIcon className="w-2.5 h-2.5" animated={isStreaming} />
@@ -44,9 +44,9 @@ export const InlineAIMarker: React.FC<InlineAIMarkerProps> = ({
         style={{
           flex: 1,
           minWidth: 0,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
       >
         {promptPreview}

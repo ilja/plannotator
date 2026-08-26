@@ -1,6 +1,12 @@
-import { Block, type Annotation, type CodeAnnotation, type EditorAnnotation, type ImageAttachment } from '../types';
-import { annotationFeedback } from '@plannotator/shared/feedback-templates';
-import { parseChoiceQuestion } from './choiceAnnotations';
+import {
+  Block,
+  type Annotation,
+  type CodeAnnotation,
+  type EditorAnnotation,
+  type ImageAttachment,
+} from "../types";
+import { annotationFeedback } from "@plannotator/shared/feedback-templates";
+import { parseChoiceQuestion } from "./choiceAnnotations";
 
 /**
  * Parsed YAML frontmatter as key-value pairs.
@@ -23,12 +29,12 @@ export interface ExtractFrontmatterResult {
 
 export function extractFrontmatter(markdown: string): ExtractFrontmatterResult {
   const trimmed = markdown.trimStart();
-  if (!trimmed.startsWith('---')) {
+  if (!trimmed.startsWith("---")) {
     return { frontmatter: null, content: markdown, contentStartLine: 1 };
   }
 
   // Find the closing ---
-  const endIndex = trimmed.indexOf('\n---', 3);
+  const endIndex = trimmed.indexOf("\n---", 3);
   if (endIndex === -1) {
     return { frontmatter: null, content: markdown, contentStartLine: 1 };
   }
@@ -51,11 +57,11 @@ export function extractFrontmatter(markdown: string): ExtractFrontmatterResult {
   let currentKey: string | null = null;
   let currentArray: string[] | null = null;
 
-  for (const line of frontmatterRaw.split('\n')) {
+  for (const line of frontmatterRaw.split("\n")) {
     const trimmedLine = line.trim();
 
     // Array item (- value)
-    if (trimmedLine.startsWith('- ') && currentKey) {
+    if (trimmedLine.startsWith("- ") && currentKey) {
       const value = trimmedLine.slice(2).trim();
       if (!currentArray) {
         currentArray = [];
@@ -66,7 +72,7 @@ export function extractFrontmatter(markdown: string): ExtractFrontmatterResult {
     }
 
     // Key: value pair
-    const colonIndex = trimmedLine.indexOf(':');
+    const colonIndex = trimmedLine.indexOf(":");
     if (colonIndex > 0) {
       currentKey = trimmedLine.slice(0, colonIndex).trim();
       const value = trimmedLine.slice(colonIndex + 1).trim();
@@ -91,11 +97,26 @@ export function extractFrontmatter(markdown: string): ExtractFrontmatterResult {
  * path and renders as escaped text, matching prior behavior.
  */
 export const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
-  'details', 'summary',
-  'div', 'section', 'article', 'aside', 'header', 'footer',
-  'blockquote', 'pre',
-  'table', 'thead', 'tbody', 'tr', 'td', 'th',
-  'ul', 'ol', 'li', 'p',
+  "details",
+  "summary",
+  "div",
+  "section",
+  "article",
+  "aside",
+  "header",
+  "footer",
+  "blockquote",
+  "pre",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "td",
+  "th",
+  "ul",
+  "ol",
+  "li",
+  "p",
 ]);
 
 const HTML_BLOCK_OPEN_RE = /^<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s|>|\/|$)/;
@@ -107,26 +128,26 @@ const HTML_BLOCK_OPEN_RE = /^<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s|>|\/|$)/;
  */
 export const parseMarkdownToBlocks = (markdown: string): Block[] => {
   const { content: cleanMarkdown, contentStartLine } = extractFrontmatter(markdown);
-  const lines = cleanMarkdown.split('\n');
+  const lines = cleanMarkdown.split("\n");
   const blocks: Block[] = [];
   let currentId = 0;
 
   let buffer: string[] = [];
-  let currentType: Block['type'] = 'paragraph';
+  let currentType: Block["type"] = "paragraph";
   let currentLevel = 0;
   let bufferStartLine = contentStartLine;
   let lastLineWasBlank = false;
 
   const flush = () => {
     if (buffer.length > 0) {
-      const content = buffer.join('\n');
+      const content = buffer.join("\n");
       blocks.push({
         id: `block-${currentId++}`,
         type: currentType,
         content: content,
         level: currentLevel,
         order: currentId,
-        startLine: bufferStartLine
+        startLine: bufferStartLine,
       });
       buffer = [];
     }
@@ -140,29 +161,29 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     lastLineWasBlank = false;
 
     // Headings
-    if (trimmed.startsWith('#')) {
+    if (trimmed.startsWith("#")) {
       flush();
       const level = trimmed.match(/^#+/)?.[0].length || 1;
       blocks.push({
         id: `block-${currentId++}`,
-        type: 'heading',
-        content: trimmed.replace(/^#+\s*/, ''),
+        type: "heading",
+        content: trimmed.replace(/^#+\s*/, ""),
         level,
         order: currentId,
-        startLine: currentLineNum
+        startLine: currentLineNum,
       });
       continue;
     }
 
     // Horizontal Rule
-    if (trimmed === '---' || trimmed === '***') {
+    if (trimmed === "---" || trimmed === "***") {
       flush();
       blocks.push({
         id: `block-${currentId++}`,
-        type: 'hr',
-        content: '',
+        type: "hr",
+        content: "",
         order: currentId,
-        startLine: currentLineNum
+        startLine: currentLineNum,
       });
       continue;
     }
@@ -172,9 +193,9 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     if (listMatch) {
       flush(); // Treat each list item as a separate block for easier annotation
       // Calculate indentation level from leading whitespace
-      const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
+      const leadingWhitespace = line.match(/^(\s*)/)?.[1] || "";
       // Count spaces (2 spaces = 1 level) or tabs (1 tab = 1 level)
-      const spaceCount = leadingWhitespace.replace(/\t/g, '  ').length;
+      const spaceCount = leadingWhitespace.replace(/\t/g, "  ").length;
       const listLevel = Math.floor(spaceCount / 2);
 
       // Distinguish numeric markers (\d+.) from bullet markers (* / -)
@@ -188,20 +209,20 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
       let checked: boolean | undefined = undefined;
       const checkboxMatch = content.match(/^\[([ xX])\]\s*/);
       if (checkboxMatch) {
-        checked = checkboxMatch[1].toLowerCase() === 'x';
-        content = content.replace(/^\[([ xX])\]\s*/, '');
+        checked = checkboxMatch[1].toLowerCase() === "x";
+        content = content.replace(/^\[([ xX])\]\s*/, "");
       }
 
       blocks.push({
         id: `block-${currentId++}`,
-        type: 'list-item',
+        type: "list-item",
         content,
         level: listLevel,
         checked,
         ordered: ordered || undefined,
         orderedStart,
         order: currentId,
-        startLine: currentLineNum
+        startLine: currentLineNum,
       });
       continue;
     }
@@ -217,9 +238,9 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     // text. Leaving them as separate blockquote blocks preserves each line's
     // visual identity (a stacked-box layout) — imperfect but legible. A
     // proper recursive blockquote parser is tracked as a follow-up.
-    if (trimmed.startsWith('>')) {
+    if (trimmed.startsWith(">")) {
       flush();
-      const stripped = trimmed.replace(/^>\s*/, '');
+      const stripped = trimmed.replace(/^>\s*/, "");
       // List markers require trailing whitespace to avoid matching inline
       // text like "-hyphen" or "1.5 seconds"; headings, code fences, and
       // nested blockquote markers don't require it (``` can be followed
@@ -231,72 +252,68 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
       // with a block marker — otherwise a `> some text` line following a
       // `> 1. item` line would get glued onto the list-item block.
       const prevIsMarkerQuote =
-        prevBlock?.type === 'blockquote' && blockMarkerRe.test(prevBlock.content);
+        prevBlock?.type === "blockquote" && blockMarkerRe.test(prevBlock.content);
       // Alerts own their body: once a blockquote is tagged as an alert,
       // subsequent `>` lines always merge into it (until a blank line).
       // Without this, `> [!NOTE]\n> - item` splits the list item off into
       // a separate plain quote, losing the callout.
-      const prevIsAlert = prevBlock?.type === 'blockquote' && !!prevBlock.alertKind;
+      const prevIsAlert = prevBlock?.type === "blockquote" && !!prevBlock.alertKind;
       const shouldMergeIntoAlert = prevIsAlert && !prevLineWasBlank;
       const shouldMergeNormal =
         !hasBlockMarker &&
         !prevIsMarkerQuote &&
         !prevLineWasBlank &&
-        prevBlock?.type === 'blockquote';
+        prevBlock?.type === "blockquote";
       if (shouldMergeIntoAlert || shouldMergeNormal) {
-        prevBlock!.content = prevBlock!.content
-          ? prevBlock!.content + '\n' + stripped
-          : stripped;
+        prevBlock!.content = prevBlock!.content ? prevBlock!.content + "\n" + stripped : stripped;
       } else {
         // GitHub alert marker: a blockquote whose first line is [!KIND].
         // We strip the marker from content and tag the block; rendering decides the style.
         const alertMatch = stripped.match(/^\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/i);
         blocks.push({
           id: `block-${currentId++}`,
-          type: 'blockquote',
-          content: alertMatch ? '' : stripped,
+          type: "blockquote",
+          content: alertMatch ? "" : stripped,
           alertKind: alertMatch
-            ? (
-                // SAFETY: alertMatch[1] is known alert kind string — cast to union
-                alertMatch[1].toLowerCase() as 'note' | 'tip' | 'warning' | 'caution' | 'important'
-              )
+            ? // SAFETY: alertMatch[1] is known alert kind string — cast to union
+              (alertMatch[1].toLowerCase() as "note" | "tip" | "warning" | "caution" | "important")
             : undefined,
           order: currentId,
-          startLine: currentLineNum
+          startLine: currentLineNum,
         });
       }
       continue;
     }
-    
+
     // Code blocks (naive)
-    if (trimmed.startsWith('```')) {
+    if (trimmed.startsWith("```")) {
       flush();
       const codeStartLine = currentLineNum;
       // Count backticks in opening fence to support nested fences (e.g. ```` wrapping ```)
       const fenceLen = trimmed.match(/^`+/)?.[0].length ?? 3;
-      const closingFence = new RegExp('^\\s*`{' + fenceLen + ',}');
+      const closingFence = new RegExp("^\\s*`{" + fenceLen + ",}");
       // Extract language from fence (e.g., ```rust → "rust")
       const language = trimmed.slice(fenceLen).trim() || undefined;
       // Fast forward until end of code block
       let codeContent = [];
       i++; // Skip start fence
-      while(i < lines.length && !closingFence.test(lines[i])) {
+      while (i < lines.length && !closingFence.test(lines[i])) {
         codeContent.push(lines[i]);
         i++;
       }
       blocks.push({
         id: `block-${currentId++}`,
-        type: 'code',
-        content: codeContent.join('\n'),
+        type: "code",
+        content: codeContent.join("\n"),
         language,
         order: currentId,
-        startLine: codeStartLine
+        startLine: codeStartLine,
       });
       continue;
     }
 
     // Tables (lines starting with |)
-    if (trimmed.startsWith('|')) {
+    if (trimmed.startsWith("|")) {
       flush();
       const tableStartLine = currentLineNum;
       const tableLines: string[] = [line];
@@ -305,7 +322,7 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
       while (i + 1 < lines.length) {
         const nextLine = lines[i + 1].trim();
         // Continue if line starts with | (table row or separator)
-        if (nextLine.startsWith('|')) {
+        if (nextLine.startsWith("|")) {
           i++;
           tableLines.push(lines[i]);
         } else {
@@ -315,10 +332,10 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
 
       blocks.push({
         id: `block-${currentId++}`,
-        type: 'table',
-        content: tableLines.join('\n'),
+        type: "table",
+        content: tableLines.join("\n"),
         order: currentId,
-        startLine: tableStartLine
+        startLine: tableStartLine,
       });
       continue;
     }
@@ -341,13 +358,13 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
       const bodyLines: string[] = [];
       while (i + 1 < lines.length) {
         i++;
-        if (lines[i].trim() === ':::') break;
+        if (lines[i].trim() === ":::") break;
         bodyLines.push(lines[i]);
       }
       blocks.push({
         id: `block-${currentId++}`,
-        type: 'directive',
-        content: bodyLines.join('\n'),
+        type: "directive",
+        content: bodyLines.join("\n"),
         directiveKind: kind,
         order: currentId,
         startLine: directiveStartLine,
@@ -360,17 +377,17 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
       flush();
       const htmlStartLine = currentLineNum;
       const tagName = htmlTagMatch[1].toLowerCase();
-      const isCloseTag = trimmed.startsWith('</');
+      const isCloseTag = trimmed.startsWith("</");
       const htmlLines: string[] = [line];
 
       if (isCloseTag) {
-        while (i + 1 < lines.length && lines[i + 1].trim() !== '') {
+        while (i + 1 < lines.length && lines[i + 1].trim() !== "") {
           i++;
           htmlLines.push(lines[i]);
         }
       } else {
-        const openRe = new RegExp(`<${tagName}(?:\\s|>|/|$)`, 'gi');
-        const closeRe = new RegExp(`</${tagName}\\s*>`, 'gi');
+        const openRe = new RegExp(`<${tagName}(?:\\s|>|/|$)`, "gi");
+        const closeRe = new RegExp(`</${tagName}\\s*>`, "gi");
         let depth = (line.match(openRe) || []).length - (line.match(closeRe) || []).length;
         while (depth > 0 && i + 1 < lines.length) {
           i++;
@@ -382,8 +399,8 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
 
       blocks.push({
         id: `block-${currentId++}`,
-        type: 'html',
-        content: htmlLines.join('\n'),
+        type: "html",
+        content: htmlLines.join("\n"),
         order: currentId,
         startLine: htmlStartLine,
       });
@@ -391,16 +408,15 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     }
 
     // Empty lines separate paragraphs
-    if (trimmed === '') {
+    if (trimmed === "") {
       const candidateStartIndex = bufferStartLine - contentStartLine;
-      const choice = buffer.length > 0
-        ? parseChoiceQuestion(lines.slice(candidateStartIndex).join('\n'))
-        : null;
+      const choice =
+        buffer.length > 0 ? parseChoiceQuestion(lines.slice(candidateStartIndex).join("\n")) : null;
 
       if (choice) {
         blocks.push({
           id: `block-${currentId++}`,
-          type: 'choice-question',
+          type: "choice-question",
           content: choice.question,
           choiceOptions: choice.options,
           recommendedChoiceLabel: choice.recommendedLabel,
@@ -410,14 +426,14 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
           startLine: bufferStartLine,
         });
         buffer = [];
-        currentType = 'paragraph';
+        currentType = "paragraph";
         lastLineWasBlank = false;
         i = candidateStartIndex + choice.sourceLineCount - 1;
         continue;
       }
 
       flush();
-      currentType = 'paragraph';
+      currentType = "paragraph";
       lastLineWasBlank = true;
       continue;
     }
@@ -427,10 +443,10 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     if (
       buffer.length === 0 &&
       blocks.length > 0 &&
-      blocks[blocks.length - 1].type === 'list-item' &&
+      blocks[blocks.length - 1].type === "list-item" &&
       (prevLineWasBlank ? /^\s{2,}/ : /^\s+/).test(line)
     ) {
-      const sep = prevLineWasBlank ? '\n\n' : '\n';
+      const sep = prevLineWasBlank ? "\n\n" : "\n";
       blocks[blocks.length - 1].content += sep + trimmed;
       continue;
     }
@@ -441,7 +457,7 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
     }
     buffer.push(line);
   }
-  
+
   flush(); // Final flush
 
   return blocks;
@@ -469,7 +485,7 @@ export const computeListIndices = (blocks: Block[]): (number | null)[] => {
   const counters: number[] = [];
   const lastOrderedAtLevel: boolean[] = [];
 
-  return blocks.map(block => {
+  return blocks.map((block) => {
     const lvl = block.level || 0;
     // Sibling change at any deeper level resets those levels.
     counters.length = lvl + 1;
@@ -491,8 +507,7 @@ export const computeListIndices = (blocks: Block[]): (number | null)[] => {
 };
 
 /** Wrap feedback output with annotation instructions for pasting into agent sessions */
-export const wrapFeedbackForAgent = (feedback: string): string =>
-  annotationFeedback(feedback);
+export const wrapFeedbackForAgent = (feedback: string): string => annotationFeedback(feedback);
 
 export interface ExportAnnotationsOptions {
   sourceConverted?: boolean;
@@ -500,14 +515,14 @@ export interface ExportAnnotationsOptions {
 
 /** Compute the end line of a block from its content and type. */
 const blockEndLine = (block: Block): number => {
-  if (block.type === 'choice-question') {
-    const lineCount = block.sourceLineCount ?? block.sourceText?.split('\n').length ?? 1;
+  if (block.type === "choice-question") {
+    const lineCount = block.sourceLineCount ?? block.sourceText?.split("\n").length ?? 1;
     return block.startLine + lineCount - 1;
   }
   if (!block.content) return block.startLine;
-  const contentLines = block.content.split('\n').length;
-  if (block.type === 'code') return block.startLine + contentLines + 1;
-  if (block.type === 'directive') return block.startLine + contentLines + 1;
+  const contentLines = block.content.split("\n").length;
+  if (block.type === "code") return block.startLine + contentLines + 1;
+  if (block.type === "directive") return block.startLine + contentLines + 1;
   if (block.alertKind) return block.startLine + contentLines;
   return block.startLine + contentLines - 1;
 };
@@ -515,9 +530,13 @@ const blockEndLine = (block: Block): number => {
 /** Resolve the source-line label for a single annotation.
  *  Returns null for global comments, diff-view annotations, or missing blocks. */
 const lineLabelForAnnotation = (blocks: Block[], ann: any): string | null => {
-  if (!ann.blockId || ann.type === 'GLOBAL_COMMENT') return null;
-  if (Object.prototype.toString.call(ann.blockId) === "[object String]" && ann.blockId.startsWith('diff-block-')) return null;
-  const block = blocks.find(b => b.id === ann.blockId);
+  if (!ann.blockId || ann.type === "GLOBAL_COMMENT") return null;
+  if (
+    Object.prototype.toString.call(ann.blockId) === "[object String]" &&
+    ann.blockId.startsWith("diff-block-")
+  )
+    return null;
+  const block = blocks.find((b) => b.id === ann.blockId);
   if (!block || Object.prototype.toString.call(block.startLine) !== "[object Number]") return null;
   const end = blockEndLine(block);
   if (end <= block.startLine) return `line ${block.startLine}`;
@@ -528,18 +547,18 @@ export const exportAnnotations = (
   blocks: Block[],
   annotations: any[],
   globalAttachments: ImageAttachment[] = [],
-  title: string = 'Plan Feedback',
-  subject: string = 'plan',
+  title: string = "Plan Feedback",
+  subject: string = "plan",
   opts: ExportAnnotationsOptions = {},
 ): string => {
   if (annotations.length === 0 && globalAttachments.length === 0) {
-    return 'No changes detected.';
+    return "No changes detected.";
   }
 
   // Sort annotations by block and offset
   const sortedAnns = [...annotations].sort((a, b) => {
-    const blockA = blocks.findIndex(blk => blk.id === a.blockId);
-    const blockB = blocks.findIndex(blk => blk.id === b.blockId);
+    const blockA = blocks.findIndex((blk) => blk.id === a.blockId);
+    const blockB = blocks.findIndex((blk) => blk.id === b.blockId);
     if (blockA !== blockB) return blockA - blockB;
     return a.startOffset - b.startOffset;
   });
@@ -561,7 +580,7 @@ export const exportAnnotations = (
   }
 
   if (annotations.length > 0) {
-    output += `I've reviewed this ${subject} and have ${annotations.length} piece${annotations.length > 1 ? 's' : ''} of feedback:\n\n`;
+    output += `I've reviewed this ${subject} and have ${annotations.length} piece${annotations.length > 1 ? "s" : ""} of feedback:\n\n`;
   }
 
   sortedAnns.forEach((ann, index) => {
@@ -576,13 +595,13 @@ export const exportAnnotations = (
     }
 
     switch (ann.type) {
-      case 'DELETION':
+      case "DELETION":
         output += `Remove this\n`;
         output += `\`\`\`\n${ann.originalText}\n\`\`\`\n`;
         output += `> I don't want this in the ${subject}.\n`;
         break;
 
-      case 'COMMENT':
+      case "COMMENT":
         if (ann.isQuickLabel) {
           output += `[${ann.text}] Feedback on: "${ann.originalText}"\n`;
           if (ann.quickLabelTip) {
@@ -594,7 +613,7 @@ export const exportAnnotations = (
         }
         break;
 
-      case 'GLOBAL_COMMENT':
+      case "GLOBAL_COMMENT":
         output += `General feedback about the ${subject}\n`;
         output += `> ${ann.text}\n`;
         break;
@@ -608,7 +627,7 @@ export const exportAnnotations = (
       });
     }
 
-    output += '\n';
+    output += "\n";
   });
 
   output += `---\n`;
@@ -625,7 +644,7 @@ export const exportAnnotations = (
     for (const [text, count] of grouped) {
       output += `- **${text}**: ${count}\n`;
     }
-    output += '\n';
+    output += "\n";
   }
 
   return output;
@@ -640,14 +659,17 @@ export interface LinkedDocAnnotationEntry {
 }
 
 export const exportLinkedDocAnnotations = (
-  docAnnotations: Map<string, LinkedDocAnnotationEntry>
+  docAnnotations: Map<string, LinkedDocAnnotationEntry>,
 ): string => {
   let output = `\n# Linked Document Feedback\n\nThe following feedback is on documents referenced in the plan.\n\n`;
 
-  for (const [filepath, { annotations, globalAttachments, blocks: docBlocks, isConverted }] of docAnnotations) {
+  for (const [
+    filepath,
+    { annotations, globalAttachments, blocks: docBlocks, isConverted },
+  ] of docAnnotations) {
     if (annotations.length === 0 && globalAttachments.length === 0) continue;
 
-    output += `## ${filepath}${isConverted ? ' (converted from HTML — line numbers refer to converted markdown)' : ''}\n\n`;
+    output += `## ${filepath}${isConverted ? " (converted from HTML — line numbers refer to converted markdown)" : ""}\n\n`;
 
     if (globalAttachments.length > 0) {
       output += `### Reference Images\n`;
@@ -664,7 +686,7 @@ export const exportLinkedDocAnnotations = (
       return a.startOffset - b.startOffset;
     });
 
-    output += `I've reviewed this document and have ${annotations.length} piece${annotations.length !== 1 ? 's' : ''} of feedback:\n\n`;
+    output += `I've reviewed this document and have ${annotations.length} piece${annotations.length !== 1 ? "s" : ""} of feedback:\n\n`;
 
     sortedAnns.forEach((ann, index) => {
       output += `### ${index + 1}. `;
@@ -673,13 +695,13 @@ export const exportLinkedDocAnnotations = (
       if (lineLabel) output += `(${lineLabel}) `;
 
       switch (ann.type) {
-        case 'DELETION':
+        case "DELETION":
           output += `Remove this\n`;
           output += `\`\`\`\n${ann.originalText}\n\`\`\`\n`;
           output += `> I don't want this in the document.\n`;
           break;
 
-        case 'COMMENT':
+        case "COMMENT":
           if (ann.isQuickLabel) {
             output += `[${ann.text}] Feedback on: "${ann.originalText}"\n`;
             if (ann.quickLabelTip) {
@@ -691,7 +713,7 @@ export const exportLinkedDocAnnotations = (
           }
           break;
 
-        case 'GLOBAL_COMMENT':
+        case "GLOBAL_COMMENT":
           output += `General feedback about the document\n`;
           output += `> ${ann.text}\n`;
           break;
@@ -704,7 +726,7 @@ export const exportLinkedDocAnnotations = (
         });
       }
 
-      output += '\n';
+      output += "\n";
     });
   }
 
@@ -713,14 +735,15 @@ export const exportLinkedDocAnnotations = (
 };
 
 export const exportEditorAnnotations = (editorAnnotations: EditorAnnotation[]): string => {
-  if (editorAnnotations.length === 0) return '';
+  if (editorAnnotations.length === 0) return "";
 
   let output = `\n# Editor File Annotations\n\nThe following annotations reference code files in the project.\n\n`;
 
   editorAnnotations.forEach((ann, index) => {
-    const lineRange = ann.lineStart === ann.lineEnd
-      ? `line ${ann.lineStart}`
-      : `lines ${ann.lineStart}-${ann.lineEnd}`;
+    const lineRange =
+      ann.lineStart === ann.lineEnd
+        ? `line ${ann.lineStart}`
+        : `lines ${ann.lineStart}-${ann.lineEnd}`;
 
     output += `## ${index + 1}. ${ann.filePath} (${lineRange})\n`;
     output += `\`\`\`\n${ann.selectedText}\n\`\`\`\n`;
@@ -729,7 +752,7 @@ export const exportEditorAnnotations = (editorAnnotations: EditorAnnotation[]): 
       output += `> ${ann.comment}\n`;
     }
 
-    output += '\n';
+    output += "\n";
   });
 
   output += `---\n`;
@@ -737,7 +760,7 @@ export const exportEditorAnnotations = (editorAnnotations: EditorAnnotation[]): 
 };
 
 export const exportCodeFileAnnotations = (annotations: CodeAnnotation[]): string => {
-  if (annotations.length === 0) return '';
+  if (annotations.length === 0) return "";
 
   let output = `\n# Code File Feedback\n\nThe following feedback is on code files referenced from the reviewed document.\n\n`;
   const sorted = [...annotations].sort((a, b) => {
@@ -747,9 +770,10 @@ export const exportCodeFileAnnotations = (annotations: CodeAnnotation[]): string
   });
 
   sorted.forEach((ann, index) => {
-    const lineRange = ann.lineStart === ann.lineEnd
-      ? `line ${ann.lineStart}`
-      : `lines ${ann.lineStart}-${ann.lineEnd}`;
+    const lineRange =
+      ann.lineStart === ann.lineEnd
+        ? `line ${ann.lineStart}`
+        : `lines ${ann.lineStart}-${ann.lineEnd}`;
 
     output += `## ${index + 1}. ${ann.filePath} (${lineRange})\n`;
     if (ann.originalCode) {
@@ -764,7 +788,7 @@ export const exportCodeFileAnnotations = (annotations: CodeAnnotation[]): string
         output += `- [${img.name}] \`${img.path}\`\n`;
       });
     }
-    output += '\n';
+    output += "\n";
   });
 
   output += `---\n`;
@@ -790,9 +814,9 @@ const excerptMessageText = (text: string): string => {
   return `${trimmed.slice(0, MESSAGE_EXCERPT_MAX_CHARS).trimEnd()}...`;
 };
 
-const fencedBlock = (text: string, language = ''): string => {
-  let fence = '```';
-  while (text.includes(fence)) fence += '`';
+const fencedBlock = (text: string, language = ""): string => {
+  let fence = "```";
+  while (text.includes(fence)) fence += "`";
   return `${fence}${language}\n${text}\n${fence}\n`;
 };
 
@@ -801,7 +825,7 @@ export const exportMessageAnnotations = (entries: MessageAnnotationEntry[]): str
     const linkedDocCount = entry.linkedDocs
       ? Array.from(entry.linkedDocs.values()).reduce(
           (sum, doc) => sum + doc.annotations.length + doc.globalAttachments.length,
-          0
+          0,
         )
       : 0;
     return (
@@ -813,17 +837,17 @@ export const exportMessageAnnotations = (entries: MessageAnnotationEntry[]): str
   });
 
   if (nonEmpty.length === 0) {
-    return 'User reviewed the messages and has no feedback.';
+    return "User reviewed the messages and has no feedback.";
   }
 
-  let output = `# Message Feedback\n\nThe following feedback spans ${nonEmpty.length} assistant message${nonEmpty.length === 1 ? '' : 's'}. Each section includes an excerpt of the message it applies to.\n\n`;
+  let output = `# Message Feedback\n\nThe following feedback spans ${nonEmpty.length} assistant message${nonEmpty.length === 1 ? "" : "s"}. Each section includes an excerpt of the message it applies to.\n\n`;
 
   nonEmpty.forEach((entry, index) => {
-    const label = entry.timestamp ? ` (${entry.timestamp})` : '';
+    const label = entry.timestamp ? ` (${entry.timestamp})` : "";
     output += `## Message ${index + 1}${label}\n\n`;
     output += `Message excerpt:\n`;
-    output += fencedBlock(excerptMessageText(entry.text), 'markdown');
-    output += '\n';
+    output += fencedBlock(excerptMessageText(entry.text), "markdown");
+    output += "\n";
 
     if (entry.annotations.length > 0 || entry.globalAttachments.length > 0) {
       output += exportAnnotations(
@@ -831,24 +855,24 @@ export const exportMessageAnnotations = (entries: MessageAnnotationEntry[]): str
         entry.annotations,
         entry.globalAttachments,
         `Feedback for Message ${index + 1}`,
-        'message',
+        "message",
       );
-      output += '\n';
+      output += "\n";
     }
 
     const hasLinkedDocFeedback = entry.linkedDocs
       ? Array.from(entry.linkedDocs.values()).some(
-          (doc) => doc.annotations.length > 0 || doc.globalAttachments.length > 0
+          (doc) => doc.annotations.length > 0 || doc.globalAttachments.length > 0,
         )
       : false;
     if (entry.linkedDocs && hasLinkedDocFeedback) {
       output += exportLinkedDocAnnotations(entry.linkedDocs);
-      output += '\n';
+      output += "\n";
     }
 
     if (entry.codeAnnotations?.length) {
       output += exportCodeFileAnnotations(entry.codeAnnotations);
-      output += '\n';
+      output += "\n";
     }
   });
 

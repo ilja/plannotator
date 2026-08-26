@@ -1,10 +1,10 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CodeAnnotation } from '@plannotator/ui/types';
-import { sanitizeBlockHtml } from '@plannotator/ui/utils/sanitizeHtml';
-import { CommentMeta } from './CommentMeta';
-import { CommentActions } from './CommentActions';
-import { FileNameChip } from './FileNameChip';
-import { commentCopyText } from '../utils/annotationDisplay';
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CodeAnnotation } from "@plannotator/ui/types";
+import { sanitizeBlockHtml } from "@plannotator/ui/utils/sanitizeHtml";
+import { CommentMeta } from "./CommentMeta";
+import { CommentActions } from "./CommentActions";
+import { FileNameChip } from "./FileNameChip";
+import { commentCopyText } from "../utils/annotationDisplay";
 
 interface FileCommentBannerProps {
   /** File-scoped comments for ONE file (already filtered to scope === 'file'). */
@@ -19,9 +19,9 @@ interface FileCommentBannerProps {
 
 /** First non-empty line of the comment, used as the collapsed one-line preview. */
 function firstLine(text: string): string {
-  for (const line of text.split('\n')) {
+  for (const line of text.split("\n")) {
     const trimmed = line.trim();
-    if (trimmed) return trimmed.replace(/^#+\s*/, '').replace(/[*_`>]/g, '');
+    if (trimmed) return trimmed.replace(/^#+\s*/, "").replace(/[*_`>]/g, "");
   }
   return text.trim();
 }
@@ -46,7 +46,7 @@ export const FileCommentCard: React.FC<{
   // lets a reviewer collapse a long note back to one line to reach the hunks.
   const [collapsed, setCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(comment.text ?? '');
+  const [draft, setDraft] = useState(comment.text ?? "");
 
   // Tell the owner to re-measure when our height changes — in the all-files view
   // these cards live in Pierre's custom-header portal, whose height isn't auto-
@@ -60,10 +60,7 @@ export const FileCommentCard: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapsed, isEditing]);
 
-  const html = useMemo(
-    () => (comment.text ? sanitizeBlockHtml(comment.text) : ''),
-    [comment.text],
-  );
+  const html = useMemo(() => (comment.text ? sanitizeBlockHtml(comment.text) : ""), [comment.text]);
 
   const saveEdit = () => {
     const trimmed = draft.trim();
@@ -73,7 +70,7 @@ export const FileCommentCard: React.FC<{
 
   return (
     <div
-      className={`review-comment group${isSelected ? ' is-selected' : ''}`}
+      className={`review-comment group${isSelected ? " is-selected" : ""}`}
       data-annotation-id={comment.id}
       onClick={() => onSelect(comment.id)}
     >
@@ -84,10 +81,19 @@ export const FileCommentCard: React.FC<{
                 space from a long comment), unlike the hover-revealed actions. */}
             <button
               className="flex-none -ml-0.5 rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
-              title={collapsed ? 'Expand comment' : 'Collapse comment'}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCollapsed((c) => !c);
+              }}
+              title={collapsed ? "Expand comment" : "Collapse comment"}
             >
-              <svg className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-90'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className={`w-3.5 h-3.5 transition-transform ${collapsed ? "" : "rotate-90"}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -109,31 +115,51 @@ export const FileCommentCard: React.FC<{
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') { e.preventDefault(); setIsEditing(false); }
-              else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(); }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setIsEditing(false);
+              } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                saveEdit();
+              }
             }}
             className="w-full min-h-[80px] resize-y rounded border border-border bg-background p-2 text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary/40"
             placeholder="File comment (markdown supported)…"
           />
           <div className="mt-1 flex items-center justify-end gap-2">
-            <button className="text-xs px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted" onClick={() => setIsEditing(false)}>
+            <button
+              className="text-xs px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={() => setIsEditing(false)}
+            >
               Cancel
             </button>
-            <button className="text-xs px-2 py-1 rounded bg-primary/15 text-primary hover:bg-primary/25" onClick={saveEdit}>
+            <button
+              className="text-xs px-2 py-1 rounded bg-primary/15 text-primary hover:bg-primary/25"
+              onClick={saveEdit}
+            >
               Save
             </button>
           </div>
         </div>
       ) : comment.text ? (
         collapsed ? (
-          <div className="review-comment-body truncate text-muted-foreground/80">{firstLine(comment.text)}</div>
+          <div className="review-comment-body truncate text-muted-foreground/80">
+            {firstLine(comment.text)}
+          </div>
         ) : (
-          <div className="review-comment-body ai-markdown max-h-[220px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: html }} />
+          <div
+            className="review-comment-body ai-markdown max-h-[220px] overflow-y-auto"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
         )
       ) : null}
       {!isEditing && (
         <CommentActions
-          onEdit={() => { setDraft(comment.text ?? ''); setIsEditing(true); setCollapsed(false); }}
+          onEdit={() => {
+            setDraft(comment.text ?? "");
+            setIsEditing(true);
+            setCollapsed(false);
+          }}
           copyText={comment.text ? commentCopyText(comment) : undefined}
           onDelete={() => onDelete(comment.id)}
         />

@@ -9,7 +9,8 @@ import {
 
 describe("feedback-templates", () => {
   test("annotation feedback preserves feedback content verbatim", () => {
-    const feedback = "## 1. Change intro\n**From:**\n```\nold text\n```\n**To:**\n```\nnew text\n```";
+    const feedback =
+      "## 1. Change intro\n**From:**\n```\nold text\n```\n**To:**\n```\nnew text\n```";
     const result = annotationFeedback(feedback);
 
     expect(result).toContain("# Annotation Feedback");
@@ -36,10 +37,16 @@ describe("feedback-templates", () => {
     }
 
     const instruction = results[0];
-    expect(instruction).toContain("If any comment contains a question or is ambiguous, do not make any changes, including changes requested by clear comments.");
+    expect(instruction).toContain(
+      "If any comment contains a question or is ambiguous, do not make any changes, including changes requested by clear comments.",
+    );
     expect(instruction).toContain("Discuss the unclear comments with me and wait for my response.");
-    expect(instruction).toContain("Only start making changes after we have reached a shared understanding of every comment.");
-    expect(instruction).toContain("If no comment contains a question and none is ambiguous, apply the feedback.");
+    expect(instruction).toContain(
+      "Only start making changes after we have reached a shared understanding of every comment.",
+    );
+    expect(instruction).toContain(
+      "If no comment contains a question and none is ambiguous, apply the feedback.",
+    );
   });
 
   test("does not duplicate the discussion instruction", () => {

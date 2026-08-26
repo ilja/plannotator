@@ -1,10 +1,10 @@
-import React from 'react';
-import type { Block, ChoiceQuestionOption } from '../../types';
-import { InlineMarkdown } from '../InlineMarkdown';
+import React from "react";
+import type { Block, ChoiceQuestionOption } from "../../types";
+import { InlineMarkdown } from "../InlineMarkdown";
 
 const proseStyle: React.CSSProperties = {
-  fontFamily: 'var(--annotation-prose-font-family, var(--font-sans))',
-  fontSize: 'var(--annotation-prose-font-size, 15px)',
+  fontFamily: "var(--annotation-prose-font-family, var(--font-sans))",
+  fontSize: "var(--annotation-prose-font-size, 15px)",
 };
 
 type ChoiceQuestionBlockProps = {
@@ -34,8 +34,8 @@ export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
 }) => {
   const options = block.choiceOptions ?? [];
   const recommendationLine = block.sourceText
-    ?.split('\n')
-    .map(line => line.trim())
+    ?.split("\n")
+    .map((line) => line.trim())
     .filter(Boolean)
     .at(-1);
   const inlineProps = {
@@ -58,7 +58,7 @@ export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
         <InlineMarkdown {...inlineProps} text={block.content} />
       </div>
       <div className="grid gap-2">
-        {options.map(option => {
+        {options.map((option) => {
           const selected = option.label === selectedOptionLabel;
           const recommended = option.label === block.recommendedChoiceLabel;
 
@@ -69,15 +69,15 @@ export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
               tabIndex={0}
               className={`w-full cursor-pointer rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 selected
-                  ? 'border-primary/70 bg-primary/10 shadow-sm ring-1 ring-primary/20'
-                  : 'border-border/60 bg-background/70 hover:border-primary/40 hover:bg-muted/40'
+                  ? "border-primary/70 bg-primary/10 shadow-sm ring-1 ring-primary/20"
+                  : "border-border/60 bg-background/70 hover:border-primary/40 hover:bg-muted/40"
               }`}
               data-choice-option-label={option.label}
-              data-choice-selected={selected ? 'true' : undefined}
+              data-choice-selected={selected ? "true" : undefined}
               data-choice-annotation-id={selected ? selectedAnnotationId : undefined}
               onClick={() => onSelectChoice?.(block, option)}
               onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
+                if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
                 onSelectChoice?.(block, option);
               }}

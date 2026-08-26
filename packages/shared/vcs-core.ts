@@ -48,7 +48,12 @@ export interface VcsProvider {
   ownsDiffType(diffType: string): boolean;
   canStageFiles?(diffType: string): boolean;
   getContext(cwd?: string): Promise<GitContext>;
-  runDiff(diffType: DiffType, defaultBranch: string, cwd?: string, options?: GitDiffOptions): Promise<DiffResult>;
+  runDiff(
+    diffType: DiffType,
+    defaultBranch: string,
+    cwd?: string,
+    options?: GitDiffOptions,
+  ): Promise<DiffResult>;
   getFileContents(
     diffType: DiffType,
     defaultBranch: string,
@@ -123,7 +128,15 @@ export interface PreparedLocalReviewDiff {
   error?: string;
 }
 
-const GIT_DIFF_TYPES = new Set(["uncommitted", "staged", "unstaged", "last-commit", "branch", "merge-base", "all"]);
+const GIT_DIFF_TYPES = new Set([
+  "uncommitted",
+  "staged",
+  "unstaged",
+  "last-commit",
+  "branch",
+  "merge-base",
+  "all",
+]);
 const JJ_DIFF_TYPES = new Set(["jj-current", "jj-last", "jj-line", "jj-evolog", "jj-all"]);
 
 function selectNearestProvider(
@@ -154,7 +167,9 @@ function isSameOrAncestor(root: string, child: string): boolean {
 }
 
 function vcsRootDepth(root: string): number {
-  return resolve(root).split(/[\\/]+/).filter(Boolean).length;
+  return resolve(root)
+    .split(/[\\/]+/)
+    .filter(Boolean).length;
 }
 
 export function createGitProvider(runtime: ReviewGitRuntime): VcsProvider {
@@ -188,7 +203,12 @@ export function createGitProvider(runtime: ReviewGitRuntime): VcsProvider {
       return getGitContext(runtime, cwd);
     },
 
-    runDiff(diffType: DiffType, defaultBranch: string, cwd?: string, options?: GitDiffOptions): Promise<DiffResult> {
+    runDiff(
+      diffType: DiffType,
+      defaultBranch: string,
+      cwd?: string,
+      options?: GitDiffOptions,
+    ): Promise<DiffResult> {
       return runGitDiff(runtime, diffType, defaultBranch, cwd, options);
     },
 
@@ -239,7 +259,12 @@ export function createJjProvider(runtime: ReviewJjRuntime): VcsProvider {
       return getJjContext(runtime, cwd);
     },
 
-    runDiff(diffType: DiffType, defaultBranch: string, cwd?: string, options?: GitDiffOptions): Promise<DiffResult> {
+    runDiff(
+      diffType: DiffType,
+      defaultBranch: string,
+      cwd?: string,
+      options?: GitDiffOptions,
+    ): Promise<DiffResult> {
       return runJjDiff(runtime, diffType, defaultBranch, cwd, options);
     },
 
@@ -263,7 +288,9 @@ export function createVcsApi(providers: readonly VcsProvider[]): VcsApi {
     throw new Error("createVcsApi requires at least one provider");
   }
 
-  async function collectDetectedProviders(cwd?: string): Promise<Array<{ provider: VcsProvider; root: string | null; order: number }>> {
+  async function collectDetectedProviders(
+    cwd?: string,
+  ): Promise<Array<{ provider: VcsProvider; root: string | null; order: number }>> {
     const candidates: Array<{ provider: VcsProvider; root: string | null; order: number }> = [];
     for (let index = 0; index < providerList.length; index++) {
       const provider = providerList[index];
@@ -286,7 +313,10 @@ export function createVcsApi(providers: readonly VcsProvider[]): VcsApi {
     return candidates;
   }
 
-  async function detectManagedVcs(cwd?: string, vcsType?: VcsSelection): Promise<VcsProvider | null> {
+  async function detectManagedVcs(
+    cwd?: string,
+    vcsType?: VcsSelection,
+  ): Promise<VcsProvider | null> {
     const key = `${vcsType ?? "auto"}:${cwd ?? process.cwd()}`;
     const cached = managedVcsCache.get(key);
     if (cached) return cached;
@@ -410,22 +440,32 @@ export function createVcsApi(providers: readonly VcsProvider[]): VcsApi {
       return (await getContextWithProvider(cwd, vcsType)).gitContext;
     },
 
-    async detectRemoteDefaultCompareTarget(cwd?: string, vcsType?: VcsSelection): Promise<string | null> {
+    async detectRemoteDefaultCompareTarget(
+      cwd?: string,
+      vcsType?: VcsSelection,
+    ): Promise<string | null> {
       const provider = await getProviderForSelection(vcsType, cwd);
       return provider.detectRemoteDefaultCompareTarget?.(cwd) ?? null;
     },
 
-    async prepareLocalReviewDiff(options: PrepareLocalReviewDiffOptions): Promise<PreparedLocalReviewDiff> {
+    async prepareLocalReviewDiff(
+      options: PrepareLocalReviewDiffOptions,
+    ): Promise<PreparedLocalReviewDiff> {
       const { provider, gitContext } = await getContextWithProvider(options.cwd, options.vcsType);
-      const ownsRequestedDiffType = options.requestedDiffType !== undefined
-        && provider.ownsDiffType(options.requestedDiffType);
+      const ownsRequestedDiffType =
+        options.requestedDiffType !== undefined && provider.ownsDiffType(options.requestedDiffType);
       const diffType = resolveRequestedDiffType(
         provider,
         gitContext,
         options.requestedDiffType,
         options.configuredDiffType,
       );
-      const base = resolveInitialBase(gitContext, diffType, options.requestedBase, ownsRequestedDiffType);
+      const base = resolveInitialBase(
+        gitContext,
+        diffType,
+        options.requestedBase,
+        ownsRequestedDiffType,
+      );
       const result = await provider.runDiff(diffType, base, gitContext.cwd ?? options.cwd, {
         hideWhitespace: options.hideWhitespace,
       });

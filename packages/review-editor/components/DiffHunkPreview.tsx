@@ -1,12 +1,12 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { FileDiff } from '@pierre/diffs/react';
-import { getSingularPatch } from '@pierre/diffs';
-import type { DiffLineBgIntensity } from '@plannotator/shared/config';
-import { useTheme } from '@plannotator/ui/components/ThemeProvider';
-import { useConfigValue } from '@plannotator/ui/config';
-import { useReviewState } from '../dock/ReviewStateContext';
-import { buildLineBgOverrides, resolvePierreThemeSelection } from '../hooks/usePierreTheme';
-import { useWorkerPoolThemeSync } from '../workerPool';
+import React, { useMemo, useState, useEffect } from "react";
+import { FileDiff } from "@pierre/diffs/react";
+import { getSingularPatch } from "@pierre/diffs";
+import type { DiffLineBgIntensity } from "@plannotator/shared/config";
+import { useTheme } from "@plannotator/ui/components/ThemeProvider";
+import { useConfigValue } from "@plannotator/ui/config";
+import { useReviewState } from "../dock/ReviewStateContext";
+import { buildLineBgOverrides, resolvePierreThemeSelection } from "../hooks/usePierreTheme";
+import { useWorkerPoolThemeSync } from "../workerPool";
 
 interface DiffHunkPreviewProps {
   /** Raw diff hunk string (unified diff format). */
@@ -21,22 +21,25 @@ interface DiffHunkPreviewProps {
  * Called synchronously so the first render is already themed (no flash on tooltip open).
  */
 function buildPierreCSS(
-  mode: 'light' | 'dark',
+  mode: "light" | "dark",
   fontFamily: string,
   fontSize: string,
   lineBgIntensity: DiffLineBgIntensity,
 ): string {
   try {
     const styles = getComputedStyle(document.documentElement);
-    const bg = styles.getPropertyValue('--background').trim();
-    const fg = styles.getPropertyValue('--foreground').trim();
-    if (!bg || !fg) return '';
+    const bg = styles.getPropertyValue("--background").trim();
+    const fg = styles.getPropertyValue("--foreground").trim();
+    if (!bg || !fg) return "";
 
-    const fontCSS = (fontFamily || fontSize) ? `
+    const fontCSS =
+      fontFamily || fontSize
+        ? `
       pre, code, [data-line-content], [data-column-number] {
-        ${fontFamily ? `font-family: '${fontFamily}', monospace !important;` : ''}
-        ${fontSize ? `font-size: ${fontSize} !important; line-height: 1.5 !important;` : ''}
-      }` : '';
+        ${fontFamily ? `font-family: '${fontFamily}', monospace !important;` : ""}
+        ${fontSize ? `font-size: ${fontSize} !important; line-height: 1.5 !important;` : ""}
+      }`
+        : "";
 
     return `
       :host, [data-diff], [data-file], [data-diffs-header], [data-error-wrapper], [data-virtualizer-buffer] {
@@ -55,7 +58,7 @@ function buildPierreCSS(
       ${buildLineBgOverrides(lineBgIntensity, mode)}
     `;
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -71,7 +74,7 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
 }) => {
   const { resolvedMode, colorTheme } = useTheme();
   const state = useReviewState();
-  const lineBgIntensity = useConfigValue('diffLineBgIntensity');
+  const lineBgIntensity = useConfigValue("diffLineBgIntensity");
   const selection = resolvePierreThemeSelection(colorTheme, resolvedMode);
   const [expanded, setExpanded] = useState(false);
 
@@ -82,9 +85,9 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
       //   1. Full git diff: starts with "diff --git" — use as-is
       //   2. File-level diff: starts with "--- " — prepend "diff --git" line only
       //   3. Bare hunk: starts with "@@ " — prepend full synthetic headers
-      const patch = hunk.startsWith('diff --git')
+      const patch = hunk.startsWith("diff --git")
         ? hunk
-        : hunk.startsWith('--- ')
+        : hunk.startsWith("--- ")
           ? `diff --git a/file b/file\n${hunk}`
           : `diff --git a/file b/file\n--- a/file\n+++ b/file\n${hunk}`;
       return getSingularPatch(patch);
@@ -95,9 +98,9 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
 
   // Initialize synchronously so the very first render (inside a tooltip) is already themed.
   // The lazy initializer reads computed CSS variables from the document root.
-  const [css, setCss] = useState(() => (
-    buildPierreCSS(selection.type, state.fontFamily, state.fontSize, lineBgIntensity)
-  ));
+  const [css, setCss] = useState(() =>
+    buildPierreCSS(selection.type, state.fontFamily, state.fontSize, lineBgIntensity),
+  );
 
   // Re-compute on theme / font / intensity changes
   useEffect(() => {
@@ -118,26 +121,26 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
   }
 
   return (
-    <div className={`rounded overflow-hidden border border-border/20 ${className ?? ''}`}>
-      <div
-        className="overflow-hidden"
-        style={expanded ? undefined : { maxHeight }}
-      >
+    <div className={`rounded overflow-hidden border border-border/20 ${className ?? ""}`}>
+      <div className="overflow-hidden" style={expanded ? undefined : { maxHeight }}>
         <FileDiff
           fileDiff={fileDiff}
           options={{
             themeType: selection.type,
             unsafeCSS: css,
             theme: selection.syntaxTheme,
-            diffStyle: 'unified',
+            diffStyle: "unified",
             disableLineNumbers: true,
-            overflow: 'wrap',
+            overflow: "wrap",
           }}
         />
       </div>
       {!expanded && (
         <button
-          onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(true);
+          }}
           className="w-full text-[10px] text-muted-foreground hover:text-foreground py-1 bg-muted/20 border-t border-border/20 transition-colors"
         >
           Show full context

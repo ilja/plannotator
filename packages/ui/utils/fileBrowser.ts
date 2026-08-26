@@ -5,11 +5,11 @@
  * Users add directories to browse; settings persist via cookies.
  */
 
-import { Option, Schema } from 'effect';
-import { storage } from './storage';
+import { Option, Schema } from "effect";
+import { storage } from "./storage";
 
-const STORAGE_KEY_ENABLED = 'plannotator-filebrowser-enabled';
-const STORAGE_KEY_DIRS = 'plannotator-filebrowser-dirs';
+const STORAGE_KEY_ENABLED = "plannotator-filebrowser-enabled";
+const STORAGE_KEY_DIRS = "plannotator-filebrowser-dirs";
 const DirectoryItemsSchema = Schema.Array(Schema.Unknown);
 const decodeDirectoryItems = Schema.decodeUnknownOption(DirectoryItemsSchema);
 const decodeDirectory = Schema.decodeUnknownOption(Schema.String);
@@ -39,7 +39,7 @@ function parseDirectories(raw: string): string[] {
 export function getFileBrowserSettings(): FileBrowserSettings {
   const dirsRaw = storage.getItem(STORAGE_KEY_DIRS);
   return {
-    enabled: storage.getItem(STORAGE_KEY_ENABLED) === 'true',
+    enabled: storage.getItem(STORAGE_KEY_ENABLED) === "true",
     directories: dirsRaw === null ? [] : parseDirectories(dirsRaw),
   };
 }

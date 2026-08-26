@@ -27,11 +27,13 @@ afterAll(() => {
 
 describe("resolveOpenInTarget — /api/open-in containment", () => {
   test("rejects non-string request fields at the /api/open-in boundary", async () => {
-    const response = await handleOpenIn(new Request("http://localhost/api/open-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filePath: 123 }),
-    }));
+    const response = await handleOpenIn(
+      new Request("http://localhost/api/open-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath: 123 }),
+      }),
+    );
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ ok: false, error: "Invalid request" });

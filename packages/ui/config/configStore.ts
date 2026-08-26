@@ -11,24 +11,26 @@
  * via a debounced POST /api/config.
  */
 
-import type { ConfigPatch } from '@plannotator/shared/config';
+import type { ConfigPatch } from "@plannotator/shared/config";
 import {
   decodeUiServerConfig,
   SETTINGS,
   type SettingDef,
   type SettingName,
   type SettingsMap,
-} from './settings';
+} from "./settings";
 
 type Listener = () => void;
 
 function mergeConfigPatches(current: ConfigPatch, patch: ConfigPatch): ConfigPatch {
-  const diffOptions = current.diffOptions || patch.diffOptions
-    ? { ...current.diffOptions, ...patch.diffOptions }
-    : undefined;
-  const annotationOptions = current.annotationOptions || patch.annotationOptions
-    ? { ...current.annotationOptions, ...patch.annotationOptions }
-    : undefined;
+  const diffOptions =
+    current.diffOptions || patch.diffOptions
+      ? { ...current.diffOptions, ...patch.diffOptions }
+      : undefined;
+  const annotationOptions =
+    current.annotationOptions || patch.annotationOptions
+      ? { ...current.annotationOptions, ...patch.annotationOptions }
+      : undefined;
 
   return {
     ...current,
@@ -40,7 +42,9 @@ function mergeConfigPatches(current: ConfigPatch, patch: ConfigPatch): ConfigPat
 
 /** Infer the value type from a SettingDef */
 type SettingValue<K extends SettingName> = SettingsMap[K] extends { defaultValue: infer D }
-  ? D extends (...args: unknown[]) => infer R ? R : D
+  ? D extends (...args: unknown[]) => infer R
+    ? R
+    : D
   : never;
 
 function resolveDefaultValue<Value>(definition: SettingDef<Value>): Value {
@@ -107,10 +111,7 @@ export class ConfigStore {
     def.toCookie(value);
 
     if (def.serverKey && def.toServer) {
-      this.pendingServerWrites = mergeConfigPatches(
-        this.pendingServerWrites,
-        def.toServer(value),
-      );
+      this.pendingServerWrites = mergeConfigPatches(this.pendingServerWrites, def.toServer(value));
       this.scheduleServerSync();
     }
 
@@ -133,9 +134,9 @@ export class ConfigStore {
     this.serverSyncTimer = setTimeout(() => {
       const payload = { ...this.pendingServerWrites };
       this.pendingServerWrites = {};
-      fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }).catch(() => {}); // best-effort
     }, 300);

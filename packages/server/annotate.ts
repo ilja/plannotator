@@ -14,20 +14,37 @@
 import { isRemoteSession, getServerHostname, getServerPort } from "./remote";
 import { getRepoInfo } from "./repo";
 import type { Origin } from "@plannotator/shared/agents";
-import {handleImage, handleUpload, handleDraftSave, handleDraftLoad, handleDraftDelete, handleFavicon, handleSaveNotes, readDraftGenerationFromBody, readDraftGenerationFromUrl} from "./shared-handlers";
-import { handleDoc, handleDocExists, handleFileBrowserFiles, handleObsidianVaults, handleObsidianFiles, handleObsidianDoc } from "./reference-handlers";
+import {
+  handleImage,
+  handleUpload,
+  handleDraftSave,
+  handleDraftLoad,
+  handleDraftDelete,
+  handleFavicon,
+  handleSaveNotes,
+  readDraftGenerationFromBody,
+  readDraftGenerationFromUrl,
+} from "./shared-handlers";
+import {
+  handleDoc,
+  handleDocExists,
+  handleFileBrowserFiles,
+  handleObsidianVaults,
+  handleObsidianFiles,
+  handleObsidianDoc,
+} from "./reference-handlers";
 import { handleFileBrowserFilesStream } from "./reference-watch";
 import { resolveUserPath, warmFileListCache } from "@plannotator/shared/resolve-file";
 import { contentHash, deleteDraft } from "./draft";
 import { disabledSourceSave, SourceSaveRequestSchema } from "@plannotator/shared/source-save";
 import { getAnnotateReferenceRootPaths } from "@plannotator/shared/annotate-reference-roots-node";
 import {
-	createSourceSaveCapability,
-	createSourceSaveCapabilityFromText,
-	readSourceFileSnapshot,
-	resolveFolderSourceFile,
-	resolveFolderSourceFileForSave,
-	saveSourceFileAtomic,
+  createSourceSaveCapability,
+  createSourceSaveCapabilityFromText,
+  readSourceFileSnapshot,
+  resolveFolderSourceFile,
+  resolveFolderSourceFileForSave,
+  saveSourceFileAtomic,
 } from "@plannotator/shared/source-save-node";
 import { createExternalAnnotationHandler } from "./external-annotations";
 import { saveConfig, detectGitUser, getServerConfig, ConfigPatch } from "./config";
@@ -42,7 +59,10 @@ import type { AIEndpoints } from "@plannotator/ai";
 import { createHtmlAssetRegistry } from "./html-assets";
 import { createBunAgentTerminalBridge } from "./agent-terminal";
 import { FeedbackRequestSchema } from "./review-request-schemas";
-import { isAgentTerminalWsRoute, supportsAnnotateAgentTerminalMode } from "@plannotator/shared/agent-terminal";
+import {
+  isAgentTerminalWsRoute,
+  supportsAnnotateAgentTerminalMode,
+} from "@plannotator/shared/agent-terminal";
 
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
@@ -131,7 +151,7 @@ const RETRY_DELAY_MS = 500;
  * - Port conflict retries
  */
 export async function startAnnotateServer(
-  options: AnnotateServerOptions
+  options: AnnotateServerOptions,
 ): Promise<AnnotateServerResult> {
   // Side-channel pre-warm so /api/doc/exists POSTs land on warm cache.
   void warmFileListCache(process.cwd(), "code");
@@ -164,7 +184,9 @@ export async function startAnnotateServer(
   const draftSource =
     mode === "annotate-folder" && folderPath
       ? `folder:${resolvePath(folderPath)}`
-      : renderHtml && rawHtml ? rawHtml : markdown;
+      : renderHtml && rawHtml
+        ? rawHtml
+        : markdown;
   const draftKey = contentHash(draftSource);
   const externalAnnotations = createExternalAnnotationHandler("plan");
   const aiRuntime = await createAIRuntime();
@@ -176,22 +198,29 @@ export async function startAnnotateServer(
 
   async function loadShareHtml(pathParam: string | null): Promise<Response> {
     if (/^https?:\/\//i.test(filePath)) {
-      return Response.json({ error: "Raw HTML sharing is unavailable for URL annotations" }, { status: 400 });
+      return Response.json(
+        { error: "Raw HTML sharing is unavailable for URL annotations" },
+        { status: 400 },
+      );
     }
 
     const sourcePath = resolvePath(filePath);
     const requestedPath = pathParam ? resolvePath(pathParam) : sourcePath;
     if (!/\.html?$/i.test(requestedPath)) {
-      return Response.json({ error: "Share HTML is only available for HTML documents" }, { status: 400 });
+      return Response.json(
+        { error: "Share HTML is only available for HTML documents" },
+        { status: 400 },
+      );
     }
     if (!isAllowedHtmlSharePath(requestedPath)) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
 
     try {
-      const html = renderHtml && rawHtml && requestedPath === sourcePath
-        ? rawHtml
-        : await Bun.file(requestedPath).text();
+      const html =
+        renderHtml && rawHtml && requestedPath === sourcePath
+          ? rawHtml
+          : await Bun.file(requestedPath).text();
       return Response.json({ shareHtml: htmlAssets.inlineHtml(html, requestedPath) });
     } catch {
       return Response.json({ error: "Failed to prepare share HTML" }, { status: 500 });
@@ -208,7 +237,11 @@ export async function startAnnotateServer(
     return false;
   }
 
-  const singleFileSourceSaveEligible = mode === "annotate" && !sourceConverted && !(renderHtml && rawHtml) && !/^https?:\/\//i.test(filePath);
+  const singleFileSourceSaveEligible =
+    mode === "annotate" &&
+    !sourceConverted &&
+    !(renderHtml && rawHtml) &&
+    !/^https?:\/\//i.test(filePath);
   const initialSingleFileSourceSave = singleFileSourceSaveEligible
     ? createSourceSaveCapability("single-file", filePath)
     : null;
@@ -236,10 +269,17 @@ export async function startAnnotateServer(
       return { plan: markdown, sourceSave: disabledSourceSave("not-local-file") };
     }
 
-    const sourceSave = createSourceSaveCapability("single-file", initialSingleFileSourcePath ?? filePath);
+    const sourceSave = createSourceSaveCapability(
+      "single-file",
+      initialSingleFileSourcePath ?? filePath,
+    );
     if (!sourceSave.enabled) {
       if (sourceSave.reason === "missing-file" && initialSingleFileSourcePath) {
-        const missingSourceSave = createSourceSaveCapabilityFromText("single-file", initialSingleFileSourcePath, markdown);
+        const missingSourceSave = createSourceSaveCapabilityFromText(
+          "single-file",
+          initialSingleFileSourcePath,
+          markdown,
+        );
         if (missingSourceSave.enabled) {
           return { plan: markdown, sourceSave: missingSourceSave };
         }
@@ -264,12 +304,13 @@ export async function startAnnotateServer(
     }
   };
 
-  const getReferenceRootPaths = () => getAnnotateReferenceRootPaths({
-    mode,
-    filePath,
-    folderPath,
-    initialSingleFileSourcePath,
-  });
+  const getReferenceRootPaths = () =>
+    getAnnotateReferenceRootPaths({
+      mode,
+      filePath,
+      folderPath,
+      initialSingleFileSourcePath,
+    });
 
   // Detect repo info (cached for this session)
   const repoInfo = await getRepoInfo();
@@ -321,7 +362,8 @@ export async function startAnnotateServer(
 
           // API: Get plan content (reuse /api/plan so the plan editor UI works)
           if (url.pathname === "/api/plan" && req.method === "GET") {
-            const displayRawHtml = renderHtml && rawHtml ? htmlAssets.rewriteHtml(rawHtml, filePath) : undefined;
+            const displayRawHtml =
+              renderHtml && rawHtml ? htmlAssets.rewriteHtml(rawHtml, filePath) : undefined;
             const primarySource = getPrimarySource();
             const planResponse = {
               plan: primarySource.plan,
@@ -332,7 +374,7 @@ export async function startAnnotateServer(
               sourceConverted: sourceConverted ?? false,
               sourceSave: primarySource.sourceSave,
               gate,
-              renderAs: displayRawHtml ? 'html' as const : 'markdown' as const,
+              renderAs: displayRawHtml ? ("html" as const) : ("markdown" as const),
               convertHtml,
               sharingEnabled,
               shareBaseUrl,
@@ -403,7 +445,10 @@ export async function startAnnotateServer(
             const docUrl = new URL(req.url);
             let changed = false;
             if (!docUrl.searchParams.has("base") && !/^https?:\/\//i.test(filePath)) {
-              docUrl.searchParams.set("base", mode === "annotate-folder" && folderPath ? folderPath : dirname(filePath));
+              docUrl.searchParams.set(
+                "base",
+                mode === "annotate-folder" && folderPath ? folderPath : dirname(filePath),
+              );
               changed = true;
             }
             if (convertHtml && !docUrl.searchParams.has("convert")) {
@@ -414,7 +459,7 @@ export async function startAnnotateServer(
             return handleDoc(docReq, {
               rewriteHtml: htmlAssets.rewriteHtml,
               sourceSaveFilePath: singleFileSourceSaveEligible
-                ? initialSingleFileSourcePath ?? filePath
+                ? (initialSingleFileSourcePath ?? filePath)
                 : undefined,
               sourceSaveFolderPath: mode === "annotate-folder" ? folderPath : undefined,
               onSourceDocumentServed: (path) => openedSourceFilePaths.add(path),
@@ -435,7 +480,10 @@ export async function startAnnotateServer(
 
             let targetPath: string | null = null;
             if (singleFileSourceSaveEligible) {
-              const capability = createSourceSaveCapability("single-file", initialSingleFileSourcePath ?? filePath);
+              const capability = createSourceSaveCapability(
+                "single-file",
+                initialSingleFileSourcePath ?? filePath,
+              );
               targetPath = capability.enabled ? capability.path : initialSingleFileSourcePath;
             } else if (mode === "annotate-folder" && folderPath && body.path !== undefined) {
               targetPath = body.allowMissingBase
@@ -453,7 +501,11 @@ export async function startAnnotateServer(
 
             if (!targetPath) {
               return Response.json(
-                { ok: false, code: "not-writable", message: "This document cannot be saved to a file." },
+                {
+                  ok: false,
+                  code: "not-writable",
+                  message: "This document cannot be saved to a file.",
+                },
                 { status: 403 },
               );
             }
@@ -573,10 +625,7 @@ export async function startAnnotateServer(
 
               return Response.json({ ok: true });
             } catch (err) {
-              const message =
-                err instanceof Error
-                  ? err.message
-                  : "Failed to process feedback";
+              const message = err instanceof Error ? err.message : "Failed to process feedback";
               return Response.json({ error: message }, { status: 500 });
             }
           }
@@ -607,8 +656,7 @@ export async function startAnnotateServer(
 
       break; // Success, exit retry loop
     } catch (err: unknown) {
-      const isAddressInUse =
-        err instanceof Error && err.message.includes("EADDRINUSE");
+      const isAddressInUse = err instanceof Error && err.message.includes("EADDRINUSE");
 
       if (isAddressInUse && attempt < MAX_RETRIES) {
         await Bun.sleep(RETRY_DELAY_MS);
@@ -616,12 +664,8 @@ export async function startAnnotateServer(
       }
 
       if (isAddressInUse) {
-        const hint = isRemote
-          ? " (set PLANNOTATOR_PORT to use different port)"
-          : "";
-        throw new Error(
-          `Port ${configuredPort} in use after ${MAX_RETRIES} retries${hint}`
-        );
+        const hint = isRemote ? " (set PLANNOTATOR_PORT to use different port)" : "";
+        throw new Error(`Port ${configuredPort} in use after ${MAX_RETRIES} retries${hint}`);
       }
 
       throw err;

@@ -15,20 +15,17 @@
  * Requires DOM_TESTS=1 (happy-dom preload). Run:
  *   DOM_TESTS=1 bun test markdownEditorFidelity
  */
-import { describe, test, expect } from 'bun:test';
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { act } from 'react';
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-import {
-  AtomicCodeMirrorEditor,
-  type AtomicCodeMirrorEditorHandle,
-} from '@atomic-editor/editor';
+import { describe, test, expect } from "bun:test";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { act } from "react";
+import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { AtomicCodeMirrorEditor, type AtomicCodeMirrorEditorHandle } from "@atomic-editor/editor";
 
 const hasDom = globalThis.document !== undefined;
-const CORPUS_DIR = join(homedir(), '.plannotator', 'history');
+const CORPUS_DIR = join(homedir(), ".plannotator", "history");
 const CORPUS_SAMPLE_SIZE = 150;
 const MAX_FILE_BYTES = 64 * 1024;
 
@@ -37,7 +34,7 @@ interface Fixtures {
 }
 
 const FIXTURES: Fixtures = {
-  'pfm-kitchen-sink': `---
+  "pfm-kitchen-sink": `---
 title: Spike Plan
 tags: [a, b]
 ---
@@ -75,7 +72,7 @@ text with trailing whitespace
 and a hard\\
 break — em…dash "quotes"
 `,
-  'mermaid-and-code': `# Diagram plan
+  "mermaid-and-code": `# Diagram plan
 
 \`\`\`mermaid
 graph TD
@@ -93,7 +90,7 @@ const x: Record<string, number> = { 'a-b': 1 };
 
 Inline \`code with *asterisks*\` and an autolink https://example.com/a_(b) plus <https://angle.example>.
 `,
-  'whitespace-edges': `# Edge cases
+  "whitespace-edges": `# Edge cases
 
 paragraph with two trailing spaces
 then a line
@@ -109,9 +106,9 @@ triple blank lines above, none below`,
 };
 
 async function mountAndRead(markdown: string): Promise<string> {
-  const host = document.createElement('div');
-  host.style.width = '600px';
-  host.style.height = '400px';
+  const host = document.createElement("div");
+  host.style.width = "600px";
+  host.style.height = "400px";
   document.body.appendChild(host);
   interface HandleRef {
     current: AtomicCodeMirrorEditorHandle | null;
@@ -120,11 +117,9 @@ async function mountAndRead(markdown: string): Promise<string> {
   const handleRef: HandleRef = { current: null };
   const root = createRoot(host);
   await act(async () => {
-    root.render(
-      <AtomicCodeMirrorEditor markdownSource={markdown} editorHandleRef={handleRef} />,
-    );
+    root.render(<AtomicCodeMirrorEditor markdownSource={markdown} editorHandleRef={handleRef} />);
   });
-  const out = handleRef.current?.getMarkdown() ?? '<<no handle>>';
+  const out = handleRef.current?.getMarkdown() ?? "<<no handle>>";
   await act(async () => {
     root.unmount();
   });
@@ -148,7 +143,8 @@ function sampleCorpus(): string[] {
       try {
         const st = statSync(full);
         if (st.isDirectory()) walk(full);
-        else if (entry.endsWith('.md') && st.size > 0 && st.size <= MAX_FILE_BYTES) files.push(full);
+        else if (entry.endsWith(".md") && st.size > 0 && st.size <= MAX_FILE_BYTES)
+          files.push(full);
       } catch {
         /* unreadable entry — skip */
       }
@@ -171,7 +167,7 @@ function sampleCorpus(): string[] {
     .map((x) => x.f);
 }
 
-describe('markdown edit mode fidelity', () => {
+describe("markdown edit mode fidelity", () => {
   for (const [name, fixture] of Object.entries(FIXTURES)) {
     test.skipIf(!hasDom)(`fixture ${name}: load → getMarkdown is byte-identical`, async () => {
       const out = await mountAndRead(fixture);
@@ -189,10 +185,10 @@ describe('markdown edit mode fidelity', () => {
       let tested = 0;
       let skippedCrlf = 0;
       for (const file of sample) {
-        const content = readFileSync(file, 'utf8');
+        const content = readFileSync(file, "utf8");
         // CM6's Text model joins lines with \n; CRLF input cannot round-trip.
         // The corpus is verified \r-free today — guard rather than fail noisily.
-        if (content.includes('\r')) {
+        if (content.includes("\r")) {
           skippedCrlf++;
           continue;
         }
@@ -201,7 +197,9 @@ describe('markdown edit mode fidelity', () => {
         if (out !== content) failures.push(file);
       }
 
-      console.log(`[fidelity] tested=${tested} skippedCrlf=${skippedCrlf} failures=${failures.length}`);
+      console.log(
+        `[fidelity] tested=${tested} skippedCrlf=${skippedCrlf} failures=${failures.length}`,
+      );
       expect(failures).toEqual([]);
     },
     120_000,

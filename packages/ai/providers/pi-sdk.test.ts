@@ -1,14 +1,16 @@
-import { describe, expect, test } from 'bun:test';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { PiSDKProvider } from './pi-sdk.ts';
+import { describe, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PiSDKProvider } from "./pi-sdk.ts";
 
-describe('PiSDKProvider', () => {
-  test('rejects malformed RPC state responses instead of hanging startup', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'plannotator-pi-sdk-'));
-    const executable = join(directory, 'fake-pi');
-    writeFileSync(executable, `#!/usr/bin/env node
+describe("PiSDKProvider", () => {
+  test("rejects malformed RPC state responses instead of hanging startup", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "plannotator-pi-sdk-"));
+    const executable = join(directory, "fake-pi");
+    writeFileSync(
+      executable,
+      `#!/usr/bin/env node
 const readline = require('node:readline');
 const input = readline.createInterface({ input: process.stdin });
 input.on('line', (line) => {
@@ -30,11 +32,13 @@ input.on('line', (line) => {
     process.stdout.write(JSON.stringify({ type: 'agent_end' }) + '\\n');
   }
 });
-`, 'utf8');
+`,
+      "utf8",
+    );
     chmodSync(executable, 0o755);
 
     const provider = new PiSDKProvider({
-      type: 'pi-sdk',
+      type: "pi-sdk",
       cwd: directory,
       piExecutablePath: executable,
     });
@@ -43,18 +47,18 @@ input.on('line', (line) => {
       const session = await provider.createSession({
         cwd: directory,
         context: {
-          mode: 'annotate',
-          annotate: { content: 'Note', filePath: join(directory, 'note.md') },
+          mode: "annotate",
+          annotate: { content: "Note", filePath: join(directory, "note.md") },
         },
       });
       const result = await Promise.race([
-        session.query('Hello').next(),
+        session.query("Hello").next(),
         new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Pi startup timed out')), 1_000);
+          setTimeout(() => reject(new Error("Pi startup timed out")), 1_000);
         }),
       ]);
       expect(result.done).toBe(false);
-      expect(result.value).toMatchObject({ type: 'result', success: true });
+      expect(result.value).toMatchObject({ type: "result", success: true });
     } finally {
       provider.dispose();
       rmSync(directory, { recursive: true, force: true });

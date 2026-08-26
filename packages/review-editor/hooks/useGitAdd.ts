@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { readGitAddResponse } from '../utils/git-add-response';
+import { useState, useCallback, useRef } from "react";
+import { readGitAddResponse } from "../utils/git-add-response";
 
 interface UseGitAddOptions {
   activeDiffBase: string;
@@ -15,7 +15,12 @@ interface UseGitAddReturn {
   stageError: string | null;
 }
 
-const STAGEABLE_DIFF_TYPES = new Set(['uncommitted', 'unstaged', 'workspace-current', 'workspace-unstaged']);
+const STAGEABLE_DIFF_TYPES = new Set([
+  "uncommitted",
+  "unstaged",
+  "workspace-current",
+  "workspace-unstaged",
+]);
 
 export function useGitAdd({ activeDiffBase, onFileViewed }: UseGitAddOptions): UseGitAddReturn {
   const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
@@ -29,46 +34,49 @@ export function useGitAdd({ activeDiffBase, onFileViewed }: UseGitAddOptions): U
   const stagedFilesRef = useRef(stagedFiles);
   stagedFilesRef.current = stagedFiles;
 
-  const stageFile = useCallback(async (filePath: string) => {
-    const isUndo = stagedFilesRef.current.has(filePath);
-    setStagingFile(filePath);
-    setStageError(null);
-    clearTimeout(errorTimeoutRef.current);
+  const stageFile = useCallback(
+    async (filePath: string) => {
+      const isUndo = stagedFilesRef.current.has(filePath);
+      setStagingFile(filePath);
+      setStageError(null);
+      clearTimeout(errorTimeoutRef.current);
 
-    try {
-      const res = await fetch('/api/git-add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath, undo: isUndo }),
-      });
+      try {
+        const res = await fetch("/api/git-add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath, undo: isUndo }),
+        });
 
-      const result = await readGitAddResponse(res);
-      if (!result.ok) {
-        throw new Error(result.error);
-      }
-
-      setStagedFiles(prev => {
-        const next = new Set(prev);
-        if (isUndo) {
-          next.delete(filePath);
-        } else {
-          next.add(filePath);
+        const result = await readGitAddResponse(res);
+        if (!result.ok) {
+          throw new Error(result.error);
         }
-        return next;
-      });
 
-      // Auto-mark as viewed on stage (not on unstage)
-      if (!isUndo) {
-        onFileViewed(filePath);
+        setStagedFiles((prev) => {
+          const next = new Set(prev);
+          if (isUndo) {
+            next.delete(filePath);
+          } else {
+            next.add(filePath);
+          }
+          return next;
+        });
+
+        // Auto-mark as viewed on stage (not on unstage)
+        if (!isUndo) {
+          onFileViewed(filePath);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Git add failed";
+        setStageError(message);
+        errorTimeoutRef.current = setTimeout(() => setStageError(null), 3000);
+      } finally {
+        setStagingFile(null);
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Git add failed';
-      setStageError(message);
-      errorTimeoutRef.current = setTimeout(() => setStageError(null), 3000);
-    } finally {
-      setStagingFile(null);
-    }
-  }, [onFileViewed]);
+    },
+    [onFileViewed],
+  );
 
   const resetStagedFiles = useCallback(() => {
     setStagedFiles(new Set());

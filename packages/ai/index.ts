@@ -74,11 +74,7 @@ export type {
 } from "./types.ts";
 
 // Provider registry
-export {
-  ProviderRegistry,
-  registerProviderFactory,
-  createProvider,
-} from "./provider.ts";
+export { ProviderRegistry, registerProviderFactory, createProvider } from "./provider.ts";
 
 // Context builders
 export { buildSystemPrompt, buildForkPreamble, buildEffectivePrompt } from "./context.ts";

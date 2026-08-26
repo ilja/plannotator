@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  createPaste,
-  DEFAULT_PASTE_MAX_SIZE,
-  handleRequest,
-} from "./handler";
+import { createPaste, DEFAULT_PASTE_MAX_SIZE, handleRequest } from "./handler";
 import type { PasteStore } from "./storage";
 
 class MemoryPasteStore implements PasteStore {
@@ -31,12 +27,10 @@ describe("paste payload limits", () => {
   test("rejects payloads above the default encrypted payload limit", async () => {
     const store = new MemoryPasteStore();
 
-    await expect(createPaste("x".repeat(DEFAULT_PASTE_MAX_SIZE + 1), store))
-      .rejects
-      .toMatchObject({
-        status: 413,
-        message: "Payload too large (max 5 MB encrypted)",
-      });
+    await expect(createPaste("x".repeat(DEFAULT_PASTE_MAX_SIZE + 1), store)).rejects.toMatchObject({
+      status: 413,
+      message: "Payload too large (max 5 MB encrypted)",
+    });
   });
 });
 
@@ -50,11 +44,7 @@ describe("handleRequest", () => {
   test("creates a paste from a valid body", async () => {
     const store = new MemoryPasteStore();
 
-    const response = await handleRequest(
-      post(JSON.stringify({ data: "hello" })),
-      store,
-      cors
-    );
+    const response = await handleRequest(post(JSON.stringify({ data: "hello" })), store, cors);
 
     expect(response.status).toBe(201);
     const { id } = await response.json();
@@ -64,11 +54,7 @@ describe("handleRequest", () => {
   test("rejects a non-string data field", async () => {
     const store = new MemoryPasteStore();
 
-    const response = await handleRequest(
-      post(JSON.stringify({ data: 42 })),
-      store,
-      cors
-    );
+    const response = await handleRequest(post(JSON.stringify({ data: 42 })), store, cors);
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
@@ -79,11 +65,7 @@ describe("handleRequest", () => {
   test("rejects an empty string data field", async () => {
     const store = new MemoryPasteStore();
 
-    const response = await handleRequest(
-      post(JSON.stringify({ data: "" })),
-      store,
-      cors
-    );
+    const response = await handleRequest(post(JSON.stringify({ data: "" })), store, cors);
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
@@ -117,7 +99,7 @@ describe("handleRequest", () => {
     const response = await handleRequest(
       post(JSON.stringify({ data: "x".repeat(DEFAULT_PASTE_MAX_SIZE + 1) })),
       store,
-      cors
+      cors,
     );
 
     expect(response.status).toBe(413);

@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 const ObsidianVaultsResponseSchema = Schema.Struct({
   vaults: Schema.Array(Schema.Unknown),

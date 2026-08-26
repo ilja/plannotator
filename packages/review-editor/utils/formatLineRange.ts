@@ -10,8 +10,9 @@ export function formatTokenContext(tokenSelection: {
   anchor: { lineNumber: number };
   fullText: string;
 }): string {
-  const display = tokenSelection.fullText.length > 30
-    ? tokenSelection.fullText.slice(0, 27) + '...'
-    : tokenSelection.fullText;
+  const display =
+    tokenSelection.fullText.length > 30
+      ? tokenSelection.fullText.slice(0, 27) + "..."
+      : tokenSelection.fullText;
   return `Line ${tokenSelection.anchor.lineNumber}: \`${display}\``;
 }

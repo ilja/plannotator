@@ -11,12 +11,12 @@ import { TableBlock } from "./blocks/TableBlock";
 import { ChoiceQuestionBlock } from "./blocks/ChoiceQuestionBlock";
 
 const proseStyle: React.CSSProperties = {
-  fontFamily: 'var(--annotation-prose-font-family, var(--font-sans))',
-  fontSize: 'var(--annotation-prose-font-size, 15px)',
+  fontFamily: "var(--annotation-prose-font-family, var(--font-sans))",
+  fontSize: "var(--annotation-prose-font-size, 15px)",
 };
 
 const headingStyle = (scale: number): React.CSSProperties => ({
-  fontFamily: 'var(--annotation-prose-font-family, var(--font-sans))',
+  fontFamily: "var(--annotation-prose-font-family, var(--font-sans))",
   fontSize: `calc(var(--annotation-prose-font-size, 15px) * ${scale})`,
 });
 
@@ -34,18 +34,35 @@ export const BlockRenderer: React.FC<{
   onNavigateAnchor?: (hash: string) => void;
   annotations?: Annotation[];
   onSelectChoice?: (block: Block, option: ChoiceQuestionOption) => void;
-}> = ({ block, onOpenLinkedDoc, onOpenCodeFile, imageBaseDir, onImageClick, onToggleCheckbox, checkboxOverrides, orderedIndex, githubRepo, headingAnchorId, onNavigateAnchor, annotations, onSelectChoice }) => {
-  const selectedChoiceAnnotation = annotations?.find(ann => isChoiceAnnotationForBlock(ann, block.id));
+}> = ({
+  block,
+  onOpenLinkedDoc,
+  onOpenCodeFile,
+  imageBaseDir,
+  onImageClick,
+  onToggleCheckbox,
+  checkboxOverrides,
+  orderedIndex,
+  githubRepo,
+  headingAnchorId,
+  onNavigateAnchor,
+  annotations,
+  onSelectChoice,
+}) => {
+  const selectedChoiceAnnotation = annotations?.find((ann) =>
+    isChoiceAnnotationForBlock(ann, block.id),
+  );
 
   switch (block.type) {
-    case 'heading': {
+    case "heading": {
       // SAFETY: block.level is 1-3 heading level, Template literal produces valid h1/h2/h3 tag
       const Tag = `h${block.level || 1}` as React.ElementType;
-      const styles = {
-        1: 'text-2xl font-bold mb-4 mt-6 first:mt-0 tracking-tight',
-        2: 'text-xl font-semibold mb-3 mt-8 text-foreground/90',
-        3: 'text-base font-semibold mb-2 mt-6 text-foreground/80',
-      }[block.level || 1] || 'text-base font-semibold mb-2 mt-4';
+      const styles =
+        {
+          1: "text-2xl font-bold mb-4 mt-6 first:mt-0 tracking-tight",
+          2: "text-xl font-semibold mb-3 mt-8 text-foreground/90",
+          3: "text-base font-semibold mb-2 mt-6 text-foreground/80",
+        }[block.level || 1] || "text-base font-semibold mb-2 mt-4";
       return (
         <Tag
           id={headingAnchorId}
@@ -54,12 +71,20 @@ export const BlockRenderer: React.FC<{
           data-block-id={block.id}
           data-block-type="heading"
         >
-          <InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={block.content} onOpenLinkedDoc={onOpenLinkedDoc} onOpenCodeFile={onOpenCodeFile} githubRepo={githubRepo} onNavigateAnchor={onNavigateAnchor} />
+          <InlineMarkdown
+            imageBaseDir={imageBaseDir}
+            onImageClick={onImageClick}
+            text={block.content}
+            onOpenLinkedDoc={onOpenLinkedDoc}
+            onOpenCodeFile={onOpenCodeFile}
+            githubRepo={githubRepo}
+            onNavigateAnchor={onNavigateAnchor}
+          />
         </Tag>
       );
     }
 
-    case 'blockquote': {
+    case "blockquote": {
       if (block.alertKind) {
         return (
           <AlertBlock
@@ -85,23 +110,38 @@ export const BlockRenderer: React.FC<{
           data-block-id={block.id}
         >
           {paragraphs.map((para, i) => (
-            <p key={i} className={i > 0 ? 'mt-2' : ''}>
-              <InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={para} onOpenLinkedDoc={onOpenLinkedDoc} onOpenCodeFile={onOpenCodeFile} githubRepo={githubRepo} onNavigateAnchor={onNavigateAnchor} />
+            <p key={i} className={i > 0 ? "mt-2" : ""}>
+              <InlineMarkdown
+                imageBaseDir={imageBaseDir}
+                onImageClick={onImageClick}
+                text={para}
+                onOpenLinkedDoc={onOpenLinkedDoc}
+                onOpenCodeFile={onOpenCodeFile}
+                githubRepo={githubRepo}
+                onNavigateAnchor={onNavigateAnchor}
+              />
             </p>
           ))}
         </blockquote>
       );
     }
 
-    case 'list-item': {
+    case "list-item": {
       const indent = (block.level || 0) * 1.25; // 1.25rem per level
       const isCheckbox = block.checked !== undefined;
       const isChecked = checkboxOverrides?.has(block.id)
         ? checkboxOverrides.get(block.id)!
         : block.checked;
       const isInteractive = isCheckbox && !!onToggleCheckbox;
-      const textClass = `leading-relaxed ${isCheckbox && isChecked ? 'text-muted-foreground line-through' : 'text-foreground/90'}`;
-      const inlineProps = { imageBaseDir, onImageClick, onOpenLinkedDoc, onOpenCodeFile, githubRepo, onNavigateAnchor };
+      const textClass = `leading-relaxed ${isCheckbox && isChecked ? "text-muted-foreground line-through" : "text-foreground/90"}`;
+      const inlineProps = {
+        imageBaseDir,
+        onImageClick,
+        onOpenLinkedDoc,
+        onOpenCodeFile,
+        githubRepo,
+        onNavigateAnchor,
+      };
       return (
         <div
           className="flex items-start gap-3 my-1.5"
@@ -124,10 +164,10 @@ export const BlockRenderer: React.FC<{
       );
     }
 
-    case 'code':
+    case "code":
       return <CodeBlock block={block} onHover={() => {}} onLeave={() => {}} isHovered={false} />;
 
-    case 'table':
+    case "table":
       return (
         <TableBlock
           block={block}
@@ -140,14 +180,22 @@ export const BlockRenderer: React.FC<{
         />
       );
 
-    case 'hr':
+    case "hr":
       return <hr className="border-border/30 my-8" data-block-id={block.id} />;
 
-    case 'html':
-      return <HtmlBlock block={block} imageBaseDir={imageBaseDir} onOpenLinkedDoc={onOpenLinkedDoc} onOpenCodeFile={onOpenCodeFile} onNavigateAnchor={onNavigateAnchor} />;
+    case "html":
+      return (
+        <HtmlBlock
+          block={block}
+          imageBaseDir={imageBaseDir}
+          onOpenLinkedDoc={onOpenLinkedDoc}
+          onOpenCodeFile={onOpenCodeFile}
+          onNavigateAnchor={onNavigateAnchor}
+        />
+      );
 
-    case 'directive': {
-      const kind = block.directiveKind || 'note';
+    case "directive": {
+      const kind = block.directiveKind || "note";
       return (
         <Callout
           blockId={block.id}
@@ -166,7 +214,7 @@ export const BlockRenderer: React.FC<{
       );
     }
 
-    case 'choice-question':
+    case "choice-question":
       return (
         <ChoiceQuestionBlock
           block={block}
@@ -189,7 +237,15 @@ export const BlockRenderer: React.FC<{
           style={proseStyle}
           data-block-id={block.id}
         >
-          <InlineMarkdown imageBaseDir={imageBaseDir} onImageClick={onImageClick} text={block.content} onOpenLinkedDoc={onOpenLinkedDoc} onOpenCodeFile={onOpenCodeFile} githubRepo={githubRepo} onNavigateAnchor={onNavigateAnchor} />
+          <InlineMarkdown
+            imageBaseDir={imageBaseDir}
+            onImageClick={onImageClick}
+            text={block.content}
+            onOpenLinkedDoc={onOpenLinkedDoc}
+            onOpenCodeFile={onOpenCodeFile}
+            githubRepo={githubRepo}
+            onNavigateAnchor={onNavigateAnchor}
+          />
         </p>
       );
   }

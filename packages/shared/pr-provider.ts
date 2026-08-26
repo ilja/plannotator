@@ -11,9 +11,35 @@
  * browser-safe.
  */
 
-import { checkGhAuth, getGhUser, fetchGhPR, fetchGhPRContext, fetchGhPRFileContent, submitGhPRReview, fetchGhPRViewedFiles, markGhFilesViewed, fetchGhPRStack, fetchGhPRList } from "./pr-github";
-import { checkGlAuth, getGlUser, fetchGlMR, fetchGlMRContext, fetchGlFileContent, submitGlMRReview } from "./pr-gitlab";
-import type { PRRuntime, PRRef, PRMetadata, PRContext, PRReviewFileComment, PRStackTree, PRListItem } from "./pr-types";
+import {
+  checkGhAuth,
+  getGhUser,
+  fetchGhPR,
+  fetchGhPRContext,
+  fetchGhPRFileContent,
+  submitGhPRReview,
+  fetchGhPRViewedFiles,
+  markGhFilesViewed,
+  fetchGhPRStack,
+  fetchGhPRList,
+} from "./pr-github";
+import {
+  checkGlAuth,
+  getGlUser,
+  fetchGlMR,
+  fetchGlMRContext,
+  fetchGlFileContent,
+  submitGlMRReview,
+} from "./pr-gitlab";
+import type {
+  PRRuntime,
+  PRRef,
+  PRMetadata,
+  PRContext,
+  PRReviewFileComment,
+  PRStackTree,
+  PRListItem,
+} from "./pr-types";
 
 // Re-export the browser-safe surface so server callers can keep using
 // pr-provider as a single facade. Browser code imports from pr-types
@@ -40,10 +66,7 @@ export async function fetchPR(
   return fetchGlMR(runtime, ref);
 }
 
-export async function fetchPRContext(
-  runtime: PRRuntime,
-  ref: PRRef,
-): Promise<PRContext> {
+export async function fetchPRContext(runtime: PRRuntime, ref: PRRef): Promise<PRContext> {
   if (ref.platform === "github") return fetchGhPRContext(runtime, ref);
   return fetchGlMRContext(runtime, ref);
 }
@@ -66,7 +89,8 @@ export async function submitPRReview(
   body: string,
   fileComments: PRReviewFileComment[],
 ): Promise<void> {
-  if (ref.platform === "github") return submitGhPRReview(runtime, ref, headSha, action, body, fileComments);
+  if (ref.platform === "github")
+    return submitGhPRReview(runtime, ref, headSha, action, body, fileComments);
   return submitGlMRReview(runtime, ref, headSha, action, body, fileComments);
 }
 
@@ -95,7 +119,8 @@ export async function markPRFilesViewed(
   filePaths: string[],
   viewed: boolean,
 ): Promise<void> {
-  if (ref.platform === "github") return markGhFilesViewed(runtime, ref, prNodeId, filePaths, viewed);
+  if (ref.platform === "github")
+    return markGhFilesViewed(runtime, ref, prNodeId, filePaths, viewed);
   // GitLab: no-op
 }
 
@@ -114,10 +139,7 @@ export async function fetchPRStack(
   return null; // GitLab: not yet implemented
 }
 
-export async function fetchPRList(
-  runtime: PRRuntime,
-  ref: PRRef,
-): Promise<PRListItem[]> {
+export async function fetchPRList(runtime: PRRuntime, ref: PRRef): Promise<PRListItem[]> {
   if (ref.platform === "github") return fetchGhPRList(runtime, ref);
   return []; // GitLab: not yet implemented
 }

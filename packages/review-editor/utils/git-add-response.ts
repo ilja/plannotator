@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 const GitAddSuccessSchema = Schema.Struct({
   ok: Schema.Literal(true),
@@ -24,7 +24,7 @@ export interface GitAddErrorResponse {
 /** The validated success-or-error result used by the git-add flow. */
 export type GitAddResponse = GitAddSuccessResponse | GitAddErrorResponse;
 
-const GIT_ADD_FALLBACK_ERROR = 'Failed';
+const GIT_ADD_FALLBACK_ERROR = "Failed";
 const decodeSuccess = Schema.decodeUnknownOption(GitAddSuccessSchema);
 const decodeErrorEnvelope = Schema.decodeUnknownOption(GitAddErrorEnvelopeSchema);
 

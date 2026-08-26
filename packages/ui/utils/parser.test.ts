@@ -1,5 +1,11 @@
 import { describe, test, expect } from "bun:test";
-import { parseMarkdownToBlocks, computeListIndices, extractFrontmatter, exportAnnotations, exportLinkedDocAnnotations } from "./parser";
+import {
+  parseMarkdownToBlocks,
+  computeListIndices,
+  extractFrontmatter,
+  exportAnnotations,
+  exportLinkedDocAnnotations,
+} from "./parser";
 import { AnnotationType, type Block } from "../types";
 
 /** Tiny factory for list-item blocks used by computeListIndices tests. */
@@ -184,7 +190,8 @@ describe("parseMarkdownToBlocks — tables", () => {
   });
 
   test("real-world plan: prose with union types is not a table", () => {
-    const md = "`@pierre/diffs` supports `overflow: 'scroll' | 'wrap'` plus options, but Plannotator doesn't expose any of them.";
+    const md =
+      "`@pierre/diffs` supports `overflow: 'scroll' | 'wrap'` plus options, but Plannotator doesn't expose any of them.";
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("paragraph");
@@ -208,12 +215,12 @@ describe("parseMarkdownToBlocks — real-world plan regression", () => {
     const blocks = parseMarkdownToBlocks(md);
     const types = blocks.map((b) => b.type);
     expect(types).toEqual([
-      "heading",      // ### 5. Migrate App.tsx
-      "list-item",    // - **Remove**
-      "list-item",    // - **Replace**
-      "code",         // ```ts ... ```
-      "list-item",    // - **Update**
-      "heading",      // ### 6. Update DiffViewer
+      "heading", // ### 5. Migrate App.tsx
+      "list-item", // - **Remove**
+      "list-item", // - **Replace**
+      "code", // ```ts ... ```
+      "list-item", // - **Update**
+      "heading", // ### 6. Update DiffViewer
     ]);
     expect(blocks[3].type).toBe("code");
     expect(blocks[3].language).toBe("ts");
@@ -320,11 +327,13 @@ Option B: Beta
 
 Recommendation: Option B.`);
 
-    expect(blocks.some(block => block.type === "choice-question")).toBe(false);
-    expect(blocks).toContainEqual(expect.objectContaining({
-      type: "heading",
-      content: "Separate decision",
-    }));
+    expect(blocks.some((block) => block.type === "choice-question")).toBe(false);
+    expect(blocks).toContainEqual(
+      expect.objectContaining({
+        type: "heading",
+        content: "Separate decision",
+      }),
+    );
   });
 
   test("accepts Reccomendation spelling", () => {
@@ -335,10 +344,12 @@ Recommendation: Option B.`);
 
 Reccomendation: Option left.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: "left",
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: "left",
+      }),
+    );
   });
 
   test("accepts recommendation rationale after a comma", () => {
@@ -349,10 +360,12 @@ Reccomendation: Option left.`);
 
 Reccomendation: Option A, because it is best.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: "A",
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: "A",
+      }),
+    );
   });
 
   test("accepts recommendation rationale after whitespace", () => {
@@ -363,10 +376,12 @@ Reccomendation: Option A, because it is best.`);
 
 Reccomendation: Option A for the first version.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: "A",
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: "A",
+      }),
+    );
   });
 
   test("accepts recommendation text with the option mentioned later", () => {
@@ -378,10 +393,12 @@ Reccomendation: Option A for the first version.`);
 
 Reccomendation: We should choose Option A because it is best.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: "A",
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: "A",
+      }),
+    );
   });
 
   test("renders choice question without a badge when recommendation mentions multiple options", () => {
@@ -393,10 +410,12 @@ Reccomendation: We should choose Option A because it is best.`);
 
 Reccomendation: Use an ordered strategy: Option A first, Option B next, then Option C.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: undefined,
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: undefined,
+      }),
+    );
   });
 
   test("renders choice question without a badge when recommendation uses plural options", () => {
@@ -408,10 +427,12 @@ Reccomendation: Use an ordered strategy: Option A first, Option B next, then Opt
 
 Reccomendation: Options A and B for the first implementation. Option C can exist later.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: undefined,
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: undefined,
+      }),
+    );
   });
 
   test("does not partially match unknown recommendation labels", () => {
@@ -422,10 +443,12 @@ Reccomendation: Options A and B for the first implementation. Option C can exist
 
 Recommendation: Option AB, because it is best.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: undefined,
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: undefined,
+      }),
+    );
   });
 
   test("renders choice question without a badge when recommendation label does not match", () => {
@@ -436,10 +459,12 @@ Recommendation: Option AB, because it is best.`);
 
 Recommendation: Option C.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: undefined,
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: undefined,
+      }),
+    );
   });
 
   test("renders choice question when recommendation is omitted", () => {
@@ -448,10 +473,12 @@ Recommendation: Option C.`);
 - Option A: Alpha
 - Option B: Beta`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      recommendedChoiceLabel: undefined,
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        recommendedChoiceLabel: undefined,
+      }),
+    );
   });
 
   test("accepts indented option continuation lines", () => {
@@ -466,14 +493,16 @@ Recommendation: Option C.`);
 
 Reccomendation: Option A.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      choiceOptions: [
-        { label: "A", text: "Alpha.\n- Pros: good.\n- Cons: bad." },
-        { label: "B", text: "Beta.\n- Pros: ok.\n- Cons: worse." },
-      ],
-      recommendedChoiceLabel: "A",
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        choiceOptions: [
+          { label: "A", text: "Alpha.\n- Pros: good.\n- Cons: bad." },
+          { label: "B", text: "Beta.\n- Pros: ok.\n- Cons: worse." },
+        ],
+        recommendedChoiceLabel: "A",
+      }),
+    );
   });
 
   test("accepts indented option continuation lines without a recommendation", () => {
@@ -484,14 +513,16 @@ Reccomendation: Option A.`);
 - Option B: Beta.
   - Pros: ok.`);
 
-    expect(blocks[0]).toEqual(expect.objectContaining({
-      type: "choice-question",
-      choiceOptions: [
-        { label: "A", text: "Alpha.\n- Pros: good." },
-        { label: "B", text: "Beta.\n- Pros: ok." },
-      ],
-      recommendedChoiceLabel: undefined,
-    }));
+    expect(blocks[0]).toEqual(
+      expect.objectContaining({
+        type: "choice-question",
+        choiceOptions: [
+          { label: "A", text: "Alpha.\n- Pros: good." },
+          { label: "B", text: "Beta.\n- Pros: ok." },
+        ],
+        recommendedChoiceLabel: undefined,
+      }),
+    );
   });
 
   test("preserves adjacent normal markdown", () => {
@@ -506,11 +537,7 @@ Recommendation: Option B.
 
 Afterwards`);
 
-    expect(blocks.map(block => block.type)).toEqual([
-      "heading",
-      "choice-question",
-      "paragraph",
-    ]);
+    expect(blocks.map((block) => block.type)).toEqual(["heading", "choice-question", "paragraph"]);
   });
 });
 
@@ -792,8 +819,8 @@ describe("parseMarkdownToBlocks — blockquotes", () => {
     const md = "> - First\n> - Second\n> - Third";
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(3);
-    expect(blocks.every(b => b.type === "blockquote")).toBe(true);
-    expect(blocks.map(b => b.content)).toEqual(["- First", "- Second", "- Third"]);
+    expect(blocks.every((b) => b.type === "blockquote")).toBe(true);
+    expect(blocks.map((b) => b.content)).toEqual(["- First", "- Second", "- Third"]);
   });
 
   test("quoted heading does NOT merge into previous blockquote", () => {
@@ -826,12 +853,13 @@ describe("parseMarkdownToBlocks — blockquotes", () => {
   test("wrapped prose quote still merges (regression guard for the merge fix)", () => {
     // This is the case the merge fix was added for — a single logical
     // paragraph wrapped across multiple source lines. Must still merge.
-    const md = "> This is a long quoted paragraph\n> that wraps across several\n> source lines for readability.";
+    const md =
+      "> This is a long quoted paragraph\n> that wraps across several\n> source lines for readability.";
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("blockquote");
     expect(blocks[0].content).toBe(
-      "This is a long quoted paragraph\nthat wraps across several\nsource lines for readability."
+      "This is a long quoted paragraph\nthat wraps across several\nsource lines for readability.",
     );
   });
 
@@ -854,10 +882,7 @@ describe("parseMarkdownToBlocks — blockquotes", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("blockquote");
     expect(blocks[0].content).toBe("first paragraph\n\nsecond paragraph");
-    expect(blocks[0].content.split(/\n\n+/)).toEqual([
-      "first paragraph",
-      "second paragraph",
-    ]);
+    expect(blocks[0].content.split(/\n\n+/)).toEqual(["first paragraph", "second paragraph"]);
   });
 });
 
@@ -875,7 +900,9 @@ describe("parseMarkdownToBlocks — GitHub alerts", () => {
     for (const kind of ["NOTE", "TIP", "WARNING", "CAUTION", "IMPORTANT"]) {
       const blocks = parseMarkdownToBlocks(`> [!${kind}]\n> body`);
       // SAFETY: kind.toLowerCase is known alert kind — cast to union
-      expect(blocks[0].alertKind).toBe(kind.toLowerCase() as 'note' | 'tip' | 'warning' | 'caution' | 'important');
+      expect(blocks[0].alertKind).toBe(
+        kind.toLowerCase() as "note" | "tip" | "warning" | "caution" | "important",
+      );
     }
     const lower = parseMarkdownToBlocks("> [!note]\n> body");
     expect(lower[0].alertKind).toBe("note");
@@ -1019,7 +1046,8 @@ describe("parseMarkdownToBlocks — raw HTML blocks", () => {
   });
 
   test("nested tags stay in one block", () => {
-    const md = "<details>\n<summary>Outer</summary>\n<details>\n<summary>Inner</summary>\nnested\n</details>\n</details>";
+    const md =
+      "<details>\n<summary>Outer</summary>\n<details>\n<summary>Inner</summary>\nnested\n</details>\n</details>";
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("html");
@@ -1034,7 +1062,8 @@ describe("parseMarkdownToBlocks — raw HTML blocks", () => {
   });
 
   test("multiple HTML blocks separated by blank lines produce multiple blocks", () => {
-    const md = "<details>\n<summary>A</summary>\n</details>\n\n<details>\n<summary>B</summary>\n</details>";
+    const md =
+      "<details>\n<summary>A</summary>\n</details>\n\n<details>\n<summary>B</summary>\n</details>";
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(2);
     expect(blocks[0].type).toBe("html");
@@ -1065,7 +1094,8 @@ describe("parseMarkdownToBlocks — raw HTML blocks", () => {
   });
 
   test("nested same-tag open/close is balanced (not terminated by first close)", () => {
-    const md = "<details>\n<summary>Outer</summary>\n<details>\n<summary>Inner</summary>\n</details>\nouter tail\n</details>";
+    const md =
+      "<details>\n<summary>Outer</summary>\n<details>\n<summary>Inner</summary>\n</details>\nouter tail\n</details>";
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("html");
@@ -1105,12 +1135,7 @@ describe("computeListIndices", () => {
   });
 
   test("unordered item breaks the ordered streak; next ordered restarts from its orderedStart", () => {
-    const blocks = [
-      li(0, true, 1),
-      li(0, true, 2),
-      li(0, false),
-      li(0, true, 1),
-    ];
+    const blocks = [li(0, true, 1), li(0, true, 2), li(0, false), li(0, true, 1)];
     expect(computeListIndices(blocks)).toEqual([1, 2, null, 1]);
   });
 
@@ -1119,12 +1144,7 @@ describe("computeListIndices", () => {
     //   - bullet
     //   - bullet
     // 2. b
-    const blocks = [
-      li(0, true, 1),
-      li(1, false),
-      li(1, false),
-      li(0, true, 2),
-    ];
+    const blocks = [li(0, true, 1), li(1, false), li(1, false), li(0, true, 2)];
     expect(computeListIndices(blocks)).toEqual([1, null, null, 2]);
   });
 
@@ -1134,13 +1154,7 @@ describe("computeListIndices", () => {
     //   2. a.2
     // 2. b
     //   1. b.1
-    const blocks = [
-      li(0, true, 1),
-      li(1, true, 1),
-      li(1, true, 2),
-      li(0, true, 2),
-      li(1, true, 1),
-    ];
+    const blocks = [li(0, true, 1), li(1, true, 1), li(1, true, 2), li(0, true, 2), li(1, true, 1)];
     expect(computeListIndices(blocks)).toEqual([1, 1, 2, 2, 1]);
   });
 
@@ -1148,11 +1162,7 @@ describe("computeListIndices", () => {
     // 1. a
     //   - bullet
     //   2. honored as 2 because the source said `2.`
-    const blocks = [
-      li(0, true, 1),
-      li(1, false),
-      li(1, true, 2),
-    ];
+    const blocks = [li(0, true, 1), li(1, false), li(1, true, 2)];
     expect(computeListIndices(blocks)).toEqual([1, null, 2]);
   });
 
@@ -1162,13 +1172,7 @@ describe("computeListIndices", () => {
     // 2. b
     //   - sub
     // 3. c
-    const blocks = [
-      li(0, true, 1),
-      li(1, false),
-      li(0, true, 2),
-      li(1, false),
-      li(0, true, 3),
-    ];
+    const blocks = [li(0, true, 1), li(1, false), li(0, true, 2), li(1, false), li(0, true, 3)];
     expect(computeListIndices(blocks)).toEqual([1, null, 2, null, 3]);
   });
 
@@ -1245,41 +1249,99 @@ describe("parseMarkdownToBlocks — startLine accuracy", () => {
 });
 
 describe("exportAnnotations — line labels", () => {
-  const blocks = parseMarkdownToBlocks("# Heading\n\nShort paragraph\n\n```ts\nline1\nline2\nline3\n```");
+  const blocks = parseMarkdownToBlocks(
+    "# Heading\n\nShort paragraph\n\n```ts\nline1\nline2\nline3\n```",
+  );
 
   test("single-line block shows 'line N'", () => {
-    const anns = [{ blockId: blocks[0].id, type: "COMMENT", text: "fix this", originalText: "Heading", startOffset: 0 }];
+    const anns = [
+      {
+        blockId: blocks[0].id,
+        type: "COMMENT",
+        text: "fix this",
+        originalText: "Heading",
+        startOffset: 0,
+      },
+    ];
     const output = exportAnnotations(blocks, anns);
     expect(output).toContain("(line 1)");
   });
 
   test("multi-line code block shows line range", () => {
-    const codeBlock = blocks.find(b => b.type === "code")!;
-    const anns = [{ blockId: codeBlock.id, type: "COMMENT", text: "refactor", originalText: "line1", startOffset: 0 }];
+    const codeBlock = blocks.find((b) => b.type === "code")!;
+    const anns = [
+      {
+        blockId: codeBlock.id,
+        type: "COMMENT",
+        text: "refactor",
+        originalText: "line1",
+        startOffset: 0,
+      },
+    ];
     const output = exportAnnotations(blocks, anns);
     expect(output).toMatch(/\(lines 5–9\)/);
   });
 
   test("GLOBAL_COMMENT has no line label", () => {
-    const anns = [{ blockId: "global", type: "GLOBAL_COMMENT", text: "overall feedback", originalText: "", startOffset: 0 }];
+    const anns = [
+      {
+        blockId: "global",
+        type: "GLOBAL_COMMENT",
+        text: "overall feedback",
+        originalText: "",
+        startOffset: 0,
+      },
+    ];
     const output = exportAnnotations(blocks, anns);
     expect(output).not.toMatch(/\(line/);
   });
 
   test("diff-context annotation shows label instead of line number", () => {
-    const anns = [{ blockId: blocks[0].id, type: "COMMENT", text: "change", originalText: "Heading", startOffset: 0, diffContext: "added" }];
+    const anns = [
+      {
+        blockId: blocks[0].id,
+        type: "COMMENT",
+        text: "change",
+        originalText: "Heading",
+        startOffset: 0,
+        diffContext: "added",
+      },
+    ];
     const output = exportAnnotations(blocks, anns);
     expect(output).not.toMatch(/\(line/);
     expect(output).toContain("[In diff content]");
   });
 
   test("sourceConverted adds caveat", () => {
-    const output = exportAnnotations(blocks, [{ blockId: blocks[0].id, type: "COMMENT", text: "ok", originalText: "Heading", startOffset: 0 }], [], "Feedback", "plan", { sourceConverted: true });
+    const output = exportAnnotations(
+      blocks,
+      [
+        {
+          blockId: blocks[0].id,
+          type: "COMMENT",
+          text: "ok",
+          originalText: "Heading",
+          startOffset: 0,
+        },
+      ],
+      [],
+      "Feedback",
+      "plan",
+      { sourceConverted: true },
+    );
     expect(output).toContain("converted markdown");
   });
 
   test("no sourceConverted means no caveat", () => {
-    const output = exportAnnotations(blocks, [{ blockId: blocks[0].id, type: "COMMENT", text: "ok", originalText: "Heading", startOffset: 0 }]);
+    const output = exportAnnotations(blocks, [
+      {
+        blockId: blocks[0].id,
+        type: "COMMENT",
+        text: "ok",
+        originalText: "Heading",
+        startOffset: 0,
+      },
+    ]);
     expect(output).not.toContain("converted markdown");
   });
 
@@ -1290,14 +1352,16 @@ describe("exportAnnotations — line labels", () => {
 - Option B: Beta
 
 Recommendation: Option B.`);
-    const output = exportAnnotations(choiceBlocks, [{
-      blockId: choiceBlocks[0].id,
-      type: "COMMENT",
-      text: "👍 Selected Option",
-      originalText: "Beta",
-      startOffset: 0,
-      isQuickLabel: true,
-    }]);
+    const output = exportAnnotations(choiceBlocks, [
+      {
+        blockId: choiceBlocks[0].id,
+        type: "COMMENT",
+        text: "👍 Selected Option",
+        originalText: "Beta",
+        startOffset: 0,
+        isQuickLabel: true,
+      },
+    ]);
 
     expect(output).toContain("(lines 1–6)");
     expect(output).toContain('[👍 Selected Option] Feedback on: "Beta"');
@@ -1311,22 +1375,27 @@ Recommendation: Option B.`);
 
 Recommendation: Option B.`);
     const docs = new Map([
-      ["docs/a.md", {
-        annotations: [{
-          id: "ann-choice-1",
-          blockId: choiceBlocks[0].id,
-          startOffset: 0,
-          endOffset: 4,
-          type: AnnotationType.COMMENT,
-          text: "👍 Selected Option",
-          originalText: "Beta",
-          isQuickLabel: true,
-          choiceOptionLabel: "B",
-          createdA: 1718000000000,
-        }],
-        globalAttachments: [],
-        blocks: choiceBlocks,
-      }],
+      [
+        "docs/a.md",
+        {
+          annotations: [
+            {
+              id: "ann-choice-1",
+              blockId: choiceBlocks[0].id,
+              startOffset: 0,
+              endOffset: 4,
+              type: AnnotationType.COMMENT,
+              text: "👍 Selected Option",
+              originalText: "Beta",
+              isQuickLabel: true,
+              choiceOptionLabel: "B",
+              createdA: 1718000000000,
+            },
+          ],
+          globalAttachments: [],
+          blocks: choiceBlocks,
+        },
+      ],
     ]);
 
     const output = exportLinkedDocAnnotations(docs);

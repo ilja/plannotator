@@ -1,6 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import * as Popover from '@radix-ui/react-popover';
-import type { AvailableBranches, CompareTargetPickerCopy, RecentCommit } from '@plannotator/shared/types';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import type {
+  AvailableBranches,
+  CompareTargetPickerCopy,
+  RecentCommit,
+} from "@plannotator/shared/types";
 
 interface BaseBranchPickerProps {
   availableBranches: AvailableBranches;
@@ -13,7 +17,7 @@ interface BaseBranchPickerProps {
   recentCommits?: RecentCommit[];
 }
 
-type Tab = 'branches' | 'commits';
+type Tab = "branches" | "commits";
 
 // SHA or `HEAD~N` / `HEAD^N` patterns — the picker treats any matching query as
 // a usable commit-ish even if it isn't in `recentCommits`. We require ≥ 4 hex
@@ -44,8 +48,8 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
   recentCommits,
 }) => {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<Tab>('branches');
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<Tab>("branches");
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { local, remote } = availableBranches;
@@ -82,22 +86,22 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
   // they'd land on Branches (empty for hex queries) and miss the commit list.
   useEffect(() => {
     if (hasCommits && trimmedQuery && isCommitishQuery(trimmedQuery)) {
-      setTab('commits');
+      setTab("commits");
     }
   }, [trimmedQuery, hasCommits]);
 
   const handleSelect = (ref: string) => {
     onSelectBase(ref);
     setOpen(false);
-    setQuery('');
-    setTab('branches');
+    setQuery("");
+    setTab("branches");
   };
 
   const handleReset = () => {
     onSelectBase(detectedBase);
     setOpen(false);
-    setQuery('');
-    setTab('branches');
+    setQuery("");
+    setTab("branches");
   };
 
   const isCustom = selectedBase !== detectedBase;
@@ -136,7 +140,11 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
       {filtered.commits.length === 0 ? (
         <div className="px-3 py-2 text-xs text-muted-foreground">No matching commits.</div>
       ) : (
-        <CommitList commits={filtered.commits} selectedBase={selectedBase} onSelect={handleSelect} />
+        <CommitList
+          commits={filtered.commits}
+          selectedBase={selectedBase}
+          onSelect={handleSelect}
+        />
       )}
     </>
   );
@@ -147,8 +155,8 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
       onOpenChange={(v) => {
         setOpen(v);
         if (!v) {
-          setQuery('');
-          setTab('branches');
+          setQuery("");
+          setTab("branches");
         }
       }}
     >
@@ -159,8 +167,8 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
           title={`${copy.triggerTitlePrefix}: ${selectedBase}`}
           className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed ${
             isCustom
-              ? 'bg-primary/10 border border-primary/30 text-foreground'
-              : 'bg-muted border border-transparent text-foreground'
+              ? "bg-primary/10 border border-primary/30 text-foreground"
+              : "bg-muted border border-transparent text-foreground"
           }`}
         >
           <span className="text-[10px] uppercase tracking-wide opacity-60 flex-shrink-0">
@@ -195,11 +203,13 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={hasCommits ? `${copy.searchPlaceholder} or SHA / HEAD~N` : copy.searchPlaceholder}
+              placeholder={
+                hasCommits ? `${copy.searchPlaceholder} or SHA / HEAD~N` : copy.searchPlaceholder
+              }
               onKeyDown={(e) => {
                 // Enter on a SHA-like query commits the manual entry —
                 // matches the "Use … as base" affordance below.
-                if (e.key === 'Enter' && showUseAsBase) {
+                if (e.key === "Enter" && showUseAsBase) {
                   e.preventDefault();
                   handleSelect(trimmedQuery);
                 }
@@ -225,16 +235,16 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
           )}
           {hasCommits && (
             <div className="flex border-b border-border/50 bg-muted/30">
-              <TabButton active={tab === 'branches'} onClick={() => setTab('branches')}>
+              <TabButton active={tab === "branches"} onClick={() => setTab("branches")}>
                 Branches
               </TabButton>
-              <TabButton active={tab === 'commits'} onClick={() => setTab('commits')}>
+              <TabButton active={tab === "commits"} onClick={() => setTab("commits")}>
                 Commits
               </TabButton>
             </div>
           )}
           <div className="max-h-72 overflow-y-auto py-1">
-            {hasCommits && tab === 'commits' ? commitsContent : branchesContent}
+            {hasCommits && tab === "commits" ? commitsContent : branchesContent}
           </div>
           {isCustom && (
             <div className="border-t border-border/50 p-1">
@@ -265,8 +275,8 @@ const TabButton: React.FC<TabButtonProps> = ({ active, onClick, children }) => (
     onClick={onClick}
     className={`flex-1 px-3 py-1.5 text-xs transition-colors focus:outline-none ${
       active
-        ? 'bg-popover text-foreground font-medium border-b-2 border-primary -mb-px'
-        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+        ? "bg-popover text-foreground font-medium border-b-2 border-primary -mb-px"
+        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
     }`}
   >
     {children}
@@ -301,12 +311,18 @@ const BranchGroup: React.FC<BranchGroupProps> = ({
           type="button"
           onClick={() => onSelect(branch)}
           className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-muted focus:outline-none focus:bg-muted ${
-            isSelected ? 'text-foreground font-medium' : 'text-foreground/80'
+            isSelected ? "text-foreground font-medium" : "text-foreground/80"
           }`}
         >
           <span className="w-3 flex-shrink-0">
             {isSelected && (
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={3}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             )}
@@ -340,12 +356,18 @@ const CommitList: React.FC<CommitListProps> = ({ commits, selectedBase, onSelect
           onClick={() => onSelect(c.sha)}
           title={`${c.sha}\n${c.subject}\n${c.relativeDate} · ${c.author}`}
           className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-muted focus:outline-none focus:bg-muted ${
-            isSelected ? 'text-foreground font-medium' : 'text-foreground/80'
+            isSelected ? "text-foreground font-medium" : "text-foreground/80"
           }`}
         >
           <span className="w-3 flex-shrink-0">
             {isSelected && (
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={3}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             )}

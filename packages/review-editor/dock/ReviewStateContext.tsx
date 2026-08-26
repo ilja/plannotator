@@ -1,11 +1,18 @@
-import React, { createContext, useContext } from 'react';
-import type { CodeAnnotation, CodeAnnotationType, SelectedLineRange, TokenAnnotationMeta, ConventionalLabel, ConventionalDecoration } from '@plannotator/ui/types';
-import type { DiffFile, AnnotationScrollTarget } from '../types';
-import type { AIChatEntry } from '../hooks/useAIChat';
-import type { ReviewSearchMatch } from '../utils/reviewSearch';
-import type { PRMetadata, PRContext } from '@plannotator/shared/pr-types';
-import type { PRDiffScope } from '@plannotator/shared/pr-stack';
-import type { FeedbackDiffContext } from '../utils/exportFeedback';
+import React, { createContext, useContext } from "react";
+import type {
+  CodeAnnotation,
+  CodeAnnotationType,
+  SelectedLineRange,
+  TokenAnnotationMeta,
+  ConventionalLabel,
+  ConventionalDecoration,
+} from "@plannotator/ui/types";
+import type { DiffFile, AnnotationScrollTarget } from "../types";
+import type { AIChatEntry } from "../hooks/useAIChat";
+import type { ReviewSearchMatch } from "../utils/reviewSearch";
+import type { PRMetadata, PRContext } from "@plannotator/shared/pr-types";
+import type { PRDiffScope } from "@plannotator/shared/pr-stack";
+import type { FeedbackDiffContext } from "../utils/exportFeedback";
 
 /**
  * Shared review state consumed by dockview panel wrappers.
@@ -20,10 +27,10 @@ export interface ReviewState {
   rawPatch: string;
   focusedFileIndex: number;
   focusedFilePath: string | null;
-  diffStyle: 'split' | 'unified';
-  diffOverflow?: 'scroll' | 'wrap';
-  diffIndicators?: 'bars' | 'classic' | 'none';
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none';
+  diffStyle: "split" | "unified";
+  diffOverflow?: "scroll" | "wrap";
+  diffIndicators?: "bars" | "classic" | "none";
+  lineDiffType?: "word-alt" | "word" | "char" | "none";
   disableLineNumbers?: boolean;
   disableBackground?: boolean;
   expandUnchanged?: boolean;
@@ -53,11 +60,35 @@ export interface ReviewState {
   scrollTargetAnnotation: AnnotationScrollTarget | null;
   pendingSelection: SelectedLineRange | null;
   onLineSelection: (range: SelectedLineRange | null) => void;
-  onAddAnnotation: (type: CodeAnnotationType, text?: string, suggestedCode?: string, originalCode?: string, conventionalLabel?: ConventionalLabel, decorations?: ConventionalDecoration[], tokenMeta?: TokenAnnotationMeta) => void;
-  onAddAnnotationForFile: (filePath: string, type: CodeAnnotationType, text?: string, suggestedCode?: string, originalCode?: string, conventionalLabel?: ConventionalLabel, decorations?: ConventionalDecoration[], tokenMeta?: TokenAnnotationMeta) => void;
+  onAddAnnotation: (
+    type: CodeAnnotationType,
+    text?: string,
+    suggestedCode?: string,
+    originalCode?: string,
+    conventionalLabel?: ConventionalLabel,
+    decorations?: ConventionalDecoration[],
+    tokenMeta?: TokenAnnotationMeta,
+  ) => void;
+  onAddAnnotationForFile: (
+    filePath: string,
+    type: CodeAnnotationType,
+    text?: string,
+    suggestedCode?: string,
+    originalCode?: string,
+    conventionalLabel?: ConventionalLabel,
+    decorations?: ConventionalDecoration[],
+    tokenMeta?: TokenAnnotationMeta,
+  ) => void;
   onAddFileComment: (text: string) => void;
   onAddFileCommentForFile: (filePath: string, text: string) => void;
-  onEditAnnotation: (id: string, text?: string, suggestedCode?: string, originalCode?: string, conventionalLabel?: ConventionalLabel | null, decorations?: ConventionalDecoration[]) => void;
+  onEditAnnotation: (
+    id: string,
+    text?: string,
+    suggestedCode?: string,
+    originalCode?: string,
+    conventionalLabel?: ConventionalLabel | null,
+    decorations?: ConventionalDecoration[],
+  ) => void;
   /** Highlight a comment without moving the viewport (in-diff click). */
   onSelectAnnotation: (id: string | null) => void;
   /** Select AND scroll the diff to a comment (sidebar / findings-list click). */
@@ -92,7 +123,7 @@ export interface ReviewState {
   onAttachAIContextForFile: (
     filePath: string,
     lineNumber: number,
-    side: 'additions' | 'deletions',
+    side: "additions" | "deletions",
   ) => void;
 
   // PR
@@ -114,8 +145,8 @@ export interface ReviewState {
   onSemanticDiffLoadSuccess: () => void;
 
   // Code navigation
-  onCodeNavRequest?: (request: import('@plannotator/shared/code-nav').CodeNavRequest) => void;
-  codeNavResult: import('@plannotator/shared/code-nav').CodeNavResponse | null;
+  onCodeNavRequest?: (request: import("@plannotator/shared/code-nav").CodeNavRequest) => void;
+  codeNavResult: import("@plannotator/shared/code-nav").CodeNavResponse | null;
   codeNavIsLoading: boolean;
   codeNavActiveSymbol: string | null;
 }
@@ -129,16 +160,12 @@ export function ReviewStateProvider({
   value: ReviewState;
   children: React.ReactNode;
 }) {
-  return (
-    <ReviewStateContext.Provider value={value}>
-      {children}
-    </ReviewStateContext.Provider>
-  );
+  return <ReviewStateContext.Provider value={value}>{children}</ReviewStateContext.Provider>;
 }
 
 export function useReviewState(): ReviewState {
   const ctx = useContext(ReviewStateContext);
-  if (!ctx) throw new Error('useReviewState must be used within ReviewStateProvider');
+  if (!ctx) throw new Error("useReviewState must be used within ReviewStateProvider");
   return ctx;
 }
 

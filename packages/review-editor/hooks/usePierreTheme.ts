@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { DEFAULT_THEMES } from '@pierre/diffs';
-import type { DiffLineBgIntensity } from '@plannotator/shared/config';
-import { useTheme } from '@plannotator/ui/components/ThemeProvider';
-import { useConfigValue } from '@plannotator/ui/config';
-import { resolveAppliedThemeMode } from '@plannotator/ui/utils/themeRegistry';
-import { FRAMER_LIGHT_SYNTAX_THEME_NAME } from '../themes/framerLightSyntax';
+import { useEffect, useMemo, useState } from "react";
+import { DEFAULT_THEMES } from "@pierre/diffs";
+import type { DiffLineBgIntensity } from "@plannotator/shared/config";
+import { useTheme } from "@plannotator/ui/components/ThemeProvider";
+import { useConfigValue } from "@plannotator/ui/config";
+import { resolveAppliedThemeMode } from "@plannotator/ui/utils/themeRegistry";
+import { FRAMER_LIGHT_SYNTAX_THEME_NAME } from "../themes/framerLightSyntax";
 
 interface ShikiThemeEntry {
   dark: string | null;
@@ -16,42 +16,42 @@ interface ShikiThemeMap {
 }
 
 export const SHIKI_THEME_MAP: ShikiThemeMap = {
-  'andromeeda': { dark: 'andromeeda', light: null },
-  'aurora-x': { dark: 'aurora-x', light: null },
-  'ayu-dark': { dark: 'ayu-dark', light: null },
-  'catppuccin': { dark: 'catppuccin-mocha', light: 'catppuccin-latte' },
-  'dark-plus': { dark: 'dark-plus', light: 'light-plus' },
-  'dracula': { dark: 'dracula', light: null },
-  'everforest': { dark: 'everforest-dark', light: 'everforest-light' },
-  'everforest-hard': { dark: 'everforest-dark', light: 'everforest-light' },
-  'everforest-soft': { dark: 'everforest-dark', light: 'everforest-light' },
-  'framer-light': { dark: FRAMER_LIGHT_SYNTAX_THEME_NAME, light: FRAMER_LIGHT_SYNTAX_THEME_NAME },
-  'github': { dark: 'github-dark', light: 'github-light' },
-  'gruvbox': { dark: 'gruvbox-dark-medium', light: 'gruvbox-light-medium' },
-  'houston': { dark: 'houston', light: null },
-  'kanagawa-dragon': { dark: 'kanagawa-dragon', light: null },
-  'kanagawa-lotus': { dark: null, light: 'kanagawa-lotus' },
-  'kanagawa-wave': { dark: 'kanagawa-wave', light: null },
-  'laserwave': { dark: 'laserwave', light: null },
-  'material': { dark: 'material-theme', light: 'material-theme-lighter' },
-  'min': { dark: 'min-dark', light: 'min-light' },
-  'monokai-pro': { dark: 'monokai', light: null },
-  'night-owl': { dark: 'night-owl', light: null },
-  'nord': { dark: 'nord', light: null },
-  'one-dark-pro': { dark: 'one-dark-pro', light: null },
-  'one-light': { dark: null, light: 'one-light' },
-  'plastic': { dark: 'plastic', light: null },
-  'poimandres': { dark: 'poimandres', light: null },
-  'red': { dark: 'red', light: null },
-  'rose-pine': { dark: 'rose-pine', light: 'rose-pine-dawn' },
-  'slack': { dark: 'slack-dark', light: 'slack-ochin' },
-  'snazzy-light': { dark: null, light: 'snazzy-light' },
-  'solarized': { dark: 'solarized-dark', light: 'solarized-light' },
-  'synthwave-84': { dark: 'synthwave-84', light: null },
-  'tokyo-night': { dark: 'tokyo-night', light: null },
-  'vesper': { dark: 'vesper', light: null },
-  'vitesse': { dark: 'vitesse-dark', light: 'vitesse-light' },
-  'vitesse-black': { dark: 'vitesse-black', light: null },
+  andromeeda: { dark: "andromeeda", light: null },
+  "aurora-x": { dark: "aurora-x", light: null },
+  "ayu-dark": { dark: "ayu-dark", light: null },
+  catppuccin: { dark: "catppuccin-mocha", light: "catppuccin-latte" },
+  "dark-plus": { dark: "dark-plus", light: "light-plus" },
+  dracula: { dark: "dracula", light: null },
+  everforest: { dark: "everforest-dark", light: "everforest-light" },
+  "everforest-hard": { dark: "everforest-dark", light: "everforest-light" },
+  "everforest-soft": { dark: "everforest-dark", light: "everforest-light" },
+  "framer-light": { dark: FRAMER_LIGHT_SYNTAX_THEME_NAME, light: FRAMER_LIGHT_SYNTAX_THEME_NAME },
+  github: { dark: "github-dark", light: "github-light" },
+  gruvbox: { dark: "gruvbox-dark-medium", light: "gruvbox-light-medium" },
+  houston: { dark: "houston", light: null },
+  "kanagawa-dragon": { dark: "kanagawa-dragon", light: null },
+  "kanagawa-lotus": { dark: null, light: "kanagawa-lotus" },
+  "kanagawa-wave": { dark: "kanagawa-wave", light: null },
+  laserwave: { dark: "laserwave", light: null },
+  material: { dark: "material-theme", light: "material-theme-lighter" },
+  min: { dark: "min-dark", light: "min-light" },
+  "monokai-pro": { dark: "monokai", light: null },
+  "night-owl": { dark: "night-owl", light: null },
+  nord: { dark: "nord", light: null },
+  "one-dark-pro": { dark: "one-dark-pro", light: null },
+  "one-light": { dark: null, light: "one-light" },
+  plastic: { dark: "plastic", light: null },
+  poimandres: { dark: "poimandres", light: null },
+  red: { dark: "red", light: null },
+  "rose-pine": { dark: "rose-pine", light: "rose-pine-dawn" },
+  slack: { dark: "slack-dark", light: "slack-ochin" },
+  "snazzy-light": { dark: null, light: "snazzy-light" },
+  solarized: { dark: "solarized-dark", light: "solarized-light" },
+  "synthwave-84": { dark: "synthwave-84", light: null },
+  "tokyo-night": { dark: "tokyo-night", light: null },
+  vesper: { dark: "vesper", light: null },
+  vitesse: { dark: "vitesse-dark", light: "vitesse-light" },
+  "vitesse-black": { dark: "vitesse-black", light: null },
 };
 
 export interface PierreSyntaxTheme {
@@ -60,11 +60,11 @@ export interface PierreSyntaxTheme {
 }
 
 export interface PierreThemeSelection {
-  type: 'dark' | 'light';
+  type: "dark" | "light";
   syntaxTheme: PierreSyntaxTheme;
 }
 
-export function resolveSyntaxTheme(colorTheme: string, mode: 'dark' | 'light'): PierreSyntaxTheme {
+export function resolveSyntaxTheme(colorTheme: string, mode: "dark" | "light"): PierreSyntaxTheme {
   const map = SHIKI_THEME_MAP[colorTheme];
   if (!map?.[mode]) return DEFAULT_THEMES;
   return {
@@ -75,7 +75,7 @@ export function resolveSyntaxTheme(colorTheme: string, mode: 'dark' | 'light'): 
 
 export function resolvePierreThemeSelection(
   colorTheme: string,
-  resolvedMode: 'dark' | 'light',
+  resolvedMode: "dark" | "light",
 ): PierreThemeSelection {
   const type = resolveAppliedThemeMode(colorTheme, resolvedMode);
   return { type, syntaxTheme: resolveSyntaxTheme(colorTheme, type) };
@@ -108,7 +108,7 @@ interface IntensityConfig {
 const INTENSITY_CONFIG = {
   normal: { restMixLight: 55, restMixDark: 45, hoverMixLight: 45, hoverMixDark: 35 },
   strong: { restMixLight: 35, restMixDark: 25, hoverMixLight: 25, hoverMixDark: 15 },
-} satisfies Record<Exclude<DiffLineBgIntensity, 'subtle'>, IntensityConfig>;
+} satisfies Record<Exclude<DiffLineBgIntensity, "subtle">, IntensityConfig>;
 
 /**
  * The word-level chip is derived from the *actual computed line bg* (not from
@@ -134,7 +134,10 @@ const EMPHASIS_LIGHTNESS_SHIFT = 0.07;
  * "hide emphasis when diff bg is off" rule so that toggle behaves consistently
  * at every intensity.
  */
-export function buildLineBgOverrides(intensity: DiffLineBgIntensity, mode: 'light' | 'dark'): string {
+export function buildLineBgOverrides(
+  intensity: DiffLineBgIntensity,
+  mode: "light" | "dark",
+): string {
   // The library's word-emphasis rule (`[data-line-type=…] [data-diff-span] {
   // background-color: var(--diffs-bg-addition-emphasis); }`) is NOT gated on
   // `[data-background]`, so disabling diff backgrounds still leaves chips
@@ -146,11 +149,10 @@ export function buildLineBgOverrides(intensity: DiffLineBgIntensity, mode: 'ligh
       background-color: transparent !important;
     }
   `;
-  if (intensity === 'subtle') return hideEmphasisWithoutBg;
+  if (intensity === "subtle") return hideEmphasisWithoutBg;
   const cfg = INTENSITY_CONFIG[intensity];
-  const lShift = mode === 'dark'
-    ? `+ ${EMPHASIS_LIGHTNESS_SHIFT}`
-    : `- ${EMPHASIS_LIGHTNESS_SHIFT}`;
+  const lShift =
+    mode === "dark" ? `+ ${EMPHASIS_LIGHTNESS_SHIFT}` : `- ${EMPHASIS_LIGHTNESS_SHIFT}`;
   // Targeting `[data-line]` and `[data-no-newline]` only — the actual code
   // lines. Skipping `[data-gutter-buffer]` / `[data-column-number]` keeps the
   // line-number gutter at the page bg (matching the existing
@@ -181,12 +183,16 @@ export function buildLineBgOverrides(intensity: DiffLineBgIntensity, mode: 'ligh
   `;
 }
 
-export function usePierreTheme(options?: { fontFamily?: string; fontSize?: string; showFileHeader?: boolean }): PierreTheme {
+export function usePierreTheme(options?: {
+  fontFamily?: string;
+  fontSize?: string;
+  showFileHeader?: boolean;
+}): PierreTheme {
   const { colorTheme, resolvedMode } = useTheme();
   const fontFamily = options?.fontFamily;
   const fontSize = options?.fontSize;
   const showFileHeader = options?.showFileHeader ?? false;
-  const lineBgIntensity = useConfigValue('diffLineBgIntensity');
+  const lineBgIntensity = useConfigValue("diffLineBgIntensity");
   const selection = useMemo(
     () => resolvePierreThemeSelection(colorTheme, resolvedMode),
     [colorTheme, resolvedMode],
@@ -194,9 +200,9 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
 
   const [css, setCss] = useState(() => {
     const styles = getComputedStyle(document.documentElement);
-    const bg = styles.getPropertyValue('--background').trim();
-    const fg = styles.getPropertyValue('--foreground').trim();
-    if (!bg || !fg) return '';
+    const bg = styles.getPropertyValue("--background").trim();
+    const fg = styles.getPropertyValue("--foreground").trim();
+    if (!bg || !fg) return "";
     return `
       :host, [data-diff], [data-file], [data-diffs-header], [data-error-wrapper], [data-virtualizer-buffer] {
         --diffs-bg: ${bg} !important; --diffs-fg: ${fg} !important;
@@ -213,19 +219,22 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
   useEffect(() => {
     requestAnimationFrame(() => {
       const styles = getComputedStyle(document.documentElement);
-      const bg = styles.getPropertyValue('--background').trim();
-      const fg = styles.getPropertyValue('--foreground').trim();
-      const muted = styles.getPropertyValue('--muted').trim();
-      const mutedFg = styles.getPropertyValue('--muted-foreground').trim();
-      const border = styles.getPropertyValue('--border').trim();
-      const primary = styles.getPropertyValue('--primary').trim();
+      const bg = styles.getPropertyValue("--background").trim();
+      const fg = styles.getPropertyValue("--foreground").trim();
+      const muted = styles.getPropertyValue("--muted").trim();
+      const mutedFg = styles.getPropertyValue("--muted-foreground").trim();
+      const border = styles.getPropertyValue("--border").trim();
+      const primary = styles.getPropertyValue("--primary").trim();
       if (!bg || !fg) return;
 
-      const fontCSS = fontFamily || fontSize ? `
+      const fontCSS =
+        fontFamily || fontSize
+          ? `
           pre, code, [data-line-content], [data-column-number] {
-            ${fontFamily ? `font-family: '${fontFamily}', monospace !important;` : ''}
-            ${fontSize ? `font-size: ${fontSize} !important; line-height: 1.5 !important;` : ''}
-          }` : '';
+            ${fontFamily ? `font-family: '${fontFamily}', monospace !important;` : ""}
+            ${fontSize ? `font-size: ${fontSize} !important; line-height: 1.5 !important;` : ""}
+          }`
+          : "";
 
       setCss(`
           :host, [data-diff], [data-file], [data-diffs-header], [data-error-wrapper], [data-virtualizer-buffer] {
@@ -239,7 +248,7 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
           pre, code { background-color: ${bg} !important; }
           [data-file-info] { background-color: ${muted} !important; }
           [data-column-number] { background-color: ${bg} !important; }
-          ${showFileHeader ? '' : '[data-diffs-header] [data-title] { display: none !important; }'}
+          ${showFileHeader ? "" : "[data-diffs-header] [data-title] { display: none !important; }"}
           [data-diff-type='split'][data-overflow='scroll'] {
             grid-template-columns:
               minmax(0, var(--split-left, 1fr))
@@ -253,7 +262,7 @@ export function usePierreTheme(options?: { fontFamily?: string; fontSize?: strin
           }
           .pn-token-hover {
             text-decoration: underline;
-            text-decoration-color: ${primary || 'oklch(0.70 0.20 280)'};
+            text-decoration-color: ${primary || "oklch(0.70 0.20 280)"};
             text-decoration-thickness: 1.5px;
             text-underline-offset: 2px;
             cursor: pointer;

@@ -1,7 +1,7 @@
-import React from 'react';
-import { Button } from './ui/button';
-import { cn } from '../lib/utils';
-import { Send, Check } from 'lucide-react';
+import React from "react";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
+import { Send, Check } from "lucide-react";
 
 interface FeedbackButtonProps {
   onClick: () => void;
@@ -19,11 +19,11 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
   onClick,
   disabled = false,
   isLoading = false,
-  label = 'Send Feedback',
+  label = "Send Feedback",
   shortLabel,
-  loadingLabel = 'Sending...',
+  loadingLabel = "Sending...",
   shortLoadingLabel,
-  title = 'Send Feedback',
+  title = "Send Feedback",
   muted = false,
 }) => (
   <Button
@@ -33,11 +33,13 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
     disabled={disabled}
     title={title}
     iconLeft={<Send className="size-3.5" />}
-    className={cn(muted && 'opacity-50 cursor-not-allowed')}
+    className={cn(muted && "opacity-50 cursor-not-allowed")}
   >
     {shortLabel ? (
       <>
-        <span className="hidden md:inline lg:hidden">{isLoading ? (shortLoadingLabel ?? loadingLabel) : shortLabel}</span>
+        <span className="hidden md:inline lg:hidden">
+          {isLoading ? (shortLoadingLabel ?? loadingLabel) : shortLabel}
+        </span>
         <span className="hidden lg:inline">{isLoading ? loadingLabel : label}</span>
       </>
     ) : (
@@ -63,10 +65,10 @@ export const ApproveButton: React.FC<ApproveButtonProps> = ({
   onClick,
   disabled = false,
   isLoading = false,
-  label = 'Approve',
-  loadingLabel = 'Approving...',
-  mobileLabel = 'OK',
-  mobileLoadingLabel = '...',
+  label = "Approve",
+  loadingLabel = "Approving...",
+  mobileLabel = "OK",
+  mobileLoadingLabel = "...",
   title,
   dimmed = false,
   muted = false,
@@ -79,9 +81,12 @@ export const ApproveButton: React.FC<ApproveButtonProps> = ({
     title={title}
     iconLeft={<Check className="size-3.5" />}
     className={cn(
-      muted && 'opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted',
-      disabled && !muted && 'bg-muted text-muted-foreground hover:bg-muted',
-      dimmed && !muted && !disabled && 'bg-success/50 text-success-foreground/70 hover:bg-success hover:text-success-foreground',
+      muted && "opacity-40 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted",
+      disabled && !muted && "bg-muted text-muted-foreground hover:bg-muted",
+      dimmed &&
+        !muted &&
+        !disabled &&
+        "bg-success/50 text-success-foreground/70 hover:bg-success hover:text-success-foreground",
     )}
   >
     <span className="md:hidden">{isLoading ? mobileLoadingLabel : mobileLabel}</span>
@@ -100,7 +105,7 @@ export const ExitButton: React.FC<ExitButtonProps> = ({
   onClick,
   disabled = false,
   isLoading = false,
-  title = 'Close session without sending feedback',
+  title = "Close session without sending feedback",
 }) => (
   <Button
     variant="secondary"
@@ -110,7 +115,7 @@ export const ExitButton: React.FC<ExitButtonProps> = ({
     title={title}
     className="bg-muted text-muted-foreground hover:bg-muted/80"
   >
-    <span className="md:hidden">{isLoading ? '...' : '✕'}</span>
-    <span className="hidden md:inline">{isLoading ? 'Closing...' : 'Close'}</span>
+    <span className="md:hidden">{isLoading ? "..." : "✕"}</span>
+    <span className="hidden md:inline">{isLoading ? "Closing..." : "Close"}</span>
   </Button>
 );

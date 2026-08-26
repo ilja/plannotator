@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { decodeDiffFreshnessResponse } from '../utils/diff-freshness-response';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { decodeDiffFreshnessResponse } from "../utils/diff-freshness-response";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -67,17 +67,17 @@ export function useDiffFreshness({
         return;
       }
       try {
-        const res = await fetch('/api/diff/fresh');
+        const res = await fetch("/api/diff/fresh");
         if (!cancelled && res.ok) {
           const data = decodeDiffFreshnessResponse(await res.json());
           if (!cancelled && data) {
             // Keep polling even while stale: a reverted edit flips back to
             // fresh, and a FURTHER change updates the fingerprint so a
             // dismissed notice can reappear.
-            setStaleFingerprint(data.fresh ? null : data.fingerprint ?? 'stale');
+            setStaleFingerprint(data.fresh ? null : (data.fingerprint ?? "stale"));
             // PR mode re-advertises the live local checkout each probe; non-PR
             // probes omit the field entirely (leave agentCwd untouched).
-            if ('agentCwd' in data) onAgentCwdRef.current?.(data.agentCwd ?? null);
+            if ("agentCwd" in data) onAgentCwdRef.current?.(data.agentCwd ?? null);
           }
         }
       } catch {

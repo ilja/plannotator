@@ -46,9 +46,7 @@ const KNOWN_HOOKS = {
 
 export type ImprovementHookName = keyof typeof KNOWN_HOOKS;
 
-export function getImprovementHookExpectedPath(
-  hookName: ImprovementHookName,
-): string | null {
+export function getImprovementHookExpectedPath(hookName: ImprovementHookName): string | null {
   const entry = KNOWN_HOOKS[hookName];
   if (!entry) return null;
   return join(HOOKS_BASE_DIR, entry.path);
@@ -96,9 +94,7 @@ function tryReadHookFile(
  * 2. If the new path exists but is invalid (empty, oversized, etc.), return null.
  * 3. Only if the new path does not exist, try the legacy path (LEGACY_BASE_DIR + legacyPath).
  */
-export function readImprovementHook(
-  hookName: ImprovementHookName,
-): ImprovementHookResult | null {
+export function readImprovementHook(hookName: ImprovementHookName): ImprovementHookResult | null {
   const entry = KNOWN_HOOKS[hookName];
   if (!entry) return null;
 

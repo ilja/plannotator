@@ -35,10 +35,7 @@ export async function detectJjWorkspace(
   return result.exitCode === 0 ? result.stdout.trim() || null : null;
 }
 
-export async function getJjContext(
-  runtime: ReviewJjRuntime,
-  cwd?: string,
-): Promise<GitContext> {
+export async function getJjContext(runtime: ReviewJjRuntime, cwd?: string): Promise<GitContext> {
   const root = await detectJjWorkspace(runtime, cwd);
   const targets = await listJjCompareTargets(runtime, root ?? cwd);
   const defaultTarget = await selectDefaultJjCompareTarget(runtime, root ?? cwd);
@@ -121,10 +118,9 @@ export async function getJjDiffFingerprint(
   cwd?: string,
 ): Promise<string | null> {
   const idOf = async (rev: string): Promise<string | null> => {
-    const result = await runtime.runJj(
-      ["log", "-r", rev, "--no-graph", "-T", "commit_id"],
-      { cwd },
-    );
+    const result = await runtime.runJj(["log", "-r", rev, "--no-graph", "-T", "commit_id"], {
+      cwd,
+    });
     return result.exitCode === 0 ? result.stdout.trim() || null : null;
   };
 
@@ -153,9 +149,7 @@ export async function getJjDiffFingerprint(
         if (!current) return null;
         if (defaultBranch.length > 0) return `jj:${diffType}:${defaultBranch}:${current}`;
         const evologs = await getJjEvoLogEntries(runtime, cwd);
-        return evologs.length >= 2
-          ? `jj:${diffType}:auto:${evologs[1].commitId}:${current}`
-          : null;
+        return evologs.length >= 2 ? `jj:${diffType}:auto:${evologs[1].commitId}:${current}` : null;
       }
       default:
         return null;
@@ -180,7 +174,9 @@ function dropHunklessGitDiffChunks(patch: string): string {
 
 function hasReviewableGitDiffChunk(chunk: string): boolean {
   if (/^@@@? /m.test(chunk)) return true;
-  return /^(new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|GIT binary patch|Binary files |similarity index|dissimilarity index)/m.test(chunk);
+  return /^(new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|GIT binary patch|Binary files |similarity index|dissimilarity index)/m.test(
+    chunk,
+  );
 }
 
 export async function getJjFileContentsForDiff(
@@ -207,14 +203,21 @@ export async function getJjFileContentsForDiff(
     case "jj-last": {
       const parentRev = await resolveJjParent(runtime, "@-", fileCwd);
       return {
-        oldContent: parentRev ? await jjFileContent(runtime, parentRev, oldFilePath, fileCwd) : null,
+        oldContent: parentRev
+          ? await jjFileContent(runtime, parentRev, oldFilePath, fileCwd)
+          : null,
         newContent: await jjFileContent(runtime, "@-", filePath, fileCwd),
       };
     }
     case "jj-line": {
       const compareTarget = defaultBranch.length > 0 ? defaultBranch : JJ_TRUNK_REVSET;
       return {
-        oldContent: await jjFileContent(runtime, jjLineBaseRevset(compareTarget), oldFilePath, fileCwd),
+        oldContent: await jjFileContent(
+          runtime,
+          jjLineBaseRevset(compareTarget),
+          oldFilePath,
+          fileCwd,
+        ),
         newContent: await jjFileContent(runtime, "@", filePath, fileCwd),
       };
     }
@@ -250,7 +253,15 @@ export function getJjDiffArgs(
       return { args: ["diff", "--git", ...whitespaceArgs, "-r", "@-"], label: "Last change" };
     case "jj-line":
       return {
-        args: ["diff", "--git", ...whitespaceArgs, "--from", jjLineBaseRevset(compareTarget), "--to", "@"],
+        args: [
+          "diff",
+          "--git",
+          ...whitespaceArgs,
+          "--from",
+          jjLineBaseRevset(compareTarget),
+          "--to",
+          "@",
+        ],
         label: `Line of work vs ${compareTarget}`,
       };
     case "jj-evolog":
@@ -261,7 +272,10 @@ export function getJjDiffArgs(
         label: `Evolution diff from ${compareTarget.slice(0, 8)}`,
       };
     case "jj-all":
-      return { args: ["diff", "--git", ...whitespaceArgs, "--from", "root()", "--to", "@"], label: "All files" };
+      return {
+        args: ["diff", "--git", ...whitespaceArgs, "--from", "root()", "--to", "@"],
+        label: "All files",
+      };
     default:
       return null;
   }
@@ -271,14 +285,10 @@ export async function selectDefaultJjCompareTarget(
   runtime: ReviewJjRuntime,
   cwd?: string,
 ): Promise<string> {
-  const result = await runtime.runJj([
-    "log",
-    "--no-graph",
-    "-r",
-    JJ_TRUNK_REVSET,
-    "-T",
-    "json(bookmarks)",
-  ], { cwd });
+  const result = await runtime.runJj(
+    ["log", "--no-graph", "-r", JJ_TRUNK_REVSET, "-T", "json(bookmarks)"],
+    { cwd },
+  );
   if (result.exitCode !== 0) return JJ_TRUNK_REVSET;
 
   return parseJjResolvedBookmarks(result.stdout)[0] ?? JJ_TRUNK_REVSET;
@@ -333,27 +343,33 @@ async function listJjCompareTargets(
   cwd?: string,
 ): Promise<{ local: string[]; remote: string[] }> {
   const [localResult, remoteResult] = await Promise.all([
-    runtime.runJj([
-      "bookmark",
-      "list",
-      "--sort",
-      "committer-date-",
-      "--sort",
-      "name",
-      "-T",
-      "if(remote, '', if(present, json(name) ++ '\\n', ''))",
-    ], { cwd }),
-    runtime.runJj([
-      "bookmark",
-      "list",
-      "--all-remotes",
-      "--sort",
-      "committer-date-",
-      "--sort",
-      "name",
-      "-T",
-      "if(remote, if(present, json(name) ++ '\\t' ++ json(remote) ++ '\\n', ''), '')",
-    ], { cwd }),
+    runtime.runJj(
+      [
+        "bookmark",
+        "list",
+        "--sort",
+        "committer-date-",
+        "--sort",
+        "name",
+        "-T",
+        "if(remote, '', if(present, json(name) ++ '\\n', ''))",
+      ],
+      { cwd },
+    ),
+    runtime.runJj(
+      [
+        "bookmark",
+        "list",
+        "--all-remotes",
+        "--sort",
+        "committer-date-",
+        "--sort",
+        "name",
+        "-T",
+        "if(remote, if(present, json(name) ++ '\\t' ++ json(remote) ++ '\\n', ''), '')",
+      ],
+      { cwd },
+    ),
   ]);
 
   const local = localResult.exitCode === 0 ? parseJjBookmarkList(localResult.stdout) : [];
@@ -488,13 +504,28 @@ async function resolveJjParent(
   rev: string,
   cwd?: string,
 ): Promise<string | null> {
-  const result = await runtime.runJj(["log", "-r", rev, "--no-graph", "-T", "parents.map(|p| p.change_id()).join(' ')", "--limit", "1"], { cwd });
+  const result = await runtime.runJj(
+    [
+      "log",
+      "-r",
+      rev,
+      "--no-graph",
+      "-T",
+      "parents.map(|p| p.change_id()).join(' ')",
+      "--limit",
+      "1",
+    ],
+    { cwd },
+  );
   const parent = result.stdout.trim().split(/\s+/).find(Boolean);
   return result.exitCode === 0 && parent ? parent : null;
 }
 
 function firstErrorLine(stderr: string): string | undefined {
-  const line = stderr.split("\n").find((value) => value.trim().length > 0)?.trim();
+  const line = stderr
+    .split("\n")
+    .find((value) => value.trim().length > 0)
+    ?.trim();
   if (!line) return undefined;
   return line.length > 200 ? line.slice(0, 200) + "..." : line;
 }

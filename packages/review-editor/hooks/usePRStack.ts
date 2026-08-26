@@ -1,11 +1,11 @@
-import { useState, useCallback, type RefObject } from 'react';
-import { Option, Result, Schema } from 'effect';
-import type { PRDiffScope } from '@plannotator/shared/pr-stack';
-import type { PRMetadata } from '@plannotator/shared/pr-types';
+import { useState, useCallback, type RefObject } from "react";
+import { Option, Result, Schema } from "effect";
+import type { PRDiffScope } from "@plannotator/shared/pr-stack";
+import type { PRMetadata } from "@plannotator/shared/pr-types";
 import {
   decodeInitialDiffResponse,
   type InitialDiffResponse,
-} from '../utils/initial-diff-response';
+} from "../utils/initial-diff-response";
 
 /** Decoded `/api/pr-switch` data with required GitHub or GitLab metadata. */
 export interface PRSwitchResponse extends InitialDiffResponse {
@@ -66,10 +66,10 @@ export async function readPRSwitchResponse(
   try {
     data = await res.json();
   } catch {
-    throw new Error('Invalid PR switch response');
+    throw new Error("Invalid PR switch response");
   }
   const decoded = decodePRSwitchResponse(data);
-  if (decoded === undefined) throw new Error('Invalid PR switch response');
+  if (decoded === undefined) throw new Error("Invalid PR switch response");
   return decoded;
 }
 
@@ -79,7 +79,7 @@ export function decodePRDiffScopeResponse(value: PRResponseInput): PRDiffScopeRe
   if (Result.isFailure(decoded)) return undefined;
 
   const { prDiffScope } = decoded.success;
-  if (prDiffScope !== 'layer' && prDiffScope !== 'full-stack') return undefined;
+  if (prDiffScope !== "layer" && prDiffScope !== "full-stack") return undefined;
 
   return { ...decoded.success, prDiffScope };
 }
@@ -107,7 +107,7 @@ export async function readPRDiffScopeResponse(
   }
 
   const decoded = decodePRDiffScopeResponse(await res.json());
-  if (decoded === undefined) throw new Error('Invalid PR diff scope response');
+  if (decoded === undefined) throw new Error("Invalid PR diff scope response");
   return decoded;
 }
 
@@ -120,24 +120,27 @@ export function usePRStack(callbacksRef: RefObject<PRStackCallbacks | null>) {
   const [isSwitchingPRScope, setIsSwitchingPRScope] = useState(false);
   const [isLoadingFullDiff, setIsLoadingFullDiff] = useState(false);
 
-  const handleScopeSelect = useCallback(async (scope: PRDiffScope) => {
-    const cb = callbacksRef.current;
-    if (!cb) return;
-    setIsSwitchingPRScope(true);
-    try {
-      const res = await fetch('/api/pr-diff-scope', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope }),
-      });
-      const data = await readPRDiffScopeResponse(res, 'Failed to switch PR diff scope');
-      cb.applyPRResponse(data);
-    } catch (err) {
-      cb.onError(err instanceof Error ? err.message : 'Failed to switch PR diff scope');
-    } finally {
-      setIsSwitchingPRScope(false);
-    }
-  }, [callbacksRef]);
+  const handleScopeSelect = useCallback(
+    async (scope: PRDiffScope) => {
+      const cb = callbacksRef.current;
+      if (!cb) return;
+      setIsSwitchingPRScope(true);
+      try {
+        const res = await fetch("/api/pr-diff-scope", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope }),
+        });
+        const data = await readPRDiffScopeResponse(res, "Failed to switch PR diff scope");
+        cb.applyPRResponse(data);
+      } catch (err) {
+        cb.onError(err instanceof Error ? err.message : "Failed to switch PR diff scope");
+      } finally {
+        setIsSwitchingPRScope(false);
+      }
+    },
+    [callbacksRef],
+  );
 
   // Partial-diff upgrade: same layer re-POST as handleScopeSelect, but with
   // its own loading flag so the full-screen PRSwitchOverlay does NOT render.
@@ -148,38 +151,41 @@ export function usePRStack(callbacksRef: RefObject<PRStackCallbacks | null>) {
     if (!cb) return;
     setIsLoadingFullDiff(true);
     try {
-      const res = await fetch('/api/pr-diff-scope', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope: 'layer' }),
+      const res = await fetch("/api/pr-diff-scope", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "layer" }),
       });
-      const data = await readPRDiffScopeResponse(res, 'Failed to load the full diff');
+      const data = await readPRDiffScopeResponse(res, "Failed to load the full diff");
       cb.applyPRResponse(data);
     } catch (err) {
-      cb.onError(err instanceof Error ? err.message : 'Failed to load the full diff');
+      cb.onError(err instanceof Error ? err.message : "Failed to load the full diff");
     } finally {
       setIsLoadingFullDiff(false);
     }
   }, [callbacksRef]);
 
-  const handlePRSwitch = useCallback(async (prUrl: string) => {
-    const cb = callbacksRef.current;
-    if (!cb) return;
-    setIsSwitchingPRScope(true);
-    try {
-      const res = await fetch('/api/pr-switch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: prUrl }),
-      });
-      const data = await readPRSwitchResponse(res, 'Failed to switch PR');
-      cb.applyPRResponse(data);
-    } catch (err) {
-      cb.onError(err instanceof Error ? err.message : 'Failed to switch PR');
-    } finally {
-      setIsSwitchingPRScope(false);
-    }
-  }, [callbacksRef]);
+  const handlePRSwitch = useCallback(
+    async (prUrl: string) => {
+      const cb = callbacksRef.current;
+      if (!cb) return;
+      setIsSwitchingPRScope(true);
+      try {
+        const res = await fetch("/api/pr-switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: prUrl }),
+        });
+        const data = await readPRSwitchResponse(res, "Failed to switch PR");
+        cb.applyPRResponse(data);
+      } catch (err) {
+        cb.onError(err instanceof Error ? err.message : "Failed to switch PR");
+      } finally {
+        setIsSwitchingPRScope(false);
+      }
+    },
+    [callbacksRef],
+  );
 
   return {
     isSwitchingPRScope,

@@ -1,9 +1,16 @@
-import { Option, Result, Schema } from 'effect';
-import { AGENT_ORIGINS, type Origin } from '@plannotator/shared/agents';
-import type { DiffOptions, AnnotationOptions, CCLabelConfig } from '@plannotator/shared/config';
-import type { DiffOption, GitContext } from '@plannotator/shared/types';
-import type { PRDiffScope, PRMetadata, PRDiffScopeOption, PRStackInfo, PRStackNode, PRStackTree } from '@plannotator/shared/pr-types';
-import type { SemanticDiffAdvert } from '@plannotator/shared/semantic-diff-types';
+import { Option, Result, Schema } from "effect";
+import { AGENT_ORIGINS, type Origin } from "@plannotator/shared/agents";
+import type { DiffOptions, AnnotationOptions, CCLabelConfig } from "@plannotator/shared/config";
+import type { DiffOption, GitContext } from "@plannotator/shared/types";
+import type {
+  PRDiffScope,
+  PRMetadata,
+  PRDiffScopeOption,
+  PRStackInfo,
+  PRStackNode,
+  PRStackTree,
+} from "@plannotator/shared/pr-types";
+import type { SemanticDiffAdvert } from "@plannotator/shared/semantic-diff-types";
 
 const SafeRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -74,7 +81,7 @@ const AvailableBranchesFieldsSchema = Schema.Struct({
 });
 
 const GithubPRMetadataSchema = Schema.Struct({
-  platform: Schema.Literal('github'),
+  platform: Schema.Literal("github"),
   host: Schema.String,
   owner: Schema.String,
   repo: Schema.String,
@@ -92,7 +99,7 @@ const GithubPRMetadataSchema = Schema.Struct({
 });
 
 const GitlabMRMetadataSchema = Schema.Struct({
-  platform: Schema.Literal('gitlab'),
+  platform: Schema.Literal("gitlab"),
   host: Schema.String,
   projectPath: Schema.String,
   iid: Schema.Int,
@@ -107,10 +114,7 @@ const GitlabMRMetadataSchema = Schema.Struct({
   url: Schema.String,
 });
 
-const PRMetadataSchema = Schema.Union([
-  GithubPRMetadataSchema,
-  GitlabMRMetadataSchema,
-]);
+const PRMetadataSchema = Schema.Union([GithubPRMetadataSchema, GitlabMRMetadataSchema]);
 
 const PRStackInfoSchema = Schema.Struct({
   isStacked: Schema.Boolean,
@@ -118,12 +122,12 @@ const PRStackInfoSchema = Schema.Struct({
   defaultBranch: Schema.optionalKey(Schema.Unknown),
   label: Schema.String,
   source: Schema.Literals([
-    'branch-inferred',
-    'tree-discovered',
-    'github-native',
-    'gitlab-native',
-    'graphite',
-    'ghstack',
+    "branch-inferred",
+    "tree-discovered",
+    "github-native",
+    "gitlab-native",
+    "graphite",
+    "ghstack",
   ]),
 });
 
@@ -141,7 +145,7 @@ const PRStackTreeSchema = Schema.Struct({
   nodes: Schema.Unknown,
 });
 
-const PRDiffScopeSchema = Schema.Literals(['layer', 'full-stack']);
+const PRDiffScopeSchema = Schema.Literals(["layer", "full-stack"]);
 
 const PRDiffScopeOptionSchema = Schema.Struct({
   id: PRDiffScopeSchema,
@@ -185,19 +189,19 @@ const ServerAnnotationOptionsFieldsSchema = Schema.Struct({
   codeFontSize: Schema.optionalKey(Schema.Unknown),
 });
 
-const ServerDiffStyleSchema = Schema.Literals(['split', 'unified']);
-const ServerOverflowSchema = Schema.Literals(['scroll', 'wrap']);
-const ServerDiffIndicatorsSchema = Schema.Literals(['bars', 'classic', 'none']);
-const ServerLineDiffTypeSchema = Schema.Literals(['word-alt', 'word', 'char', 'none']);
+const ServerDiffStyleSchema = Schema.Literals(["split", "unified"]);
+const ServerOverflowSchema = Schema.Literals(["scroll", "wrap"]);
+const ServerDiffIndicatorsSchema = Schema.Literals(["bars", "classic", "none"]);
+const ServerLineDiffTypeSchema = Schema.Literals(["word-alt", "word", "char", "none"]);
 const ServerDefaultDiffTypeSchema = Schema.Literals([
-  'uncommitted',
-  'unstaged',
-  'staged',
-  'merge-base',
-  'all',
-  'branch',
+  "uncommitted",
+  "unstaged",
+  "staged",
+  "merge-base",
+  "all",
+  "branch",
 ]);
-const ServerLineBgIntensitySchema = Schema.Literals(['subtle', 'normal', 'strong']);
+const ServerLineBgIntensitySchema = Schema.Literals(["subtle", "normal", "strong"]);
 
 const ServerConfigFieldsSchema = Schema.Struct({
   displayName: Schema.optionalKey(Schema.Unknown),
@@ -279,10 +283,12 @@ const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
 const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
 const decodeNullableString = Schema.decodeUnknownOption(Schema.NullOr(Schema.String));
 const decodeGitContextFields = Schema.decodeUnknownOption(GitContextFieldsSchema);
-const decodeRepoInfoFields = Schema.decodeUnknownOption(Schema.Struct({
-  display: Schema.String,
-  branch: Schema.optionalKey(Schema.Unknown),
-}));
+const decodeRepoInfoFields = Schema.decodeUnknownOption(
+  Schema.Struct({
+    display: Schema.String,
+    branch: Schema.optionalKey(Schema.Unknown),
+  }),
+);
 const decodeAvailableBranchesFields = Schema.decodeUnknownOption(AvailableBranchesFieldsSchema);
 const decodePRMetadataFields = Schema.decodeUnknownOption(PRMetadataSchema);
 const decodePRStackInfoFields = Schema.decodeUnknownOption(Schema.NullOr(PRStackInfoSchema));
@@ -291,7 +297,9 @@ const decodePRDiffScope = Schema.decodeUnknownOption(PRDiffScopeSchema);
 const decodeSemanticDiffFields = Schema.decodeUnknownOption(SemanticDiffAdvertSchema);
 const decodeServerConfigFields = Schema.decodeUnknownOption(ServerConfigFieldsSchema);
 const decodeServerDiffOptionsFields = Schema.decodeUnknownOption(ServerDiffOptionsFieldsSchema);
-const decodeServerAnnotationOptionsFields = Schema.decodeUnknownOption(ServerAnnotationOptionsFieldsSchema);
+const decodeServerAnnotationOptionsFields = Schema.decodeUnknownOption(
+  ServerAnnotationOptionsFieldsSchema,
+);
 const decodeServerDiffStyle = Schema.decodeUnknownOption(ServerDiffStyleSchema);
 const decodeServerOverflow = Schema.decodeUnknownOption(ServerOverflowSchema);
 const decodeServerDiffIndicators = Schema.decodeUnknownOption(ServerDiffIndicatorsSchema);
@@ -300,7 +308,9 @@ const decodeServerDefaultDiffType = Schema.decodeUnknownOption(ServerDefaultDiff
 const decodeServerLineBgIntensity = Schema.decodeUnknownOption(ServerLineBgIntensitySchema);
 const decodeRecentCommitFields = Schema.decodeUnknownOption(RecentCommitSchema);
 const decodeConventionalLabelFields = Schema.decodeUnknownOption(ConventionalLabelSchema);
-const decodeNullableUnknownArray = Schema.decodeUnknownOption(Schema.NullOr(Schema.Array(Schema.Unknown)));
+const decodeNullableUnknownArray = Schema.decodeUnknownOption(
+  Schema.NullOr(Schema.Array(Schema.Unknown)),
+);
 const decodeUnknownArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
 
 function decodeValidArrayItems<T>(
@@ -337,70 +347,84 @@ function withoutKnownFields(record: SafeRecord, knownFields: readonly string[]):
   return unknownFields;
 }
 
-function decodeDiffOption(value: Schema.Schema.Type<typeof Schema.Unknown>): DiffOption | undefined {
+function decodeDiffOption(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): DiffOption | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(DiffOptionSchema)(record));
   if (!fields) return undefined;
   return {
-    ...withoutKnownFields(record, ['id', 'label']),
+    ...withoutKnownFields(record, ["id", "label"]),
     ...fields,
   };
 }
 
-function decodeWorktreeInfo(value: Schema.Schema.Type<typeof Schema.Unknown>): NonNullable<GitContext['worktrees']>[number] | undefined {
+function decodeWorktreeInfo(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): NonNullable<GitContext["worktrees"]>[number] | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(WorktreeInfoSchema)(record));
   if (!fields) return undefined;
   return {
-    ...withoutKnownFields(record, ['path', 'branch', 'head']),
+    ...withoutKnownFields(record, ["path", "branch", "head"]),
     ...fields,
   };
 }
 
-function decodeRecentCommit(value: Schema.Schema.Type<typeof Schema.Unknown>): NonNullable<GitContext['recentCommits']>[number] | undefined {
+function decodeRecentCommit(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): NonNullable<GitContext["recentCommits"]>[number] | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeRecentCommitFields(record));
   if (!fields) return undefined;
   return {
-    ...withoutKnownFields(record, ['sha', 'shortSha', 'subject', 'relativeDate', 'author']),
+    ...withoutKnownFields(record, ["sha", "shortSha", "subject", "relativeDate", "author"]),
     ...fields,
   };
 }
 
-function decodeCompareTarget(value: Schema.Schema.Type<typeof Schema.Unknown>): GitContext['compareTarget'] | undefined {
+function decodeCompareTarget(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): GitContext["compareTarget"] | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
-  const fields = Option.getOrUndefined(Schema.decodeUnknownOption(CompareTargetConfigSchema)(record));
+  const fields = Option.getOrUndefined(
+    Schema.decodeUnknownOption(CompareTargetConfigSchema)(record),
+  );
   if (!fields) return undefined;
 
   const pickerRecord = decodeRecord(fields.picker);
   if (!pickerRecord) return undefined;
-  const pickerFields = Option.getOrUndefined(Schema.decodeUnknownOption(CompareTargetPickerCopySchema)(pickerRecord));
+  const pickerFields = Option.getOrUndefined(
+    Schema.decodeUnknownOption(CompareTargetPickerCopySchema)(pickerRecord),
+  );
   if (!pickerFields) return undefined;
 
   return {
-    ...withoutKnownFields(record, ['diffTypes', 'fallback', 'picker']),
+    ...withoutKnownFields(record, ["diffTypes", "fallback", "picker"]),
     diffTypes: decodeStringArray(fields.diffTypes) ?? [],
     fallback: fields.fallback,
     picker: {
       ...withoutKnownFields(pickerRecord, [
-        'rowLabel',
-        'triggerLabel',
-        'triggerTitlePrefix',
-        'searchPlaceholder',
-        'emptyText',
-        'localGroupLabel',
-        'remoteGroupLabel',
+        "rowLabel",
+        "triggerLabel",
+        "triggerTitlePrefix",
+        "searchPlaceholder",
+        "emptyText",
+        "localGroupLabel",
+        "remoteGroupLabel",
       ]),
       ...pickerFields,
     },
   };
 }
 
-function decodeRepository(value: Schema.Schema.Type<typeof Schema.Unknown>): NonNullable<GitContext['repository']> | undefined {
+function decodeRepository(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): NonNullable<GitContext["repository"]> | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(RepositoryContextSchema)(record));
@@ -408,12 +432,14 @@ function decodeRepository(value: Schema.Schema.Type<typeof Schema.Unknown>): Non
 
   const displayFallback = Option.getOrUndefined(decodeString(fields.displayFallback));
   return {
-    ...withoutKnownFields(record, ['displayFallback']),
+    ...withoutKnownFields(record, ["displayFallback"]),
     ...(displayFallback !== undefined && { displayFallback }),
   };
 }
 
-function decodeJjEvolog(value: Schema.Schema.Type<typeof Schema.Unknown>): NonNullable<GitContext['jjEvologs']>[number] | undefined {
+function decodeJjEvolog(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): NonNullable<GitContext["jjEvologs"]>[number] | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(JjEvologSchema)(record));
@@ -421,14 +447,16 @@ function decodeJjEvolog(value: Schema.Schema.Type<typeof Schema.Unknown>): NonNu
 
   const age = Option.getOrUndefined(decodeString(fields.age));
   return {
-    ...withoutKnownFields(record, ['commitId', 'description', 'age']),
+    ...withoutKnownFields(record, ["commitId", "description", "age"]),
     commitId: fields.commitId,
     description: fields.description,
     ...(age !== undefined && { age }),
   };
 }
 
-function decodePRStackNode(value: Schema.Schema.Type<typeof Schema.Unknown>): PRStackNode | undefined {
+function decodePRStackNode(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): PRStackNode | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(PRStackNodeSchema)(record));
@@ -438,9 +466,19 @@ function decodePRStackNode(value: Schema.Schema.Type<typeof Schema.Unknown>): PR
   const decodedNumber = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Int)(number));
   const decodedTitle = Option.getOrUndefined(decodeString(title));
   const decodedUrl = Option.getOrUndefined(decodeString(url));
-  const decodedState = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Literals(['open', 'merged', 'closed']))(state));
+  const decodedState = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.Literals(["open", "merged", "closed"]))(state),
+  );
   return {
-    ...withoutKnownFields(record, ['branch', 'number', 'title', 'url', 'isCurrent', 'isDefaultBranch', 'state']),
+    ...withoutKnownFields(record, [
+      "branch",
+      "number",
+      "title",
+      "url",
+      "isCurrent",
+      "isDefaultBranch",
+      "state",
+    ]),
     ...required,
     ...(decodedNumber !== undefined && { number: decodedNumber }),
     ...(decodedTitle !== undefined && { title: decodedTitle }),
@@ -449,17 +487,22 @@ function decodePRStackNode(value: Schema.Schema.Type<typeof Schema.Unknown>): PR
   };
 }
 
-function decodeAvailableBranches(value: Schema.Schema.Type<typeof Schema.Unknown>): GitContext['availableBranches'] {
+function decodeAvailableBranches(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): GitContext["availableBranches"] {
   const record = decodeRecord(value);
-  const fields = record === undefined ? undefined : Option.getOrUndefined(decodeAvailableBranchesFields(record));
+  const fields =
+    record === undefined ? undefined : Option.getOrUndefined(decodeAvailableBranchesFields(record));
   return {
-    ...(record !== undefined && withoutKnownFields(record, ['local', 'remote'])),
+    ...(record !== undefined && withoutKnownFields(record, ["local", "remote"])),
     local: decodeStringArray(fields?.local) ?? [],
     remote: decodeStringArray(fields?.remote) ?? [],
   };
 }
 
-function decodeRepoInfo(value: Schema.Schema.Type<typeof Schema.Unknown>): { display: string; branch?: string } | undefined {
+function decodeRepoInfo(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): { display: string; branch?: string } | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeRepoInfoFields(record));
@@ -467,43 +510,54 @@ function decodeRepoInfo(value: Schema.Schema.Type<typeof Schema.Unknown>): { dis
 
   const branch = Option.getOrUndefined(decodeString(fields.branch));
   return {
-    ...withoutKnownFields(record, ['display', 'branch']),
+    ...withoutKnownFields(record, ["display", "branch"]),
     display: fields.display,
     ...(branch !== undefined && { branch }),
   };
 }
 
-function decodeGitContext(value: Schema.Schema.Type<typeof Schema.Unknown>): GitContext | undefined {
+function decodeGitContext(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): GitContext | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const context = Option.getOrUndefined(decodeGitContextFields(record));
   if (!context) return undefined;
 
-  const diffOptions = decodeValidArrayItems(context.diffOptions, (item) => decodeOptionalItem(decodeDiffOption, item)) ?? [];
-  const worktrees = decodeValidArrayItems(context.worktrees, (item) => decodeOptionalItem(decodeWorktreeInfo, item)) ?? [];
+  const diffOptions =
+    decodeValidArrayItems(context.diffOptions, (item) =>
+      decodeOptionalItem(decodeDiffOption, item),
+    ) ?? [];
+  const worktrees =
+    decodeValidArrayItems(context.worktrees, (item) =>
+      decodeOptionalItem(decodeWorktreeInfo, item),
+    ) ?? [];
   const compareTarget = decodeCompareTarget(context.compareTarget);
   const repository = decodeRepository(context.repository);
   const cwd = Option.getOrUndefined(decodeString(context.cwd));
-  const vcsType = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Literals(['git', 'jj', 'p4']))(context.vcsType));
-  const jjEvologs = decodeValidArrayItems(
-    context.jjEvologs,
-    (item) => decodeOptionalItem(decodeJjEvolog, item),
+  const vcsType = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.Literals(["git", "jj", "p4"]))(context.vcsType),
   );
-  const recentCommits = decodeValidArrayItems(context.recentCommits, (item) => decodeOptionalItem(decodeRecentCommit, item));
+  const jjEvologs = decodeValidArrayItems(context.jjEvologs, (item) =>
+    decodeOptionalItem(decodeJjEvolog, item),
+  );
+  const recentCommits = decodeValidArrayItems(context.recentCommits, (item) =>
+    decodeOptionalItem(decodeRecentCommit, item),
+  );
 
   return {
     ...withoutKnownFields(record, [
-      'currentBranch',
-      'defaultBranch',
-      'diffOptions',
-      'worktrees',
-      'availableBranches',
-      'compareTarget',
-      'repository',
-      'cwd',
-      'vcsType',
-      'jjEvologs',
-      'recentCommits',
+      "currentBranch",
+      "defaultBranch",
+      "diffOptions",
+      "worktrees",
+      "availableBranches",
+      "compareTarget",
+      "repository",
+      "cwd",
+      "vcsType",
+      "jjEvologs",
+      "recentCommits",
     ]),
     currentBranch: context.currentBranch,
     defaultBranch: context.defaultBranch,
@@ -519,34 +573,36 @@ function decodeGitContext(value: Schema.Schema.Type<typeof Schema.Unknown>): Git
   };
 }
 
-function decodePRMetadata(value: Schema.Schema.Type<typeof Schema.Unknown>): PRMetadata | undefined {
+function decodePRMetadata(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): PRMetadata | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodePRMetadataFields(record));
   if (!fields) return undefined;
 
-  if (fields.platform === 'github') {
+  if (fields.platform === "github") {
     const { prNodeId, defaultBranch, mergeBaseSha, ...required } = fields;
     const decodedPrNodeId = Option.getOrUndefined(decodeString(prNodeId));
     const decodedDefaultBranch = Option.getOrUndefined(decodeString(defaultBranch));
     const decodedMergeBaseSha = Option.getOrUndefined(decodeString(mergeBaseSha));
     return {
       ...withoutKnownFields(record, [
-        'platform',
-        'host',
-        'owner',
-        'repo',
-        'number',
-        'prNodeId',
-        'title',
-        'author',
-        'baseBranch',
-        'headBranch',
-        'defaultBranch',
-        'baseSha',
-        'headSha',
-        'mergeBaseSha',
-        'url',
+        "platform",
+        "host",
+        "owner",
+        "repo",
+        "number",
+        "prNodeId",
+        "title",
+        "author",
+        "baseBranch",
+        "headBranch",
+        "defaultBranch",
+        "baseSha",
+        "headSha",
+        "mergeBaseSha",
+        "url",
       ]),
       ...required,
       ...(decodedPrNodeId !== undefined && { prNodeId: decodedPrNodeId }),
@@ -560,19 +616,19 @@ function decodePRMetadata(value: Schema.Schema.Type<typeof Schema.Unknown>): PRM
   const decodedMergeBaseSha = Option.getOrUndefined(decodeString(mergeBaseSha));
   return {
     ...withoutKnownFields(record, [
-      'platform',
-      'host',
-      'projectPath',
-      'iid',
-      'title',
-      'author',
-      'baseBranch',
-      'headBranch',
-      'defaultBranch',
-      'baseSha',
-      'headSha',
-      'mergeBaseSha',
-      'url',
+      "platform",
+      "host",
+      "projectPath",
+      "iid",
+      "title",
+      "author",
+      "baseBranch",
+      "headBranch",
+      "defaultBranch",
+      "baseSha",
+      "headSha",
+      "mergeBaseSha",
+      "url",
     ]),
     ...required,
     ...(decodedDefaultBranch !== undefined && { defaultBranch: decodedDefaultBranch }),
@@ -580,7 +636,9 @@ function decodePRMetadata(value: Schema.Schema.Type<typeof Schema.Unknown>): PRM
   };
 }
 
-function decodePRStackInfo(value: Schema.Schema.Type<typeof Schema.Unknown>): PRStackInfo | null | undefined {
+function decodePRStackInfo(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): PRStackInfo | null | undefined {
   if (value === null) return null;
   const record = decodeRecord(value);
   if (!record) return undefined;
@@ -590,13 +648,15 @@ function decodePRStackInfo(value: Schema.Schema.Type<typeof Schema.Unknown>): PR
   const { defaultBranch, ...required } = fields;
   const decodedDefaultBranch = Option.getOrUndefined(decodeString(defaultBranch));
   return {
-    ...withoutKnownFields(record, ['isStacked', 'baseBranch', 'defaultBranch', 'label', 'source']),
+    ...withoutKnownFields(record, ["isStacked", "baseBranch", "defaultBranch", "label", "source"]),
     ...required,
     ...(decodedDefaultBranch !== undefined && { defaultBranch: decodedDefaultBranch }),
   };
 }
 
-function decodeSemanticDiff(value: Schema.Schema.Type<typeof Schema.Unknown>): SemanticDiffAdvert | undefined {
+function decodeSemanticDiff(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): SemanticDiffAdvert | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeSemanticDiffFields(record));
@@ -606,14 +666,16 @@ function decodeSemanticDiff(value: Schema.Schema.Type<typeof Schema.Unknown>): S
   const decodedSemVersion = Option.getOrUndefined(decodeString(semVersion));
   const decodedSemSource = Option.getOrUndefined(decodeString(semSource));
   return {
-    ...withoutKnownFields(record, ['available', 'semVersion', 'semSource']),
+    ...withoutKnownFields(record, ["available", "semVersion", "semSource"]),
     ...required,
     ...(decodedSemVersion !== undefined && { semVersion: decodedSemVersion }),
     ...(decodedSemSource !== undefined && { semSource: decodedSemSource }),
   };
 }
 
-function decodePRStackTree(value: Schema.Schema.Type<typeof Schema.Unknown>): PRStackTree | null | undefined {
+function decodePRStackTree(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): PRStackTree | null | undefined {
   if (value === null) return null;
   const record = decodeRecord(value);
   if (!record) return undefined;
@@ -627,13 +689,17 @@ function decodePRStackTree(value: Schema.Schema.Type<typeof Schema.Unknown>): PR
     const decoded = decodePRStackNode(node);
     return decoded === undefined ? [] : [decoded];
   });
-  return rawNodes.length > 0 && nodes.length === 0 ? undefined : {
-    ...withoutKnownFields(record, ['nodes']),
-    nodes,
-  };
+  return rawNodes.length > 0 && nodes.length === 0
+    ? undefined
+    : {
+        ...withoutKnownFields(record, ["nodes"]),
+        nodes,
+      };
 }
 
-function decodeDiffOptions(value: Schema.Schema.Type<typeof Schema.Unknown>): DiffOption[] | undefined {
+function decodeDiffOptions(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): DiffOption[] | undefined {
   return decodeValidArrayItems(value, (item) => decodeOptionalItem(decodeDiffOption, item));
 }
 
@@ -641,11 +707,15 @@ function decodeViewedFiles(value: Schema.Schema.Type<typeof Schema.Unknown>): st
   return decodeValidArrayItems(value, decodeString);
 }
 
-function decodePRDiffScopeOptions(value: Schema.Schema.Type<typeof Schema.Unknown>): PRDiffScopeOption[] | undefined {
+function decodePRDiffScopeOptions(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): PRDiffScopeOption[] | undefined {
   return decodeValidArrayItems(value, Schema.decodeUnknownOption(PRDiffScopeOptionSchema));
 }
 
-function decodeServerDiffOptions(value: Schema.Schema.Type<typeof Schema.Unknown>): DiffOptions | undefined {
+function decodeServerDiffOptions(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): DiffOptions | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeServerDiffOptionsFields(record));
@@ -662,25 +732,29 @@ function decodeServerDiffOptions(value: Schema.Schema.Type<typeof Schema.Unknown
   const tabSize = Option.getOrUndefined(decodeNumber(fields.tabSize));
   const hideWhitespace = Option.getOrUndefined(decodeBoolean(fields.hideWhitespace));
   const expandUnchanged = Option.getOrUndefined(decodeBoolean(fields.expandUnchanged));
-  const defaultDiffType = Option.getOrUndefined(decodeServerDefaultDiffType(fields.defaultDiffType));
-  const canonicalDefaultDiffType = defaultDiffType === 'branch' ? 'merge-base' : defaultDiffType;
-  const lineBgIntensity = Option.getOrUndefined(decodeServerLineBgIntensity(fields.lineBgIntensity));
+  const defaultDiffType = Option.getOrUndefined(
+    decodeServerDefaultDiffType(fields.defaultDiffType),
+  );
+  const canonicalDefaultDiffType = defaultDiffType === "branch" ? "merge-base" : defaultDiffType;
+  const lineBgIntensity = Option.getOrUndefined(
+    decodeServerLineBgIntensity(fields.lineBgIntensity),
+  );
 
   return {
     ...withoutKnownFields(record, [
-      'diffStyle',
-      'overflow',
-      'diffIndicators',
-      'lineDiffType',
-      'showLineNumbers',
-      'showDiffBackground',
-      'fontFamily',
-      'fontSize',
-      'tabSize',
-      'hideWhitespace',
-      'expandUnchanged',
-      'defaultDiffType',
-      'lineBgIntensity',
+      "diffStyle",
+      "overflow",
+      "diffIndicators",
+      "lineDiffType",
+      "showLineNumbers",
+      "showDiffBackground",
+      "fontFamily",
+      "fontSize",
+      "tabSize",
+      "hideWhitespace",
+      "expandUnchanged",
+      "defaultDiffType",
+      "lineBgIntensity",
     ]),
     ...(diffStyle !== undefined && { diffStyle }),
     ...(overflow !== undefined && { overflow }),
@@ -698,7 +772,9 @@ function decodeServerDiffOptions(value: Schema.Schema.Type<typeof Schema.Unknown
   };
 }
 
-function decodeServerAnnotationOptions(value: Schema.Schema.Type<typeof Schema.Unknown>): AnnotationOptions | undefined {
+function decodeServerAnnotationOptions(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): AnnotationOptions | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeServerAnnotationOptionsFields(record));
@@ -710,7 +786,12 @@ function decodeServerAnnotationOptions(value: Schema.Schema.Type<typeof Schema.U
   const codeFontSize = Option.getOrUndefined(decodeString(fields.codeFontSize));
 
   return {
-    ...withoutKnownFields(record, ['proseFontFamily', 'proseFontSize', 'codeFontFamily', 'codeFontSize']),
+    ...withoutKnownFields(record, [
+      "proseFontFamily",
+      "proseFontSize",
+      "codeFontFamily",
+      "codeFontSize",
+    ]),
     ...(proseFontFamily !== undefined && { proseFontFamily }),
     ...(proseFontSize !== undefined && { proseFontSize }),
     ...(codeFontFamily !== undefined && { codeFontFamily }),
@@ -718,18 +799,22 @@ function decodeServerAnnotationOptions(value: Schema.Schema.Type<typeof Schema.U
   };
 }
 
-function decodeConventionalLabel(value: Schema.Schema.Type<typeof Schema.Unknown>): CCLabelConfig | undefined {
+function decodeConventionalLabel(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): CCLabelConfig | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeConventionalLabelFields(record));
   if (!fields) return undefined;
   return {
-    ...withoutKnownFields(record, ['label', 'display', 'blocking']),
+    ...withoutKnownFields(record, ["label", "display", "blocking"]),
     ...fields,
   };
 }
 
-function decodeConventionalLabels(value: Schema.Schema.Type<typeof Schema.Unknown>): CCLabelConfig[] | null | undefined {
+function decodeConventionalLabels(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): CCLabelConfig[] | null | undefined {
   const labels = Option.getOrUndefined(decodeNullableUnknownArray(value));
   if (labels === undefined || labels === null) return labels;
 
@@ -739,7 +824,9 @@ function decodeConventionalLabels(value: Schema.Schema.Type<typeof Schema.Unknow
   });
 }
 
-function decodeServerConfig(value: Schema.Schema.Type<typeof Schema.Unknown>): InitialDiffServerConfig | undefined {
+function decodeServerConfig(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): InitialDiffServerConfig | undefined {
   const record = decodeRecord(value);
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeServerConfigFields(record));
@@ -754,12 +841,12 @@ function decodeServerConfig(value: Schema.Schema.Type<typeof Schema.Unknown>): I
 
   return {
     ...withoutKnownFields(record, [
-      'displayName',
-      'diffOptions',
-      'annotationOptions',
-      'gitUser',
-      'conventionalComments',
-      'conventionalLabels',
+      "displayName",
+      "diffOptions",
+      "annotationOptions",
+      "gitUser",
+      "conventionalComments",
+      "conventionalLabels",
     ]),
     ...(displayName !== undefined && { displayName }),
     ...(diffOptions !== undefined && { diffOptions }),
@@ -795,7 +882,9 @@ export function decodeInitialDiffResponse(
   const prDiffScope = Option.getOrUndefined(decodePRDiffScope(data.prDiffScope));
   const prDiffScopeOptions = decodePRDiffScopeOptions(data.prDiffScopeOptions);
   const prPatchIncomplete = Option.getOrUndefined(decodeBoolean(data.prPatchIncomplete));
-  const prPatchUpgradeAvailable = Option.getOrUndefined(decodeBoolean(data.prPatchUpgradeAvailable));
+  const prPatchUpgradeAvailable = Option.getOrUndefined(
+    decodeBoolean(data.prPatchUpgradeAvailable),
+  );
   const platformUser = Option.getOrUndefined(decodeString(data.platformUser));
   const viewedFiles = decodeViewedFiles(data.viewedFiles);
   const error = Option.getOrUndefined(decodeString(data.error));
@@ -847,16 +936,18 @@ export function decodeDiffSwitchResponse(
 }
 
 export type InitialDiffLoadResult =
-  | { source: 'api'; data: InitialDiffResponse }
-  | { source: 'demo' };
+  | { source: "api"; data: InitialDiffResponse }
+  | { source: "demo" };
 
 export async function loadInitialDiffResponse(
   readJson: () => Promise<Schema.Schema.Type<typeof Schema.Unknown>>,
 ): Promise<InitialDiffLoadResult> {
   try {
     const decoded = decodeInitialDiffResponse(await readJson());
-    return Result.isSuccess(decoded) ? { source: 'api', data: decoded.success } : { source: 'demo' };
+    return Result.isSuccess(decoded)
+      ? { source: "api", data: decoded.success }
+      : { source: "demo" };
   } catch {
-    return { source: 'demo' };
+    return { source: "demo" };
   }
 }

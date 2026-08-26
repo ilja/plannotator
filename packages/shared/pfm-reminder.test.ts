@@ -36,15 +36,11 @@ describe("PFM_REMINDER", () => {
 
 describe("composeImproveContext", () => {
   test("returns null when nothing is enabled", () => {
-    expect(
-      composeImproveContext({ pfmEnabled: false, improvementHookContent: null }),
-    ).toBeNull();
+    expect(composeImproveContext({ pfmEnabled: false, improvementHookContent: null })).toBeNull();
   });
 
   test("treats empty improvement-hook content the same as null", () => {
-    expect(
-      composeImproveContext({ pfmEnabled: false, improvementHookContent: "" }),
-    ).toBeNull();
+    expect(composeImproveContext({ pfmEnabled: false, improvementHookContent: "" })).toBeNull();
   });
 
   test("returns just the PFM reminder when only PFM is enabled", () => {

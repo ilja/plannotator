@@ -1,9 +1,9 @@
-import React from 'react';
-import { SEVERITY_STYLES, DiffAnnotationMetadata } from '@plannotator/ui/types';
-import { SuggestionBlock } from './SuggestionBlock';
-import { CommentMeta } from './CommentMeta';
-import { CommentActions } from './CommentActions';
-import { renderInlineMarkdown } from '../utils/renderInlineMarkdown';
+import React from "react";
+import { SEVERITY_STYLES, DiffAnnotationMetadata } from "@plannotator/ui/types";
+import { SuggestionBlock } from "./SuggestionBlock";
+import { CommentMeta } from "./CommentMeta";
+import { CommentActions } from "./CommentActions";
+import { renderInlineMarkdown } from "../utils/renderInlineMarkdown";
 
 interface InlineAnnotationProps {
   metadata: DiffAnnotationMetadata;
@@ -27,14 +27,17 @@ export const InlineAnnotation: React.FC<InlineAnnotationProps> = ({
 
   return (
     <div
-      className={`review-comment group${isSelected ? ' is-selected' : ''}`}
+      className={`review-comment group${isSelected ? " is-selected" : ""}`}
       data-annotation-id={metadata.annotationId}
       onClick={() => onSelect(metadata.annotationId)}
     >
       <CommentMeta
         leading={
           severity && (
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${severity.dot}`} title={severity.label} />
+            <span
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${severity.dot}`}
+              title={severity.label}
+            />
           )
         }
         conventionalLabel={metadata.conventionalLabel}
@@ -54,7 +57,11 @@ export const InlineAnnotation: React.FC<InlineAnnotationProps> = ({
       )}
       {metadata.suggestedCode && (
         <div className="mt-2">
-          <SuggestionBlock code={metadata.suggestedCode} originalCode={metadata.originalCode} language={language} />
+          <SuggestionBlock
+            code={metadata.suggestedCode}
+            originalCode={metadata.originalCode}
+            language={language}
+          />
         </div>
       )}
       <CommentActions

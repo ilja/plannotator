@@ -82,7 +82,7 @@ describe("vendor parity: Pi imports ↔ vendor.sh", () => {
       throw new Error(
         `Pi source files import these generated modules not in vendor.sh:\n` +
           missing.map((m) => `  - generated/${m}.js`).join("\n") +
-          `\n\nAdd them to apps/pi-extension/vendor.sh`
+          `\n\nAdd them to apps/pi-extension/vendor.sh`,
       );
     }
   });

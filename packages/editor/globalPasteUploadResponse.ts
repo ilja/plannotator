@@ -1,7 +1,7 @@
-import type { ImageAttachment } from '@plannotator/ui/types';
-import { decodeAttachmentUploadResponse } from '@plannotator/ui/utils/attachmentUploadResponse';
+import type { ImageAttachment } from "@plannotator/ui/types";
+import { decodeAttachmentUploadResponse } from "@plannotator/ui/utils/attachmentUploadResponse";
 
-type GlobalPasteUploadResponse = Pick<Response, 'ok' | 'json'>;
+type GlobalPasteUploadResponse = Pick<Response, "ok" | "json">;
 
 /** Decodes a successful global paste upload into an attachment; non-OK responses are ignored. */
 export async function decodeGlobalPasteUploadResponse(

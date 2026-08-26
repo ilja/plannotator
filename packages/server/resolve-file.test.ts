@@ -9,11 +9,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-	expandHomePath,
-	isAbsoluteUserPath,
-	normalizeUserPathInput,
-	resolveMarkdownFile,
-	resolveUserPath,
+  expandHomePath,
+  isAbsoluteUserPath,
+  normalizeUserPathInput,
+  resolveMarkdownFile,
+  resolveUserPath,
 } from "@plannotator/shared/resolve-file";
 
 const tempDirs: string[] = [];
@@ -41,17 +41,13 @@ afterEach(() => {
 // --- User path normalization ---
 
 describe("normalizeUserPathInput", () => {
-	test("expands tilde paths before normalization", () => {
-		expect(normalizeUserPathInput("~/test-plan.md")).toBe(
-			join(homedir(), "test-plan.md"),
-		);
-	});
+  test("expands tilde paths before normalization", () => {
+    expect(normalizeUserPathInput("~/test-plan.md")).toBe(join(homedir(), "test-plan.md"));
+  });
 
-	test("strips wrapping quotes", () => {
-		expect(normalizeUserPathInput('"~/test-plan.md"')).toBe(
-			join(homedir(), "test-plan.md"),
-		);
-	});
+  test("strips wrapping quotes", () => {
+    expect(normalizeUserPathInput('"~/test-plan.md"')).toBe(join(homedir(), "test-plan.md"));
+  });
 
   test("converts MSYS paths on Windows", () => {
     expect(normalizeUserPathInput("/c/Users/dev/test-plan.md", "win32")).toBe(
@@ -73,21 +69,17 @@ describe("normalizeUserPathInput", () => {
 });
 
 describe("expandHomePath", () => {
-	test("expands bare home alias", () => {
-		expect(expandHomePath("~", "/tmp/home")).toBe("/tmp/home");
-	});
+  test("expands bare home alias", () => {
+    expect(expandHomePath("~", "/tmp/home")).toBe("/tmp/home");
+  });
 
-	test("expands home-relative paths", () => {
-		expect(expandHomePath("~/docs/plan.md", "/tmp/home")).toBe(
-			join("/tmp/home", "docs/plan.md"),
-		);
-	});
+  test("expands home-relative paths", () => {
+    expect(expandHomePath("~/docs/plan.md", "/tmp/home")).toBe(join("/tmp/home", "docs/plan.md"));
+  });
 
-	test("does not expand tilde usernames", () => {
-		expect(expandHomePath("~alice/docs/plan.md", "/tmp/home")).toBe(
-			"~alice/docs/plan.md",
-		);
-	});
+  test("does not expand tilde usernames", () => {
+    expect(expandHomePath("~alice/docs/plan.md", "/tmp/home")).toBe("~alice/docs/plan.md");
+  });
 });
 
 describe("isAbsoluteUserPath", () => {
@@ -102,22 +94,20 @@ describe("isAbsoluteUserPath", () => {
 });
 
 describe("resolveUserPath", () => {
-	test("resolves relative paths against a base directory", () => {
-		expect(resolveUserPath("docs/plan.md", "/tmp/project")).toBe(
-			resolve("/tmp/project", "docs/plan.md"),
-		);
-	});
+  test("resolves relative paths against a base directory", () => {
+    expect(resolveUserPath("docs/plan.md", "/tmp/project")).toBe(
+      resolve("/tmp/project", "docs/plan.md"),
+    );
+  });
 
-	test("resolves quoted tilde paths", () => {
-		expect(resolveUserPath('"~/docs/plan.md"')).toBe(
-			resolve(homedir(), "docs/plan.md"),
-		);
-	});
+  test("resolves quoted tilde paths", () => {
+    expect(resolveUserPath('"~/docs/plan.md"')).toBe(resolve(homedir(), "docs/plan.md"));
+  });
 
-	test("returns empty string for whitespace-only input", () => {
-		expect(resolveUserPath("   ", "/tmp/project")).toBe("");
-		expect(resolveUserPath("", "/tmp/project")).toBe("");
-	});
+  test("returns empty string for whitespace-only input", () => {
+    expect(resolveUserPath("   ", "/tmp/project")).toBe("");
+    expect(resolveUserPath("", "/tmp/project")).toBe("");
+  });
 });
 
 // --- Core resolution strategies ---
@@ -132,14 +122,14 @@ describe("resolveMarkdownFile", () => {
     expect(result).toEqual({ kind: "found", path: absPath });
   });
 
-	test("resolves tilde-prefixed absolute paths", async () => {
-		const homeRoot = createTempProject({}, join(homedir(), ".plannotator-resolve-file-"));
-		const absPath = resolve(homeRoot, "plan.md");
-		writeFileSync(absPath, "# Plan");
-		const relativeToHome = absPath.slice(homedir().length + 1).replace(/\\/g, "/");
-		const result = resolveMarkdownFile(`~/${relativeToHome}`, "/unused");
-		expect(result).toEqual({ kind: "found", path: absPath });
-	});
+  test("resolves tilde-prefixed absolute paths", async () => {
+    const homeRoot = createTempProject({}, join(homedir(), ".plannotator-resolve-file-"));
+    const absPath = resolve(homeRoot, "plan.md");
+    writeFileSync(absPath, "# Plan");
+    const relativeToHome = absPath.slice(homedir().length + 1).replace(/\\/g, "/");
+    const result = resolveMarkdownFile(`~/${relativeToHome}`, "/unused");
+    expect(result).toEqual({ kind: "found", path: absPath });
+  });
 
   test("returns not_found for absolute path that doesn't exist", async () => {
     const root = createTempProject();

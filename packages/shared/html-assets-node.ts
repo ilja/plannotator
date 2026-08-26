@@ -1,5 +1,11 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve as resolvePath, posix as pathPosix } from "node:path";
+import {
+  dirname,
+  isAbsolute,
+  relative,
+  resolve as resolvePath,
+  posix as pathPosix,
+} from "node:path";
 import {
   htmlAssetContentType,
   rewriteCssAssetReferences,

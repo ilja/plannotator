@@ -1,16 +1,16 @@
-import React from 'react';
+import React from "react";
 import {
   MarkdownEditor as PackagedMarkdownEditor,
   type MarkdownEditorHandle,
-} from '@plannotator/markdown-editor';
-import '@plannotator/markdown-editor/themes/plannotator.css';
-import { useTheme } from './ThemeProvider';
+} from "@plannotator/markdown-editor";
+import "@plannotator/markdown-editor/themes/plannotator.css";
+import { useTheme } from "./ThemeProvider";
 
 export type { MarkdownEditorHandle };
 
 /* Grid-mode card utilities stay here (not in the package): they're Plannotator
    design-system Tailwind classes, and this file is @source-scanned. */
-const GRID_CARD_CLASSES = 'px-5 md:px-8 lg:px-10 xl:px-12 shadow-xl border border-border/50';
+const GRID_CARD_CLASSES = "px-5 md:px-8 lg:px-10 xl:px-12 shadow-xl border border-border/50";
 
 interface MarkdownEditorProps {
   /** Initial markdown. Read at mount only — the editor owns the text after that.

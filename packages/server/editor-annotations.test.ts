@@ -7,7 +7,10 @@ const decodeJson = Schema.decodeUnknownSync(Schema.Json);
 
 const endpoint = "http://localhost";
 
-async function handlePost(handler: ReturnType<typeof createEditorAnnotationHandler>, body: string): Promise<Response> {
+async function handlePost(
+  handler: ReturnType<typeof createEditorAnnotationHandler>,
+  body: string,
+): Promise<Response> {
   return handler.handle(
     new Request(`${endpoint}/api/editor-annotation`, {
       method: "POST",
@@ -25,13 +28,16 @@ async function responseJson(response: Response): Promise<JsonValue> {
 describe("editor annotation handler", () => {
   test("accepts valid requests, including negative and fractional line numbers, and round-trips through GET", async () => {
     const handler = createEditorAnnotationHandler();
-    const response = await handlePost(handler, JSON.stringify({
-      filePath: "src/example.ts",
-      selectedText: "const value = 1;",
-      lineStart: -1.5,
-      lineEnd: 2.5,
-      comment: "Review this",
-    }));
+    const response = await handlePost(
+      handler,
+      JSON.stringify({
+        filePath: "src/example.ts",
+        selectedText: "const value = 1;",
+        lineStart: -1.5,
+        lineEnd: 2.5,
+        comment: "Review this",
+      }),
+    );
 
     expect(response.status).toBe(200);
     expect(await responseJson(response)).toEqual({ id: expect.any(String) });
@@ -41,15 +47,17 @@ describe("editor annotation handler", () => {
       new URL(`${endpoint}/api/editor-annotations`),
     );
     expect(await responseJson(getResponse!)).toEqual({
-      annotations: [{
-        id: expect.any(String),
-        filePath: "src/example.ts",
-        selectedText: "const value = 1;",
-        lineStart: -1.5,
-        lineEnd: 2.5,
-        comment: "Review this",
-        createdAt: expect.any(Number),
-      }],
+      annotations: [
+        {
+          id: expect.any(String),
+          filePath: "src/example.ts",
+          selectedText: "const value = 1;",
+          lineStart: -1.5,
+          lineEnd: 2.5,
+          comment: "Review this",
+          createdAt: expect.any(Number),
+        },
+      ],
     });
   });
 
@@ -76,13 +84,16 @@ describe("editor annotation handler", () => {
 
   test("omits a malformed optional comment without rejecting the annotation", async () => {
     const handler = createEditorAnnotationHandler();
-    const response = await handlePost(handler, JSON.stringify({
-      filePath: "src/example.ts",
-      selectedText: "text",
-      lineStart: 1,
-      lineEnd: 1,
-      comment: 42,
-    }));
+    const response = await handlePost(
+      handler,
+      JSON.stringify({
+        filePath: "src/example.ts",
+        selectedText: "text",
+        lineStart: 1,
+        lineEnd: 1,
+        comment: 42,
+      }),
+    );
 
     expect(response.status).toBe(200);
     const getResponse = await handler.handle(
@@ -90,14 +101,16 @@ describe("editor annotation handler", () => {
       new URL(`${endpoint}/api/editor-annotations`),
     );
     expect(await responseJson(getResponse!)).toEqual({
-      annotations: [{
-        id: expect.any(String),
-        filePath: "src/example.ts",
-        selectedText: "text",
-        lineStart: 1,
-        lineEnd: 1,
-        createdAt: expect.any(Number),
-      }],
+      annotations: [
+        {
+          id: expect.any(String),
+          filePath: "src/example.ts",
+          selectedText: "text",
+          lineStart: 1,
+          lineEnd: 1,
+          createdAt: expect.any(Number),
+        },
+      ],
     });
   });
 });

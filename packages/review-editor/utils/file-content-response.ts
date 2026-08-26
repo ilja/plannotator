@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 const FileContentResponseSchema = Schema.Struct({
   oldContent: Schema.NullOr(Schema.String),

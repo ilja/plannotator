@@ -1,18 +1,18 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import React, { act, useRef, useState } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { disabledSourceSave } from '@plannotator/shared/source-save';
-import { AnnotationType, type Annotation, type ImageAttachment } from '../types';
-import type { ViewerHandle } from '../components/Viewer';
-import { type LinkedDocLoadData, useLinkedDoc } from './useLinkedDoc';
+import { afterEach, describe, expect, test } from "bun:test";
+import React, { act, useRef, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { disabledSourceSave } from "@plannotator/shared/source-save";
+import { AnnotationType, type Annotation, type ImageAttachment } from "../types";
+import type { ViewerHandle } from "../components/Viewer";
+import { type LinkedDocLoadData, useLinkedDoc } from "./useLinkedDoc";
 
 const hasDom = globalThis.document !== undefined;
-const unsupportedSourceSave = disabledSourceSave('unsupported-extension');
+const unsupportedSourceSave = disabledSourceSave("unsupported-extension");
 const originalFetch = globalThis.fetch;
 
 const annotation = (id: string, originalText: string): Annotation => ({
   id,
-  blockId: 'block',
+  blockId: "block",
   startOffset: 0,
   endOffset: originalText.length,
   type: AnnotationType.COMMENT,
@@ -30,21 +30,21 @@ const CHOICE_MARKDOWN = `Pick one
 Recommendation: Option B.`;
 
 const LEGACY_CHOICE: Annotation = {
-  id: 'ann-choice-legacy',
-  blockId: 'block-0',
+  id: "ann-choice-legacy",
+  blockId: "block-0",
   startOffset: 0,
   endOffset: 4,
   type: AnnotationType.COMMENT,
-  originalText: 'Beta',
+  originalText: "Beta",
   createdA: 1,
-  choiceOptionLabel: 'B',
+  choiceOptionLabel: "B",
 };
 
 type Session = {
   current: () => {
     hook: LinkedDocApi;
     markdown: string;
-    renderAs: 'markdown' | 'html';
+    renderAs: "markdown" | "html";
     rawHtml: string;
     shareHtml: string;
     annotations: Annotation[];
@@ -60,20 +60,20 @@ let roots: Root[] = [];
 let containers: HTMLElement[] = [];
 
 async function mountLinkedDoc(): Promise<Session> {
-  const container = document.createElement('div');
+  const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   roots.push(root);
   containers.push(container);
 
   const loadedDocuments: LinkedDocLoadData[] = [];
-  let latest: Session['current'] extends () => infer T ? T : never;
+  let latest: Session["current"] extends () => infer T ? T : never;
   function Harness() {
-    const [markdown, setMarkdown] = useState('root markdown');
-    const [renderAs, setRenderAs] = useState<'markdown' | 'html'>('markdown');
-    const [rawHtml, setRawHtml] = useState('');
-    const [shareHtml, setShareHtml] = useState('');
-    const [annotations, setAnnotations] = useState<Annotation[]>([annotation('root', 'root')]);
+    const [markdown, setMarkdown] = useState("root markdown");
+    const [renderAs, setRenderAs] = useState<"markdown" | "html">("markdown");
+    const [rawHtml, setRawHtml] = useState("");
+    const [shareHtml, setShareHtml] = useState("");
+    const [annotations, setAnnotations] = useState<Annotation[]>([annotation("root", "root")]);
     const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
     const [globalAttachments, setGlobalAttachments] = useState<ImageAttachment[]>([]);
     const viewerRef = useRef<ViewerHandle | null>(null);
@@ -130,7 +130,11 @@ async function mountLinkedDoc(): Promise<Session> {
 }
 
 afterEach(async () => {
-  Object.defineProperty(globalThis, 'fetch', { configurable: true, writable: true, value: originalFetch });
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: originalFetch,
+  });
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
@@ -138,7 +142,7 @@ afterEach(async () => {
 });
 
 function mockFetch(response: Response | Error): void {
-  Object.defineProperty(globalThis, 'fetch', {
+  Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     writable: true,
     value: async () => {
@@ -158,124 +162,133 @@ type LinkedMarkdownResponseOverrides = {
   sourceSave?: unknown;
 };
 
-const linkedMarkdownResponse = (overrides: LinkedMarkdownResponseOverrides = {}): Response => Response.json({
-  filepath: '/repo/docs/guide.md',
-  markdown: 'linked markdown',
-  renderAs: 'markdown',
-  ...overrides,
-});
+const linkedMarkdownResponse = (overrides: LinkedMarkdownResponseOverrides = {}): Response =>
+  Response.json({
+    filepath: "/repo/docs/guide.md",
+    markdown: "linked markdown",
+    renderAs: "markdown",
+    ...overrides,
+  });
 
-describe('useLinkedDoc /api/doc response validation', () => {
-  test.skipIf(!hasDom)('opens valid markdown and passes source-save data to the host', async () => {
+describe("useLinkedDoc /api/doc response validation", () => {
+  test.skipIf(!hasDom)("opens valid markdown and passes source-save data to the host", async () => {
     const session = await mountLinkedDoc();
     const sourceSave = {
       enabled: true,
-      kind: 'local-text-file',
-      scope: 'single-file',
-      path: '/repo/docs/guide.md',
-      basename: 'guide.md',
-      language: 'markdown',
-      hash: 'sha256:guide',
+      kind: "local-text-file",
+      scope: "single-file",
+      path: "/repo/docs/guide.md",
+      basename: "guide.md",
+      language: "markdown",
+      hash: "sha256:guide",
       mtimeMs: 1000,
       size: 16,
-      eol: 'lf',
+      eol: "lf",
     } as const;
     mockFetch(linkedMarkdownResponse({ sourceSave }));
 
     await act(async () => {
-      await session.current().hook.open('/repo/docs/guide.md');
+      await session.current().hook.open("/repo/docs/guide.md");
     });
 
-    expect(session.current().markdown).toBe('linked markdown');
-    expect(session.current().loadedDocuments).toEqual([{
-      filepath: '/repo/docs/guide.md',
-      markdown: 'linked markdown',
-      renderAs: 'markdown',
-      sourceSave,
-    }]);
+    expect(session.current().markdown).toBe("linked markdown");
+    expect(session.current().loadedDocuments).toEqual([
+      {
+        filepath: "/repo/docs/guide.md",
+        markdown: "linked markdown",
+        renderAs: "markdown",
+        sourceSave,
+      },
+    ]);
     expect(session.current().hook.error).toBeNull();
 
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('opens valid HTML with raw and share HTML', async () => {
+  test.skipIf(!hasDom)("opens valid HTML with raw and share HTML", async () => {
     const session = await mountLinkedDoc();
-    mockFetch(Response.json({
-      filepath: '/repo/docs/guide.html',
-      rawHtml: '<h1>Guide</h1>',
-      shareHtml: '<article><h1>Guide</h1></article>',
-      renderAs: 'html',
-      isConverted: false,
-    }));
+    mockFetch(
+      Response.json({
+        filepath: "/repo/docs/guide.html",
+        rawHtml: "<h1>Guide</h1>",
+        shareHtml: "<article><h1>Guide</h1></article>",
+        renderAs: "html",
+        isConverted: false,
+      }),
+    );
 
     await act(async () => {
-      await session.current().hook.open('/repo/docs/guide.html');
+      await session.current().hook.open("/repo/docs/guide.html");
     });
 
-    expect(session.current().renderAs).toBe('html');
-    expect(session.current().rawHtml).toBe('<h1>Guide</h1>');
-    expect(session.current().shareHtml).toBe('<article><h1>Guide</h1></article>');
-    expect(session.current().markdown).toBe('');
+    expect(session.current().renderAs).toBe("html");
+    expect(session.current().rawHtml).toBe("<h1>Guide</h1>");
+    expect(session.current().shareHtml).toBe("<article><h1>Guide</h1></article>");
+    expect(session.current().markdown).toBe("");
     expect(session.current().loadedDocuments).toEqual([]);
 
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('uses the load fallback for malformed success responses', async () => {
+  test.skipIf(!hasDom)("uses the load fallback for malformed success responses", async () => {
     const session = await mountLinkedDoc();
 
-    mockFetch(Response.json({ filepath: 42, markdown: 'malformed filepath' }));
+    mockFetch(Response.json({ filepath: 42, markdown: "malformed filepath" }));
     await act(async () => {
-      await session.current().hook.open('/repo/docs/guide.md');
+      await session.current().hook.open("/repo/docs/guide.md");
     });
-    expect(session.current().hook.error).toBe('Failed to load document');
-    expect(session.current().markdown).toBe('root markdown');
+    expect(session.current().hook.error).toBe("Failed to load document");
+    expect(session.current().markdown).toBe("root markdown");
 
     expect(session.current().loadedDocuments).toEqual([]);
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('drops malformed optional fields while retaining valid fields', async () => {
+  test.skipIf(!hasDom)("drops malformed optional fields while retaining valid fields", async () => {
     const session = await mountLinkedDoc();
-    mockFetch(linkedMarkdownResponse({
-      rawHtml: 42,
-      shareHtml: 'valid share HTML',
-      renderAs: 'invalid',
-      isConverted: 'false',
-      sourceSave: { enabled: true, path: 42 },
-    }));
+    mockFetch(
+      linkedMarkdownResponse({
+        rawHtml: 42,
+        shareHtml: "valid share HTML",
+        renderAs: "invalid",
+        isConverted: "false",
+        sourceSave: { enabled: true, path: 42 },
+      }),
+    );
 
     await act(async () => {
-      await session.current().hook.open('/repo/docs/guide.md');
+      await session.current().hook.open("/repo/docs/guide.md");
     });
 
-    expect(session.current().markdown).toBe('linked markdown');
-    expect(session.current().renderAs).toBe('markdown');
-    expect(session.current().rawHtml).toBe('');
-    expect(session.current().shareHtml).toBe('');
-    expect(session.current().loadedDocuments).toEqual([{
-      filepath: '/repo/docs/guide.md',
-      markdown: 'linked markdown',
-      shareHtml: 'valid share HTML',
-    }]);
+    expect(session.current().markdown).toBe("linked markdown");
+    expect(session.current().renderAs).toBe("markdown");
+    expect(session.current().rawHtml).toBe("");
+    expect(session.current().shareHtml).toBe("");
+    expect(session.current().loadedDocuments).toEqual([
+      {
+        filepath: "/repo/docs/guide.md",
+        markdown: "linked markdown",
+        shareHtml: "valid share HTML",
+      },
+    ]);
 
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('uses string error envelopes and the load fallback', async () => {
+  test.skipIf(!hasDom)("uses string error envelopes and the load fallback", async () => {
     const session = await mountLinkedDoc();
 
-    mockFetch(Response.json({ error: 'File not found' }));
+    mockFetch(Response.json({ error: "File not found" }));
     await act(async () => {
-      await session.current().hook.open('/repo/docs/missing.md');
+      await session.current().hook.open("/repo/docs/missing.md");
     });
-    expect(session.current().hook.error).toBe('File not found');
+    expect(session.current().hook.error).toBe("File not found");
 
-    mockFetch(Response.json({ error: 'Forbidden' }, { status: 403 }));
+    mockFetch(Response.json({ error: "Forbidden" }, { status: 403 }));
     await act(async () => {
-      await session.current().hook.open('/repo/docs/forbidden.md');
+      await session.current().hook.open("/repo/docs/forbidden.md");
     });
-    expect(session.current().hook.error).toBe('Forbidden');
+    expect(session.current().hook.error).toBe("Forbidden");
 
     for (const response of [
       Response.json({ error: 42 }, { status: 404 }),
@@ -283,47 +296,50 @@ describe('useLinkedDoc /api/doc response validation', () => {
     ]) {
       mockFetch(response);
       await act(async () => {
-        await session.current().hook.open('/repo/docs/malformed-error.md');
+        await session.current().hook.open("/repo/docs/malformed-error.md");
       });
-      expect(session.current().hook.error).toBe('Failed to load document');
+      expect(session.current().hook.error).toBe("Failed to load document");
     }
 
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('uses the connection fallback for invalid JSON and network errors', async () => {
-    const session = await mountLinkedDoc();
+  test.skipIf(!hasDom)(
+    "uses the connection fallback for invalid JSON and network errors",
+    async () => {
+      const session = await mountLinkedDoc();
 
-    mockFetch(new Response('{', { headers: { 'Content-Type': 'application/json' } }));
-    await act(async () => {
-      await session.current().hook.open('/repo/docs/invalid-json.md');
-    });
-    expect(session.current().hook.error).toBe('Failed to connect to server');
+      mockFetch(new Response("{", { headers: { "Content-Type": "application/json" } }));
+      await act(async () => {
+        await session.current().hook.open("/repo/docs/invalid-json.md");
+      });
+      expect(session.current().hook.error).toBe("Failed to connect to server");
 
-    mockFetch(new Error('network failure'));
-    await act(async () => {
-      await session.current().hook.open('/repo/docs/network.md');
-    });
-    expect(session.current().hook.error).toBe('Failed to connect to server');
+      mockFetch(new Error("network failure"));
+      await act(async () => {
+        await session.current().hook.open("/repo/docs/network.md");
+      });
+      expect(session.current().hook.error).toBe("Failed to connect to server");
 
-    await session.unmount();
-  });
+      await session.unmount();
+    },
+  );
 });
 
-describe('useLinkedDoc unsupported Markdown path', () => {
-  test.skipIf(!hasDom)('keeps non-source Markdown in the linked-document cache path', async () => {
+describe("useLinkedDoc unsupported Markdown path", () => {
+  test.skipIf(!hasDom)("keeps non-source Markdown in the linked-document cache path", async () => {
     const session = await mountLinkedDoc();
-    const filepath = '/repo/docs/notes.md';
-    const linkedAnnotation = annotation('linked', 'linked');
+    const filepath = "/repo/docs/notes.md";
+    const linkedAnnotation = annotation("linked", "linked");
 
     await act(async () => {
       session.current().hook.openLoaded({
         filepath,
-        markdown: 'linked markdown',
+        markdown: "linked markdown",
         sourceSave: unsupportedSourceSave,
       });
     });
-    expect(session.current().markdown).toBe('linked markdown');
+    expect(session.current().markdown).toBe("linked markdown");
 
     await act(async () => {
       session.current().setAnnotations([linkedAnnotation]);
@@ -331,25 +347,27 @@ describe('useLinkedDoc unsupported Markdown path', () => {
     await act(async () => {
       session.current().hook.back();
     });
-    expect(session.current().markdown).toBe('root markdown');
+    expect(session.current().markdown).toBe("root markdown");
 
     await act(async () => {
       session.current().hook.openLoaded({
         filepath,
-        markdown: 'changed server markdown',
+        markdown: "changed server markdown",
         sourceSave: unsupportedSourceSave,
       });
     });
-    expect(session.current().markdown).toBe('linked markdown');
+    expect(session.current().markdown).toBe("linked markdown");
     expect(session.current().annotations).toEqual([linkedAnnotation]);
-    expect(session.current().hook.getDocAnnotations().get(filepath)?.markdown).toBe('linked markdown');
+    expect(session.current().hook.getDocAnnotations().get(filepath)?.markdown).toBe(
+      "linked markdown",
+    );
 
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)('reconciles invalid cached choices and clears the selected id', async () => {
+  test.skipIf(!hasDom)("reconciles invalid cached choices and clears the selected id", async () => {
     const session = await mountLinkedDoc();
-    const filepath = '/repo/docs/choices.md';
+    const filepath = "/repo/docs/choices.md";
 
     await act(async () => {
       session.current().hook.openLoaded({

@@ -50,13 +50,62 @@ describe("decodeSessionInfo", () => {
 
   test("rejects records missing each required field", () => {
     const incompleteSessions = [
-      { port: 3000, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", mode: "review", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", mode: "review", project: "/workspace", label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z" },
+      {
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+      },
     ];
 
     for (const input of incompleteSessions) {
@@ -66,13 +115,69 @@ describe("decodeSessionInfo", () => {
 
   test("rejects records with wrong required field values", () => {
     const malformedSessions = [
-      { pid: "1", port: 3000, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: "3000", url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, url: 123, mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", mode: "other", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", mode: "review", project: 123, startedAt: "2026-03-12T10:00:00.000Z", label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: 123, label: "Session" },
-      { pid: 1, port: 3000, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: 123 },
+      {
+        pid: "1",
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: "3000",
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: 123,
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "other",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: 123,
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        startedAt: 123,
+        label: "Session",
+      },
+      {
+        pid: 1,
+        port: 3000,
+        url: "http://localhost:3000",
+        mode: "review",
+        project: "/workspace",
+        startedAt: "2026-03-12T10:00:00.000Z",
+        label: 123,
+      },
     ];
 
     for (const input of malformedSessions) {
@@ -81,14 +186,48 @@ describe("decodeSessionInfo", () => {
   });
 
   test("rejects invalid pid values", () => {
-    for (const pid of [1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
-      expect(() => decodeSessionInfo({ pid, port: 3000, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" })).toThrow();
+    for (const pid of [
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      0,
+      -1,
+    ]) {
+      expect(() =>
+        decodeSessionInfo({
+          pid,
+          port: 3000,
+          url: "http://localhost:3000",
+          mode: "review",
+          project: "/workspace",
+          startedAt: "2026-03-12T10:00:00.000Z",
+          label: "Session",
+        }),
+      ).toThrow();
     }
   });
 
   test("rejects invalid port values", () => {
-    for (const port of [1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
-      expect(() => decodeSessionInfo({ pid: 1, port, url: "http://localhost:3000", mode: "review", project: "/workspace", startedAt: "2026-03-12T10:00:00.000Z", label: "Session" })).toThrow();
+    for (const port of [
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      0,
+      -1,
+    ]) {
+      expect(() =>
+        decodeSessionInfo({
+          pid: 1,
+          port,
+          url: "http://localhost:3000",
+          mode: "review",
+          project: "/workspace",
+          startedAt: "2026-03-12T10:00:00.000Z",
+          label: "Session",
+        }),
+      ).toThrow();
     }
   });
 });

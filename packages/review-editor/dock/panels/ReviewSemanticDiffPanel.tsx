@@ -1,25 +1,25 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   decodeSemanticDiffResponse,
   type SemanticDiffBinaryChange,
   type SemanticDiffChange,
   type SemanticDiffResponse,
-} from '@plannotator/shared/semantic-diff-types';
-import { useReviewState } from '../ReviewStateContext';
+} from "@plannotator/shared/semantic-diff-types";
+import { useReviewState } from "../ReviewStateContext";
 import {
   SemanticDiffRows,
   groupSemanticChangesByFile,
   lineSelectionForChange,
-} from './semanticDiffShared';
+} from "./semanticDiffShared";
 
-type SemanticDiffOkResponse = Extract<SemanticDiffResponse, { status: 'ok' }>;
-type SemanticDiffErrorResponse = Extract<SemanticDiffResponse, { status: 'error' }>;
+type SemanticDiffOkResponse = Extract<SemanticDiffResponse, { status: "ok" }>;
+type SemanticDiffErrorResponse = Extract<SemanticDiffResponse, { status: "error" }>;
 
 type LoadState =
-  | { status: 'idle' | 'loading' }
-  | { status: 'ready'; data: SemanticDiffOkResponse }
-  | { status: 'empty'; data: SemanticDiffOkResponse }
-  | { status: 'error'; error: SemanticDiffErrorResponse | Error };
+  | { status: "idle" | "loading" }
+  | { status: "ready"; data: SemanticDiffOkResponse }
+  | { status: "empty"; data: SemanticDiffOkResponse }
+  | { status: "error"; error: SemanticDiffErrorResponse | Error };
 
 function formatSummary(data: SemanticDiffOkResponse): string {
   const summary = data.summary;
@@ -33,11 +33,11 @@ function formatSummary(data: SemanticDiffOkResponse): string {
   if (summary.reordered > 0) parts.push(`${summary.reordered} reordered`);
   if (summary.binary > 0) parts.push(`${summary.binary} binary`);
   if (summary.orphan > 0) parts.push(`${summary.orphan} orphans`);
-  return `Summary: ${parts.join(', ')} across ${summary.fileCount} files`;
+  return `Summary: ${parts.join(", ")} across ${summary.fileCount} files`;
 }
 
 function formatLoadError(error: SemanticDiffErrorResponse | Error): string {
-  return error.message || 'Semantic diff failed.';
+  return error.message || "Semantic diff failed.";
 }
 
 interface SplitFilePath {
@@ -46,8 +46,8 @@ interface SplitFilePath {
 }
 
 function splitFilePath(filePath: string): SplitFilePath {
-  const lastSlash = filePath.lastIndexOf('/');
-  if (lastSlash === -1) return { dir: '', name: filePath };
+  const lastSlash = filePath.lastIndexOf("/");
+  if (lastSlash === -1) return { dir: "", name: filePath };
   return { dir: filePath.slice(0, lastSlash + 1), name: filePath.slice(lastSlash + 1) };
 }
 
@@ -62,42 +62,47 @@ export function ReviewSemanticDiffPanel() {
     openDiffFile,
     onLineSelection,
   } = state;
-  const [loadState, setLoadState] = useState<LoadState>({ status: 'idle' });
+  const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!semanticDiffAvailable) return;
 
     const controller = new AbortController();
-    setLoadState({ status: 'loading' });
+    setLoadState({ status: "loading" });
 
-    fetch('/api/semantic-diff', { signal: controller.signal })
+    fetch("/api/semantic-diff", { signal: controller.signal })
       .then(async (res) => {
-        if (!res.ok) throw new Error('Semantic diff failed');
+        if (!res.ok) throw new Error("Semantic diff failed");
         const data: unknown = await res.json();
         return decodeSemanticDiffResponse(data);
       })
       .then((data) => {
         if (controller.signal.aborted) return;
-        if (data.status === 'unavailable') {
+        if (data.status === "unavailable") {
           onSemanticDiffUnavailable();
           return;
         }
-        if (data.status === 'error') {
+        if (data.status === "error") {
           if (onSemanticDiffLoadError()) return;
-          setLoadState({ status: 'error', error: data });
+          setLoadState({ status: "error", error: data });
           return;
         }
         onSemanticDiffLoadSuccess();
-        setLoadState(data.changes.length === 0 && data.binaryChanges.length === 0
-          ? { status: 'empty', data }
-          : { status: 'ready', data });
+        setLoadState(
+          data.changes.length === 0 && data.binaryChanges.length === 0
+            ? { status: "empty", data }
+            : { status: "ready", data },
+        );
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
-        console.error('Failed to load semantic diff:', error);
+        console.error("Failed to load semantic diff:", error);
         if (onSemanticDiffLoadError()) return;
-        setLoadState({ status: 'error', error: error instanceof Error ? error : new Error(String(error)) });
+        setLoadState({
+          status: "error",
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
       });
 
     return () => controller.abort();
@@ -111,23 +116,29 @@ export function ReviewSemanticDiffPanel() {
   ]);
 
   const groupedChanges = useMemo(() => {
-    if (loadState.status !== 'ready' && loadState.status !== 'empty') return [];
+    if (loadState.status !== "ready" && loadState.status !== "empty") return [];
     return groupSemanticChangesByFile(loadState.data.changes, loadState.data.binaryChanges);
   }, [loadState]);
 
-  const openChange = useCallback((change: SemanticDiffChange) => {
-    openDiffFile(change.filePath);
-    onLineSelection(lineSelectionForChange(change));
-  }, [openDiffFile, onLineSelection]);
+  const openChange = useCallback(
+    (change: SemanticDiffChange) => {
+      openDiffFile(change.filePath);
+      onLineSelection(lineSelectionForChange(change));
+    },
+    [openDiffFile, onLineSelection],
+  );
 
-  const openBinaryChange = useCallback((change: SemanticDiffBinaryChange) => {
-    openDiffFile(change.filePath);
-    onLineSelection(null);
-  }, [openDiffFile, onLineSelection]);
+  const openBinaryChange = useCallback(
+    (change: SemanticDiffBinaryChange) => {
+      openDiffFile(change.filePath);
+      onLineSelection(null);
+    },
+    [openDiffFile, onLineSelection],
+  );
 
   if (!semanticDiffAvailable) return null;
 
-  if (loadState.status === 'idle' || loadState.status === 'loading') {
+  if (loadState.status === "idle" || loadState.status === "loading") {
     return (
       <div className="semantic-diff-panel">
         <div className="semantic-diff-terminal" aria-live="polite">
@@ -137,7 +148,7 @@ export function ReviewSemanticDiffPanel() {
     );
   }
 
-  if (loadState.status === 'error') {
+  if (loadState.status === "error") {
     return (
       <div className="semantic-diff-panel">
         <div className="semantic-diff-terminal" aria-live="polite">
@@ -185,7 +196,7 @@ export function ReviewSemanticDiffPanel() {
           </section>
         ))}
 
-        {loadState.status === 'empty' && (
+        {loadState.status === "empty" && (
           <div className="semantic-diff-empty">No semantic changes found.</div>
         )}
         <div className="semantic-diff-summary">{formatSummary(loadState.data)}</div>

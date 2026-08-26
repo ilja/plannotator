@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, describe, expect, test } from "bun:test";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 
 const hasDom = globalThis.document !== undefined;
-if (hasDom) Object.defineProperty(window, '__PLANNOTATOR_VSCODE', { configurable: true, value: true });
-const { useEditorAnnotations } = await import('./useEditorAnnotations');
+if (hasDom)
+  Object.defineProperty(window, "__PLANNOTATOR_VSCODE", { configurable: true, value: true });
+const { useEditorAnnotations } = await import("./useEditorAnnotations");
 
 const realFetch = globalThis.fetch;
 const roots: Root[] = [];
@@ -21,7 +22,7 @@ function HookHarness(): React.JSX.Element {
   const { editorAnnotations } = useEditorAnnotations();
   return (
     <output
-      data-ids={editorAnnotations.map(({ id }) => id).join('|')}
+      data-ids={editorAnnotations.map(({ id }) => id).join("|")}
       data-count={String(editorAnnotations.length)}
     />
   );
@@ -34,7 +35,7 @@ async function flushAsyncWork(): Promise<void> {
 }
 
 async function mountHarness(): Promise<HTMLDivElement> {
-  const host = document.createElement('div');
+  const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   roots.push(root);
@@ -58,37 +59,79 @@ afterEach(async () => {
   }
   globalThis.fetch = realFetch;
   if (hasDom) {
-    document.body.innerHTML = '';
-    Reflect.deleteProperty(window, '__PLANNOTATOR_VSCODE');
+    document.body.innerHTML = "";
+    Reflect.deleteProperty(window, "__PLANNOTATOR_VSCODE");
   }
 });
 
-describe('useEditorAnnotations response handling', () => {
-  test.skipIf(!hasDom)('clears stale annotations for a valid empty response', async () => {
+describe("useEditorAnnotations response handling", () => {
+  test.skipIf(!hasDom)("clears stale annotations for a valid empty response", async () => {
     installFetch([
-      new Response(JSON.stringify({ annotations: [{ id: 'first', filePath: 'src/a.ts', selectedText: 'a', lineStart: 1, lineEnd: 1, createdAt: 1 }] })),
+      new Response(
+        JSON.stringify({
+          annotations: [
+            {
+              id: "first",
+              filePath: "src/a.ts",
+              selectedText: "a",
+              lineStart: 1,
+              lineEnd: 1,
+              createdAt: 1,
+            },
+          ],
+        }),
+      ),
       new Response(JSON.stringify({ annotations: [] })),
     ]);
     const host = await mountHarness();
     await waitForPolls(550);
 
-    expect(host.querySelector('output')?.dataset.count).toBe('0');
+    expect(host.querySelector("output")?.dataset.count).toBe("0");
   });
 
-  test.skipIf(!hasDom)('preserves stale state for malformed responses and recovers on a later valid poll', async () => {
-    installFetch([
-      new Response(JSON.stringify({ annotations: [{ id: 'first', filePath: 'src/a.ts', selectedText: 'a', lineStart: 1, lineEnd: 1, createdAt: 1 }] })),
-      new Response(JSON.stringify({ annotations: {} })),
-      new Response('{invalid-json'),
-      new Response(JSON.stringify({ error: 'Unavailable' }), { status: 503 }),
-      new Response(JSON.stringify({ annotations: [{ id: 'recovered', filePath: 'src/b.ts', selectedText: 'b', lineStart: 2, lineEnd: 2, createdAt: 2 }] })),
-    ]);
-    const host = await mountHarness();
+  test.skipIf(!hasDom)(
+    "preserves stale state for malformed responses and recovers on a later valid poll",
+    async () => {
+      installFetch([
+        new Response(
+          JSON.stringify({
+            annotations: [
+              {
+                id: "first",
+                filePath: "src/a.ts",
+                selectedText: "a",
+                lineStart: 1,
+                lineEnd: 1,
+                createdAt: 1,
+              },
+            ],
+          }),
+        ),
+        new Response(JSON.stringify({ annotations: {} })),
+        new Response("{invalid-json"),
+        new Response(JSON.stringify({ error: "Unavailable" }), { status: 503 }),
+        new Response(
+          JSON.stringify({
+            annotations: [
+              {
+                id: "recovered",
+                filePath: "src/b.ts",
+                selectedText: "b",
+                lineStart: 2,
+                lineEnd: 2,
+                createdAt: 2,
+              },
+            ],
+          }),
+        ),
+      ]);
+      const host = await mountHarness();
 
-    await waitForPolls(1_600);
-    expect(host.querySelector('output')?.dataset.ids).toBe('first');
+      await waitForPolls(1_600);
+      expect(host.querySelector("output")?.dataset.ids).toBe("first");
 
-    await waitForPolls(550);
-    expect(host.querySelector('output')?.dataset.ids).toBe('recovered');
-  });
+      await waitForPolls(550);
+      expect(host.querySelector("output")?.dataset.ids).toBe("recovered");
+    },
+  );
 });

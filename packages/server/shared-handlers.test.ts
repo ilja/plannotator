@@ -49,7 +49,9 @@ function captureStderrWrites(): StderrCapture {
 
 describe("handleUpload", () => {
   test("treats a missing file field as a bad request", async () => {
-    const response = await handleUpload(new Request("http://localhost/api/upload", { method: "POST", body: new FormData() }));
+    const response = await handleUpload(
+      new Request("http://localhost/api/upload", { method: "POST", body: new FormData() }),
+    );
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe("No file provided");
@@ -59,12 +61,13 @@ describe("handleUpload", () => {
     const formData = new FormData();
     formData.set("file", "not a file");
 
-    const response = await handleUpload(new Request("http://localhost/api/upload", { method: "POST", body: formData }));
+    const response = await handleUpload(
+      new Request("http://localhost/api/upload", { method: "POST", body: formData }),
+    );
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe("No file provided");
   });
-
 });
 
 describe("handleAgents", () => {
@@ -237,8 +240,16 @@ describe("handleSaveNotes", () => {
 
   test("reports malformed Obsidian and Octarine target configurations", async () => {
     for (const [target, config, error] of [
-      ["obsidian", { folder: "plannotator", plan: "# Test Plan" }, "Invalid Obsidian save configuration"],
-      ["octarine", { workspace: "workspace", folder: "plannotator" }, "Invalid Octarine save configuration"],
+      [
+        "obsidian",
+        { folder: "plannotator", plan: "# Test Plan" },
+        "Invalid Obsidian save configuration",
+      ],
+      [
+        "octarine",
+        { workspace: "workspace", folder: "plannotator" },
+        "Invalid Octarine save configuration",
+      ],
     ] as const) {
       const response = await handleSaveNotes(saveNotesRequest({ [target]: config }));
 

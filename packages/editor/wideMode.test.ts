@@ -1,65 +1,71 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from "bun:test";
 import {
   canUseAnnotateWideMode,
   resolveWideModeExitLayout,
   type WideModeLayoutSnapshot,
-} from './wideMode';
+} from "./wideMode";
 
 const snapshot: WideModeLayoutSnapshot = {
   sidebarIsOpen: true,
-  sidebarTab: 'files',
+  sidebarTab: "files",
   panelOpen: true,
 };
 
-describe('canUseAnnotateWideMode', () => {
-  test('enables wide mode for annotation documents', () => {
+describe("canUseAnnotateWideMode", () => {
+  test("enables wide mode for annotation documents", () => {
     expect(canUseAnnotateWideMode()).toBe(true);
   });
 });
 
-describe('resolveWideModeExitLayout', () => {
-  test('restores the saved sidebar tab and panel by default', () => {
+describe("resolveWideModeExitLayout", () => {
+  test("restores the saved sidebar tab and panel by default", () => {
     expect(resolveWideModeExitLayout(snapshot)).toEqual({
       sidebarOpen: true,
-      sidebarTab: 'files',
+      sidebarTab: "files",
       panelOpen: true,
     });
   });
 
-  test('opens an explicit sidebar target and can keep the panel closed', () => {
-    expect(resolveWideModeExitLayout(snapshot, {
-      restore: false,
-      sidebarTab: 'toc',
-      panelOpen: false,
-    })).toEqual({
+  test("opens an explicit sidebar target and can keep the panel closed", () => {
+    expect(
+      resolveWideModeExitLayout(snapshot, {
+        restore: false,
+        sidebarTab: "toc",
+        panelOpen: false,
+      }),
+    ).toEqual({
       sidebarOpen: true,
-      sidebarTab: 'toc',
+      sidebarTab: "toc",
       panelOpen: false,
     });
   });
 
-  test('honors an explicit panel reopen without restoring the sidebar snapshot', () => {
-    expect(resolveWideModeExitLayout(snapshot, {
-      restore: false,
-      panelOpen: true,
-    })).toEqual({
+  test("honors an explicit panel reopen without restoring the sidebar snapshot", () => {
+    expect(
+      resolveWideModeExitLayout(snapshot, {
+        restore: false,
+        panelOpen: true,
+      }),
+    ).toEqual({
       sidebarOpen: false,
       sidebarTab: null,
       panelOpen: true,
     });
   });
 
-  test('keeps the panel closed when leaving wide mode without restore', () => {
-    expect(resolveWideModeExitLayout(snapshot, {
-      restore: false,
-    })).toEqual({
+  test("keeps the panel closed when leaving wide mode without restore", () => {
+    expect(
+      resolveWideModeExitLayout(snapshot, {
+        restore: false,
+      }),
+    ).toEqual({
       sidebarOpen: false,
       sidebarTab: null,
       panelOpen: undefined,
     });
   });
 
-  test('falls back to a closed layout when the snapshot is missing', () => {
+  test("falls back to a closed layout when the snapshot is missing", () => {
     expect(resolveWideModeExitLayout(null)).toEqual({
       sidebarOpen: false,
       sidebarTab: null,

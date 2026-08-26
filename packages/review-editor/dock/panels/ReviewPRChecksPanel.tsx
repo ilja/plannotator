@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { useReviewState } from '../ReviewStateContext';
-import { PRChecksTab } from '../../components/PRChecksTab';
-import { OverlayScrollArea } from '@plannotator/ui/components/OverlayScrollArea';
+import React, { useEffect } from "react";
+import type { IDockviewPanelProps } from "dockview-react";
+import { useReviewState } from "../ReviewStateContext";
+import { PRChecksTab } from "../../components/PRChecksTab";
+import { OverlayScrollArea } from "@plannotator/ui/components/OverlayScrollArea";
 
 /**
  * Dock panel wrapper for PR Checks.

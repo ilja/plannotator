@@ -8,8 +8,10 @@ export function buildAgentTerminalWsPath(token: string): string {
 }
 
 export function isAgentTerminalWsRoute(pathname: string): boolean {
-  return pathname === AGENT_TERMINAL_WS_BASE_PATH ||
-    pathname.startsWith(`${AGENT_TERMINAL_WS_BASE_PATH}/`);
+  return (
+    pathname === AGENT_TERMINAL_WS_BASE_PATH ||
+    pathname.startsWith(`${AGENT_TERMINAL_WS_BASE_PATH}/`)
+  );
 }
 
 export type AgentTerminalDisabledReason =
@@ -46,8 +48,6 @@ export type AnnotateAgentTerminalMode =
   | string
   | undefined;
 
-export function supportsAnnotateAgentTerminalMode(
-  mode: AnnotateAgentTerminalMode,
-): boolean {
+export function supportsAnnotateAgentTerminalMode(mode: AnnotateAgentTerminalMode): boolean {
   return mode === "annotate" || mode === "annotate-folder";
 }

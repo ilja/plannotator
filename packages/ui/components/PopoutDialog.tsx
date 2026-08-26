@@ -1,8 +1,8 @@
-import React, { useCallback } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
+import React, { useCallback } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 
 const ANNOTATION_SELECTORS = [
-  '.annotation-toolbar',
+  ".annotation-toolbar",
   '[data-comment-popover="true"]',
   '[data-floating-picker="true"]',
 ];
@@ -30,27 +30,27 @@ export const PopoutDialog: React.FC<PopoutDialogProps> = ({
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
       const target = e.target;
-      if (target instanceof Element && ANNOTATION_SELECTORS.some((sel) => target.closest(sel))) return;
+      if (target instanceof Element && ANNOTATION_SELECTORS.some((sel) => target.closest(sel)))
+        return;
       onClose();
     },
     [onClose],
   );
 
-  const handleInteractOutside = useCallback(
-    (e: Event) => {
-      const target = e.target;
-      if (!(target instanceof Element)) return;
-      if (ANNOTATION_SELECTORS.some((sel) => target.closest(sel))) {
-        e.preventDefault();
-      }
-    },
-    [],
-  );
+  const handleInteractOutside = useCallback((e: Event) => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    if (ANNOTATION_SELECTORS.some((sel) => target.closest(sel))) {
+      e.preventDefault();
+    }
+  }, []);
 
   return (
     <Dialog.Root
       open={open}
-      onOpenChange={(next) => { if (!next) onClose(); }}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
       modal={false}
     >
       <Dialog.Portal container={container ?? undefined}>
@@ -64,7 +64,7 @@ export const PopoutDialog: React.FC<PopoutDialogProps> = ({
           aria-hidden="true"
         />
         <Dialog.Content
-          className={`fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden ${className ?? 'w-[calc(100vw-4rem)] max-w-[min(calc(100vw-4rem),1500px)] max-h-[calc(100vh-4rem)]'}`}
+          className={`fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-background border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden ${className ?? "w-[calc(100vw-4rem)] max-w-[min(calc(100vw-4rem),1500px)] max-h-[calc(100vh-4rem)]"}`}
           data-popout="true"
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -77,7 +77,13 @@ export const PopoutDialog: React.FC<PopoutDialogProps> = ({
               className="absolute top-3 right-3 z-20 p-1.5 rounded-md text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
               aria-label="Close"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>

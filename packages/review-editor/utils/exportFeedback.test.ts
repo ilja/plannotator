@@ -107,12 +107,7 @@ describe("exportReviewFeedback", () => {
   });
 
   it("PR mode: includes stacked diff review scope when provided", () => {
-    const result = exportReviewFeedback(
-      [ann()],
-      prMeta,
-      undefined,
-      "Full stack diff vs `main`",
-    );
+    const result = exportReviewFeedback([ann()], prMeta, undefined, "Full stack diff vs `main`");
 
     expect(result).toContain("Review scope: Full stack diff vs `main`");
   });
@@ -163,31 +158,23 @@ describe("exportReviewFeedback", () => {
   });
 
   it("renders line ranges", () => {
-    const result = exportReviewFeedback([
-      ann({ lineStart: 10, lineEnd: 15 }),
-    ]);
+    const result = exportReviewFeedback([ann({ lineStart: 10, lineEnd: 15 })]);
     expect(result).toContain("### Lines 10-15 (new)");
   });
 
   it("renders single lines", () => {
-    const result = exportReviewFeedback([
-      ann({ lineStart: 7, lineEnd: 7 }),
-    ]);
+    const result = exportReviewFeedback([ann({ lineStart: 7, lineEnd: 7 })]);
     expect(result).toContain("### Line 7 (new)");
   });
 
   it("renders suggested code", () => {
-    const result = exportReviewFeedback([
-      ann({ suggestedCode: "const x = 1;" }),
-    ]);
+    const result = exportReviewFeedback([ann({ suggestedCode: "const x = 1;" })]);
     expect(result).toContain("**Suggested code:**");
     expect(result).toContain("const x = 1;");
   });
 
   it("includes side indicator", () => {
-    const result = exportReviewFeedback([
-      ann({ side: "old", lineStart: 3, lineEnd: 3 }),
-    ]);
+    const result = exportReviewFeedback([ann({ side: "old", lineStart: 3, lineEnd: 3 })]);
     expect(result).toContain("### Line 3 (old)");
   });
 
@@ -205,8 +192,19 @@ describe("exportReviewFeedback", () => {
 
   it("multi-PR: annotation headings are one level deeper than file headings", () => {
     const result = exportReviewFeedback([
-      ann({ prUrl: "https://github.com/acme/widgets/pull/1", prNumber: 1, prTitle: "PR 1", prRepo: "acme/widgets" }),
-      ann({ prUrl: "https://github.com/acme/widgets/pull/2", prNumber: 2, prTitle: "PR 2", prRepo: "acme/widgets", filePath: "src/other.ts" }),
+      ann({
+        prUrl: "https://github.com/acme/widgets/pull/1",
+        prNumber: 1,
+        prTitle: "PR 1",
+        prRepo: "acme/widgets",
+      }),
+      ann({
+        prUrl: "https://github.com/acme/widgets/pull/2",
+        prNumber: 2,
+        prTitle: "PR 2",
+        prRepo: "acme/widgets",
+        filePath: "src/other.ts",
+      }),
     ]);
     expect(result).toContain("### src/index.ts");
     expect(result).toContain("#### Line 10 (new)");
@@ -214,10 +212,23 @@ describe("exportReviewFeedback", () => {
   });
 
   it("single-PR with mismatched prMeta uses annotation PR context", () => {
-    const prMetaB: PRMetadata = { ...prMeta, number: 99, url: "https://github.com/acme/widgets/pull/99", title: "different PR" };
-    const result = exportReviewFeedback([
-      ann({ prUrl: "https://github.com/acme/widgets/pull/42", prNumber: 42, prTitle: "fix: broken widget", prRepo: "acme/widgets" }),
-    ], prMetaB);
+    const prMetaB: PRMetadata = {
+      ...prMeta,
+      number: 99,
+      url: "https://github.com/acme/widgets/pull/99",
+      title: "different PR",
+    };
+    const result = exportReviewFeedback(
+      [
+        ann({
+          prUrl: "https://github.com/acme/widgets/pull/42",
+          prNumber: 42,
+          prTitle: "fix: broken widget",
+          prRepo: "acme/widgets",
+        }),
+      ],
+      prMetaB,
+    );
     expect(result).not.toContain("#99");
     expect(result).toContain("#42");
     expect(result).not.toContain("Multi-PR");
@@ -227,8 +238,21 @@ describe("exportReviewFeedback", () => {
 
   it("multi-PR with diffScope: includes review scope line per PR group", () => {
     const result = exportReviewFeedback([
-      ann({ prUrl: "https://github.com/acme/widgets/pull/1", prNumber: 1, prTitle: "PR 1", prRepo: "acme/widgets", diffScope: "layer" }),
-      ann({ prUrl: "https://github.com/acme/widgets/pull/2", prNumber: 2, prTitle: "PR 2", prRepo: "acme/widgets", filePath: "src/other.ts", diffScope: "full-stack" }),
+      ann({
+        prUrl: "https://github.com/acme/widgets/pull/1",
+        prNumber: 1,
+        prTitle: "PR 1",
+        prRepo: "acme/widgets",
+        diffScope: "layer",
+      }),
+      ann({
+        prUrl: "https://github.com/acme/widgets/pull/2",
+        prNumber: 2,
+        prTitle: "PR 2",
+        prRepo: "acme/widgets",
+        filePath: "src/other.ts",
+        diffScope: "full-stack",
+      }),
     ]);
     expect(result).toContain("Review scope: layer");
     expect(result).toContain("Review scope: full-stack");
@@ -236,8 +260,19 @@ describe("exportReviewFeedback", () => {
 
   it("multi-PR without diffScope: no review scope line", () => {
     const result = exportReviewFeedback([
-      ann({ prUrl: "https://github.com/acme/widgets/pull/1", prNumber: 1, prTitle: "PR 1", prRepo: "acme/widgets" }),
-      ann({ prUrl: "https://github.com/acme/widgets/pull/2", prNumber: 2, prTitle: "PR 2", prRepo: "acme/widgets", filePath: "src/other.ts" }),
+      ann({
+        prUrl: "https://github.com/acme/widgets/pull/1",
+        prNumber: 1,
+        prTitle: "PR 1",
+        prRepo: "acme/widgets",
+      }),
+      ann({
+        prUrl: "https://github.com/acme/widgets/pull/2",
+        prNumber: 2,
+        prTitle: "PR 2",
+        prRepo: "acme/widgets",
+        filePath: "src/other.ts",
+      }),
     ]);
     expect(result).not.toContain("Review scope:");
   });
@@ -249,19 +284,22 @@ describe("exportReviewFeedback", () => {
   });
 
   it("single-PR with uniform diffScope: derives scope from annotations, not prReviewScope param", () => {
-    const result = exportReviewFeedback([
-      ann({ diffScope: "layer" }),
-      ann({ filePath: "src/other.ts", diffScope: "layer" }),
-    ], prMeta);
+    const result = exportReviewFeedback(
+      [ann({ diffScope: "layer" }), ann({ filePath: "src/other.ts", diffScope: "layer" })],
+      prMeta,
+    );
     expect(result).toContain("Review scope: layer");
     expect(result).not.toContain("full-stack");
   });
 
   it("single-PR with mixed diffScope: groups annotations under scope headings", () => {
-    const result = exportReviewFeedback([
-      ann({ diffScope: "layer", text: "layer finding" }),
-      ann({ filePath: "src/other.ts", diffScope: "full-stack", text: "full-stack finding" }),
-    ], prMeta);
+    const result = exportReviewFeedback(
+      [
+        ann({ diffScope: "layer", text: "layer finding" }),
+        ann({ filePath: "src/other.ts", diffScope: "full-stack", text: "full-stack finding" }),
+      ],
+      prMeta,
+    );
     // Should have separate scope sections, not comma-joined
     expect(result).not.toContain("layer, full-stack");
     // Each scope should be a heading
@@ -278,9 +316,10 @@ describe("exportReviewFeedback", () => {
   });
 
   it("single-PR with one scope: no scope heading, just scope label in header", () => {
-    const result = exportReviewFeedback([
-      ann({ diffScope: "full-stack", text: "finding" }),
-    ], prMeta);
+    const result = exportReviewFeedback(
+      [ann({ diffScope: "full-stack", text: "finding" })],
+      prMeta,
+    );
     expect(result).toContain("Review scope: full-stack");
     // No scope sub-headings when all annotations share the same scope
     expect(result).not.toContain("## Full-stack");
@@ -289,9 +328,12 @@ describe("exportReviewFeedback", () => {
 
   it("prReviewScope param is ignored when annotations carry diffScope", () => {
     // Simulates Copy All bug: agent ran in layer, user switched to full-stack
-    const result = exportReviewFeedback([
-      ann({ diffScope: "layer", text: "agent finding" }),
-    ], prMeta, undefined, "full-stack");
+    const result = exportReviewFeedback(
+      [ann({ diffScope: "layer", text: "agent finding" })],
+      prMeta,
+      undefined,
+      "full-stack",
+    );
     // Should use annotation's diffScope, not the passed-in prReviewScope
     expect(result).toContain("Review scope: layer");
     expect(result).not.toContain("Review scope: full-stack");
@@ -299,7 +341,14 @@ describe("exportReviewFeedback", () => {
 
   it("general comments render under a General section, not a file/line group", () => {
     const result = exportReviewFeedback([
-      ann({ id: "g", scope: "general", filePath: "", lineStart: 0, lineEnd: 0, text: "the overall approach is off" }),
+      ann({
+        id: "g",
+        scope: "general",
+        filePath: "",
+        lineStart: 0,
+        lineEnd: 0,
+        text: "the overall approach is off",
+      }),
     ]);
     expect(result).toContain("## General");
     expect(result).toContain("the overall approach is off");
@@ -310,7 +359,14 @@ describe("exportReviewFeedback", () => {
   it("mixes line and general: both appear, general in its own section", () => {
     const result = exportReviewFeedback([
       ann({ id: "l", text: "line issue" }),
-      ann({ id: "g", scope: "general", filePath: "", lineStart: 0, lineEnd: 0, text: "review-wide note" }),
+      ann({
+        id: "g",
+        scope: "general",
+        filePath: "",
+        lineStart: 0,
+        lineEnd: 0,
+        text: "review-wide note",
+      }),
     ]);
     expect(result).toContain("line issue");
     expect(result).toContain("## General");

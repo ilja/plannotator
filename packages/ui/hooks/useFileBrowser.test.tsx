@@ -162,21 +162,24 @@ afterEach(() => {
 });
 
 describe("useFileBrowser", () => {
-  test.skipIf(!hasDom)("falls back when a failed response has a malformed error envelope", async () => {
-    const dirPath = "/tmp/plannotator-docs";
-    installFetchResponses([response({ error: 42 }, 500)]);
+  test.skipIf(!hasDom)(
+    "falls back when a failed response has a malformed error envelope",
+    async () => {
+      const dirPath = "/tmp/plannotator-docs";
+      installFetchResponses([response({ error: 42 }, 500)]);
 
-    const session = await mountHook();
-    await fetchTree(session.result.current!, dirPath);
+      const session = await mountHook();
+      await fetchTree(session.result.current!, dirPath);
 
-    expect(session.result.current!.dirs[0]).toMatchObject({
-      path: dirPath,
-      isLoading: false,
-      error: "Failed to load",
-    });
+      expect(session.result.current!.dirs[0]).toMatchObject({
+        path: dirPath,
+        isLoading: false,
+        error: "Failed to load",
+      });
 
-    await session.unmount();
-  });
+      await session.unmount();
+    },
+  );
 
   test.skipIf(!hasDom)("falls back when a failed response has invalid JSON", async () => {
     const dirPath = "/tmp/plannotator-docs";
@@ -194,107 +197,120 @@ describe("useFileBrowser", () => {
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)("uses the existing connection failure path for malformed successful responses", async () => {
-    const dirPath = "/tmp/plannotator-docs";
-    installFetchResponses([response({ tree: {} })]);
+  test.skipIf(!hasDom)(
+    "uses the existing connection failure path for malformed successful responses",
+    async () => {
+      const dirPath = "/tmp/plannotator-docs";
+      installFetchResponses([response({ tree: {} })]);
 
-    const session = await mountHook();
-    await fetchTree(session.result.current!, dirPath);
+      const session = await mountHook();
+      await fetchTree(session.result.current!, dirPath);
 
-    expect(session.result.current!.dirs[0]).toMatchObject({
-      path: dirPath,
-      isLoading: false,
-      error: "Failed to connect to server",
-    });
+      expect(session.result.current!.dirs[0]).toMatchObject({
+        path: dirPath,
+        isLoading: false,
+        error: "Failed to connect to server",
+      });
 
-    await session.unmount();
-  });
+      await session.unmount();
+    },
+  );
 
-  test.skipIf(!hasDom)("waits for the initial tree fetch before opening the live watcher", async () => {
-    installMockEventSource();
-    const dirPath = "/tmp/plannotator-docs";
-    const pending = deferred<Response>();
-    const calls: string[] = [];
-    // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      calls.push(String(input));
-      return pending.promise;
-    }) as typeof fetch;
+  test.skipIf(!hasDom)(
+    "waits for the initial tree fetch before opening the live watcher",
+    async () => {
+      installMockEventSource();
+      const dirPath = "/tmp/plannotator-docs";
+      const pending = deferred<Response>();
+      const calls: string[] = [];
+      // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        calls.push(String(input));
+        return pending.promise;
+      }) as typeof fetch;
 
-    const session = await mountHook();
-    await act(async () => {
-      session.result.current!.fetchAll([dirPath]);
-    });
-    await tick(0);
-
-    expect(calls).toHaveLength(1);
-    expect(session.result.current!.dirs[0]).toMatchObject({ path: dirPath, isLoading: true });
-    expect(MockEventSource.instances).toHaveLength(0);
-
-    await act(async () => {
-      pending.resolve(response({ tree: [] }));
+      const session = await mountHook();
+      await act(async () => {
+        session.result.current!.fetchAll([dirPath]);
+      });
       await tick(0);
-    });
-    await tick(0);
 
-    expect(session.result.current!.dirs[0]).toMatchObject({ path: dirPath, isLoading: false, error: null });
-    expect(MockEventSource.instances).toHaveLength(1);
-    expect(MockEventSource.instances[0]?.url).toContain("/api/reference/files/stream?");
+      expect(calls).toHaveLength(1);
+      expect(session.result.current!.dirs[0]).toMatchObject({ path: dirPath, isLoading: true });
+      expect(MockEventSource.instances).toHaveLength(0);
 
-    await session.unmount();
-  });
+      await act(async () => {
+        pending.resolve(response({ tree: [] }));
+        await tick(0);
+      });
+      await tick(0);
 
-  test.skipIf(!hasDom)("waits for all initial folder snapshots before opening the live watcher", async () => {
-    installMockEventSource();
-    const firstDir = "/tmp/plannotator-docs-a";
-    const secondDir = "/tmp/plannotator-docs-b";
-    const first = deferred<Response>();
-    const second = deferred<Response>();
-    const pending = [first.promise, second.promise];
-    const calls: string[] = [];
-    // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      calls.push(String(input));
-      return pending.shift() ?? response({ error: "unexpected fetch" }, 500);
-    }) as typeof fetch;
+      expect(session.result.current!.dirs[0]).toMatchObject({
+        path: dirPath,
+        isLoading: false,
+        error: null,
+      });
+      expect(MockEventSource.instances).toHaveLength(1);
+      expect(MockEventSource.instances[0]?.url).toContain("/api/reference/files/stream?");
 
-    const session = await mountHook();
-    await act(async () => {
-      session.result.current!.fetchAll([firstDir, secondDir]);
-    });
-    await tick(0);
+      await session.unmount();
+    },
+  );
 
-    expect(calls).toHaveLength(2);
-    expect(MockEventSource.instances).toHaveLength(0);
+  test.skipIf(!hasDom)(
+    "waits for all initial folder snapshots before opening the live watcher",
+    async () => {
+      installMockEventSource();
+      const firstDir = "/tmp/plannotator-docs-a";
+      const secondDir = "/tmp/plannotator-docs-b";
+      const first = deferred<Response>();
+      const second = deferred<Response>();
+      const pending = [first.promise, second.promise];
+      const calls: string[] = [];
+      // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        calls.push(String(input));
+        return pending.shift() ?? response({ error: "unexpected fetch" }, 500);
+      }) as typeof fetch;
 
-    await act(async () => {
-      first.resolve(response({ tree: [{ type: "file", name: "a.md", path: "a.md" }] }));
-      await Promise.resolve();
-    });
-    await tick(0);
+      const session = await mountHook();
+      await act(async () => {
+        session.result.current!.fetchAll([firstDir, secondDir]);
+      });
+      await tick(0);
 
-    expect(session.result.current!.dirs.find((dir) => dir.path === firstDir)).toMatchObject({
-      isLoading: false,
-      hasLoadedTree: true,
-    });
-    expect(session.result.current!.dirs.find((dir) => dir.path === secondDir)).toMatchObject({
-      isLoading: true,
-      hasLoadedTree: false,
-    });
-    expect(MockEventSource.instances).toHaveLength(0);
+      expect(calls).toHaveLength(2);
+      expect(MockEventSource.instances).toHaveLength(0);
 
-    await act(async () => {
-      second.resolve(response({ tree: [{ type: "file", name: "b.md", path: "b.md" }] }));
-      await Promise.resolve();
-    });
-    await tick(0);
+      await act(async () => {
+        first.resolve(response({ tree: [{ type: "file", name: "a.md", path: "a.md" }] }));
+        await Promise.resolve();
+      });
+      await tick(0);
 
-    expect(MockEventSource.instances).toHaveLength(1);
-    expect(MockEventSource.instances[0]?.url).toContain(encodeURIComponent(firstDir));
-    expect(MockEventSource.instances[0]?.url).toContain(encodeURIComponent(secondDir));
+      expect(session.result.current!.dirs.find((dir) => dir.path === firstDir)).toMatchObject({
+        isLoading: false,
+        hasLoadedTree: true,
+      });
+      expect(session.result.current!.dirs.find((dir) => dir.path === secondDir)).toMatchObject({
+        isLoading: true,
+        hasLoadedTree: false,
+      });
+      expect(MockEventSource.instances).toHaveLength(0);
 
-    await session.unmount();
-  });
+      await act(async () => {
+        second.resolve(response({ tree: [{ type: "file", name: "b.md", path: "b.md" }] }));
+        await Promise.resolve();
+      });
+      await tick(0);
+
+      expect(MockEventSource.instances).toHaveLength(1);
+      expect(MockEventSource.instances[0]?.url).toContain(encodeURIComponent(firstDir));
+      expect(MockEventSource.instances[0]?.url).toContain(encodeURIComponent(secondDir));
+
+      await session.unmount();
+    },
+  );
 
   test.skipIf(!hasDom)("quiet invalid-directory refresh clears stale files", async () => {
     const dirPath = "/tmp/plannotator-docs";
@@ -412,35 +428,38 @@ describe("useFileBrowser", () => {
     await session.unmount();
   });
 
-  test.skipIf(!hasDom)("waits for the first tree snapshot before opening the live stream", async () => {
-    installMockEventSource();
-    const dirPath = "/tmp/plannotator-docs";
-    const tree: VaultNode[] = [{ type: "file", name: "a.md", path: "a.md" }];
-    const deferred = installDeferredFetch();
+  test.skipIf(!hasDom)(
+    "waits for the first tree snapshot before opening the live stream",
+    async () => {
+      installMockEventSource();
+      const dirPath = "/tmp/plannotator-docs";
+      const tree: VaultNode[] = [{ type: "file", name: "a.md", path: "a.md" }];
+      const deferred = installDeferredFetch();
 
-    const session = await mountHook();
-    await act(async () => {
-      session.result.current!.fetchTree(dirPath);
-      await Promise.resolve();
-    });
+      const session = await mountHook();
+      await act(async () => {
+        session.result.current!.fetchTree(dirPath);
+        await Promise.resolve();
+      });
 
-    expect(deferred.calls).toHaveLength(1);
-    expect(session.result.current!.dirs[0]).toMatchObject({
-      path: dirPath,
-      isLoading: true,
-    });
-    expect(MockEventSource.instances).toHaveLength(0);
+      expect(deferred.calls).toHaveLength(1);
+      expect(session.result.current!.dirs[0]).toMatchObject({
+        path: dirPath,
+        isLoading: true,
+      });
+      expect(MockEventSource.instances).toHaveLength(0);
 
-    deferred.resolve(response({ tree }));
-    await tick(0);
+      deferred.resolve(response({ tree }));
+      await tick(0);
 
-    expect(session.result.current!.dirs[0]).toMatchObject({
-      path: dirPath,
-      isLoading: false,
-      hasLoadedTree: true,
-    });
-    expect(MockEventSource.instances).toHaveLength(1);
+      expect(session.result.current!.dirs[0]).toMatchObject({
+        path: dirPath,
+        isLoading: false,
+        hasLoadedTree: true,
+      });
+      expect(MockEventSource.instances).toHaveLength(1);
 
-    await session.unmount();
-  });
+      await session.unmount();
+    },
+  );
 });

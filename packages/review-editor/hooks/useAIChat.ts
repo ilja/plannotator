@@ -1,4 +1,8 @@
-import { useAIChat as useSharedAIChat, type AIChatEntry, type PendingPermission } from '@plannotator/ui/hooks/useAIChat';
+import {
+  useAIChat as useSharedAIChat,
+  type AIChatEntry,
+  type PendingPermission,
+} from "@plannotator/ui/hooks/useAIChat";
 export type { AIChatEntry, PendingPermission };
 
 interface UseAIChatOptions {
@@ -11,7 +15,7 @@ interface UseAIChatOptions {
 export function useAIChat({ patch, providerId, model, reasoningEffort }: UseAIChatOptions) {
   return useSharedAIChat({
     context: {
-      mode: 'code-review',
+      mode: "code-review",
       review: { patch },
     },
     providerId,

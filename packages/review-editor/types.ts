@@ -3,7 +3,7 @@
  * default and is deliberately NOT decorated in the UI (mirroring Pierre's
  * diffshub: most files are modifications, so only A/D/R stand out).
  */
-export type DiffFileStatus = 'added' | 'deleted' | 'renamed' | 'modified';
+export type DiffFileStatus = "added" | "deleted" | "renamed" | "modified";
 
 export interface DiffFile {
   path: string;

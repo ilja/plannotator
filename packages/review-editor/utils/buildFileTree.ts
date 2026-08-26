@@ -1,7 +1,7 @@
-import type { DiffFile } from '../types';
+import type { DiffFile } from "../types";
 
 export interface FileTreeNode {
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   name: string;
   path: string;
   depth: number;
@@ -21,7 +21,7 @@ function buildTrie(files: DiffFile[]): TrieNode {
   const root: TrieNode = { children: new Map() };
 
   for (let i = 0; i < files.length; i++) {
-    const segments = files[i].path.split('/').filter(Boolean);
+    const segments = files[i].path.split("/").filter(Boolean);
     let current = root;
 
     for (let j = 0; j < segments.length - 1; j++) {
@@ -48,7 +48,7 @@ function trieToNodes(trie: TrieNode, parentPath: string, depth: number): FileTre
 
     if (child.file) {
       fileNodes.push({
-        type: 'file',
+        type: "file",
         name,
         path: child.file.data.path,
         depth,
@@ -63,7 +63,7 @@ function trieToNodes(trie: TrieNode, parentPath: string, depth: number): FileTre
       const deletions = children.reduce((s, c) => s + c.deletions, 0);
 
       folders.push({
-        type: 'folder',
+        type: "folder",
         name,
         path: fullPath,
         depth,
@@ -81,14 +81,14 @@ function trieToNodes(trie: TrieNode, parentPath: string, depth: number): FileTre
 }
 
 function collapseSingleChild(nodes: FileTreeNode[]): FileTreeNode[] {
-  return nodes.map(node => {
-    if (node.type !== 'folder' || !node.children) return node;
+  return nodes.map((node) => {
+    if (node.type !== "folder" || !node.children) return node;
 
     let current = node;
     while (
       current.children &&
       current.children.length === 1 &&
-      current.children[0].type === 'folder'
+      current.children[0].type === "folder"
     ) {
       const child = current.children[0];
       current = {
@@ -100,13 +100,15 @@ function collapseSingleChild(nodes: FileTreeNode[]): FileTreeNode[] {
 
     return {
       ...current,
-      children: current.children ? collapseSingleChild(fixDepths(current.children, node.depth + 1)) : undefined,
+      children: current.children
+        ? collapseSingleChild(fixDepths(current.children, node.depth + 1))
+        : undefined,
     };
   });
 }
 
 function fixDepths(nodes: FileTreeNode[], depth: number): FileTreeNode[] {
-  return nodes.map(node => ({
+  return nodes.map((node) => ({
     ...node,
     depth,
     children: node.children ? fixDepths(node.children, depth + 1) : undefined,
@@ -117,14 +119,14 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode[] {
   if (files.length === 0) return [];
 
   const trie = buildTrie(files);
-  let tree = trieToNodes(trie, '', 0);
+  let tree = trieToNodes(trie, "", 0);
   tree = collapseSingleChild(tree);
 
   // Flat fallback: if the tree is a single root folder with only file children, unwrap it
   if (
     tree.length === 1 &&
-    tree[0].type === 'folder' &&
-    tree[0].children?.every(c => c.type === 'file')
+    tree[0].type === "folder" &&
+    tree[0].children?.every((c) => c.type === "file")
   ) {
     return fixDepths(tree[0].children!, 0);
   }
@@ -133,10 +135,10 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode[] {
 }
 
 export function getAncestorPaths(filePath: string): string[] {
-  const segments = filePath.split('/').filter(Boolean);
+  const segments = filePath.split("/").filter(Boolean);
   const paths: string[] = [];
   for (let i = 1; i < segments.length; i++) {
-    paths.push(segments.slice(0, i).join('/'));
+    paths.push(segments.slice(0, i).join("/"));
   }
   return paths;
 }
@@ -144,7 +146,7 @@ export function getAncestorPaths(filePath: string): string[] {
 export function getVisualFileOrder(nodes: FileTreeNode[]): number[] {
   const order: number[] = [];
   for (const node of nodes) {
-    if (node.type === 'file' && node.fileIndex != null) {
+    if (node.type === "file" && node.fileIndex != null) {
       order.push(node.fileIndex);
     } else if (node.children) {
       order.push(...getVisualFileOrder(node.children));
@@ -156,7 +158,7 @@ export function getVisualFileOrder(nodes: FileTreeNode[]): number[] {
 export function getAllFolderPaths(nodes: FileTreeNode[]): string[] {
   const paths: string[] = [];
   for (const node of nodes) {
-    if (node.type === 'folder') {
+    if (node.type === "folder") {
       paths.push(node.path);
       if (node.children) {
         paths.push(...getAllFolderPaths(node.children));

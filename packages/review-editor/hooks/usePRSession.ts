@@ -1,6 +1,11 @@
-import { useState, useCallback } from 'react';
-import type { PRMetadata } from '@plannotator/shared/pr-types';
-import type { PRDiffScope, PRDiffScopeOption, PRStackInfo, PRStackTree } from '@plannotator/shared/pr-stack';
+import { useState, useCallback } from "react";
+import type { PRMetadata } from "@plannotator/shared/pr-types";
+import type {
+  PRDiffScope,
+  PRDiffScopeOption,
+  PRStackInfo,
+  PRStackTree,
+} from "@plannotator/shared/pr-stack";
 
 export interface PRSessionState {
   prMetadata: PRMetadata | null;
@@ -36,22 +41,24 @@ export function usePRSession() {
     prMetadata: null,
     prStackInfo: null,
     prStackTree: null,
-    prDiffScope: 'layer',
+    prDiffScope: "layer",
     prDiffScopeOptions: [],
     prPatchIncomplete: false,
     prPatchUpgradeAvailable: false,
   });
 
   const updatePRSession = useCallback((update: PRSessionUpdate) => {
-    setState(prev => {
+    setState((prev) => {
       const next = { ...prev };
       if (update.prMetadata !== undefined) next.prMetadata = update.prMetadata;
       if (update.prStackInfo !== undefined) next.prStackInfo = update.prStackInfo;
       if (update.prStackTree !== undefined) next.prStackTree = update.prStackTree;
       if (update.prDiffScope !== undefined) next.prDiffScope = update.prDiffScope;
-      if (update.prDiffScopeOptions !== undefined) next.prDiffScopeOptions = update.prDiffScopeOptions;
+      if (update.prDiffScopeOptions !== undefined)
+        next.prDiffScopeOptions = update.prDiffScopeOptions;
       if (update.prPatchIncomplete !== undefined) next.prPatchIncomplete = update.prPatchIncomplete;
-      if (update.prPatchUpgradeAvailable !== undefined) next.prPatchUpgradeAvailable = update.prPatchUpgradeAvailable;
+      if (update.prPatchUpgradeAvailable !== undefined)
+        next.prPatchUpgradeAvailable = update.prPatchUpgradeAvailable;
       return next;
     });
   }, []);

@@ -6,9 +6,17 @@
  */
 
 import { afterEach, describe, expect, it } from "bun:test";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import {join} from "node:path";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
@@ -51,11 +59,14 @@ function initRepo(dir: string, initialBranch = "main"): void {
   git(dir, ["commit", "-m", "initial"]);
 }
 
-function makeMockSem(dir: string, options: {
-  versionCounterPath?: string;
-  runCwdLogPath?: string;
-  inputLogPath?: string;
-} = {}): string {
+function makeMockSem(
+  dir: string,
+  options: {
+    versionCounterPath?: string;
+    runCwdLogPath?: string;
+    inputLogPath?: string;
+  } = {},
+): string {
   const semPath = join(dir, "sem");
   writeFileSync(
     semPath,
@@ -63,15 +74,30 @@ function makeMockSem(dir: string, options: {
       "#!/usr/bin/env bash",
       "set -euo pipefail",
       'if [ "${1:-}" = "--version" ]; then',
-      ...(options.versionCounterPath ? [`  printf x >> ${JSON.stringify(options.versionCounterPath)}`] : []),
+      ...(options.versionCounterPath
+        ? [`  printf x >> ${JSON.stringify(options.versionCounterPath)}`]
+        : []),
       '  echo "sem 0.8.0"',
       "  exit 0",
       "fi",
       ...(options.runCwdLogPath ? [`pwd >> ${JSON.stringify(options.runCwdLogPath)}`] : []),
-      ...(options.inputLogPath ? [`cat > ${JSON.stringify(options.inputLogPath)}`] : ["cat >/dev/null"]),
+      ...(options.inputLogPath
+        ? [`cat > ${JSON.stringify(options.inputLogPath)}`]
+        : ["cat >/dev/null"]),
       "cat <<'JSON'",
       JSON.stringify({
-        summary: { fileCount: 1, added: 1, modified: 0, deleted: 0, moved: 0, renamed: 0, reordered: 0, binary: 0, orphan: 0, total: 1 },
+        summary: {
+          fileCount: 1,
+          added: 1,
+          modified: 0,
+          deleted: 0,
+          moved: 0,
+          renamed: 0,
+          reordered: 0,
+          binary: 0,
+          orphan: 0,
+          total: 1,
+        },
         changes: [
           {
             entityId: "src/app.ts::function::created",
@@ -140,7 +166,9 @@ describe("review-workspace", () => {
       });
 
       try {
-        const diffPayload: { semanticDiff?: { available: boolean; semVersion?: string; semSource?: string } } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
+        const diffPayload: {
+          semanticDiff?: { available: boolean; semVersion?: string; semSource?: string };
+        } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
         expect(diffPayload.semanticDiff).toMatchObject({
           available: true,
           semVersion: "0.8.0",
@@ -151,13 +179,13 @@ describe("review-workspace", () => {
           status: string;
           summary?: { added: number; fileCount: number };
           changes?: Array<{ entityType: string; entityName: string; filePath: string }>;
-        } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) => response.json());
+        } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) =>
+          response.json(),
+        );
         expect(semanticPayload).toMatchObject({
           status: "ok",
           summary: { added: 1, fileCount: 1 },
-          changes: [
-            { entityType: "function", entityName: "created", filePath: "src/app.ts" },
-          ],
+          changes: [{ entityType: "function", entityName: "created", filePath: "src/app.ts" }],
         });
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(
           realpathSync(join(dataDir, "semantic-diff", "patch-only")),
@@ -182,7 +210,9 @@ describe("review-workspace", () => {
       });
 
       try {
-        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
+        const semanticPayload: { status: string } = await fetch(
+          `${server.url}/api/semantic-diff`,
+        ).then((response) => response.json());
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(agentCwd));
       } finally {
@@ -208,7 +238,9 @@ describe("review-workspace", () => {
       });
 
       try {
-        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
+        const semanticPayload: { status: string } = await fetch(
+          `${server.url}/api/semantic-diff`,
+        ).then((response) => response.json());
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(repoDir));
       } finally {
@@ -249,10 +281,14 @@ describe("review-workspace", () => {
       });
 
       try {
-        const diffPayload: { semanticDiff?: { available: boolean } } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
+        const diffPayload: { semanticDiff?: { available: boolean } } = await fetch(
+          `${server.url}/api/diff`,
+        ).then((response) => response.json());
         expect(diffPayload.semanticDiff?.available).toBe(false);
 
-        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
+        const semanticPayload: { status: string } = await fetch(
+          `${server.url}/api/semantic-diff`,
+        ).then((response) => response.json());
         expect(semanticPayload.status).toBe("unavailable");
       } finally {
         server.stop();
@@ -290,16 +326,16 @@ describe("review-workspace", () => {
 
       const result = prefixPatchPaths(patch, "api");
 
-      expect(result).toContain("diff --git \"a/api/foo b/bar.ts\" \"b/api/foo b/bar.ts\"");
-      expect(result).toContain("--- \"a/api/foo b/bar.ts\"");
-      expect(result).toContain("+++ \"b/api/foo b/bar.ts\"");
+      expect(result).toContain('diff --git "a/api/foo b/bar.ts" "b/api/foo b/bar.ts"');
+      expect(result).toContain('--- "a/api/foo b/bar.ts"');
+      expect(result).toContain('+++ "b/api/foo b/bar.ts"');
     });
 
     it("keeps quoted paths valid when prefixing workspace paths", () => {
       const patch = [
-        "diff --git \"a/path with space.ts\" \"b/path with space.ts\"",
-        "--- \"a/path with space.ts\"",
-        "+++ \"b/path with space.ts\"",
+        'diff --git "a/path with space.ts" "b/path with space.ts"',
+        '--- "a/path with space.ts"',
+        '+++ "b/path with space.ts"',
         "@@ -1 +1 @@",
         "-old",
         "+new",
@@ -307,9 +343,9 @@ describe("review-workspace", () => {
 
       const result = prefixPatchPaths(patch, "web");
 
-      expect(result).toContain("diff --git \"a/web/path with space.ts\" \"b/web/path with space.ts\"");
-      expect(result).toContain("--- \"a/web/path with space.ts\"");
-      expect(result).toContain("+++ \"b/web/path with space.ts\"");
+      expect(result).toContain('diff --git "a/web/path with space.ts" "b/web/path with space.ts"');
+      expect(result).toContain('--- "a/web/path with space.ts"');
+      expect(result).toContain('+++ "b/web/path with space.ts"');
     });
 
     it("handles /dev/null paths correctly", () => {
@@ -341,7 +377,9 @@ describe("review-workspace", () => {
 
       const result = prefixPatchPaths(patch, "frontend");
 
-      expect(result).toContain("diff --git a/frontend/packages/ui/src/index.ts b/frontend/packages/ui/src/index.ts");
+      expect(result).toContain(
+        "diff --git a/frontend/packages/ui/src/index.ts b/frontend/packages/ui/src/index.ts",
+      );
     });
 
     it("prefixes rename and copy metadata without corrupting the header keywords", () => {
@@ -429,7 +467,7 @@ describe("review-workspace", () => {
 
       const result = prefixPatchPaths(patch, "repo-a");
 
-      expect(result).toContain("diff --git \"a/repo-a/foo b/old.bin\" b/repo-a/new.bin");
+      expect(result).toContain('diff --git "a/repo-a/foo b/old.bin" b/repo-a/new.bin');
     });
 
     it("does not treat hunk body lines as file headers", () => {
@@ -458,18 +496,20 @@ describe("review-workspace", () => {
 
   describe("aggregateWorkspacePatch", () => {
     it("preserves real trailing spaces in patch lines", () => {
-      const aggregate = aggregateWorkspacePatch([{
-        label: "api",
-        selected: true,
-        rawPatch: [
-          "diff --git a/api/file.txt b/api/file.txt",
-          "@@ -1 +1 @@",
-          "-before",
-          "+after   ",
-          "",
-        ].join("\n"),
-        gitRef: "Uncommitted changes",
-      }]);
+      const aggregate = aggregateWorkspacePatch([
+        {
+          label: "api",
+          selected: true,
+          rawPatch: [
+            "diff --git a/api/file.txt b/api/file.txt",
+            "@@ -1 +1 @@",
+            "-before",
+            "+after   ",
+            "",
+          ].join("\n"),
+          gitRef: "Uncommitted changes",
+        },
+      ]);
 
       expect(aggregate.rawPatch).toEndWith("+after   ");
     });
@@ -479,7 +519,14 @@ describe("review-workspace", () => {
     it("resolves the longest matching repo label first", () => {
       const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "apps", cwd: "/tmp/apps", selected: true, rawPatch: "", gitRef: "" },
-        { id: "2", label: "apps/api", cwd: "/tmp/apps-api", selected: true, rawPatch: "", gitRef: "" },
+        {
+          id: "2",
+          label: "apps/api",
+          cwd: "/tmp/apps-api",
+          selected: true,
+          rawPatch: "",
+          gitRef: "",
+        },
       ];
 
       const resolved = resolveWorkspaceFilePath(repos, "apps/api/src/index.ts");
@@ -490,7 +537,14 @@ describe("review-workspace", () => {
 
     it("returns null when no repo matches", () => {
       const repos: WorkspaceRepoRuntimeState[] = [
-        { id: "1", label: "frontend", cwd: "/tmp/frontend", selected: true, rawPatch: "", gitRef: "" },
+        {
+          id: "1",
+          label: "frontend",
+          cwd: "/tmp/frontend",
+          selected: true,
+          rawPatch: "",
+          gitRef: "",
+        },
       ];
 
       const resolved = resolveWorkspaceFilePath(repos, "backend/src/index.ts");
@@ -672,8 +726,22 @@ describe("review-workspace", () => {
       // The label building logic is internal, but we verify it works
       // through resolveWorkspaceFilePath tests with realistic labels
       const repos: WorkspaceRepoRuntimeState[] = [
-        { id: "1", label: "packages/frontend", cwd: "/tmp/packages/frontend", selected: true, rawPatch: "", gitRef: "" },
-        { id: "2", label: "packages/backend", cwd: "/tmp/packages/backend", selected: true, rawPatch: "", gitRef: "" },
+        {
+          id: "1",
+          label: "packages/frontend",
+          cwd: "/tmp/packages/frontend",
+          selected: true,
+          rawPatch: "",
+          gitRef: "",
+        },
+        {
+          id: "2",
+          label: "packages/backend",
+          cwd: "/tmp/packages/backend",
+          selected: true,
+          rawPatch: "",
+          gitRef: "",
+        },
       ];
 
       const resolved1 = resolveWorkspaceFilePath(repos, "packages/frontend/src/index.ts");
@@ -688,7 +756,14 @@ describe("review-workspace", () => {
       // the second should get a numbered suffix
       const repos: WorkspaceRepoRuntimeState[] = [
         { id: "1", label: "api", cwd: "/tmp/apps/api", selected: true, rawPatch: "", gitRef: "" },
-        { id: "2", label: "api-2", cwd: "/tmp/services/api", selected: true, rawPatch: "", gitRef: "" },
+        {
+          id: "2",
+          label: "api-2",
+          cwd: "/tmp/services/api",
+          selected: true,
+          rawPatch: "",
+          gitRef: "",
+        },
       ];
 
       const resolved = resolveWorkspaceFilePath(repos, "api-2/src/index.ts");
@@ -717,8 +792,14 @@ describe("review-workspace", () => {
             worktrees: [],
             availableBranches: { local: [], remote: [] },
             diffOptions: isJj
-              ? [{ id: "jj-current", label: "Current change" }, { id: "jj-last", label: "Last change" }]
-              : [{ id: "uncommitted", label: "Uncommitted changes" }, { id: "last-commit", label: "Last commit" }],
+              ? [
+                  { id: "jj-current", label: "Current change" },
+                  { id: "jj-last", label: "Last change" },
+                ]
+              : [
+                  { id: "uncommitted", label: "Uncommitted changes" },
+                  { id: "last-commit", label: "Last commit" },
+                ],
           };
         },
         async runVcsDiff(diffType: DiffType, _defaultBranch?: string, cwd?: string) {
@@ -903,7 +984,10 @@ describe("review-workspace", () => {
       const semDir = makeTempDir("plannotator-workspace-switch-sem-");
       const cwdLogPath = join(semDir, "cwd-log");
       const inputLogPath = join(semDir, "input.patch");
-      process.env.PLANNOTATOR_SEM_PATH = makeMockSem(semDir, { runCwdLogPath: cwdLogPath, inputLogPath });
+      process.env.PLANNOTATOR_SEM_PATH = makeMockSem(semDir, {
+        runCwdLogPath: cwdLogPath,
+        inputLogPath,
+      });
       const api = join(root, "api");
       const web = join(root, "web");
       mkdirSync(api, { recursive: true });
@@ -954,7 +1038,9 @@ describe("review-workspace", () => {
         expect(diffPayload.rawPatch).toContain("diff --git a/api/tracked.txt b/api/tracked.txt");
         expect(diffPayload.rawPatch).toContain("diff --git a/web/new.txt b/web/new.txt");
 
-        const semanticPayload: { status: string } = await fetch(`${server.url}/api/semantic-diff`).then((response) => response.json());
+        const semanticPayload: { status: string } = await fetch(
+          `${server.url}/api/semantic-diff`,
+        ).then((response) => response.json());
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(root));
         const semInput = readFileSync(inputLogPath, "utf-8");
@@ -985,7 +1071,9 @@ describe("review-workspace", () => {
         });
         expect(currentResponse.status).toBe(200);
 
-        const fileContentResponse = await fetch(`${server.url}/api/file-content?path=api/tracked.txt`);
+        const fileContentResponse = await fetch(
+          `${server.url}/api/file-content?path=api/tracked.txt`,
+        );
         expect(fileContentResponse.status).toBe(200);
         const fileContent: {
           oldContent: string | null;

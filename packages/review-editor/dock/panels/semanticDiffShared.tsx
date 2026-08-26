@@ -1,9 +1,9 @@
-import React from 'react';
-import type { SelectedLineRange } from '@plannotator/ui/types';
+import React from "react";
+import type { SelectedLineRange } from "@plannotator/ui/types";
 import type {
   SemanticDiffBinaryChange,
   SemanticDiffChange,
-} from '@plannotator/shared/semantic-diff-types';
+} from "@plannotator/shared/semantic-diff-types";
 
 // `renamed`/`moved` are handled by the early return in getChangeSymbol, so they
 // intentionally have no entry here.
@@ -12,24 +12,24 @@ interface ChangeSymbolMap {
 }
 
 const changeSymbols: ChangeSymbolMap = {
-  added: '⊕',
-  deleted: '⊖',
-  modified: '∆',
-  reordered: '↕',
+  added: "⊕",
+  deleted: "⊖",
+  modified: "∆",
+  reordered: "↕",
 };
 
 export function getChangeSymbol(changeType: string): string {
-  if (changeType.includes('renamed') || changeType.includes('moved')) return '↻';
-  return changeSymbols[changeType] ?? '∆';
+  if (changeType.includes("renamed") || changeType.includes("moved")) return "↻";
+  return changeSymbols[changeType] ?? "∆";
 }
 
 export function getChangeClass(changeType: string): string {
-  if (changeType.includes('added')) return 'added';
-  if (changeType.includes('deleted')) return 'deleted';
-  if (changeType.includes('renamed')) return 'renamed';
-  if (changeType.includes('moved')) return 'moved';
-  if (changeType.includes('reordered')) return 'reordered';
-  return 'modified';
+  if (changeType.includes("added")) return "added";
+  if (changeType.includes("deleted")) return "deleted";
+  if (changeType.includes("renamed")) return "renamed";
+  if (changeType.includes("moved")) return "moved";
+  if (changeType.includes("reordered")) return "reordered";
+  return "modified";
 }
 
 export function getDisplayName(change: SemanticDiffChange): string {
@@ -43,7 +43,7 @@ export function getBinaryDisplayName(change: SemanticDiffBinaryChange): string {
   if (change.oldFilePath && change.oldFilePath !== change.filePath) {
     return `${change.oldFilePath} -> ${change.filePath}`;
   }
-  return 'file';
+  return "file";
 }
 
 export function getBinaryStatus(change: SemanticDiffBinaryChange): string {
@@ -51,7 +51,7 @@ export function getBinaryStatus(change: SemanticDiffBinaryChange): string {
 }
 
 export function lineSelectionForChange(change: SemanticDiffChange): SelectedLineRange | null {
-  const deleted = change.changeType === 'deleted';
+  const deleted = change.changeType === "deleted";
   const start = deleted ? change.oldStartLine : change.startLine;
   const end = deleted ? change.oldEndLine : change.endLine;
   if (!start || start < 1) return null;
@@ -59,7 +59,7 @@ export function lineSelectionForChange(change: SemanticDiffChange): SelectedLine
   return {
     start,
     end: end && end >= start ? end : start,
-    side: deleted ? 'deletions' : 'additions',
+    side: deleted ? "deletions" : "additions",
   };
 }
 
@@ -68,7 +68,7 @@ export function lineSelectionForChange(change: SemanticDiffChange): SelectedLine
  * these by default (only the summary count surfaces them); we do the same.
  */
 export function isOrphanChange(change: SemanticDiffChange): boolean {
-  return change.entityType === 'orphan';
+  return change.entityType === "orphan";
 }
 
 export interface SemanticDiffGroup {
@@ -123,11 +123,16 @@ export function SemanticDiffRows({
         <button
           type="button"
           className="semantic-diff-row"
-          key={change.entityId ?? `${change.filePath}:${change.entityType}:${change.entityName}:${index}`}
+          key={
+            change.entityId ??
+            `${change.filePath}:${change.entityType}:${change.entityName}:${index}`
+          }
           onClick={() => onOpenChange(change)}
-          title={`${change.filePath}${change.startLine ? `:${change.startLine}` : ''}`}
+          title={`${change.filePath}${change.startLine ? `:${change.startLine}` : ""}`}
         >
-          <span className={`semantic-diff-symbol semantic-diff-symbol-${getChangeClass(change.changeType)}`}>
+          <span
+            className={`semantic-diff-symbol semantic-diff-symbol-${getChangeClass(change.changeType)}`}
+          >
             {getChangeSymbol(change.changeType)}
           </span>
           <span className="semantic-diff-kind">{change.entityType}</span>

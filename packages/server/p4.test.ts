@@ -21,13 +21,19 @@ describe("parseP4WorkspaceInfo", () => {
 
   test("rejects missing or empty required fields", () => {
     expect(parseP4WorkspaceInfo(completeP4Info.replace("User name: alice", ""))).toBeNull();
-    expect(parseP4WorkspaceInfo(completeP4Info.replace("User name: alice", "User name: "))).toBeNull();
+    expect(
+      parseP4WorkspaceInfo(completeP4Info.replace("User name: alice", "User name: ")),
+    ).toBeNull();
     expect(parseP4WorkspaceInfo(completeP4Info.replace("Client name: workspace", ""))).toBeNull();
-    expect(parseP4WorkspaceInfo(completeP4Info.replace("Client root: /work/project", ""))).toBeNull();
+    expect(
+      parseP4WorkspaceInfo(completeP4Info.replace("Client root: /work/project", "")),
+    ).toBeNull();
   });
 
   test("allows an absent server address", () => {
-    expect(parseP4WorkspaceInfo(completeP4Info.replace("Server address: perforce.example:1666", ""))).toMatchObject({
+    expect(
+      parseP4WorkspaceInfo(completeP4Info.replace("Server address: perforce.example:1666", "")),
+    ).toMatchObject({
       clientName: "workspace",
       clientRoot: "/work/project",
       userName: "alice",

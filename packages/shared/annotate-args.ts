@@ -61,7 +61,14 @@ const FLAG_MAP = {
 
 export function parseAnnotateArgs(raw: string): ParsedAnnotateArgs {
   const s = (raw ?? "").trim();
-  const flags = { gate: false, json: false, hook: false, renderHtml: false, renderMarkdown: false, noJina: false };
+  const flags = {
+    gate: false,
+    json: false,
+    hook: false,
+    renderHtml: false,
+    renderMarkdown: false,
+    noJina: false,
+  };
 
   const segments: Segment[] = [];
   for (let i = 0; i < s.length;) {

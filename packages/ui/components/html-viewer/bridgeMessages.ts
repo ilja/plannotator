@@ -35,7 +35,9 @@ export type HtmlBridgeOutboundMessage = DecodedOutboundMessage;
 
 /** Decode messages before crossing the parent-to-iframe bridge. */
 export function decodeHtmlBridgeOutboundMessage(value: any): HtmlBridgeOutboundMessage | undefined {
-  const message = Option.getOrUndefined(Schema.decodeUnknownOption(BridgeOutboundMessageSchema)(value));
+  const message = Option.getOrUndefined(
+    Schema.decodeUnknownOption(BridgeOutboundMessageSchema)(value),
+  );
   if (!message) return undefined;
   if ("id" in message && message.id !== null && message.id.length === 0) return undefined;
   if ("originalText" in message && message.originalText.length === 0) return undefined;

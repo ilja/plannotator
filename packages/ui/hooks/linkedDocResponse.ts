@@ -1,8 +1,8 @@
 import {
   SourceSaveCapabilitySchema,
   type SourceSaveCapability,
-} from '@plannotator/shared/source-save';
-import { Option, Schema } from 'effect';
+} from "@plannotator/shared/source-save";
+import { Option, Schema } from "effect";
 
 const LinkedDocResponseEnvelopeSchema = Schema.Struct({
   filepath: Schema.String,
@@ -18,7 +18,7 @@ const LinkedDocErrorEnvelopeSchema = Schema.Struct({ error: Schema.String });
 const decodeLinkedDocResponseEnvelope = Schema.decodeUnknownOption(LinkedDocResponseEnvelopeSchema);
 const decodeLinkedDocErrorEnvelope = Schema.decodeUnknownOption(LinkedDocErrorEnvelopeSchema);
 const decodeString = Schema.decodeUnknownOption(Schema.String);
-const decodeRenderAs = Schema.decodeUnknownOption(Schema.Literals(['markdown', 'html']));
+const decodeRenderAs = Schema.decodeUnknownOption(Schema.Literals(["markdown", "html"]));
 const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
 const decodeSourceSave = Schema.decodeUnknownOption(SourceSaveCapabilitySchema);
 
@@ -27,7 +27,7 @@ export interface LinkedDocResponse {
   markdown?: string;
   rawHtml?: string;
   shareHtml?: string;
-  renderAs?: 'markdown' | 'html';
+  renderAs?: "markdown" | "html";
   isConverted?: boolean;
   sourceSave?: SourceSaveCapability;
 }

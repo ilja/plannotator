@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 const PRActionSuccessSchema = Schema.Struct({
   ok: Schema.Literal(true),
@@ -30,7 +30,7 @@ export interface PRActionErrorResponse {
 /** The validated success-or-error result used by the PR action submission flow. */
 export type PRActionResponse = PRActionSuccessResponse | PRActionErrorResponse;
 
-const PR_ACTION_FALLBACK_ERROR = 'Failed to submit';
+const PR_ACTION_FALLBACK_ERROR = "Failed to submit";
 const decodeSuccess = Schema.decodeUnknownOption(PRActionSuccessSchema);
 const decodeErrorEnvelope = Schema.decodeUnknownOption(PRActionErrorEnvelopeSchema);
 const decodeSuccessMarker = Schema.decodeUnknownOption(PRActionSuccessMarkerSchema);
@@ -57,9 +57,7 @@ export async function readPRActionResponse(response: Response): Promise<PRAction
   }
 
   if (!response.ok) {
-    return decoded?.ok === false
-      ? decoded
-      : { ok: false, error: PR_ACTION_FALLBACK_ERROR };
+    return decoded?.ok === false ? decoded : { ok: false, error: PR_ACTION_FALLBACK_ERROR };
   }
 
   return decoded ?? { ok: false, error: PR_ACTION_FALLBACK_ERROR };

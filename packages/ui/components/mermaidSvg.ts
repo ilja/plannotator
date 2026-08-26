@@ -11,11 +11,11 @@ export function normalizeMermaidSvgMarkup(markup: string): string {
     if (/\bstyle\s*=\s*"/i.test(next)) {
       next = next.replace(/\bstyle\s*=\s*"([^"]*)"/i, (_m, styleVal: string) => {
         const rules = styleVal
-          .split(';')
+          .split(";")
           .map((s) => s.trim())
           .filter((s) => s.length > 0 && !/^max-width\s*:/i.test(s));
-        rules.push('max-width: none');
-        return `style="${rules.join('; ')}"`;
+        rules.push("max-width: none");
+        return `style="${rules.join("; ")}"`;
       });
     } else {
       next += ' style="max-width: none"';

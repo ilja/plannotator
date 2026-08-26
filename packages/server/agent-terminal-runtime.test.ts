@@ -73,9 +73,10 @@ describe("agent terminal runtime", () => {
     ];
 
     for (const manifest of manifests) {
-      const parsed: { dependencies?: Record<string, string> } = JSON.parse(readFileSync(join(repoRoot, manifest), "utf8"));
+      const parsed: { dependencies?: Record<string, string> } = JSON.parse(
+        readFileSync(join(repoRoot, manifest), "utf8"),
+      );
       expect(parsed.dependencies?.["@plannotator/webtui"]).toBe(AGENT_TERMINAL_WEBTUI_VERSION);
     }
-
   });
 });

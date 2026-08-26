@@ -34,14 +34,38 @@ describe("jj diff args", () => {
   });
 
   test("preserves hide-whitespace in every jj diff mode", () => {
-    expect(getJjDiffArgs("jj-current", "trunk()", { hideWhitespace: true })?.args)
-      .toEqual(["diff", "--git", "-w", "-r", "@"]);
-    expect(getJjDiffArgs("jj-last", "trunk()", { hideWhitespace: true })?.args)
-      .toEqual(["diff", "--git", "-w", "-r", "@-"]);
-    expect(getJjDiffArgs("jj-line", "trunk()", { hideWhitespace: true })?.args)
-      .toEqual(["diff", "--git", "-w", "--from", "heads(::@ & ::(trunk()))", "--to", "@"]);
-    expect(getJjDiffArgs("jj-all", "trunk()", { hideWhitespace: true })?.args)
-      .toEqual(["diff", "--git", "-w", "--from", "root()", "--to", "@"]);
+    expect(getJjDiffArgs("jj-current", "trunk()", { hideWhitespace: true })?.args).toEqual([
+      "diff",
+      "--git",
+      "-w",
+      "-r",
+      "@",
+    ]);
+    expect(getJjDiffArgs("jj-last", "trunk()", { hideWhitespace: true })?.args).toEqual([
+      "diff",
+      "--git",
+      "-w",
+      "-r",
+      "@-",
+    ]);
+    expect(getJjDiffArgs("jj-line", "trunk()", { hideWhitespace: true })?.args).toEqual([
+      "diff",
+      "--git",
+      "-w",
+      "--from",
+      "heads(::@ & ::(trunk()))",
+      "--to",
+      "@",
+    ]);
+    expect(getJjDiffArgs("jj-all", "trunk()", { hideWhitespace: true })?.args).toEqual([
+      "diff",
+      "--git",
+      "-w",
+      "--from",
+      "root()",
+      "--to",
+      "@",
+    ]);
   });
 
   test("drops hunk-less file chunks after hide-whitespace filtering", async () => {
@@ -73,13 +97,25 @@ describe("jj diff args", () => {
       "",
     ].join("\n");
 
-    const result = await runJjDiff(runtimeForPatch(hunklessChunk + realChunk), "jj-current", "trunk()", undefined, { hideWhitespace: true });
+    const result = await runJjDiff(
+      runtimeForPatch(hunklessChunk + realChunk),
+      "jj-current",
+      "trunk()",
+      undefined,
+      { hideWhitespace: true },
+    );
 
     expect(result.patch).not.toContain("spacey.ts");
     expect(result.patch).toContain("real.ts");
     expect(result.patch).toContain("@@ -1 +1 @@");
 
-    const emptyResult = await runJjDiff(runtimeForPatch(hunklessChunk), "jj-current", "trunk()", undefined, { hideWhitespace: true });
+    const emptyResult = await runJjDiff(
+      runtimeForPatch(hunklessChunk),
+      "jj-current",
+      "trunk()",
+      undefined,
+      { hideWhitespace: true },
+    );
     expect(emptyResult.patch).toBe("");
   });
 });
@@ -90,20 +126,16 @@ describe("jj compare targets", () => {
     const runtime: ReviewJjRuntime = {
       async runJj(args) {
         calls.push(args);
-        return { stdout: '[{"name":"main"},{"name":"main","remote":"origin"}]\n', stderr: "", exitCode: 0 };
+        return {
+          stdout: '[{"name":"main"},{"name":"main","remote":"origin"}]\n',
+          stderr: "",
+          exitCode: 0,
+        };
       },
     };
 
-    await expect(selectDefaultJjCompareTarget(runtime, "/repo"))
-      .resolves.toBe("main@origin");
-    expect(calls).toEqual([[
-      "log",
-      "--no-graph",
-      "-r",
-      "trunk()",
-      "-T",
-      "json(bookmarks)",
-    ]]);
+    await expect(selectDefaultJjCompareTarget(runtime, "/repo")).resolves.toBe("main@origin");
+    expect(calls).toEqual([["log", "--no-graph", "-r", "trunk()", "-T", "json(bookmarks)"]]);
   });
 
   test("falls back to local bookmark then trunk revset", async () => {
@@ -113,15 +145,17 @@ describe("jj compare targets", () => {
       },
     });
 
-    await expect(selectDefaultJjCompareTarget(runtimeFor('[{"name":"develop"}]\n')))
-      .resolves.toBe("develop");
-    await expect(selectDefaultJjCompareTarget(runtimeFor('[]\n')))
-      .resolves.toBe("trunk()");
+    await expect(selectDefaultJjCompareTarget(runtimeFor('[{"name":"develop"}]\n'))).resolves.toBe(
+      "develop",
+    );
+    await expect(selectDefaultJjCompareTarget(runtimeFor("[]\n"))).resolves.toBe("trunk()");
   });
 
   test("treats bookmarks and revsets correctly in line-of-work revsets", () => {
     expect(jjLineBaseRevset("main")).toBe('heads(::@ & ::(bookmarks(exact:"main")))');
-    expect(jjLineBaseRevset("main@origin")).toBe('heads(::@ & ::(remote_bookmarks(exact:"main", exact:"origin")))');
+    expect(jjLineBaseRevset("main@origin")).toBe(
+      'heads(::@ & ::(remote_bookmarks(exact:"main", exact:"origin")))',
+    );
     expect(jjLineBaseRevset("trunk()")).toBe("heads(::@ & ::(trunk()))");
   });
 });
@@ -135,8 +169,15 @@ describe("jj evolog", () => {
   });
 
   test("builds evolog diff args with whitespace flag", () => {
-    expect(getJjDiffArgs("jj-evolog", "abc123456789", { hideWhitespace: true })?.args)
-      .toEqual(["diff", "--git", "-w", "--from", "abc123456789", "--to", "@"]);
+    expect(getJjDiffArgs("jj-evolog", "abc123456789", { hideWhitespace: true })?.args).toEqual([
+      "diff",
+      "--git",
+      "-w",
+      "--from",
+      "abc123456789",
+      "--to",
+      "@",
+    ]);
   });
 
   test("parses evolog output correctly (commit.* template fields)", async () => {
@@ -156,9 +197,21 @@ describe("jj evolog", () => {
     };
     const entries = await getJjEvoLogEntries(runtime);
     expect(entries).toHaveLength(3);
-    expect(entries[0]).toEqual({ commitId: "abc123456789", description: "Add login form", age: "2 minutes ago" });
-    expect(entries[1]).toEqual({ commitId: "def456789012", description: "Add login form", age: "10 minutes ago" });
-    expect(entries[2]).toEqual({ commitId: "ghi789012345", description: "Add login form", age: "1 hour ago" });
+    expect(entries[0]).toEqual({
+      commitId: "abc123456789",
+      description: "Add login form",
+      age: "2 minutes ago",
+    });
+    expect(entries[1]).toEqual({
+      commitId: "def456789012",
+      description: "Add login form",
+      age: "10 minutes ago",
+    });
+    expect(entries[2]).toEqual({
+      commitId: "ghi789012345",
+      description: "Add login form",
+      age: "1 hour ago",
+    });
   });
 
   test("returns empty array when evolog exits non-zero", async () => {
@@ -204,7 +257,11 @@ describe("jj evolog", () => {
     const runtime: ReviewJjRuntime = {
       async runJj(args) {
         if (args[0] === "evolog") {
-          return { stdout: "abc123456789\tInitial commit\t1 minute ago\n", stderr: "", exitCode: 0 };
+          return {
+            stdout: "abc123456789\tInitial commit\t1 minute ago\n",
+            stderr: "",
+            exitCode: 0,
+          };
         }
         return { stdout: "", stderr: "", exitCode: 0 };
       },

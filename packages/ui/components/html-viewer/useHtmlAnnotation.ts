@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback, useRef, type RefObject } from "react";
 import { Option, Schema } from "effect";
-import { AnnotationType, type Annotation, type EditorMode, type ImageAttachment } from "../../types";
+import {
+  AnnotationType,
+  type Annotation,
+  type EditorMode,
+  type ImageAttachment,
+} from "../../types";
 import type { QuickLabel } from "../../utils/quickLabels";
 import { postHtmlBridgeMessage, type HtmlBridgeOutboundMessage } from "./bridgeMessages";
 import { getIdentity } from "../../utils/identity";
@@ -69,10 +74,7 @@ export interface UseHtmlAnnotationOptions {
   onResize?: (height: number) => void;
 }
 
-function postToIframe(
-  iframe: HTMLIFrameElement | null,
-  message: HtmlBridgeOutboundMessage,
-): void {
+function postToIframe(iframe: HTMLIFrameElement | null, message: HtmlBridgeOutboundMessage): void {
   postHtmlBridgeMessage(iframe, message);
 }
 
@@ -281,7 +283,11 @@ export function useHtmlAnnotation({
       if (!text || type !== AnnotationType.DELETION) return;
 
       const id = nextHtmlAnnId();
-      postToIframe(iframeRef.current, { type: `${PREFIX}create-mark`, id, annotationType: "deletion" });
+      postToIframe(iframeRef.current, {
+        type: `${PREFIX}create-mark`,
+        id,
+        annotationType: "deletion",
+      });
       onAddRef.current?.({
         id,
         blockId: "",
@@ -305,7 +311,12 @@ export function useHtmlAnnotation({
       if (!text) return;
       const anchor = anchorRef.current ?? getOrCreateAnchor();
       setToolbarState(null);
-      setCommentPopover({ anchorEl: anchor, contextText: text, selectedText: text, initialText: initialChar });
+      setCommentPopover({
+        anchorEl: anchor,
+        contextText: text,
+        selectedText: text,
+        initialText: initialChar,
+      });
     },
     [getOrCreateAnchor],
   );
@@ -318,7 +329,11 @@ export function useHtmlAnnotation({
       if (!text) return;
 
       const id = nextHtmlAnnId();
-      postToIframe(iframeRef.current, { type: `${PREFIX}create-mark`, id, annotationType: "comment" });
+      postToIframe(iframeRef.current, {
+        type: `${PREFIX}create-mark`,
+        id,
+        annotationType: "comment",
+      });
       onAddRef.current?.({
         id,
         blockId: "",
@@ -353,7 +368,11 @@ export function useHtmlAnnotation({
       const text = pendingTextRef.current;
       if (!text) return;
       const id = nextHtmlAnnId();
-      postToIframe(iframeRef.current, { type: `${PREFIX}create-mark`, id, annotationType: "comment" });
+      postToIframe(iframeRef.current, {
+        type: `${PREFIX}create-mark`,
+        id,
+        annotationType: "comment",
+      });
       onAddRef.current?.({
         id,
         blockId: "",

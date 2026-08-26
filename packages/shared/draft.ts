@@ -23,7 +23,10 @@ export function decodeDraftEnvelope<Input>(value: Input): DraftEnvelope | null {
   return Option.getOrUndefined(Schema.decodeUnknownOption(DraftEnvelopeSchema)(value)) ?? null;
 }
 
-export type SourceBackedDraftSourceSaveCapability = Extract<SourceSaveCapability, { enabled: true }>;
+export type SourceBackedDraftSourceSaveCapability = Extract<
+  SourceSaveCapability,
+  { enabled: true }
+>;
 
 export interface SourceBackedSavedFileChangeDraftData {
   key: string;
@@ -72,13 +75,19 @@ function tombstonePath(key: string): string {
 }
 
 function readDraftGeneration(draft: DraftEnvelope): number | null {
-  return Option.getOrUndefined(Schema.decodeUnknownOption(DraftGenerationSchema)(draft.draftGeneration)) ?? null;
+  return (
+    Option.getOrUndefined(
+      Schema.decodeUnknownOption(DraftGenerationSchema)(draft.draftGeneration),
+    ) ?? null
+  );
 }
 
 function parseDraftEnvelope(serializedDraft: string): DraftEnvelope | null {
   try {
     const parsedDraft: unknown = JSON.parse(serializedDraft);
-    return Option.getOrUndefined(Schema.decodeUnknownOption(DraftEnvelopeSchema)(parsedDraft)) ?? null;
+    return (
+      Option.getOrUndefined(Schema.decodeUnknownOption(DraftEnvelopeSchema)(parsedDraft)) ?? null
+    );
   } catch {
     return null;
   }
@@ -107,10 +116,9 @@ function readStoredDraftGeneration(key: string): number | null {
 }
 
 export function getDraftGeneration(key: string): number | null {
-  const generations = [
-    readStoredDraftGeneration(key),
-    readTombstoneGeneration(key),
-  ].filter((value): value is number => value !== null);
+  const generations = [readStoredDraftGeneration(key), readTombstoneGeneration(key)].filter(
+    (value): value is number => value !== null,
+  );
   return generations.length > 0 ? Math.max(...generations) : null;
 }
 
@@ -137,7 +145,11 @@ export function saveDraft<T>(key: string, data: T): boolean {
 
   const draftGeneration = readDraftGeneration(draft);
   const deletedGeneration = readTombstoneGeneration(key);
-  if (draftGeneration !== null && deletedGeneration !== null && draftGeneration <= deletedGeneration) {
+  if (
+    draftGeneration !== null &&
+    deletedGeneration !== null &&
+    draftGeneration <= deletedGeneration
+  ) {
     return false;
   }
   const storedGeneration = readStoredDraftGeneration(key);
@@ -170,7 +182,11 @@ export function loadDraft(key: string): DraftEnvelope | null {
 
     const draftGeneration = readDraftGeneration(draft);
     const deletedGeneration = readTombstoneGeneration(key);
-    if (draftGeneration !== null && deletedGeneration !== null && draftGeneration <= deletedGeneration) {
+    if (
+      draftGeneration !== null &&
+      deletedGeneration !== null &&
+      draftGeneration <= deletedGeneration
+    ) {
       return null;
     }
     return draft;
@@ -185,9 +201,9 @@ export function loadDraft(key: string): DraftEnvelope | null {
 export function deleteDraft(key: string, draftGeneration?: number): void {
   const filePath = draftPath(key);
   try {
-    const generation = Option.getOrUndefined(
-      Schema.decodeUnknownOption(DraftGenerationSchema)(draftGeneration),
-    ) ?? null;
+    const generation =
+      Option.getOrUndefined(Schema.decodeUnknownOption(DraftGenerationSchema)(draftGeneration)) ??
+      null;
     if (generation !== null) {
       const knownGeneration = getDraftGeneration(key);
       if (knownGeneration !== null && generation < knownGeneration) return;

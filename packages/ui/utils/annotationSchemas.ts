@@ -1,6 +1,6 @@
-import { Schema } from 'effect';
-import { AnnotationType } from '../types';
-import { ChoiceValidationEvidenceSchema } from './choiceAnnotations';
+import { Schema } from "effect";
+import { AnnotationType } from "../types";
+import { ChoiceValidationEvidenceSchema } from "./choiceAnnotations";
 
 /** Validates an image attachment stored with an annotation. */
 export const ImageAttachmentSchema = Schema.Struct({
@@ -36,7 +36,7 @@ export const AnnotationSchema = Schema.Struct({
   quickLabelTip: Schema.optionalKey(Schema.String),
   choiceOptionLabel: Schema.optionalKey(Schema.String),
   choiceValidationEvidence: Schema.optionalKey(ChoiceValidationEvidenceSchema),
-  diffContext: Schema.optionalKey(Schema.Literals(['added', 'removed', 'modified'])),
+  diffContext: Schema.optionalKey(Schema.Literals(["added", "removed", "modified"])),
   startMeta: Schema.optionalKey(SelectionMetaSchema),
   endMeta: Schema.optionalKey(SelectionMetaSchema),
 });
@@ -44,12 +44,12 @@ export const AnnotationSchema = Schema.Struct({
 /** Validates a persisted code annotation record. */
 export const CodeAnnotationSchema = Schema.Struct({
   id: Schema.String,
-  type: Schema.Literals(['comment', 'suggestion', 'concern']),
-  scope: Schema.optionalKey(Schema.Literals(['line', 'file', 'general'])),
+  type: Schema.Literals(["comment", "suggestion", "concern"]),
+  scope: Schema.optionalKey(Schema.Literals(["line", "file", "general"])),
   filePath: Schema.String,
   lineStart: Schema.Finite,
   lineEnd: Schema.Finite,
-  side: Schema.Literals(['old', 'new']),
+  side: Schema.Literals(["old", "new"]),
   text: Schema.optionalKey(Schema.String),
   images: Schema.optionalKey(Schema.mutable(Schema.Array(ImageAttachmentSchema))),
   suggestedCode: Schema.optionalKey(Schema.String),
@@ -60,18 +60,18 @@ export const CodeAnnotationSchema = Schema.Struct({
   createdAt: Schema.Finite,
   author: Schema.optionalKey(Schema.String),
   source: Schema.optionalKey(Schema.String),
-  severity: Schema.optionalKey(Schema.Literals(['important', 'nit', 'pre_existing'])),
+  severity: Schema.optionalKey(Schema.Literals(["important", "nit", "pre_existing"])),
   reasoning: Schema.optionalKey(Schema.String),
   reviewProfileLabel: Schema.optionalKey(Schema.String),
   conventionalLabel: Schema.optionalKey(Schema.String),
   decorations: Schema.optionalKey(
-    Schema.mutable(Schema.Array(Schema.Literals(['blocking', 'non-blocking', 'if-minor']))),
+    Schema.mutable(Schema.Array(Schema.Literals(["blocking", "non-blocking", "if-minor"]))),
   ),
   prUrl: Schema.optionalKey(Schema.String),
   prNumber: Schema.optionalKey(Schema.Finite),
   prTitle: Schema.optionalKey(Schema.String),
   prRepo: Schema.optionalKey(Schema.String),
-  diffScope: Schema.optionalKey(Schema.Literals(['layer', 'full-stack'])),
+  diffScope: Schema.optionalKey(Schema.Literals(["layer", "full-stack"])),
 });
 
 /** Decodes an unknown persisted document annotation, discarding mismatch details. */

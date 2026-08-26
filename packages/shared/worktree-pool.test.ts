@@ -4,8 +4,8 @@ import type { PRMetadata } from "./pr-types";
 import { createWorktreePool } from "./worktree-pool";
 
 interface FakeRuntimeResult {
-	readonly runtime: ReviewGitRuntime;
-	readonly commands: string[][];
+  readonly runtime: ReviewGitRuntime;
+  readonly commands: string[][];
 }
 
 function fakeRuntime(): FakeRuntimeResult {
@@ -15,7 +15,9 @@ function fakeRuntime(): FakeRuntimeResult {
       commands.push(args);
       return { stdout: "", stderr: "", exitCode: 0 };
     },
-    async readTextFile() { return null; },
+    async readTextFile() {
+      return null;
+    },
   };
   return { runtime, commands };
 }
@@ -39,26 +41,50 @@ function makeMetadata(number: number, baseBranch = "main"): PRMetadata {
 
 describe("worktree-pool", () => {
   test("resolve returns undefined for unknown PR", () => {
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: true,
+    });
     expect(pool.resolve("https://github.com/acme/widgets/pull/99")).toBeUndefined();
   });
 
   test("resolve returns path for ready entry", () => {
-    const initial = { path: "/tmp/session/pool/pr-3", prUrl: "https://github.com/acme/widgets/pull/3", number: 3, ready: true };
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true }, initial);
+    const initial = {
+      path: "/tmp/session/pool/pr-3",
+      prUrl: "https://github.com/acme/widgets/pull/3",
+      number: 3,
+      ready: true,
+    };
+    const pool = createWorktreePool(
+      { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
+      initial,
+    );
     expect(pool.resolve("https://github.com/acme/widgets/pull/3")).toBe("/tmp/session/pool/pr-3");
   });
 
   test("has returns true for existing entry", () => {
-    const initial = { path: "/tmp/session/pool/pr-3", prUrl: "https://github.com/acme/widgets/pull/3", number: 3, ready: true };
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true }, initial);
+    const initial = {
+      path: "/tmp/session/pool/pr-3",
+      prUrl: "https://github.com/acme/widgets/pull/3",
+      number: 3,
+      ready: true,
+    };
+    const pool = createWorktreePool(
+      { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
+      initial,
+    );
     expect(pool.has("https://github.com/acme/widgets/pull/3")).toBe(true);
     expect(pool.has("https://github.com/acme/widgets/pull/99")).toBe(false);
   });
 
   test("ensure creates worktree on first call", async () => {
     const { runtime, commands } = fakeRuntime();
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: true,
+    });
 
     const entry = await pool.ensure(runtime, makeMetadata(5));
 
@@ -71,12 +97,22 @@ describe("worktree-pool", () => {
     expect(commands[0]).toEqual(["fetch", "origin", "--", "main"]);
     expect(commands[1][0]).toBe("cat-file"); // ensureObjectAvailable check
     expect(commands[2]).toEqual(["fetch", "origin", "--", "refs/pull/5/head"]);
-    expect(commands[3]).toEqual(["worktree", "add", "--detach", "/tmp/session/pool/pr-5", "FETCH_HEAD"]);
+    expect(commands[3]).toEqual([
+      "worktree",
+      "add",
+      "--detach",
+      "/tmp/session/pool/pr-5",
+      "FETCH_HEAD",
+    ]);
   });
 
   test("ensure returns cached entry on second call", async () => {
     const { runtime, commands } = fakeRuntime();
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: true,
+    });
 
     await pool.ensure(runtime, makeMetadata(5));
     const commandCountAfterFirst = commands.length;
@@ -88,7 +124,11 @@ describe("worktree-pool", () => {
 
   test("ensure creates separate entries for different PRs", async () => {
     const { runtime } = fakeRuntime();
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: true,
+    });
 
     const a = await pool.ensure(runtime, makeMetadata(3));
     const b = await pool.ensure(runtime, makeMetadata(4, "feature/pr-3"));
@@ -101,8 +141,16 @@ describe("worktree-pool", () => {
 
   test("cross-repo pool returns matching entry", async () => {
     const { runtime } = fakeRuntime();
-    const initial = { path: "/tmp/session/pool/pr-3", prUrl: "https://github.com/acme/widgets/pull/3", number: 3, ready: true };
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false }, initial);
+    const initial = {
+      path: "/tmp/session/pool/pr-3",
+      prUrl: "https://github.com/acme/widgets/pull/3",
+      number: 3,
+      ready: true,
+    };
+    const pool = createWorktreePool(
+      { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false },
+      initial,
+    );
 
     const entry = await pool.ensure(runtime, makeMetadata(3));
     expect(entry.path).toBe("/tmp/session/pool/pr-3");
@@ -110,22 +158,42 @@ describe("worktree-pool", () => {
 
   test("cross-repo pool rejects different PR", async () => {
     const { runtime } = fakeRuntime();
-    const initial = { path: "/tmp/session/pool/pr-3", prUrl: "https://github.com/acme/widgets/pull/3", number: 3, ready: true };
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false }, initial);
+    const initial = {
+      path: "/tmp/session/pool/pr-3",
+      prUrl: "https://github.com/acme/widgets/pull/3",
+      number: 3,
+      ready: true,
+    };
+    const pool = createWorktreePool(
+      { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false },
+      initial,
+    );
 
-    await expect(pool.ensure(runtime, makeMetadata(5))).rejects.toThrow("Cross-repo pool cannot create worktrees for other PRs");
+    await expect(pool.ensure(runtime, makeMetadata(5))).rejects.toThrow(
+      "Cross-repo pool cannot create worktrees for other PRs",
+    );
   });
 
   test("cross-repo pool throws when empty", async () => {
     const { runtime } = fakeRuntime();
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: false,
+    });
 
-    await expect(pool.ensure(runtime, makeMetadata(5))).rejects.toThrow("Cross-repo pool cannot create worktrees for other PRs");
+    await expect(pool.ensure(runtime, makeMetadata(5))).rejects.toThrow(
+      "Cross-repo pool cannot create worktrees for other PRs",
+    );
   });
 
   test("cleanup removes all entries", async () => {
     const { runtime, commands } = fakeRuntime();
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: true,
+    });
 
     await pool.ensure(runtime, makeMetadata(3));
     await pool.ensure(runtime, makeMetadata(4, "feature/pr-3"));
@@ -136,13 +204,17 @@ describe("worktree-pool", () => {
     expect(pool.has("https://github.com/acme/widgets/pull/3")).toBe(false);
     expect(pool.has("https://github.com/acme/widgets/pull/4")).toBe(false);
     // Should have called worktree remove for both
-    const removeCommands = commands.filter(c => c[0] === "worktree" && c[1] === "remove");
+    const removeCommands = commands.filter((c) => c[0] === "worktree" && c[1] === "remove");
     expect(removeCommands.length).toBe(2);
   });
 
   test("GitLab MR uses correct ref format", async () => {
     const { runtime, commands } = fakeRuntime();
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: true,
+    });
 
     const glMetadata: PRMetadata = {
       platform: "gitlab",
@@ -161,7 +233,9 @@ describe("worktree-pool", () => {
     const entry = await pool.ensure(runtime, glMetadata);
     expect(entry.path).toBe("/tmp/session/pool/pr-42");
 
-    const fetchPRHead = commands.find(c => c[0] === "fetch" && c[2] === "--" && c[3]?.includes("merge-requests"));
+    const fetchPRHead = commands.find(
+      (c) => c[0] === "fetch" && c[2] === "--" && c[3]?.includes("merge-requests"),
+    );
     expect(fetchPRHead?.[3]).toBe("refs/merge-requests/42/head");
   });
 });
@@ -171,7 +245,10 @@ describe("worktree-pool", () => {
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (err: any) => void;
-  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
   return { promise, resolve, reject };
 }
 
@@ -254,7 +331,7 @@ describe("worktree-pool seeded warmup", () => {
     expect(entry.ready).toBe(true);
     expect(pool.resolve(PR3_URL)).toBe("/tmp/session/pool/pr-3");
     // The retry ran the full creation sequence itself this time.
-    expect(commands.some(c => c[0] === "worktree" && c[1] === "add")).toBe(true);
+    expect(commands.some((c) => c[0] === "worktree" && c[1] === "add")).toBe(true);
   });
 
   test("cross-repo ensure rejects after a failed warmup — pool cannot rebuild a clone", async () => {
@@ -290,7 +367,13 @@ describe("worktree-pool seeded warmup", () => {
     const entry = await switched;
 
     expect(entry.path).toBe("/tmp/session/pool/pr-5");
-    expect(commands[commands.length - 1]).toEqual(["worktree", "add", "--detach", "/tmp/session/pool/pr-5", "FETCH_HEAD"]);
+    expect(commands[commands.length - 1]).toEqual([
+      "worktree",
+      "add",
+      "--detach",
+      "/tmp/session/pool/pr-5",
+      "FETCH_HEAD",
+    ]);
   });
 
   test("concurrent creations for different PRs never interleave their git commands", async () => {
@@ -303,9 +386,15 @@ describe("worktree-pool seeded warmup", () => {
         commands.push(args);
         return { stdout: "", stderr: "", exitCode: 0 };
       },
-      async readTextFile() { return null; },
+      async readTextFile() {
+        return null;
+      },
     };
-    const pool = createWorktreePool({ sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true });
+    const pool = createWorktreePool({
+      sessionDir: "/tmp/session",
+      repoDir: "/repo",
+      isSameRepo: true,
+    });
 
     const [a, b] = await Promise.all([
       pool.ensure(runtime, makeMetadata(3)),
@@ -317,8 +406,12 @@ describe("worktree-pool seeded warmup", () => {
 
     // PR #3's entire sequence (ending in worktree add) must complete before
     // any PR #4 command runs.
-    const firstPr4Index = commands.findIndex(c => c.join(" ").includes("pr-4") || c.join(" ").includes("refs/pull/4"));
-    const pr3AddIndex = commands.findIndex(c => c[0] === "worktree" && c[3] === "/tmp/session/pool/pr-3");
+    const firstPr4Index = commands.findIndex(
+      (c) => c.join(" ").includes("pr-4") || c.join(" ").includes("refs/pull/4"),
+    );
+    const pr3AddIndex = commands.findIndex(
+      (c) => c[0] === "worktree" && c[3] === "/tmp/session/pool/pr-3",
+    );
     expect(pr3AddIndex).toBeGreaterThanOrEqual(0);
     expect(firstPr4Index).toBeGreaterThan(pr3AddIndex);
   });

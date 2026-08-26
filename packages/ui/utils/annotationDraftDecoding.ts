@@ -2,24 +2,12 @@ import type {
   SourceBackedDocumentDraftData,
   SourceBackedDraftSourceSaveCapability,
   SourceBackedSavedFileChangeDraftData,
-} from '@plannotator/shared/draft';
-import { SourceSaveCapabilitySchema } from '@plannotator/shared/source-save';
-import { Option, Schema } from 'effect';
-import {
-  type Annotation,
-  type CodeAnnotation,
-  type ImageAttachment,
-} from '../types';
-import {
-  decodeAnnotation,
-  decodeCodeAnnotation,
-  decodeImageAttachment,
-} from './annotationSchemas';
-import {
-  decodeLegacyShareData,
-  fromShareable,
-  parseShareableImages,
-} from './sharing';
+} from "@plannotator/shared/draft";
+import { SourceSaveCapabilitySchema } from "@plannotator/shared/source-save";
+import { Option, Schema } from "effect";
+import { type Annotation, type CodeAnnotation, type ImageAttachment } from "../types";
+import { decodeAnnotation, decodeCodeAnnotation, decodeImageAttachment } from "./annotationSchemas";
+import { decodeLegacyShareData, fromShareable, parseShareableImages } from "./sharing";
 
 const SavedFileChangeInputSchema = Schema.Struct({
   key: Schema.String,
@@ -155,9 +143,7 @@ function readSavedFileChange<Input>(
   };
 }
 
-function readSourceBackedDocument<Input>(
-  value: Input,
-): SourceBackedDocumentDraftData | null {
+function readSourceBackedDocument<Input>(value: Input): SourceBackedDocumentDraftData | null {
   const decoded = Option.getOrNull(decodeSourceBackedDocumentInput(value));
   if (!decoded) return null;
   const sourceSave = readSourceSaveCapability(decoded.sourceSave);
@@ -174,9 +160,7 @@ function readSourceBackedDocument<Input>(
   };
 }
 
-function readSourceBackedDocuments<Input>(
-  value: Input,
-): SourceBackedDocumentDraftData[] | null {
+function readSourceBackedDocuments<Input>(value: Input): SourceBackedDocumentDraftData[] | null {
   const items = readDraftItems(value);
   if (!items) return null;
   const documents: SourceBackedDocumentDraftData[] = [];
@@ -187,9 +171,7 @@ function readSourceBackedDocuments<Input>(
   return documents;
 }
 
-function readSavedFileChanges<Input>(
-  value: Input,
-): SourceBackedSavedFileChangeDraftData[] | null {
+function readSavedFileChanges<Input>(value: Input): SourceBackedSavedFileChangeDraftData[] | null {
   const items = readDraftItems(value);
   if (!items) return null;
   const changes: SourceBackedSavedFileChangeDraftData[] = [];

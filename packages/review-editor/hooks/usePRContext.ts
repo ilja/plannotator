@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import type { PRContext, PRMetadata } from '@plannotator/shared/pr-types';
-import { decodePRContextError, decodePRContextResponse } from '../utils/pr-context-response';
+import { useState, useRef, useCallback, useEffect } from "react";
+import type { PRContext, PRMetadata } from "@plannotator/shared/pr-types";
+import { decodePRContextError, decodePRContextResponse } from "../utils/pr-context-response";
 
 /** Read and validate one `/api/pr-context` response before updating hook state. */
 export async function readPRContextResponse(res: Response): Promise<PRContext> {
@@ -43,14 +43,14 @@ export function usePRContext(prMetadata: PRMetadata | null) {
     setError(null);
 
     try {
-      const res = await fetch('/api/pr-context');
+      const res = await fetch("/api/pr-context");
       if (requestUrl !== lastUrl.current) return;
       const context = await readPRContextResponse(res);
       if (requestUrl !== lastUrl.current) return;
       setPRContext(context);
     } catch (err) {
       if (requestUrl !== lastUrl.current) return;
-      const message = err instanceof Error ? err.message : 'Failed to load PR context';
+      const message = err instanceof Error ? err.message : "Failed to load PR context";
       setError(message);
       fetched.current = false;
     } finally {

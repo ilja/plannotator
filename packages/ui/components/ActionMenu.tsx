@@ -1,12 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 
 interface ActionMenuProps {
   className?: string;
   panelClassName?: string;
-  renderTrigger: (props: {
-    isOpen: boolean;
-    toggleMenu: () => void;
-  }) => React.ReactNode;
+  renderTrigger: (props: { isOpen: boolean; toggleMenu: () => void }) => React.ReactNode;
   children: (props: { closeMenu: () => void }) => React.ReactNode;
 }
 
@@ -30,28 +27,33 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setIsOpen(false);
       }
     };
 
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen]);
 
   return (
-    <div ref={menuRef} className={className ? `relative ${className}` : 'relative'}>
+    <div ref={menuRef} className={className ? `relative ${className}` : "relative"}>
       {renderTrigger({
         isOpen,
-        toggleMenu: () => setIsOpen(open => !open),
+        toggleMenu: () => setIsOpen((open) => !open),
       })}
 
       {isOpen && (
-        <div className={panelClassName ?? 'absolute top-full right-0 mt-1 w-56 rounded-lg border border-border bg-popover py-1 shadow-xl z-[70]'}>
+        <div
+          className={
+            panelClassName ??
+            "absolute top-full right-0 mt-1 w-56 rounded-lg border border-border bg-popover py-1 shadow-xl z-[70]"
+          }
+        >
           {children({ closeMenu: () => setIsOpen(false) })}
         </div>
       )}
@@ -91,9 +93,7 @@ export const ActionMenuItem: React.FC<ActionMenuItemProps> = ({
   </button>
 );
 
-export const ActionMenuDivider: React.FC = () => (
-  <div className="my-1 border-t border-border" />
-);
+export const ActionMenuDivider: React.FC = () => <div className="my-1 border-t border-border" />;
 
 export const ActionMenuSectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

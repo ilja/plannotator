@@ -1,11 +1,16 @@
-import { Option, Schema } from 'effect';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { storage } from '../utils/storage';
-import { BUILT_IN_THEMES, isKnownThemeId, resolveAppliedThemeMode, type ThemeInfo } from '../utils/themeRegistry';
+import { Option, Schema } from "effect";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { storage } from "../utils/storage";
+import {
+  BUILT_IN_THEMES,
+  isKnownThemeId,
+  resolveAppliedThemeMode,
+  type ThemeInfo,
+} from "../utils/themeRegistry";
 
-export type Mode = 'dark' | 'light' | 'system';
+export type Mode = "dark" | "light" | "system";
 
-const decodeMode = Schema.decodeUnknownOption(Schema.Literals(['dark', 'light', 'system']));
+const decodeMode = Schema.decodeUnknownOption(Schema.Literals(["dark", "light", "system"]));
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 type ThemeProviderState = {
@@ -14,7 +19,7 @@ type ThemeProviderState = {
   setTheme: (mode: Mode) => void;
   mode: Mode;
   setMode: (mode: Mode) => void;
-  resolvedMode: 'dark' | 'light';
+  resolvedMode: "dark" | "light";
   // Color theme (palette)
   colorTheme: string;
   setColorTheme: (theme: string) => void;
@@ -22,42 +27,45 @@ type ThemeProviderState = {
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState>({
-  theme: 'dark',
+  theme: "dark",
   setTheme: () => null,
-  mode: 'dark',
+  mode: "dark",
   setMode: () => null,
-  resolvedMode: 'dark',
-  colorTheme: 'plannotator',
+  resolvedMode: "dark",
+  colorTheme: "plannotator",
   setColorTheme: () => null,
   availableThemes: BUILT_IN_THEMES,
 });
 
 /** Resolve the class string for a theme + mode combination */
-function resolveThemeClasses(themeId: string, resolvedMode: 'dark' | 'light'): string {
+function resolveThemeClasses(themeId: string, resolvedMode: "dark" | "light"): string {
   const appliedMode = resolveAppliedThemeMode(themeId, resolvedMode);
-  return `theme-${themeId}${appliedMode === 'light' ? ' light' : ''}`;
+  return `theme-${themeId}${appliedMode === "light" ? " light" : ""}`;
 }
 
 /** Sync theme classes on <html> without stripping non-theme classes (e.g. transitions-ready). */
-function applyThemeClasses(themeId: string, effectiveMode: 'dark' | 'light'): void {
+function applyThemeClasses(themeId: string, effectiveMode: "dark" | "light"): void {
   const el = document.documentElement;
   const themeClass = `theme-${themeId}`;
-  const wantLight = resolveThemeClasses(themeId, effectiveMode).includes(' light');
+  const wantLight = resolveThemeClasses(themeId, effectiveMode).includes(" light");
 
-  if (el.classList.contains(themeClass) && el.classList.contains('light') === wantLight) return;
+  if (el.classList.contains(themeClass) && el.classList.contains("light") === wantLight) return;
 
   for (const cls of Array.from(el.classList)) {
-    if (cls.startsWith('theme-')) el.classList.remove(cls);
+    if (cls.startsWith("theme-")) el.classList.remove(cls);
   }
-  el.classList.remove('light');
+  el.classList.remove("light");
 
   el.classList.add(themeClass);
-  if (wantLight) el.classList.add('light');
+  if (wantLight) el.classList.add("light");
 }
 
 /** Read system preference synchronously */
 function getSystemIsLight(): boolean {
-  return globalThis.window !== undefined && globalThis.matchMedia('(prefers-color-scheme: light)').matches;
+  return (
+    globalThis.window !== undefined &&
+    globalThis.matchMedia("(prefers-color-scheme: light)").matches
+  );
 }
 
 interface ThemeProviderProps {
@@ -70,10 +78,10 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'dark',
-  defaultColorTheme = 'plannotator',
-  storageKey = 'plannotator-theme',
-  colorThemeStorageKey = 'plannotator-color-theme',
+  defaultTheme = "dark",
+  defaultColorTheme = "plannotator",
+  storageKey = "plannotator-theme",
+  colorThemeStorageKey = "plannotator-color-theme",
 }: ThemeProviderProps) {
   const [mode, setModeState] = useState<Mode>(() => {
     const stored = Option.getOrUndefined(decodeMode(storage.getItem(storageKey)));
@@ -88,7 +96,8 @@ export function ThemeProvider({
   const [systemIsLight, setSystemIsLight] = useState(getSystemIsLight);
 
   // Compute resolved mode once — consumers use this instead of re-querying matchMedia
-  const resolvedMode: 'dark' | 'light' = mode === 'system' ? (systemIsLight ? 'light' : 'dark') : mode;
+  const resolvedMode: "dark" | "light" =
+    mode === "system" ? (systemIsLight ? "light" : "dark") : mode;
 
   // [P3 fix] Apply theme class synchronously during initialization to prevent
   // flash of unstyled content. CSS tokens live under .theme-* selectors, so
@@ -106,57 +115,62 @@ export function ThemeProvider({
   // transition rule from firing during initial load.
   useEffect(() => {
     requestAnimationFrame(() => {
-      document.documentElement.classList.add('transitions-ready');
+      document.documentElement.classList.add("transitions-ready");
     });
   }, []);
 
   // [P2 fix] Listen for system theme changes AND re-read current value when
   // entering system mode (OS may have changed while pinned to explicit mode)
   useEffect(() => {
-    if (mode !== 'system') return;
+    if (mode !== "system") return;
 
     // Sync immediately — OS preference may have changed since we last checked
     setSystemIsLight(getSystemIsLight());
 
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
     const handleChange = () => setSystemIsLight(mediaQuery.matches);
 
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [mode]);
 
-  const setMode = useCallback((newMode: Mode) => {
-    storage.setItem(storageKey, newMode);
-    setModeState(newMode);
-  }, [storageKey]);
-
-  const setColorTheme = useCallback((newTheme: string) => {
-    storage.setItem(colorThemeStorageKey, newTheme);
-    setColorThemeState(newTheme);
-  }, [colorThemeStorageKey]);
-
-  const value = useMemo<ThemeProviderState>(() => ({
-    theme: mode,
-    setTheme: setMode,
-    mode,
-    setMode,
-    resolvedMode,
-    colorTheme,
-    setColorTheme,
-    availableThemes: BUILT_IN_THEMES,
-  }), [mode, resolvedMode, colorTheme, setMode, setColorTheme]);
-
-  return (
-    <ThemeProviderContext.Provider value={value}>
-      {children}
-    </ThemeProviderContext.Provider>
+  const setMode = useCallback(
+    (newMode: Mode) => {
+      storage.setItem(storageKey, newMode);
+      setModeState(newMode);
+    },
+    [storageKey],
   );
+
+  const setColorTheme = useCallback(
+    (newTheme: string) => {
+      storage.setItem(colorThemeStorageKey, newTheme);
+      setColorThemeState(newTheme);
+    },
+    [colorThemeStorageKey],
+  );
+
+  const value = useMemo<ThemeProviderState>(
+    () => ({
+      theme: mode,
+      setTheme: setMode,
+      mode,
+      setMode,
+      resolvedMode,
+      colorTheme,
+      setColorTheme,
+      availableThemes: BUILT_IN_THEMES,
+    }),
+    [mode, resolvedMode, colorTheme, setMode, setColorTheme],
+  );
+
+  return <ThemeProviderContext.Provider value={value}>{children}</ThemeProviderContext.Provider>;
 }
 
 export const useTheme = () => {
   const context = useContext(ThemeProviderContext);
   if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
 };

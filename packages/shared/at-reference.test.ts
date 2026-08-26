@@ -84,7 +84,10 @@ describe("resolveAtReference", () => {
   // Inputs without @ have no fallback, just a single existence check.
   test("handles non-@ inputs with a single check", () => {
     let calls = 0;
-    const exists = (p: string) => { calls++; return p === "plain.md"; };
+    const exists = (p: string) => {
+      calls++;
+      return p === "plain.md";
+    };
     expect(resolveAtReference("plain.md", exists)).toBe("plain.md");
     expect(calls).toBe(1);
   });
@@ -92,7 +95,10 @@ describe("resolveAtReference", () => {
   // Non-@ input that doesn't resolve returns null without a retry.
   test("returns null for non-@ input that doesn't resolve", () => {
     let calls = 0;
-    const exists = (_p: string) => { calls++; return false; };
+    const exists = (_p: string) => {
+      calls++;
+      return false;
+    };
     expect(resolveAtReference("missing.md", exists)).toBeNull();
     expect(calls).toBe(1);
   });

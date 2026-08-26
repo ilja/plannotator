@@ -1,5 +1,5 @@
-import { Option, Schema } from 'effect';
-import type { EditorAnnotation } from '@plannotator/shared/types';
+import { Option, Schema } from "effect";
+import type { EditorAnnotation } from "@plannotator/shared/types";
 
 const EditorAnnotationSchema = Schema.Struct({
   id: Schema.String,
@@ -18,7 +18,9 @@ const decodeEnvelope = Schema.decodeUnknownOption(EditorAnnotationsEnvelopeSchem
 const decodeRecord = Schema.decodeUnknownOption(RecordSchema);
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
-function decodeEditorAnnotation(value: Schema.Schema.Type<typeof Schema.Unknown>): EditorAnnotation | undefined {
+function decodeEditorAnnotation(
+  value: Schema.Schema.Type<typeof Schema.Unknown>,
+): EditorAnnotation | undefined {
   const annotation = Option.getOrUndefined(decodeAnnotation(value));
   if (!annotation) return undefined;
 

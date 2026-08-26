@@ -7,12 +7,7 @@ import {
   createVcsApi,
   resolveInitialDiffType,
 } from "@plannotator/shared/vcs-core";
-import {
-  detectP4Workspace,
-  getP4Context,
-  getP4FileContentsForDiff,
-  runP4Diff,
-} from "./p4";
+import { detectP4Workspace, getP4Context, getP4FileContentsForDiff, runP4Diff } from "./p4";
 import { runtime as gitRuntime } from "./git";
 import { runtime as jjRuntime } from "./jj";
 
@@ -38,11 +33,7 @@ const p4Provider: VcsProvider = {
   },
 };
 
-const api = createVcsApi([
-  createJjProvider(jjRuntime),
-  createGitProvider(gitRuntime),
-  p4Provider,
-]);
+const api = createVcsApi([createJjProvider(jjRuntime), createGitProvider(gitRuntime), p4Provider]);
 
 export const {
   detectVcs,

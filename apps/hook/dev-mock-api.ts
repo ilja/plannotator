@@ -4,11 +4,11 @@
  * Two document versions are wired up for local annotation development without
  * running a real hook session.
  */
-import type { Plugin } from 'vite';
-import { existsSync, readFileSync, statSync } from 'fs';
-import { resolve } from 'path';
-import { isCodeFilePath } from '../../packages/shared/code-file';
-import { preloadFile } from '@pierre/diffs/ssr';
+import type { Plugin } from "vite";
+import { existsSync, readFileSync, statSync } from "fs";
+import { resolve } from "path";
+import { isCodeFilePath } from "../../packages/shared/code-file";
+import { preloadFile } from "@pierre/diffs/ssr";
 
 // ─── Default plans (Real-time Collaboration) ─────────────────────────────
 // What every dev sees when running `bun run dev:annotation` without any flag.
@@ -230,107 +230,129 @@ const versionPlans: VersionPlanTable = {
 
 export function devMockApi(): Plugin {
   return {
-    name: 'plannotator-dev-mock-api',
+    name: "plannotator-dev-mock-api",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (req.url === '/api/hooks/status') {
-          res.setHeader('Content-Type', 'application/json');
+        if (req.url === "/api/hooks/status") {
+          res.setHeader("Content-Type", "application/json");
           try {
-            const { readImprovementHook, getImprovementHookExpectedPath } = await import('@plannotator/shared/improvement-hooks');
-            const { loadConfig } = await import('@plannotator/shared/config');
-            const { composeImproveContext } = await import('@plannotator/shared/pfm-reminder');
+            const { readImprovementHook, getImprovementHookExpectedPath } =
+              await import("@plannotator/shared/improvement-hooks");
+            const { loadConfig } = await import("@plannotator/shared/config");
+            const { composeImproveContext } = await import("@plannotator/shared/pfm-reminder");
             const config = loadConfig();
-            const hook = readImprovementHook('enterplanmode-improve');
+            const hook = readImprovementHook("enterplanmode-improve");
             const pfmEnabled = config.pfmReminder === true;
-            const composed = composeImproveContext({ pfmEnabled, improvementHookContent: hook?.content ?? null });
-            res.end(JSON.stringify({
-              pfmReminder: { enabled: pfmEnabled },
-              improvementHook: {
-                present: !!hook,
-                filePath: hook?.filePath ?? getImprovementHookExpectedPath('enterplanmode-improve'),
-                fileSize: hook?.content?.length ?? null,
-                content: hook?.content ?? null,
-              },
-              composedLength: composed?.length ?? null,
-            }));
+            const composed = composeImproveContext({
+              pfmEnabled,
+              improvementHookContent: hook?.content ?? null,
+            });
+            res.end(
+              JSON.stringify({
+                pfmReminder: { enabled: pfmEnabled },
+                improvementHook: {
+                  present: !!hook,
+                  filePath:
+                    hook?.filePath ?? getImprovementHookExpectedPath("enterplanmode-improve"),
+                  fileSize: hook?.content?.length ?? null,
+                  content: hook?.content ?? null,
+                },
+                composedLength: composed?.length ?? null,
+              }),
+            );
           } catch {
-            res.end(JSON.stringify({
-              pfmReminder: { enabled: false },
-              improvementHook: { present: false, filePath: '~/.plannotator/hooks/compound/enterplanmode-improve-hook.txt', fileSize: null, content: null },
-              composedLength: null,
-            }));
+            res.end(
+              JSON.stringify({
+                pfmReminder: { enabled: false },
+                improvementHook: {
+                  present: false,
+                  filePath: "~/.plannotator/hooks/compound/enterplanmode-improve-hook.txt",
+                  fileSize: null,
+                  content: null,
+                },
+                composedLength: null,
+              }),
+            );
           }
           return;
         }
 
-        if (req.url === '/api/config' && req.method === 'POST') {
-          let body = '';
-          req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-          req.on('end', () => {
+        if (req.url === "/api/config" && req.method === "POST") {
+          let body = "";
+          req.on("data", (chunk: Buffer) => {
+            body += chunk.toString();
+          });
+          req.on("end", () => {
             // Dev mock: accept any config patch, persist via cookie only.
             // Avoid importing @plannotator/shared/config here — that file pulls in
             // Node-only data-dir and fails to resolve under Vite's ESM loader.
-            try { JSON.parse(body); } catch {}
-            res.setHeader('Content-Type', 'application/json');
+            try {
+              JSON.parse(body);
+            } catch {}
+            res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ ok: true }));
           });
           return;
         }
 
-        if (req.url === '/api/plan') {
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({
-            plan: undefined,
-            origin: 'claude-code',
-            sharingEnabled: true,
-          }));
+        if (req.url === "/api/plan") {
+          res.setHeader("Content-Type", "application/json");
+          res.end(
+            JSON.stringify({
+              plan: undefined,
+              origin: "claude-code",
+              sharingEnabled: true,
+            }),
+          );
           return;
         }
 
-        if (req.url === '/api/plan/versions') {
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({
-            project: 'demo',
-            slug: 'auth-service-refactor',
-            versions,
-          }));
+        if (req.url === "/api/plan/versions") {
+          res.setHeader("Content-Type", "application/json");
+          res.end(
+            JSON.stringify({
+              project: "demo",
+              slug: "auth-service-refactor",
+              versions,
+            }),
+          );
           return;
         }
 
-        if (req.url?.startsWith('/api/plan/version?')) {
-          const url = new URL(req.url, 'http://localhost');
-          const v = Number(url.searchParams.get('v'));
+        if (req.url?.startsWith("/api/plan/version?")) {
+          const url = new URL(req.url, "http://localhost");
+          const v = Number(url.searchParams.get("v"));
           const plan = versionPlans[v];
           if (plan) {
-            res.setHeader('Content-Type', 'application/json');
+            res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ plan, version: v }));
           } else {
             res.statusCode = 404;
-            res.end(JSON.stringify({ error: 'Version not found' }));
+            res.end(JSON.stringify({ error: "Version not found" }));
           }
           return;
         }
 
-        if (req.url?.startsWith('/api/doc?')) {
-          const url = new URL(req.url, 'http://localhost');
-          const reqPath = url.searchParams.get('path');
+        if (req.url?.startsWith("/api/doc?")) {
+          const url = new URL(req.url, "http://localhost");
+          const reqPath = url.searchParams.get("path");
           if (!reqPath) {
             res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Missing path parameter' }));
+            res.end(JSON.stringify({ error: "Missing path parameter" }));
             return;
           }
-          const base = url.searchParams.get('base');
-          const repoRoot = resolve(import.meta.dirname, '../..');
+          const base = url.searchParams.get("base");
+          const repoRoot = resolve(import.meta.dirname, "../..");
           const resolved = resolve(base || repoRoot, reqPath);
           if (!existsSync(resolved) || statSync(resolved).isDirectory()) {
             res.statusCode = 404;
             res.end(JSON.stringify({ error: `File not found: ${reqPath}` }));
             return;
           }
-          const contents = readFileSync(resolved, 'utf-8');
-          res.setHeader('Content-Type', 'application/json');
+          const contents = readFileSync(resolved, "utf-8");
+          res.setHeader("Content-Type", "application/json");
           if (isCodeFilePath(reqPath)) {
-            const displayName = resolved.split('/').pop() || resolved;
+            const displayName = resolved.split("/").pop() || resolved;
             let prerenderedHTML: string | undefined;
             try {
               const result = await preloadFile({
@@ -338,8 +360,12 @@ export function devMockApi(): Plugin {
                 options: { disableFileHeader: true },
               });
               prerenderedHTML = result.prerenderedHTML;
-            } catch { /* fall back to client-side rendering */ }
-            res.end(JSON.stringify({ codeFile: true, contents, filepath: resolved, prerenderedHTML }));
+            } catch {
+              /* fall back to client-side rendering */
+            }
+            res.end(
+              JSON.stringify({ codeFile: true, contents, filepath: resolved, prerenderedHTML }),
+            );
           } else {
             res.end(JSON.stringify({ markdown: contents, filepath: resolved }));
           }

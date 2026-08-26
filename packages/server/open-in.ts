@@ -145,10 +145,7 @@ function revealFile(absPath: string): Promise<OpenInLaunchResult> {
  *   - editor   -> open the file itself
  *   - terminal -> open the file's parent directory
  */
-function openWithApp(
-  app: OpenInApp,
-  absPath: string,
-): Promise<OpenInLaunchResult> {
+function openWithApp(app: OpenInApp, absPath: string): Promise<OpenInLaunchResult> {
   const platform = currentPlatform();
   const target = app.kind === "terminal" ? path.dirname(absPath) : absPath;
 
@@ -194,10 +191,7 @@ function openWithApp(
  * Open a file in the given app (by catalog id). An unknown or undefined id
  * falls back to the OS default handler.
  */
-export async function openFileInApp(
-  absPath: string,
-  appId?: string,
-): Promise<OpenInLaunchResult> {
+export async function openFileInApp(absPath: string, appId?: string): Promise<OpenInLaunchResult> {
   if (!appId) {
     return openSystemDefault(absPath);
   }

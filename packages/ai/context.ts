@@ -81,7 +81,9 @@ export function buildForkPreamble(ctx: AIContext): string {
         lines.push(`Render mode: ${ctx.annotate.renderAs}`);
       }
       if (ctx.annotate.sourceConverted) {
-        lines.push("Note: this content was converted before annotation, so source line numbers may not match the original document.");
+        lines.push(
+          "Note: this content was converted before annotation, so source line numbers may not match the original document.",
+        );
       }
       lines.push("");
       lines.push(truncate(ctx.annotate.content, MAX_DOCUMENT_CHARS));
@@ -124,12 +126,8 @@ function truncate(text: string, max: number): string {
   return `${text.slice(0, max)}\n\n... [truncated for context window]`;
 }
 
-function buildCodeReviewPrompt(
-  ctx: Extract<AIContext, { mode: "code-review" }>
-): string {
-  const sections: string[] = [
-    "The user is reviewing a code diff in Plannotator.",
-  ];
+function buildCodeReviewPrompt(ctx: Extract<AIContext, { mode: "code-review" }>): string {
+  const sections: string[] = ["The user is reviewing a code diff in Plannotator."];
 
   if (ctx.review.filePath) {
     sections.push("");
@@ -159,9 +157,7 @@ function buildCodeReviewPrompt(
   return sections.join("\n");
 }
 
-function buildAnnotatePrompt(
-  ctx: Extract<AIContext, { mode: "annotate" }>
-): string {
+function buildAnnotatePrompt(ctx: Extract<AIContext, { mode: "annotate" }>): string {
   const sections: string[] = [
     "The user is annotating a markdown document in Plannotator.",
     "",
@@ -177,7 +173,9 @@ function buildAnnotatePrompt(
   }
 
   if (ctx.annotate.sourceConverted) {
-    sections.push("Note: this content was converted before annotation, so source line numbers may not match the original document.");
+    sections.push(
+      "Note: this content was converted before annotation, so source line numbers may not match the original document.",
+    );
   }
 
   sections.push("");

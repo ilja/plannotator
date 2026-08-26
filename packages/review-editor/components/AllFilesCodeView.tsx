@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getSingularPatch, processFile } from '@pierre/diffs';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getSingularPatch, processFile } from "@pierre/diffs";
 import type {
   CodeViewItem,
   CodeViewLineSelection,
@@ -9,10 +9,10 @@ import type {
   LineAnnotation,
   PostRenderPhase,
   SelectedLineRange,
-} from '@pierre/diffs';
-import { CodeView, type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
-import type { File, FileDiff } from '@pierre/diffs';
-import type { DiffTokenEventBaseProps } from '@pierre/diffs';
+} from "@pierre/diffs";
+import { CodeView, type CodeViewHandle, useStableCallback } from "@pierre/diffs/react";
+import type { File, FileDiff } from "@pierre/diffs";
+import type { DiffTokenEventBaseProps } from "@pierre/diffs";
 import type {
   CodeAnnotation,
   CodeAnnotationType,
@@ -20,30 +20,34 @@ import type {
   ConventionalLabel,
   DiffAnnotationMetadata,
   TokenAnnotationMeta,
-} from '@plannotator/ui/types';
-import { CommentPopover } from '@plannotator/ui/components/CommentPopover';
-import { usePierreTheme } from '../hooks/usePierreTheme';
-import { useIsWorkerPoolReadyOrDisabled, useWorkerPoolThemeSync } from '../workerPool';
-import type { DiffFile, AnnotationScrollTarget } from '../types';
-import { buildFileTree, getVisualFileOrder } from '../utils/buildFileTree';
-import { buildCodeNavRequest } from '../utils/buildCodeNavRequest';
-import { getDiffSelection, getLineNumberFromNode, getSideFromNode } from '../utils/diffSelection';
-import { isContentConsistentWithPatch } from '../utils/patchConsistency';
-import { loadFileContentResponse } from '../utils/file-content-response';
-import { ToolbarHost, type ToolbarHostHandle } from './ToolbarHost';
-import { FileHeader } from './FileHeader';
-import { FileCommentBanner } from './FileCommentBanner';
-import { annotationMatchesPrScope, isFileScopedAnnotation, lineRangeForAnnotation } from '../utils/annotationScope';
-import { lineAnnotationMetadata } from '../utils/annotationDisplay';
-import { InlineAnnotation } from './InlineAnnotation';
-import { detectLanguage } from '../utils/detectLanguage';
-import type { ReviewSearchMatch } from '../utils/reviewSearch';
+} from "@plannotator/ui/types";
+import { CommentPopover } from "@plannotator/ui/components/CommentPopover";
+import { usePierreTheme } from "../hooks/usePierreTheme";
+import { useIsWorkerPoolReadyOrDisabled, useWorkerPoolThemeSync } from "../workerPool";
+import type { DiffFile, AnnotationScrollTarget } from "../types";
+import { buildFileTree, getVisualFileOrder } from "../utils/buildFileTree";
+import { buildCodeNavRequest } from "../utils/buildCodeNavRequest";
+import { getDiffSelection, getLineNumberFromNode, getSideFromNode } from "../utils/diffSelection";
+import { isContentConsistentWithPatch } from "../utils/patchConsistency";
+import { loadFileContentResponse } from "../utils/file-content-response";
+import { ToolbarHost, type ToolbarHostHandle } from "./ToolbarHost";
+import { FileHeader } from "./FileHeader";
+import { FileCommentBanner } from "./FileCommentBanner";
+import {
+  annotationMatchesPrScope,
+  isFileScopedAnnotation,
+  lineRangeForAnnotation,
+} from "../utils/annotationScope";
+import { lineAnnotationMetadata } from "../utils/annotationDisplay";
+import { InlineAnnotation } from "./InlineAnnotation";
+import { detectLanguage } from "../utils/detectLanguage";
+import type { ReviewSearchMatch } from "../utils/reviewSearch";
 import {
   applyItemSearchHighlights,
   clearItemSearchHighlights,
   swapActiveSearchHighlight,
-} from '../utils/reviewSearchHighlight';
-import { createReviewGutterActionsElement, type HoveredDiffLine } from './ReviewGutterActions';
+} from "../utils/reviewSearchHighlight";
+import { createReviewGutterActionsElement, type HoveredDiffLine } from "./ReviewGutterActions";
 
 /**
  * AllFilesCodeView (migration phases P1 + P2 + P3 + P4)
@@ -145,10 +149,10 @@ import { createReviewGutterActionsElement, type HoveredDiffLine } from './Review
  */
 interface AllFilesCodeViewProps {
   files: DiffFile[];
-  diffStyle: 'split' | 'unified';
-  diffOverflow?: 'scroll' | 'wrap';
-  diffIndicators?: 'bars' | 'classic' | 'none';
-  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none';
+  diffStyle: "split" | "unified";
+  diffOverflow?: "scroll" | "wrap";
+  diffIndicators?: "bars" | "classic" | "none";
+  lineDiffType?: "word-alt" | "word" | "char" | "none";
   disableLineNumbers?: boolean;
   disableBackground?: boolean;
   expandUnchanged?: boolean;
@@ -202,7 +206,7 @@ interface AllFilesCodeViewProps {
   activeSearchMatchId?: string | null;
   activeSearchMatch?: ReviewSearchMatch | null;
   // Token code navigation (P7). Cmd/Ctrl-click a token resolves symbol defs/refs.
-  onCodeNavRequest?: (request: import('@plannotator/shared/code-nav').CodeNavRequest) => void;
+  onCodeNavRequest?: (request: import("@plannotator/shared/code-nav").CodeNavRequest) => void;
   // File-tree active-file highlight follows scroll.
   onVisibleFileChange?: (filePath: string | null) => void;
   // Only handle [/]/z/v/a/c/x keyboard nav when this surface is the active panel.
@@ -212,7 +216,7 @@ interface AllFilesCodeViewProps {
   onAttachAIContextForFile?: (
     filePath: string,
     lineNumber: number,
-    side: 'additions' | 'deletions',
+    side: "additions" | "deletions",
   ) => void;
 }
 
@@ -266,11 +270,11 @@ function projectFileAnnotations(
     .filter(
       (a) =>
         a.filePath === filePath &&
-        (a.scope ?? 'line') === 'line' &&
+        (a.scope ?? "line") === "line" &&
         annotationMatchesPrScope(a, prUrl, prDiffScope),
     )
     .map((ann) => ({
-      side: ann.side === 'new' ? ('additions' as const) : ('deletions' as const),
+      side: ann.side === "new" ? ("additions" as const) : ("deletions" as const),
       lineNumber: ann.lineEnd,
       metadata: lineAnnotationMetadata(ann),
     }));
@@ -328,11 +332,11 @@ function buildItemIdentity(
     // per item (duplicate display paths) AND per diff content (the same path
     // across a base/whitespace/PR switch carries different contents). The
     // content hash is the same one fileSetKey uses.
-    fileDiff.cacheKey = `${id}#${patchHashes[index] ?? ''}`;
+    fileDiff.cacheKey = `${id}#${patchHashes[index] ?? ""}`;
     // Seed annotations at build time so the first render (and any remount via
     // fileSetKey) already paints existing annotations without an extra update.
     const fileAnnotations = projectFileAnnotations(annotations, file.path, prUrl, prDiffScope);
-    items.push({ id, type: 'diff', fileDiff, version: 0, annotations: fileAnnotations });
+    items.push({ id, type: "diff", fileDiff, version: 0, annotations: fileAnnotations });
     // First occurrence of a path wins the canonical lookup so the file tree
     // (keyed by path) navigates to the primary item for that path.
     if (!filePathToItemId.has(file.path)) {
@@ -397,7 +401,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   stageError,
   prUrl,
   prDiffScope,
-  searchQuery = '',
+  searchQuery = "",
   searchMatches = [],
   activeSearchMatchId = null,
   activeSearchMatch = null,
@@ -444,7 +448,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // File-scoped comment popover anchor (P3). Anchored by the FileHeader button
   // ref handed through the render slot — NOT by querying the recycled/portaled
   // header DOM (CodeView reuses header elements, so a DOM lookup is unreliable).
-  const [fileCommentAnchor, setFileCommentAnchor] = useState<{ el: HTMLElement; filePath: string } | null>(null);
+  const [fileCommentAnchor, setFileCommentAnchor] = useState<{
+    el: HTMLElement;
+    filePath: string;
+  } | null>(null);
   // Per-file-comment-button ref map so the `c` keyboard shortcut can anchor the
   // popover without DOM querying. Eagerly populated/cleared by FileHeader's
   // fileCommentButtonRef callback as header slots mount/unmount (clicking also
@@ -494,7 +501,15 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // files-identity change.
   const patchHashes = useMemo(() => files.map((f) => hashString(f.patch)), [files]);
   const identity = useMemo<ItemIdentity>(
-    () => buildItemIdentity(files, visualOrder, annotationsRef.current, prUrl, prDiffScope, patchHashes),
+    () =>
+      buildItemIdentity(
+        files,
+        visualOrder,
+        annotationsRef.current,
+        prUrl,
+        prDiffScope,
+        patchHashes,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [files, visualOrder, prUrl, prDiffScope, patchHashes],
   );
@@ -508,22 +523,20 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // full-stack, same file set) remounts and re-seeds annotations through the
     // current scope filter — the incremental sync bails on an unchanged
     // annotations ref and can't otherwise detect the filter change.
-    () => `${prUrl ?? ''}:${prDiffScope ?? ''}:${files.length}:${files.map((f, i) => `${f.path}#${patchHashes[i]}`).join('|')}`,
+    () =>
+      `${prUrl ?? ""}:${prDiffScope ?? ""}:${files.length}:${files.map((f, i) => `${f.path}#${patchHashes[i]}`).join("|")}`,
     [files, patchHashes, prUrl, prDiffScope],
   );
 
   // Visual-order list of file paths (for [/] stepping). Derived from items so it
   // matches CodeView's rendered order exactly.
-  const orderedItemIds = useMemo(
-    () => identity.items.map((item) => item.id),
-    [identity.items],
-  );
+  const orderedItemIds = useMemo(() => identity.items.map((item) => item.id), [identity.items]);
 
   // Path -> DiffFile lookup for the on-demand content augmentation (P5). The
   // post-render callback resolves item.id -> path -> DiffFile to know which
   // file's patch/oldPath to fetch + reparse.
   const activePatch = useMemo(
-    () => (activeFilePath ? files.find((f) => f.path === activeFilePath)?.patch ?? '' : ''),
+    () => (activeFilePath ? (files.find((f) => f.path === activeFilePath)?.patch ?? "") : ""),
     [files, activeFilePath],
   );
 
@@ -665,7 +678,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
         | LineAnnotation<DiffAnnotationMetadata>,
       item: CodeViewItem<DiffAnnotationMetadata>,
     ) => {
-      if (!('side' in annotation) || item.type !== 'diff') return null;
+      if (!("side" in annotation) || item.type !== "diff") return null;
       if (!annotation.metadata) return null;
       const filePath = itemIdToFilePath.get(item.id);
       return (
@@ -695,7 +708,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       const restoreId = filePathToItemId.get(previousVisible);
       if (restoreId != null) {
         requestAnimationFrame(() => {
-          viewerRef.current?.scrollTo({ type: 'item', id: restoreId, align: 'start' });
+          viewerRef.current?.scrollTo({ type: "item", id: restoreId, align: "start" });
         });
       }
     }
@@ -755,7 +768,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     if (!handle.updateItem(item)) return;
 
     if (itemTop != null && itemTop < viewer.getScrollTop()) {
-      viewer.scrollTo({ type: 'item', id: itemId, align: 'start' });
+      viewer.scrollTo({ type: "item", id: itemId, align: "start" });
     }
   });
 
@@ -789,7 +802,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     }
     if (collapsed) {
       const first = identity.items[0]?.id;
-      if (first) handle.getInstance()?.scrollTo({ type: 'item', id: first, align: 'start' });
+      if (first) handle.getInstance()?.scrollTo({ type: "item", id: first, align: "start" });
     }
   });
 
@@ -798,9 +811,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     if (handle == null) return;
     // If anything is open, collapse all; otherwise expand all. Computed from
     // live item state so it stays correct after manual per-file toggles.
-    const anyExpanded = identity.items.some(
-      ({ id }) => handle.getItem(id)?.collapsed !== true,
-    );
+    const anyExpanded = identity.items.some(({ id }) => handle.getItem(id)?.collapsed !== true);
     setAllItemsCollapsed(anyExpanded);
     setAllCollapsed(anyExpanded);
   });
@@ -837,7 +848,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const augmentRef = useRef<
     Map<
       string,
-      { status: 'pending' | 'done' | 'error'; controller: AbortController; generation: string }
+      { status: "pending" | "done" | "error"; controller: AbortController; generation: string }
     >
   >(new Map());
   // reviewBase / itemIdToFile / fileSetKey read through refs so the stable
@@ -878,163 +889,173 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     for (const apply of applies) apply();
   }, []);
 
-  const queueAugmentApply = useCallback((itemId: string, apply: () => void) => {
-    pendingAugmentAppliesRef.current.set(itemId, apply);
-    if (augmentFlushTimerRef.current == null) {
-      augmentFlushTimerRef.current = setTimeout(flushAugmentApplies, AUGMENT_APPLY_IDLE_MS);
-    }
-  }, [flushAugmentApplies]);
+  const queueAugmentApply = useCallback(
+    (itemId: string, apply: () => void) => {
+      pendingAugmentAppliesRef.current.set(itemId, apply);
+      if (augmentFlushTimerRef.current == null) {
+        augmentFlushTimerRef.current = setTimeout(flushAugmentApplies, AUGMENT_APPLY_IDLE_MS);
+      }
+    },
+    [flushAugmentApplies],
+  );
 
-  useEffect(() => () => {
-    if (augmentFlushTimerRef.current != null) clearTimeout(augmentFlushTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (augmentFlushTimerRef.current != null) clearTimeout(augmentFlushTimerRef.current);
+    },
+    [],
+  );
 
   // Fetch full file contents for one item, reparse with processFile, and swap
   // the item's fileDiff in place so hunk expansion (expand-unchanged gutter
   // controls) works against the COMPLETE file. Mirrors LazyFileDiff's per-mount
   // fetch, but updates the existing CodeView item instead of mounting a fresh
   // FileDiff — so CodeView's own virtualization + element pool stay in charge.
-  const augmentItem = useCallback((itemId: string) => {
-    // NOTE: deliberately no viewerRef check here. The FIRST onPostRender wave
-    // (every initially visible item) fires synchronously inside CodeView's seed
-    // layout effect, which runs BEFORE useImperativeHandle assigns the handle —
-    // so viewerRef.current is still null at that point. Bailing on a null
-    // handle would make the initial window depend entirely on CodeView's
-    // second (rAF `fitPerfectly`) render wave for augmentation — a library
-    // implementation detail we'd rather not lean on. The handle is only needed
-    // at fetch RESOLUTION, where it is re-read fresh from the ref.
-    const augmentState = augmentRef.current;
-    const generation = fileSetKeyRef.current;
-    // One fetch per item PER DIFF: a same-generation entry ('pending' or
-    // resolved) means do nothing — an item re-entering the rendered window
-    // re-fires onPostRender, and this guard is what prevents the fetch storm.
-    // An entry from a PREVIOUS diff (stale generation) does not count: abort it
-    // and fetch fresh for the new diff's content.
-    const existing = augmentState.get(itemId);
-    if (existing) {
-      if (existing.generation === generation) return;
-      existing.controller.abort();
-    }
+  const augmentItem = useCallback(
+    (itemId: string) => {
+      // NOTE: deliberately no viewerRef check here. The FIRST onPostRender wave
+      // (every initially visible item) fires synchronously inside CodeView's seed
+      // layout effect, which runs BEFORE useImperativeHandle assigns the handle —
+      // so viewerRef.current is still null at that point. Bailing on a null
+      // handle would make the initial window depend entirely on CodeView's
+      // second (rAF `fitPerfectly`) render wave for augmentation — a library
+      // implementation detail we'd rather not lean on. The handle is only needed
+      // at fetch RESOLUTION, where it is re-read fresh from the ref.
+      const augmentState = augmentRef.current;
+      const generation = fileSetKeyRef.current;
+      // One fetch per item PER DIFF: a same-generation entry ('pending' or
+      // resolved) means do nothing — an item re-entering the rendered window
+      // re-fires onPostRender, and this guard is what prevents the fetch storm.
+      // An entry from a PREVIOUS diff (stale generation) does not count: abort it
+      // and fetch fresh for the new diff's content.
+      const existing = augmentState.get(itemId);
+      if (existing) {
+        if (existing.generation === generation) return;
+        existing.controller.abort();
+      }
 
-    // Resolve the file by item id (NOT path) so duplicate display paths each
-    // augment with their own DiffFile content.
-    const file = itemIdToFileRef.current.get(itemId);
-    if (file == null) return;
+      // Resolve the file by item id (NOT path) so duplicate display paths each
+      // augment with their own DiffFile content.
+      const file = itemIdToFileRef.current.get(itemId);
+      if (file == null) return;
 
-    const controller = new AbortController();
-    augmentState.set(itemId, { status: 'pending', controller, generation });
+      const controller = new AbortController();
+      augmentState.set(itemId, { status: "pending", controller, generation });
 
-    // A resolution stage is stale when its fetch was aborted (unmount / diff
-    // switch) or the diff generation moved on while the response was in flight
-    // (abort() is a no-op on an already-settled fetch, and the remounted
-    // CodeView reuses path-derived item ids — without the generation check the
-    // OLD diff's content would be written into the NEW diff's item). Stale
-    // stages must not touch augmentState either: it now belongs to the new
-    // generation.
-    const isStale = () =>
-      controller.signal.aborted || fileSetKeyRef.current !== generation;
+      // A resolution stage is stale when its fetch was aborted (unmount / diff
+      // switch) or the diff generation moved on while the response was in flight
+      // (abort() is a no-op on an already-settled fetch, and the remounted
+      // CodeView reuses path-derived item ids — without the generation check the
+      // OLD diff's content would be written into the NEW diff's item). Stale
+      // stages must not touch augmentState either: it now belongs to the new
+      // generation.
+      const isStale = () => controller.signal.aborted || fileSetKeyRef.current !== generation;
 
-    // Workspace-prefixed paths are passed through verbatim — /api/file-content
-    // resolves the prefix back to the owning repo (same contract LazyFileDiff /
-    // DiffViewer rely on).
-    const params = new URLSearchParams({ path: file.path });
-    if (file.oldPath) params.set('oldPath', file.oldPath);
-    const base = reviewBaseRef.current;
-    if (base) params.set('base', base);
+      // Workspace-prefixed paths are passed through verbatim — /api/file-content
+      // resolves the prefix back to the owning repo (same contract LazyFileDiff /
+      // DiffViewer rely on).
+      const params = new URLSearchParams({ path: file.path });
+      if (file.oldPath) params.set("oldPath", file.oldPath);
+      const base = reviewBaseRef.current;
+      if (base) params.set("base", base);
 
-    fetch(`/api/file-content?${params}`, { signal: controller.signal })
-      .then(loadFileContentResponse)
-      .then((data) => {
-        if (isStale()) return;
-        if (!data || (data.oldContent == null && data.newContent == null)) {
-          // No content available (e.g. demo mode / binary): mark done so we do
-          // not retry on every subsequent render. The raw-patch context still
-          // shows; there is just nothing to expand.
-          augmentState.set(itemId, { status: 'done', controller, generation });
-          return;
-        }
-
-        // Stale-content guard: the file may have changed on disk since this
-        // diff was captured (an agent editing/committing mid-review is normal
-        // usage). Augmenting with contents that no longer reconcile with the
-        // patch produces an internally inconsistent FileDiffMetadata — Pierre's
-        // virtualization then fails layout estimation for the item ("trailing
-        // context mismatch", content disappearing while scrolling). Keep the
-        // raw-patch view for this file instead; a diff refresh re-augments.
-        if (!isContentConsistentWithPatch(file.patch, data.oldContent, data.newContent)) {
-          console.warn(
-            `AllFilesCodeView: skipping full-content expansion for ${file.path} — file changed since the diff was captured`,
-          );
-          augmentState.set(itemId, { status: 'done', controller, generation });
-          return;
-        }
-
-        let augmented: FileDiffMetadata;
-        try {
-          const result = processFile(file.patch, {
-            oldFile:
-              data.oldContent != null
-                ? { name: file.oldPath || file.path, contents: data.oldContent }
-                : undefined,
-            newFile:
-              data.newContent != null ? { name: file.path, contents: data.newContent } : undefined,
-          });
-          if (!result) {
-            augmentState.set(itemId, { status: 'done', controller, generation });
-            return;
-          }
-          augmented = result;
-        } catch {
-          augmentState.set(itemId, { status: 'error', controller, generation });
-          return;
-        }
-
-        if (isStale()) return;
-
-        // Defer the item mutation to scroll-idle (see queueAugmentApply) —
-        // landing it mid-gesture chops scrolling and can kill momentum via
-        // CodeView's anchor-correcting scrollTo. All staleness checks re-run
-        // at apply time: the queue can hold entries across aborts and diff
-        // switches.
-        queueAugmentApply(itemId, () => {
+      fetch(`/api/file-content?${params}`, { signal: controller.signal })
+        .then(loadFileContentResponse)
+        .then((data) => {
           if (isStale()) return;
-          const liveHandle = viewerRef.current;
-          const item = liveHandle?.getItem(itemId);
-          // The item may have been torn down between fetch start and apply;
-          // belt-and-suspenders on top of the staleness check above.
-          if (liveHandle == null || item == null || item.type !== 'diff') {
-            augmentState.set(itemId, { status: 'done', controller, generation });
+          if (!data || (data.oldContent == null && data.newContent == null)) {
+            // No content available (e.g. demo mode / binary): mark done so we do
+            // not retry on every subsequent render. The raw-patch context still
+            // shows; there is just nothing to expand.
+            augmentState.set(itemId, { status: "done", controller, generation });
             return;
           }
 
-          // cacheKey MUST change when fileDiff contents change (types.ts warning):
-          // otherwise the worker / highlight caches would serve the stale partial
-          // AST. Derive a fresh key from the augmented (now full-content) diff,
-          // scoped by generation so the same item id across diff switches never
-          // collides in a (future) cross-mount worker cache.
-          augmented.cacheKey = `${generation}::${itemId}#full`;
-          item.fileDiff = augmented;
-          item.version = (item.version ?? 0) + 1;
-          // updateItem re-measures the (now taller) item and resolves the captured
-          // scroll anchor, so the viewport stays put whether this item is above or
-          // below the fold — no manual scroll correction needed.
-          liveHandle.updateItem(item);
-          augmentState.set(itemId, { status: 'done', controller, generation });
-        });
-      })
-      .catch((err) => {
-        if (isStale()) {
-          // Aborted (unmount / diff switch) or superseded: drop the entry only
-          // if it is still ours — a newer generation may already own this id.
-          if (augmentState.get(itemId)?.controller === controller) {
-            augmentState.delete(itemId);
+          // Stale-content guard: the file may have changed on disk since this
+          // diff was captured (an agent editing/committing mid-review is normal
+          // usage). Augmenting with contents that no longer reconcile with the
+          // patch produces an internally inconsistent FileDiffMetadata — Pierre's
+          // virtualization then fails layout estimation for the item ("trailing
+          // context mismatch", content disappearing while scrolling). Keep the
+          // raw-patch view for this file instead; a diff refresh re-augments.
+          if (!isContentConsistentWithPatch(file.patch, data.oldContent, data.newContent)) {
+            console.warn(
+              `AllFilesCodeView: skipping full-content expansion for ${file.path} — file changed since the diff was captured`,
+            );
+            augmentState.set(itemId, { status: "done", controller, generation });
+            return;
           }
-          return;
-        }
-        augmentState.set(itemId, { status: 'error', controller, generation });
-        void err;
-      });
-  }, [queueAugmentApply]);
+
+          let augmented: FileDiffMetadata;
+          try {
+            const result = processFile(file.patch, {
+              oldFile:
+                data.oldContent != null
+                  ? { name: file.oldPath || file.path, contents: data.oldContent }
+                  : undefined,
+              newFile:
+                data.newContent != null
+                  ? { name: file.path, contents: data.newContent }
+                  : undefined,
+            });
+            if (!result) {
+              augmentState.set(itemId, { status: "done", controller, generation });
+              return;
+            }
+            augmented = result;
+          } catch {
+            augmentState.set(itemId, { status: "error", controller, generation });
+            return;
+          }
+
+          if (isStale()) return;
+
+          // Defer the item mutation to scroll-idle (see queueAugmentApply) —
+          // landing it mid-gesture chops scrolling and can kill momentum via
+          // CodeView's anchor-correcting scrollTo. All staleness checks re-run
+          // at apply time: the queue can hold entries across aborts and diff
+          // switches.
+          queueAugmentApply(itemId, () => {
+            if (isStale()) return;
+            const liveHandle = viewerRef.current;
+            const item = liveHandle?.getItem(itemId);
+            // The item may have been torn down between fetch start and apply;
+            // belt-and-suspenders on top of the staleness check above.
+            if (liveHandle == null || item == null || item.type !== "diff") {
+              augmentState.set(itemId, { status: "done", controller, generation });
+              return;
+            }
+
+            // cacheKey MUST change when fileDiff contents change (types.ts warning):
+            // otherwise the worker / highlight caches would serve the stale partial
+            // AST. Derive a fresh key from the augmented (now full-content) diff,
+            // scoped by generation so the same item id across diff switches never
+            // collides in a (future) cross-mount worker cache.
+            augmented.cacheKey = `${generation}::${itemId}#full`;
+            item.fileDiff = augmented;
+            item.version = (item.version ?? 0) + 1;
+            // updateItem re-measures the (now taller) item and resolves the captured
+            // scroll anchor, so the viewport stays put whether this item is above or
+            // below the fold — no manual scroll correction needed.
+            liveHandle.updateItem(item);
+            augmentState.set(itemId, { status: "done", controller, generation });
+          });
+        })
+        .catch((err) => {
+          if (isStale()) {
+            // Aborted (unmount / diff switch) or superseded: drop the entry only
+            // if it is still ours — a newer generation may already own this id.
+            if (augmentState.get(itemId)?.controller === controller) {
+              augmentState.delete(itemId);
+            }
+            return;
+          }
+          augmentState.set(itemId, { status: "error", controller, generation });
+          void err;
+        });
+    },
+    [queueAugmentApply],
+  );
 
   // (Re)apply search marks for ONE item's node. Called on every render of that
   // item (onPostRender mount/update) so marks survive CodeView's element
@@ -1043,7 +1064,12 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // state through refs so the stable onPostRender callback stays identity-stable.
   const applyItemHighlights = useCallback((node: HTMLElement, itemId: string) => {
     const matches = matchesByItemIdRef.current.get(itemId) ?? [];
-    applyItemSearchHighlights(node, searchQueryRef.current, matches, activeSearchMatchIdRef.current);
+    applyItemSearchHighlights(
+      node,
+      searchQueryRef.current,
+      matches,
+      activeSearchMatchIdRef.current,
+    );
   }, []);
 
   // CodeView fires onPostRender for an item whenever it enters / updates within
@@ -1071,8 +1097,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       phase: PostRenderPhase,
       context: CodeViewItem<DiffAnnotationMetadata>,
     ) => {
-      if (context.type !== 'diff') return;
-      if (phase === 'unmount') {
+      if (context.type !== "diff") return;
+      if (phase === "unmount") {
         clearItemSearchHighlights(node);
         nodeToItemIdRef.current.delete(node);
         return;
@@ -1129,8 +1155,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     const root = scrollRef.current;
     if (!root) return;
     const handler = () => handleContentTextSelection();
-    root.addEventListener('mouseup', handler, true);
-    return () => root.removeEventListener('mouseup', handler, true);
+    root.addEventListener("mouseup", handler, true);
+    return () => root.removeEventListener("mouseup", handler, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileSetKey]);
 
@@ -1156,7 +1182,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       const viewer = viewerRef.current?.getInstance();
       if (viewer == null) return;
       for (const rendered of viewer.getRenderedItems()) {
-        if (rendered.type !== 'diff' || rendered.element == null) continue;
+        if (rendered.type !== "diff" || rendered.element == null) continue;
         applyItemHighlights(rendered.element, rendered.id);
       }
     });
@@ -1200,13 +1226,13 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // ReviewSearchSide: 'addition' -> additions, 'deletion' -> deletions,
     // 'context' -> additions (context rows carry the NEW-side line number in the
     // search index, so the additions side resolves the correct row).
-    const side: 'additions' | 'deletions' =
-      activeSearchMatch.side === 'deletion' ? 'deletions' : 'additions';
+    const side: "additions" | "deletions" =
+      activeSearchMatch.side === "deletion" ? "deletions" : "additions";
     const lineNumber = activeSearchMatch.lineNumber;
     const raf = requestAnimationFrame(() => {
       const viewer = viewerRef.current;
       if (viewer == null) return;
-      viewer.scrollTo({ type: 'line', id: itemId, lineNumber, side, align: 'center' });
+      viewer.scrollTo({ type: "line", id: itemId, lineNumber, side, align: "center" });
     });
     return () => cancelAnimationFrame(raf);
   }, [activeSearchMatch, filePathToItemId, isActive]);
@@ -1223,7 +1249,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     (filePath: string, itemId: string, allAnnotations: CodeAnnotation[]) => {
       const handle = viewerRef.current;
       const item = handle?.getItem(itemId);
-      if (handle == null || item == null || item.type !== 'diff') return;
+      if (handle == null || item == null || item.type !== "diff") return;
       item.annotations = projectFileAnnotations(allAnnotations, filePath, prUrl, prDiffScope);
       item.version = (item.version ?? 0) + 1;
       handle.updateItem(item);
@@ -1251,25 +1277,43 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     const signatures = (list: CodeAnnotation[]) => {
       const map = new Map<string, string>();
       for (const a of list) {
-        const scope = a.scope ?? 'line';
-        if (scope !== 'line' && scope !== 'file') continue;
+        const scope = a.scope ?? "line";
+        if (scope !== "line" && scope !== "file") continue;
         if (!annotationMatchesPrScope(a, prUrl, prDiffScope)) continue;
         // File comments carry different render-affecting fields than line notes
         // (no line/side/suggestion; they DO surface source + profile badges).
-        const sig = scope === 'file'
-          ? JSON.stringify([
-              'F', a.id, a.text ?? '', a.source ?? '', a.author ?? '',
-              a.reviewProfileLabel ?? '', a.conventionalLabel ?? '',
-              (a.decorations ?? []).join(','), a.createdAt ?? 0, a.reasoning ?? '',
-            ])
-          : JSON.stringify([
-              a.id, a.lineEnd, a.side, a.type,
-              a.text ?? '', a.suggestedCode ?? '', a.originalCode ?? '',
-              a.conventionalLabel ?? '', (a.decorations ?? []).join(','),
-              a.severity ?? '', a.reasoning ?? '', a.author ?? '',
-              a.reviewProfileLabel ?? '', a.source ?? '', a.createdAt ?? 0,
-            ]);
-        map.set(a.filePath, `${map.get(a.filePath) ?? ''}${sig}\n`);
+        const sig =
+          scope === "file"
+            ? JSON.stringify([
+                "F",
+                a.id,
+                a.text ?? "",
+                a.source ?? "",
+                a.author ?? "",
+                a.reviewProfileLabel ?? "",
+                a.conventionalLabel ?? "",
+                (a.decorations ?? []).join(","),
+                a.createdAt ?? 0,
+                a.reasoning ?? "",
+              ])
+            : JSON.stringify([
+                a.id,
+                a.lineEnd,
+                a.side,
+                a.type,
+                a.text ?? "",
+                a.suggestedCode ?? "",
+                a.originalCode ?? "",
+                a.conventionalLabel ?? "",
+                (a.decorations ?? []).join(","),
+                a.severity ?? "",
+                a.reasoning ?? "",
+                a.author ?? "",
+                a.reviewProfileLabel ?? "",
+                a.source ?? "",
+                a.createdAt ?? 0,
+              ]);
+        map.set(a.filePath, `${map.get(a.filePath) ?? ""}${sig}\n`);
       }
       return map;
     };
@@ -1341,10 +1385,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     }
 
     const changedPaths = new Set<string>();
-    const collectSetDelta = (
-      next: Set<string> | undefined,
-      prev: Set<string> | undefined,
-    ) => {
+    const collectSetDelta = (next: Set<string> | undefined, prev: Set<string> | undefined) => {
       if (next === prev) return;
       next?.forEach((p) => {
         if (!prev?.has(p)) changedPaths.add(p);
@@ -1385,12 +1426,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
   // --- Line selection through CodeView (replaces geometry-based inference) ---
 
-  const handleSelectedLinesChange = useStableCallback(
-    (selection: CodeViewLineSelection | null) => {
-      setSelectedLines(selection);
-      onLineSelection(selection ? selection.range : null);
-    },
-  );
+  const handleSelectedLinesChange = useStableCallback((selection: CodeViewLineSelection | null) => {
+    setSelectedLines(selection);
+    onLineSelection(selection ? selection.range : null);
+  });
 
   // Mirror ref so the pendingSelection effect below can compare against the
   // live CodeView selection without re-running on every drag delta.
@@ -1454,7 +1493,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
   const handleLineSelectionEnd = useStableCallback(
     (range: SelectedLineRange | null, item: CodeViewItem<DiffAnnotationMetadata>) => {
-      if (range == null || item.type !== 'diff') return;
+      if (range == null || item.type !== "diff") return;
       const filePath = itemIdToFilePath.get(item.id);
       if (filePath == null) return;
       routeSelectionToToolbar(range, filePath);
@@ -1467,7 +1506,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       context: { item: CodeViewItem<DiffAnnotationMetadata> },
     ) => {
       const { item } = context;
-      if (item.type !== 'diff') return null;
+      if (item.type !== "diff") return null;
       const file = itemIdToFile.get(item.id);
       if (file == null) return null;
 
@@ -1475,11 +1514,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
         getHoveredLine,
         aiAvailable,
         onComment: (range) => routeSelectionToToolbar(range, file.path),
-        onAttachAI: (line) => onAttachAIContextForFile?.(
-          file.path,
-          line.lineNumber,
-          line.side,
-        ),
+        onAttachAI: (line) => onAttachAIContextForFile?.(file.path, line.lineNumber, line.side),
       });
     },
   );
@@ -1489,8 +1524,12 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // the legacy all-files view). File identity comes from the owning item, not an
   // active-file side channel. Only wired when onCodeNavRequest is provided.
   const handleTokenClick = useStableCallback(
-    (props: DiffTokenEventBaseProps, event: MouseEvent, item: CodeViewItem<DiffAnnotationMetadata>) => {
-      if (!onCodeNavRequest || item.type !== 'diff') return;
+    (
+      props: DiffTokenEventBaseProps,
+      event: MouseEvent,
+      item: CodeViewItem<DiffAnnotationMetadata>,
+    ) => {
+      if (!onCodeNavRequest || item.type !== "diff") return;
       if (!(event.metaKey || event.ctrlKey)) return;
       const filePath = itemIdToFilePath.get(item.id);
       if (filePath == null) return;
@@ -1501,13 +1540,13 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const handleTokenEnter = useStableCallback(
     (props: DiffTokenEventBaseProps, event: PointerEvent) => {
       if (onCodeNavRequest && (event.metaKey || event.ctrlKey)) {
-        props.tokenElement.classList.add('pn-token-nav');
+        props.tokenElement.classList.add("pn-token-nav");
       }
     },
   );
 
   const handleTokenLeave = useStableCallback((props: DiffTokenEventBaseProps) => {
-    props.tokenElement.classList.remove('pn-token-nav');
+    props.tokenElement.classList.remove("pn-token-nav");
   });
 
   // --- Active-file tracking via CodeView rendered items (no header geometry) ---
@@ -1533,9 +1572,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // one. Uses CodeView's cached accessors — raw container.scrollHeight /
     // clientHeight reads here forced a synchronous layout on EVERY scroll
     // event, right after the frame's DOM writes (measurable jank).
-    if (
-      viewer.getScrollTop() + viewer.getHeight() >= viewer.getScrollHeight() - 2
-    ) {
+    if (viewer.getScrollTop() + viewer.getHeight() >= viewer.getScrollHeight() - 2) {
       bestId = rendered[rendered.length - 1].id;
     }
     const path = itemIdToFilePath.get(bestId) ?? null;
@@ -1558,9 +1595,12 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     });
   });
 
-  useEffect(() => () => {
-    if (scrollReportRafRef.current != null) cancelAnimationFrame(scrollReportRafRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (scrollReportRafRef.current != null) cancelAnimationFrame(scrollReportRafRef.current);
+    },
+    [],
+  );
 
   // CodeView's onScroll only fires on actual scroll, so seed the initial
   // active-file highlight once the viewer has rendered its first window. rAF
@@ -1577,7 +1617,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const scrollToItem = useCallback((itemId: string) => {
     const viewer = viewerRef.current;
     if (viewer == null) return;
-    viewer.scrollTo({ type: 'item', id: itemId, align: 'start' });
+    viewer.scrollTo({ type: "item", id: itemId, align: "start" });
   }, []);
 
   // --- Selected-annotation highlight + navigation ----------------------------
@@ -1644,8 +1684,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     const raf = requestAnimationFrame(() => {
       const viewer = viewerRef.current;
       if (viewer == null) return;
-      if (isFile) viewer.scrollTo({ type: 'item', id: itemId, align: 'start' });
-      else viewer.scrollTo({ type: 'range', id: itemId, range });
+      if (isFile) viewer.scrollTo({ type: "item", id: itemId, align: "start" });
+      else viewer.scrollTo({ type: "range", id: itemId, range });
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1660,9 +1700,9 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       const el = e.composedPath?.()[0] ?? e.target;
       if (
         el instanceof HTMLElement &&
-        (el.tagName === 'INPUT' ||
-          el.tagName === 'TEXTAREA' ||
-          el.tagName === 'SELECT' ||
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT" ||
           el.isContentEditable)
       )
         return;
@@ -1671,12 +1711,12 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
       // The item the user is currently reading (active-file tracking).
       const currentId = visibleFileRef.current
-        ? filePathToItemId.get(visibleFileRef.current) ?? null
+        ? (filePathToItemId.get(visibleFileRef.current) ?? null)
         : null;
-      const currentPath = currentId ? itemIdToFilePath.get(currentId) ?? null : null;
+      const currentPath = currentId ? (itemIdToFilePath.get(currentId) ?? null) : null;
 
       // x — collapse/expand the current file.
-      if (e.key === 'x' && currentId) {
+      if (e.key === "x" && currentId) {
         e.preventDefault();
         toggleItemCollapsed(currentId);
         return;
@@ -1686,15 +1726,14 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // history stack; we approximate with the nearest collapsed item AT or
       // BEFORE the current position in visual order (the file you most likely
       // just collapsed), falling back to the nearest one after it.
-      if (e.key === 'z') {
+      if (e.key === "z") {
         const collapsedIds = orderedItemIds.filter((id) => isItemCollapsed(id));
         if (collapsedIds.length === 0) return;
         e.preventDefault();
         const currentIdx = currentId ? orderedItemIds.indexOf(currentId) : -1;
         const target =
-          [...collapsedIds]
-            .reverse()
-            .find((id) => orderedItemIds.indexOf(id) <= currentIdx) ?? collapsedIds[0];
+          [...collapsedIds].reverse().find((id) => orderedItemIds.indexOf(id) <= currentIdx) ??
+          collapsedIds[0];
         toggleItemCollapsed(target);
         scrollToItem(target);
         return;
@@ -1704,7 +1743,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // anchor element comes from the eager fileCommentButtonRef registration;
       // isConnected guards against an element whose header was recycled out of
       // the rendered window between registration and keypress.
-      if (e.key === 'c' && currentPath && onAddFileCommentForFile) {
+      if (e.key === "c" && currentPath && onAddFileCommentForFile) {
         e.preventDefault();
         const btn = fileCommentButtonRefs.current.get(currentPath);
         if (btn?.isConnected) setFileCommentAnchor({ el: btn, filePath: currentPath });
@@ -1712,34 +1751,35 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       }
 
       // v — toggle viewed (and collapse on mark-viewed) for the current file.
-      if (e.key === 'v' && currentPath && currentId) {
+      if (e.key === "v" && currentPath && currentId) {
         e.preventDefault();
         handleToggleViewedAndCollapse(currentPath, currentId);
         return;
       }
 
       // a — stage/unstage the current file.
-      if (e.key === 'a' && currentPath && canStageFiles) {
+      if (e.key === "a" && currentPath && canStageFiles) {
         e.preventDefault();
         onStage?.(currentPath);
         return;
       }
 
-      if (e.key !== '[' && e.key !== ']') return;
+      if (e.key !== "[" && e.key !== "]") return;
       e.preventDefault();
 
       const currentIdx = currentId ? orderedItemIds.indexOf(currentId) : -1;
       let targetIdx: number;
-      if (e.key === ']') {
-        targetIdx = currentIdx < orderedItemIds.length - 1 ? currentIdx + 1 : orderedItemIds.length - 1;
+      if (e.key === "]") {
+        targetIdx =
+          currentIdx < orderedItemIds.length - 1 ? currentIdx + 1 : orderedItemIds.length - 1;
       } else {
         targetIdx = currentIdx > 0 ? currentIdx - 1 : 0;
       }
 
       scrollToItem(orderedItemIds[targetIdx]);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [
     isActive,
     orderedItemIds,
@@ -1757,7 +1797,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // --- Custom header render slot (the full Plannotator FileHeader) -----------
 
   const renderCustomHeader = useStableCallback((item: CodeViewItem<DiffAnnotationMetadata>) => {
-    if (item.type !== 'diff') return null;
+    if (item.type !== "diff") return null;
     const filePath = itemIdToFilePath.get(item.id);
     if (filePath == null) return null;
     // Resolve by item id (NOT files.find by path): duplicate display paths each
@@ -1772,51 +1812,57 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     return (
       <div className="flex flex-col">
         <FileHeader
-        filePath={filePath}
-        patch={file.patch}
-        status={file.status}
-        oldPath={file.oldPath}
-        isViewed={viewedFiles?.has(filePath)}
-        onToggleViewed={onToggleViewed ? () => handleToggleViewedAndCollapse(filePath, item.id) : undefined}
-        isStaged={stagedFiles?.has(filePath)}
-        isStaging={stagingFile === filePath}
-        onStage={onStage ? () => onStage(filePath) : undefined}
-        canStage={canStageFiles}
-        stageError={stagingFile === filePath ? stageError : null}
-        onFileComment={onAddFileCommentForFile ? (anchorEl) => handleFileComment(filePath, anchorEl) : undefined}
-        // Eager registration so the `c` shortcut can anchor the popover for a
-        // file whose button was never clicked. Detach (null) deletes the entry
-        // — React detaches the old ref before attaching the new one in the
-        // same commit, so a slot republish never leaves the map stale.
-        fileCommentButtonRef={
-          onAddFileCommentForFile
-            ? (el) => {
-                if (el) fileCommentButtonRefs.current.set(filePath, el);
-                else fileCommentButtonRefs.current.delete(filePath);
-              }
-            : undefined
-        }
-        collapseToggle={
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleItemCollapsed(item.id);
-            }}
-            className="flex items-center justify-center w-6 h-6 rounded hover:bg-foreground/10 transition-colors flex-shrink-0"
-            title={collapsed ? 'Expand diff' : 'Collapse diff'}
-          >
-            <svg
-              className={`w-3 h-3 transition-transform ${collapsed ? '' : 'rotate-90'}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
+          filePath={filePath}
+          patch={file.patch}
+          status={file.status}
+          oldPath={file.oldPath}
+          isViewed={viewedFiles?.has(filePath)}
+          onToggleViewed={
+            onToggleViewed ? () => handleToggleViewedAndCollapse(filePath, item.id) : undefined
+          }
+          isStaged={stagedFiles?.has(filePath)}
+          isStaging={stagingFile === filePath}
+          onStage={onStage ? () => onStage(filePath) : undefined}
+          canStage={canStageFiles}
+          stageError={stagingFile === filePath ? stageError : null}
+          onFileComment={
+            onAddFileCommentForFile
+              ? (anchorEl) => handleFileComment(filePath, anchorEl)
+              : undefined
+          }
+          // Eager registration so the `c` shortcut can anchor the popover for a
+          // file whose button was never clicked. Detach (null) deletes the entry
+          // — React detaches the old ref before attaching the new one in the
+          // same commit, so a slot republish never leaves the map stale.
+          fileCommentButtonRef={
+            onAddFileCommentForFile
+              ? (el) => {
+                  if (el) fileCommentButtonRefs.current.set(filePath, el);
+                  else fileCommentButtonRefs.current.delete(filePath);
+                }
+              : undefined
+          }
+          collapseToggle={
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleItemCollapsed(item.id);
+              }}
+              className="flex items-center justify-center w-6 h-6 rounded hover:bg-foreground/10 transition-colors flex-shrink-0"
+              title={collapsed ? "Expand diff" : "Collapse diff"}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        }
-        onCollapseToggle={() => toggleItemCollapsed(item.id)}
+              <svg
+                className={`w-3 h-3 transition-transform ${collapsed ? "" : "rotate-90"}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          }
+          onCollapseToggle={() => toggleItemCollapsed(item.id)}
         />
         {/* File-scoped comments live in the header (below the path), shown only
             when the file is expanded. They ride the sticky header — fine for a
@@ -1869,7 +1915,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       expandUnchanged,
       enableLineSelection: true,
       enableGutterUtility: true,
-      hunkSeparators: 'line-info',
+      hunkSeparators: "line-info",
       stickyHeaders: true,
       // Flush files together (no inter-file gap) — file boundaries already read
       // via the sticky header. Keep Pierre's default 8px list edge padding.
@@ -1888,7 +1934,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // option only takes effect when the library itself runs a development
       // build (NODE_ENV), so it is inert in production even if it leaks.
       ...(import.meta.env.DEV &&
-        import.meta.env.VITE_PIERRE_VALIDATE_HEIGHTS === '1' && {
+        import.meta.env.VITE_PIERRE_VALIDATE_HEIGHTS === "1" && {
           __devOnlyValidateItemHeights: true,
         }),
       onLineSelectionEnd(range, context) {
@@ -1965,8 +2011,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
           type="button"
           onClick={handleToggleAllCollapsed}
           className="absolute bottom-0 left-0 z-30 flex items-center justify-center h-[var(--panel-header-h)] w-[var(--panel-header-h)] border-r border-t border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title={allCollapsed ? 'Expand all files' : 'Collapse all files'}
-          aria-label={allCollapsed ? 'Expand all files' : 'Collapse all files'}
+          title={allCollapsed ? "Expand all files" : "Collapse all files"}
+          aria-label={allCollapsed ? "Expand all files" : "Collapse all files"}
         >
           <svg
             className="w-3.5 h-3.5"
@@ -2018,7 +2064,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       <ToolbarHost
         ref={toolbarHostRef}
         patch={activePatch}
-        filePath={activeFilePath ?? ''}
+        filePath={activeFilePath ?? ""}
         isFocused={true}
         onLineSelection={onLineSelection}
         onAddAnnotation={handleAddAnnotation}
@@ -2027,11 +2073,11 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
       {fileCommentAnchor && onAddFileCommentForFile && (
         <CommentPopover
-          key={`file:${prUrl ?? ''}:${prDiffScope ?? ''}:${fileCommentAnchor.filePath}`}
+          key={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${fileCommentAnchor.filePath}`}
           anchorEl={fileCommentAnchor.el}
-          contextText={fileCommentAnchor.filePath.split('/').pop() || fileCommentAnchor.filePath}
+          contextText={fileCommentAnchor.filePath.split("/").pop() || fileCommentAnchor.filePath}
           isGlobal={false}
-          draftKey={`file:${prUrl ?? ''}:${prDiffScope ?? ''}:${fileCommentAnchor.filePath}`}
+          draftKey={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${fileCommentAnchor.filePath}`}
           onSubmit={(text) => {
             onAddFileCommentForFile(fileCommentAnchor.filePath, text);
             setFileCommentAnchor(null);

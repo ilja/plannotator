@@ -51,10 +51,7 @@ describe("external annotations SSE", () => {
     expect(invalid?.status).toBe(400);
     expect(await invalid?.json()).toEqual({ error: "Invalid JSON" });
 
-    const unchanged = await handler.handle(
-      new Request(baseUrl),
-      new URL(baseUrl),
-    );
+    const unchanged = await handler.handle(new Request(baseUrl), new URL(baseUrl));
     expect(await unchanged?.json()).toMatchObject({
       version: 1,
       annotations: [{ id, text: "original" }],

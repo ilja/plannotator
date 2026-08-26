@@ -27,8 +27,7 @@ const ID_PATTERN = /^\/api\/paste\/([A-Za-z0-9]{6,16})$/;
  * Uses Web Crypto with rejection sampling to avoid modulo bias.
  */
 function generateId(): string {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   const limit = 256 - (256 % chars.length); // 248 — largest multiple of 62 that fits in a byte
   const id: string[] = [];
   while (id.length < 8) {
@@ -47,15 +46,12 @@ function generateId(): string {
 export async function createPaste(
   data: string,
   store: PasteStore,
-  options: Partial<PasteOptions> = {}
+  options: Partial<PasteOptions> = {},
 ): Promise<{ id: string }> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   if (data.length > opts.maxSize) {
-    throw new PasteError(
-      `Payload too large (max ${formatByteLimit(opts.maxSize)} encrypted)`,
-      413
-    );
+    throw new PasteError(`Payload too large (max ${formatByteLimit(opts.maxSize)} encrypted)`, 413);
   }
 
   const id = generateId();
@@ -70,17 +66,14 @@ function formatByteLimit(bytes: number): string {
   return `${Math.round(bytes / 1024)} KB`;
 }
 
-export async function getPaste(
-  id: string,
-  store: PasteStore
-): Promise<string | null> {
+export async function getPaste(id: string, store: PasteStore): Promise<string | null> {
   return store.get(id);
 }
 
 export class PasteError extends Error {
   constructor(
     message: string,
-    public status: number
+    public status: number,
   ) {
     super(message);
   }
@@ -94,7 +87,7 @@ export async function handleRequest(
   request: Request,
   store: PasteStore,
   cors: Record<string, string>,
-  options?: Partial<PasteOptions>
+  options?: Partial<PasteOptions>,
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -110,28 +103,19 @@ export async function handleRequest(
       if (Schema.isSchemaError(error)) {
         return Response.json(
           { error: 'Missing or invalid "data" field' },
-          { status: 400, headers: cors }
+          { status: 400, headers: cors },
         );
       }
-      return Response.json(
-        { error: "Invalid JSON body" },
-        { status: 400, headers: cors }
-      );
+      return Response.json({ error: "Invalid JSON body" }, { status: 400, headers: cors });
     }
     try {
       const result = await createPaste(body.data, store, options);
       return Response.json(result, { status: 201, headers: cors });
     } catch (e) {
       if (e instanceof PasteError) {
-        return Response.json(
-          { error: e.message },
-          { status: e.status, headers: cors }
-        );
+        return Response.json({ error: e.message }, { status: e.status, headers: cors });
       }
-      return Response.json(
-        { error: "Failed to store paste" },
-        { status: 500, headers: cors }
-      );
+      return Response.json({ error: "Failed to store paste" }, { status: 500, headers: cors });
     }
   }
 
@@ -139,10 +123,7 @@ export async function handleRequest(
   if (match && request.method === "GET") {
     const data = await getPaste(match[1], store);
     if (!data) {
-      return Response.json(
-        { error: "Paste not found or expired" },
-        { status: 404, headers: cors }
-      );
+      return Response.json({ error: "Paste not found or expired" }, { status: 404, headers: cors });
     }
     return Response.json(
       { data },
@@ -151,12 +132,12 @@ export async function handleRequest(
           ...cors,
           "Cache-Control": "private, no-store",
         },
-      }
+      },
     );
   }
 
   return Response.json(
     { error: "Not found. Valid paths: POST /api/paste, GET /api/paste/:id" },
-    { status: 404, headers: cors }
+    { status: 404, headers: cors },
   );
 }

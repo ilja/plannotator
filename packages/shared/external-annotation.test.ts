@@ -32,11 +32,23 @@ describe("transformReviewInput — scope-aware location requirements", () => {
   });
 
   test("line: still strictly requires filePath, lineStart, lineEnd", () => {
-    const [a] = ok({ source: "claude", scope: "line", filePath: "src/a.ts", lineStart: 3, lineEnd: 5, text: "x" });
+    const [a] = ok({
+      source: "claude",
+      scope: "line",
+      filePath: "src/a.ts",
+      lineStart: 3,
+      lineEnd: 5,
+      text: "x",
+    });
     expect(a.scope).toBe("line");
     expect(a.lineStart).toBe(3);
 
-    const noLine = transformReviewInput({ source: "claude", scope: "line", filePath: "src/a.ts", text: "x" });
+    const noLine = transformReviewInput({
+      source: "claude",
+      scope: "line",
+      filePath: "src/a.ts",
+      text: "x",
+    });
     expect("error" in noLine && noLine.error).toContain("lineStart");
   });
 

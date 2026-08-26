@@ -7,7 +7,13 @@ import type {
   PRStackTree,
   PRStackNode,
 } from "./pr-types";
-export type { PRDiffScope, PRDiffScopeOption, PRStackInfo, PRStackTree, PRStackNode } from "./pr-types";
+export type {
+  PRDiffScope,
+  PRDiffScopeOption,
+  PRStackInfo,
+  PRStackTree,
+  PRStackNode,
+} from "./pr-types";
 
 function branchNameIsSafe(branch: string): boolean {
   return branch.trim().length > 0 && !branch.startsWith("-") && !branch.includes("\0");
@@ -32,14 +38,16 @@ export function resolveStackInfo(
   existing?: PRStackInfo | null,
 ): PRStackInfo | null {
   if (existing) return existing;
-  if (!stackTree || stackTree.nodes.filter(n => !n.isDefaultBranch).length <= 1) return null;
-  return getPRStackInfo(metadata) ?? {
-    isStacked: true,
-    baseBranch: metadata.baseBranch,
-    defaultBranch: metadata.defaultBranch!,
-    label: `Root of stack — ${metadata.headBranch}`,
-    source: "tree-discovered",
-  };
+  if (!stackTree || stackTree.nodes.filter((n) => !n.isDefaultBranch).length <= 1) return null;
+  return (
+    getPRStackInfo(metadata) ?? {
+      isStacked: true,
+      baseBranch: metadata.baseBranch,
+      defaultBranch: metadata.defaultBranch!,
+      label: `Root of stack — ${metadata.headBranch}`,
+      source: "tree-discovered",
+    }
+  );
 }
 
 export function getPRDiffScopeOptions(
@@ -189,7 +197,11 @@ export async function runPRLayerLocalDiff(
   ];
 
   let range: string[] | null = null;
-  if (metadata.mergeBaseSha && FULL_SHA_RE.test(metadata.mergeBaseSha) && (await ensureObject(metadata.mergeBaseSha))) {
+  if (
+    metadata.mergeBaseSha &&
+    FULL_SHA_RE.test(metadata.mergeBaseSha) &&
+    (await ensureObject(metadata.mergeBaseSha))
+  ) {
     range = [metadata.mergeBaseSha, metadata.headSha];
   } else if (FULL_SHA_RE.test(metadata.baseSha) && (await ensureObject(metadata.baseSha))) {
     range = [`${metadata.baseSha}...${metadata.headSha}`];
@@ -251,9 +263,10 @@ export async function checkoutPRHead(
   metadata: PRMetadata,
   cwd: string,
 ): Promise<boolean> {
-  const refSpec = metadata.platform === "github"
-    ? `refs/pull/${metadata.number}/head`
-    : `refs/merge-requests/${metadata.iid}/head`;
+  const refSpec =
+    metadata.platform === "github"
+      ? `refs/pull/${metadata.number}/head`
+      : `refs/merge-requests/${metadata.iid}/head`;
 
   const fetch = await runtime.runGit(["fetch", "origin", refSpec], { cwd });
   if (fetch.exitCode !== 0) return false;
@@ -266,10 +279,7 @@ export async function checkoutPRHead(
  * Build a minimal stack tree from existing metadata (no API calls).
  * Used as a fallback when the full stack tree hasn't loaded yet.
  */
-export function buildMinimalStackTree(
-  metadata: PRMetadata,
-  stackInfo: PRStackInfo,
-): PRStackTree {
+export function buildMinimalStackTree(metadata: PRMetadata, stackInfo: PRStackInfo): PRStackTree {
   const nodes: PRStackNode[] = [];
 
   if (stackInfo.defaultBranch) {

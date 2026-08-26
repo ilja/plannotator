@@ -1,6 +1,6 @@
-import React from 'react';
-import { getProviderMeta } from '../ProviderIcons';
-import { type AIProviderOption } from '../../utils/aiProvider';
+import React from "react";
+import { getProviderMeta } from "../ProviderIcons";
+import { type AIProviderOption } from "../../utils/aiProvider";
 
 interface AIProviderBarProps {
   providers: AIProviderOption[];
@@ -25,12 +25,12 @@ export const AIProviderBar: React.FC<AIProviderBarProps> = ({
     );
   }
 
-  const currentProvider = providers.find(p => p.id === selectedProviderId) ?? providers[0];
-  const effectiveProviderId = currentProvider?.id ?? '';
+  const currentProvider = providers.find((p) => p.id === selectedProviderId) ?? providers[0];
+  const effectiveProviderId = currentProvider?.id ?? "";
   const models = currentProvider?.models ?? [];
-  const defaultModel = models.find(m => m.default) ?? models[0];
-  const effectiveModel = selectedModel ?? defaultModel?.id ?? '';
-  const meta = getProviderMeta(currentProvider?.name ?? 'AI');
+  const defaultModel = models.find((m) => m.default) ?? models[0];
+  const effectiveModel = selectedModel ?? defaultModel?.id ?? "";
+  const meta = getProviderMeta(currentProvider?.name ?? "AI");
   const Icon = meta.icon;
 
   return (
@@ -38,12 +38,12 @@ export const AIProviderBar: React.FC<AIProviderBarProps> = ({
       <Icon className="w-3.5 h-3.5 flex-shrink-0" />
       {providers.length > 1 ? (
         <select
-          value={effectiveProviderId ?? ''}
+          value={effectiveProviderId ?? ""}
           onChange={(event) => onProviderChange(event.target.value)}
           className="min-w-0 max-w-[8rem] bg-transparent text-[11px] text-foreground focus:outline-none"
           aria-label="AI provider"
         >
-          {providers.map(provider => {
+          {providers.map((provider) => {
             const providerMeta = getProviderMeta(provider.name);
             return (
               <option key={provider.id} value={provider.id}>
@@ -63,14 +63,13 @@ export const AIProviderBar: React.FC<AIProviderBarProps> = ({
           className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground focus:outline-none"
           aria-label="AI model"
         >
-          {models.map(model => (
+          {models.map((model) => (
             <option key={model.id} value={model.id}>
               {model.label}
             </option>
           ))}
         </select>
       )}
-
     </div>
   );
 };

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { TextShimmer } from './TextShimmer';
-import lookGridImg from '../assets/look-grid.png';
-import lookFlatImg from '../assets/look-flat.png';
-import workspacesImg from '../assets/workspaces.webp';
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { TextShimmer } from "./TextShimmer";
+import lookGridImg from "../assets/look-grid.png";
+import lookFlatImg from "../assets/look-flat.png";
+import workspacesImg from "../assets/workspaces.webp";
 
 interface LookAndFeelAnnouncementDialogProps {
   isOpen: boolean;
@@ -15,19 +15,19 @@ interface LookAndFeelAnnouncementDialogProps {
   onDismiss: () => void;
 }
 
-const WAITLIST_URL = 'https://plannotator.ai/workspaces';
+const WAITLIST_URL = "https://plannotator.ai/workspaces";
 
 const FEATURES: { title: string; desc: string }[] = [
   {
-    title: 'Leaner install',
-    desc: 'Only the core skills ship by default. Extra skills install separately.',
+    title: "Leaner install",
+    desc: "Only the core skills ship by default. Extra skills install separately.",
   },
-  { title: 'A fresh new look', desc: 'Refreshed UI 2.0 with new Simple and Neutral themes.' },
-  { title: 'Semantic code review', desc: 'Diffs grouped by what changed, not just which lines.' },
-  { title: 'Multi-repo reviews', desc: 'Review nested repositories together in one pass.' },
+  { title: "A fresh new look", desc: "Refreshed UI 2.0 with new Simple and Neutral themes." },
+  { title: "Semantic code review", desc: "Diffs grouped by what changed, not just which lines." },
+  { title: "Multi-repo reviews", desc: "Review nested repositories together in one pass." },
   {
-    title: 'Full-page HTML',
-    desc: 'Render HTML reports and explainers full-screen, then annotate them in place.',
+    title: "Full-page HTML",
+    desc: "Render HTML reports and explainers full-screen, then annotate them in place.",
   },
 ];
 
@@ -41,20 +41,20 @@ const LOOK_OPTIONS: {
   desc: string;
 }[] = [
   {
-    key: 'grid',
+    key: "grid",
     value: true,
     img: lookGridImg,
-    title: 'Grid',
-    tag: 'Classic',
-    desc: 'Your plan as a floating card on grid paper.',
+    title: "Grid",
+    tag: "Classic",
+    desc: "Your plan as a floating card on grid paper.",
   },
   {
-    key: 'flat',
+    key: "flat",
     value: false,
     img: lookFlatImg,
-    title: 'Clean',
-    tag: 'New',
-    desc: 'A simpler, edge-to-edge flat card.',
+    title: "Clean",
+    tag: "New",
+    desc: "A simpler, edge-to-edge flat card.",
   },
 ];
 
@@ -119,8 +119,8 @@ export const LookAndFeelAnnouncementDialog: React.FC<LookAndFeelAnnouncementDial
                       aria-pressed={selected}
                       className={`flex-1 min-w-0 flex flex-col items-stretch gap-2 rounded-lg border p-2 text-left transition-colors ${
                         selected
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-muted-foreground/40'
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-muted-foreground/40"
                       }`}
                     >
                       <div className="relative">
@@ -132,16 +132,16 @@ export const LookAndFeelAnnouncementDialog: React.FC<LookAndFeelAnnouncementDial
                           style={{
                             border: `2px solid ${
                               selected
-                                ? 'var(--primary)'
-                                : 'color-mix(in srgb, var(--primary) 25%, transparent)'
+                                ? "var(--primary)"
+                                : "color-mix(in srgb, var(--primary) 25%, transparent)"
                             }`,
-                            transform: isHovered ? 'scale(1.22)' : 'scale(1)',
-                            transformOrigin: 'center',
+                            transform: isHovered ? "scale(1.22)" : "scale(1)",
+                            transformOrigin: "center",
                             zIndex: isHovered ? 50 : 0,
-                            position: 'relative',
-                            boxShadow: isHovered ? '0 14px 36px rgba(0,0,0,0.4)' : 'none',
+                            position: "relative",
+                            boxShadow: isHovered ? "0 14px 36px rgba(0,0,0,0.4)" : "none",
                             transition:
-                              'transform 0.25s cubic-bezier(0.34,1.56,0.64,1), border-color 0.2s ease, box-shadow 0.2s ease',
+                              "transform 0.25s cubic-bezier(0.34,1.56,0.64,1), border-color 0.2s ease, box-shadow 0.2s ease",
                           }}
                         />
                       </div>
@@ -149,13 +149,17 @@ export const LookAndFeelAnnouncementDialog: React.FC<LookAndFeelAnnouncementDial
                         <span className="text-base font-semibold">{opt.title}</span>
                         <span
                           className={`text-[11px] leading-none px-2 py-0.5 rounded-full ${
-                            selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                            selected
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {selected ? 'Selected' : opt.tag}
+                          {selected ? "Selected" : opt.tag}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground px-0.5 leading-snug">{opt.desc}</p>
+                      <p className="text-sm text-muted-foreground px-0.5 leading-snug">
+                        {opt.desc}
+                      </p>
                     </button>
                   );
                 })}
@@ -170,7 +174,7 @@ export const LookAndFeelAnnouncementDialog: React.FC<LookAndFeelAnnouncementDial
                 className="px-4 py-2 rounded-lg border border-primary/35 hover:opacity-80 transition-opacity"
               >
                 <TextShimmer className="text-sm font-medium" duration={2.5} spread={1.5}>
-                  {'✨ Workspaces are coming 🎉 →'}
+                  {"✨ Workspaces are coming 🎉 →"}
                 </TextShimmer>
               </button>
               <button
@@ -224,6 +228,6 @@ export const LookAndFeelAnnouncementDialog: React.FC<LookAndFeelAnnouncementDial
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 };

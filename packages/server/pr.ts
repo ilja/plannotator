@@ -14,7 +14,7 @@ import type {
   PRStackTree,
   PRListItem,
 } from "@plannotator/shared/pr-types";
-import {parsePRUrl as parsePRUrlCore} from "@plannotator/shared/pr-types";
+import { parsePRUrl as parsePRUrlCore } from "@plannotator/shared/pr-types";
 import {
   checkAuth as checkAuthCore,
   getUser as getUserCore,
@@ -28,8 +28,24 @@ import {
   fetchPRList as fetchPRListCore,
 } from "@plannotator/shared/pr-provider";
 
-export type { PRRef, PRMetadata, PRContext, PRReviewFileComment, PRStackTree, PRListItem } from "@plannotator/shared/pr-types";
-export { prRefFromMetadata, isSameProject, getPlatformLabel, getMRLabel, getMRNumberLabel, getDisplayRepo, getCliName, getCliInstallUrl } from "@plannotator/shared/pr-types";
+export type {
+  PRRef,
+  PRMetadata,
+  PRContext,
+  PRReviewFileComment,
+  PRStackTree,
+  PRListItem,
+} from "@plannotator/shared/pr-types";
+export {
+  prRefFromMetadata,
+  isSameProject,
+  getPlatformLabel,
+  getMRLabel,
+  getMRNumberLabel,
+  getDisplayRepo,
+  getCliName,
+  getCliInstallUrl,
+} from "@plannotator/shared/pr-types";
 export type { GithubPRMetadata } from "@plannotator/shared/pr-types";
 
 const runtime: PRRuntime = {
@@ -84,9 +100,7 @@ export function fetchPR(
   return fetchPRCore(runtime, ref);
 }
 
-export function fetchPRContext(
-  ref: PRRef,
-): Promise<PRContext> {
+export function fetchPRContext(ref: PRRef): Promise<PRContext> {
   return fetchPRContextCore(runtime, ref);
 }
 
@@ -108,9 +122,7 @@ export function submitPRReview(
   return submitPRReviewCore(runtime, ref, headSha, action, body, fileComments);
 }
 
-export function fetchPRViewedFiles(
-  ref: PRRef,
-): Promise<Record<string, boolean>> {
+export function fetchPRViewedFiles(ref: PRRef): Promise<Record<string, boolean>> {
   return fetchPRViewedFilesCore(runtime, ref);
 }
 
@@ -123,15 +135,10 @@ export function markPRFilesViewed(
   return markPRFilesViewedCore(runtime, ref, prNodeId, filePaths, viewed);
 }
 
-export function fetchPRStack(
-  ref: PRRef,
-  metadata: PRMetadata,
-): Promise<PRStackTree | null> {
+export function fetchPRStack(ref: PRRef, metadata: PRMetadata): Promise<PRStackTree | null> {
   return fetchPRStackCore(runtime, ref, metadata);
 }
 
-export function fetchPRList(
-  ref: PRRef,
-): Promise<PRListItem[]> {
+export function fetchPRList(ref: PRRef): Promise<PRListItem[]> {
   return fetchPRListCore(runtime, ref);
 }

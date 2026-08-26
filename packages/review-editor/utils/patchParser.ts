@@ -5,9 +5,9 @@ export function extractLinesFromPatch(
   patch: string,
   lineStart: number,
   lineEnd: number,
-  side: 'old' | 'new'
+  side: "old" | "new",
 ): string {
-  const lines = patch.split('\n');
+  const lines = patch.split("\n");
   const result: string[] = [];
 
   let oldLine = 0;
@@ -23,36 +23,40 @@ export function extractLinesFromPatch(
     }
 
     // Skip diff headers
-    if (line.startsWith('diff ') || line.startsWith('index ') ||
-        line.startsWith('--- ') || line.startsWith('+++ ')) {
+    if (
+      line.startsWith("diff ") ||
+      line.startsWith("index ") ||
+      line.startsWith("--- ") ||
+      line.startsWith("+++ ")
+    ) {
       continue;
     }
 
     const prefix = line[0];
     const content = line.substring(1);
 
-    if (prefix === ' ') {
+    if (prefix === " ") {
       // Context line — exists on both sides
       oldLine++;
       newLine++;
-      const lineNum = side === 'old' ? oldLine : newLine;
+      const lineNum = side === "old" ? oldLine : newLine;
       if (lineNum >= lineStart && lineNum <= lineEnd) {
         result.push(content);
       }
-    } else if (prefix === '-') {
+    } else if (prefix === "-") {
       // Deletion — old side only
       oldLine++;
-      if (side === 'old' && oldLine >= lineStart && oldLine <= lineEnd) {
+      if (side === "old" && oldLine >= lineStart && oldLine <= lineEnd) {
         result.push(content);
       }
-    } else if (prefix === '+') {
+    } else if (prefix === "+") {
       // Addition — new side only
       newLine++;
-      if (side === 'new' && newLine >= lineStart && newLine <= lineEnd) {
+      if (side === "new" && newLine >= lineStart && newLine <= lineEnd) {
         result.push(content);
       }
     }
   }
 
-  return result.join('\n');
+  return result.join("\n");
 }

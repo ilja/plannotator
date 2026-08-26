@@ -22,7 +22,9 @@ function HookHarness(): React.JSX.Element {
 
   return (
     <div>
-      <button type="button" onClick={() => void open("src/example.ts:3")}>Open</button>
+      <button type="button" onClick={() => void open("src/example.ts:3")}>
+        Open
+      </button>
       <output
         data-loading={String(isLoading)}
         data-filepath={popoutProps?.filepath ?? ""}
@@ -75,12 +77,16 @@ afterEach(async () => {
 
 describe("useCodeFilePopout response handling", () => {
   test.skipIf(!hasDom)("opens only a validated code-file response", async () => {
-    installFetch([new Response(JSON.stringify({
-      codeFile: true,
-      contents: "const value = 1;",
-      filepath: "/repo/src/example.ts",
-      line: 4,
-    }))]);
+    installFetch([
+      new Response(
+        JSON.stringify({
+          codeFile: true,
+          contents: "const value = 1;",
+          filepath: "/repo/src/example.ts",
+          line: 4,
+        }),
+      ),
+    ]);
     const output = await openFile(await mountHarness());
 
     expect(output.dataset.loading).toBe("false");
@@ -93,11 +99,13 @@ describe("useCodeFilePopout response handling", () => {
   test.skipIf(!hasDom)("replaces a malformed fallback after a valid retry", async () => {
     installFetch([
       new Response(JSON.stringify({ contents: 42, filepath: "/repo/broken.ts" })),
-      new Response(JSON.stringify({
-        codeFile: true,
-        contents: "valid after retry",
-        filepath: "/repo/src/example.ts",
-      })),
+      new Response(
+        JSON.stringify({
+          codeFile: true,
+          contents: "valid after retry",
+          filepath: "/repo/src/example.ts",
+        }),
+      ),
     ]);
     const host = await mountHarness();
 
@@ -110,26 +118,31 @@ describe("useCodeFilePopout response handling", () => {
     expect(retried.dataset.error).toBe("");
   });
 
-  test.skipIf(!hasDom)("uses the existing fallback for malformed, non-OK, and invalid JSON responses", async () => {
-    installFetch([
-      new Response(JSON.stringify({ codeFile: true, contents: "valid", filepath: "/repo/valid.ts" })),
-      new Response(JSON.stringify({ contents: 42, filepath: "/repo/broken.ts" })),
-      new Response(JSON.stringify({ error: "Access denied" }), { status: 403 }),
-      new Response("{invalid-json"),
-    ]);
-    const host = await mountHarness();
+  test.skipIf(!hasDom)(
+    "uses the existing fallback for malformed, non-OK, and invalid JSON responses",
+    async () => {
+      installFetch([
+        new Response(
+          JSON.stringify({ codeFile: true, contents: "valid", filepath: "/repo/valid.ts" }),
+        ),
+        new Response(JSON.stringify({ contents: 42, filepath: "/repo/broken.ts" })),
+        new Response(JSON.stringify({ error: "Access denied" }), { status: 403 }),
+        new Response("{invalid-json"),
+      ]);
+      const host = await mountHarness();
 
-    const valid = await openFile(host);
-    expect(valid.dataset.contents).toBe("valid");
+      const valid = await openFile(host);
+      expect(valid.dataset.contents).toBe("valid");
 
-    const malformed = await openFile(host);
-    expect(malformed.dataset.contents).toBe("");
-    expect(malformed.dataset.error).toBe("File not found in repo: src/example.ts:3");
+      const malformed = await openFile(host);
+      expect(malformed.dataset.contents).toBe("");
+      expect(malformed.dataset.error).toBe("File not found in repo: src/example.ts:3");
 
-    const denied = await openFile(host);
-    expect(denied.dataset.error).toBe("Access denied");
+      const denied = await openFile(host);
+      expect(denied.dataset.error).toBe("Access denied");
 
-    const invalidJson = await openFile(host);
-    expect(invalidJson.dataset.error).toBe("Failed to load: src/example.ts:3");
-  });
+      const invalidJson = await openFile(host);
+      expect(invalidJson.dataset.error).toBe("Failed to load: src/example.ts:3");
+    },
+  );
 });

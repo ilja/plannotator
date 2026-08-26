@@ -20,7 +20,9 @@ describe("getCallbackConfig", () => {
 
   test("returns config with params before #", () => {
     const result = getCallbackConfig(
-      loc("https://share.plannotator.ai/?cb=https%3A%2F%2Flocalhost%3A9456%2Fplannotator-cb&ct=tok-123#abc"),
+      loc(
+        "https://share.plannotator.ai/?cb=https%3A%2F%2Flocalhost%3A9456%2Fplannotator-cb&ct=tok-123#abc",
+      ),
     );
     expect(result).not.toBeNull();
     expect(result!.callbackUrl).toBe("https://localhost:9456/plannotator-cb");
@@ -29,7 +31,9 @@ describe("getCallbackConfig", () => {
 
   test("returns config with params after # fragment", () => {
     const result = getCallbackConfig(
-      loc("https://share.plannotator.ai/#abc?cb=https%3A%2F%2Flocalhost%3A9456%2Fplannotator-cb&ct=tok-456"),
+      loc(
+        "https://share.plannotator.ai/#abc?cb=https%3A%2F%2Flocalhost%3A9456%2Fplannotator-cb&ct=tok-456",
+      ),
     );
     expect(result).not.toBeNull();
     expect(result!.callbackUrl).toBe("https://localhost:9456/plannotator-cb");
@@ -38,7 +42,9 @@ describe("getCallbackConfig", () => {
 
   test("returns null when only cb is present", () => {
     expect(
-      getCallbackConfig(loc("https://share.plannotator.ai/?cb=https%3A%2F%2Flocalhost%3A9456%2Fcb")),
+      getCallbackConfig(
+        loc("https://share.plannotator.ai/?cb=https%3A%2F%2Flocalhost%3A9456%2Fcb"),
+      ),
     ).toBeNull();
   });
 
@@ -48,7 +54,9 @@ describe("getCallbackConfig", () => {
 
   test("decodes encoded callback URL", () => {
     const encoded = encodeURIComponent("https://bot.internal/plannotator-cb");
-    const result = getCallbackConfig(loc(`https://share.plannotator.ai/?cb=${encoded}&ct=tok-abc#hash`));
+    const result = getCallbackConfig(
+      loc(`https://share.plannotator.ai/?cb=${encoded}&ct=tok-abc#hash`),
+    );
     expect(result!.callbackUrl).toBe("https://bot.internal/plannotator-cb");
   });
 
@@ -58,7 +66,9 @@ describe("getCallbackConfig", () => {
 
   test("partial params in hash — only cb, no ct", () => {
     expect(
-      getCallbackConfig(loc("https://share.plannotator.ai/#abc?cb=https%3A%2F%2Flocalhost%3A9456%2Fcb")),
+      getCallbackConfig(
+        loc("https://share.plannotator.ai/#abc?cb=https%3A%2F%2Flocalhost%3A9456%2Fcb"),
+      ),
     ).toBeNull();
   });
 
@@ -72,13 +82,20 @@ describe("getCallbackConfig", () => {
   });
 
   test("rejects non-http/https schemes", () => {
-    expect(getCallbackConfig(loc(`https://share.plannotator.ai/?cb=${encodeURIComponent("file:///etc/passwd")}&ct=tok`))).toBeNull();
-    expect(getCallbackConfig(loc(`https://share.plannotator.ai/?cb=${encodeURIComponent("javascript:alert(1)")}&ct=tok`))).toBeNull();
+    expect(
+      getCallbackConfig(
+        loc(`https://share.plannotator.ai/?cb=${encodeURIComponent("file:///etc/passwd")}&ct=tok`),
+      ),
+    ).toBeNull();
+    expect(
+      getCallbackConfig(
+        loc(`https://share.plannotator.ai/?cb=${encodeURIComponent("javascript:alert(1)")}&ct=tok`),
+      ),
+    ).toBeNull();
   });
 
   test("preserves percent-encoded chars in callback URL query params", () => {
-    const presignedUrl =
-      "https://s3.amazonaws.com/bucket/cb?X-Amz-Signature=abc%2Bdef%2Fghi%3D";
+    const presignedUrl = "https://s3.amazonaws.com/bucket/cb?X-Amz-Signature=abc%2Bdef%2Fghi%3D";
     const result = getCallbackConfig(
       loc(`https://share.plannotator.ai/?cb=${encodeURIComponent(presignedUrl)}&ct=tok-presigned`),
     );
@@ -98,8 +115,12 @@ const mockConfig = { callbackUrl: "https://localhost:9456/plannotator-cb", token
 const mockAnnotatedUrl = "https://share.plannotator.ai/#abc123";
 
 let originalFetch: typeof globalThis.fetch;
-beforeEach(() => { originalFetch = globalThis.fetch; });
-afterEach(() => { globalThis.fetch = originalFetch; });
+beforeEach(() => {
+  originalFetch = globalThis.fetch;
+});
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 describe("executeCallback", () => {
   test("approve: 200 response returns success toast", async () => {
@@ -136,7 +157,9 @@ describe("executeCallback", () => {
 
   test("network failure returns error toast", async () => {
     // SAFETY: mock fetch is untyped test double — cast to any
-    globalThis.fetch = mock(async () => { throw new Error("Network error"); }) as any;
+    globalThis.fetch = mock(async () => {
+      throw new Error("Network error");
+    }) as any;
     const result = await executeCallback(CallbackAction.Approve, mockConfig, mockAnnotatedUrl);
     expect(result?.type).toBe("error");
     expect(result?.message).toBe("Callback failed.");

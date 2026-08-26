@@ -24,15 +24,21 @@ describe("classifyMatch", () => {
     });
 
     test("async function declaration", () => {
-      expect(classifyMatch("export async function startServer(", "startServer", lang)).toBe("definition");
+      expect(classifyMatch("export async function startServer(", "startServer", lang)).toBe(
+        "definition",
+      );
     });
 
     test("export function", () => {
-      expect(classifyMatch("export function handleRequest(", "handleRequest", lang)).toBe("definition");
+      expect(classifyMatch("export function handleRequest(", "handleRequest", lang)).toBe(
+        "definition",
+      );
     });
 
     test("const assignment", () => {
-      expect(classifyMatch("const startServer = async () => {", "startServer", lang)).toBe("definition");
+      expect(classifyMatch("const startServer = async () => {", "startServer", lang)).toBe(
+        "definition",
+      );
     });
 
     test("let assignment", () => {
@@ -44,11 +50,15 @@ describe("classifyMatch", () => {
     });
 
     test("interface declaration", () => {
-      expect(classifyMatch("export interface CodeNavRequest {", "CodeNavRequest", lang)).toBe("definition");
+      expect(classifyMatch("export interface CodeNavRequest {", "CodeNavRequest", lang)).toBe(
+        "definition",
+      );
     });
 
     test("type declaration", () => {
-      expect(classifyMatch("type DiffType = 'unified' | 'split';", "DiffType", lang)).toBe("definition");
+      expect(classifyMatch("type DiffType = 'unified' | 'split';", "DiffType", lang)).toBe(
+        "definition",
+      );
     });
 
     test("enum declaration", () => {
@@ -60,7 +70,9 @@ describe("classifyMatch", () => {
     });
 
     test("plain reference (function call)", () => {
-      expect(classifyMatch("  const result = startServer(config);", "startServer", lang)).toBe("reference");
+      expect(classifyMatch("  const result = startServer(config);", "startServer", lang)).toBe(
+        "reference",
+      );
     });
 
     test("bare indented call is not a definition", () => {
@@ -68,15 +80,21 @@ describe("classifyMatch", () => {
     });
 
     test("indented call in if/return is not a definition", () => {
-      expect(classifyMatch("    return startServer(config);", "startServer", lang)).toBe("reference");
+      expect(classifyMatch("    return startServer(config);", "startServer", lang)).toBe(
+        "reference",
+      );
     });
 
     test("plain reference (import)", () => {
-      expect(classifyMatch('import { startServer } from "./server";', "startServer", lang)).toBe("reference");
+      expect(classifyMatch('import { startServer } from "./server";', "startServer", lang)).toBe(
+        "reference",
+      );
     });
 
     test("const with type annotation", () => {
-      expect(classifyMatch("const runtime: CodeNavRuntime = {", "runtime", lang)).toBe("definition");
+      expect(classifyMatch("const runtime: CodeNavRuntime = {", "runtime", lang)).toBe(
+        "definition",
+      );
     });
   });
 
@@ -84,7 +102,9 @@ describe("classifyMatch", () => {
     const lang = "python";
 
     test("def function", () => {
-      expect(classifyMatch("def handle_request(self, req):", "handle_request", lang)).toBe("definition");
+      expect(classifyMatch("def handle_request(self, req):", "handle_request", lang)).toBe(
+        "definition",
+      );
     });
 
     test("class declaration", () => {
@@ -104,11 +124,15 @@ describe("classifyMatch", () => {
     const lang = "go";
 
     test("func declaration", () => {
-      expect(classifyMatch("func StartServer(config Config) error {", "StartServer", lang)).toBe("definition");
+      expect(classifyMatch("func StartServer(config Config) error {", "StartServer", lang)).toBe(
+        "definition",
+      );
     });
 
     test("method declaration", () => {
-      expect(classifyMatch("func (s *Server) StartServer() error {", "StartServer", lang)).toBe("definition");
+      expect(classifyMatch("func (s *Server) StartServer() error {", "StartServer", lang)).toBe(
+        "definition",
+      );
     });
 
     test("type declaration", () => {
@@ -124,11 +148,15 @@ describe("classifyMatch", () => {
     const lang = "rust";
 
     test("fn declaration", () => {
-      expect(classifyMatch("fn start_server() -> Result<()> {", "start_server", lang)).toBe("definition");
+      expect(classifyMatch("fn start_server() -> Result<()> {", "start_server", lang)).toBe(
+        "definition",
+      );
     });
 
     test("pub fn declaration", () => {
-      expect(classifyMatch("pub fn start_server(config: Config) {", "start_server", lang)).toBe("definition");
+      expect(classifyMatch("pub fn start_server(config: Config) {", "start_server", lang)).toBe(
+        "definition",
+      );
     });
 
     test("struct declaration", () => {
@@ -144,7 +172,9 @@ describe("classifyMatch", () => {
     });
 
     test("plain reference", () => {
-      expect(classifyMatch("  let server = start_server(config);", "start_server", lang)).toBe("reference");
+      expect(classifyMatch("  let server = start_server(config);", "start_server", lang)).toBe(
+        "reference",
+      );
     });
   });
 
@@ -168,7 +198,9 @@ describe("classifyMatch", () => {
 
   describe("edge cases", () => {
     test("regex metacharacter in symbol ($)", () => {
-      expect(classifyMatch("const $el = document.querySelector('div');", "$el", "typescript")).toBe("definition");
+      expect(classifyMatch("const $el = document.querySelector('div');", "$el", "typescript")).toBe(
+        "definition",
+      );
     });
 
     test("regex metacharacter in symbol (.)", () => {
@@ -208,10 +240,7 @@ describe("rankLocations", () => {
   });
 
   test("changed files rank above non-changed", () => {
-    const locations = [
-      loc({ filePath: "lib/utils.ts" }),
-      loc({ filePath: "src/changed.ts" }),
-    ];
+    const locations = [loc({ filePath: "lib/utils.ts" }), loc({ filePath: "src/changed.ts" })];
     const result = rankLocations(locations, {
       sourceFilePath: "src/main.ts",
       changedFiles: ["src/changed.ts"],
@@ -264,11 +293,15 @@ describe("rankLocations", () => {
     const locations = Array.from({ length: 100 }, (_, i) =>
       loc({ filePath: `src/file${i}.ts`, line: i }),
     );
-    const result = rankLocations(locations, {
-      sourceFilePath: "src/main.ts",
-      changedFiles: [],
-      isTestFile: false,
-    }, 10);
+    const result = rankLocations(
+      locations,
+      {
+        sourceFilePath: "src/main.ts",
+        changedFiles: [],
+        isTestFile: false,
+      },
+      10,
+    );
     expect(result.references).toHaveLength(10);
     expect(result.capped).toBe(true);
   });
@@ -381,11 +414,7 @@ describe("parseRgJsonOutput", () => {
       submatches?: TestSubmatches;
     }
 
-    const validMatch = (
-      path: string,
-      lineNumber: number,
-      submatches?: TestSubmatches,
-    ) => {
+    const validMatch = (path: string, lineNumber: number, submatches?: TestSubmatches) => {
       const data: TestRgMatchData = {
         path: { text: path },
         lines: { text: `  startServer(); // ${path}\n` },
@@ -400,10 +429,22 @@ describe("parseRgJsonOutput", () => {
       "not JSON",
       JSON.stringify({ type: "begin", data: {} }),
       JSON.stringify({ type: "match", data: null }),
-      JSON.stringify({ type: "match", data: { path: { text: 1 }, lines: { text: "x" }, line_number: 2 } }),
-      JSON.stringify({ type: "match", data: { path: { text: "src/missing-lines.ts" }, line_number: 3 } }),
-      JSON.stringify({ type: "match", data: { path: { text: "src/bad-lines.ts" }, lines: { text: 1 }, line_number: 4 } }),
-      JSON.stringify({ type: "match", data: { path: { text: "src/bad-line.ts" }, lines: { text: "x" }, line_number: "4" } }),
+      JSON.stringify({
+        type: "match",
+        data: { path: { text: 1 }, lines: { text: "x" }, line_number: 2 },
+      }),
+      JSON.stringify({
+        type: "match",
+        data: { path: { text: "src/missing-lines.ts" }, line_number: 3 },
+      }),
+      JSON.stringify({
+        type: "match",
+        data: { path: { text: "src/bad-lines.ts" }, lines: { text: 1 }, line_number: 4 },
+      }),
+      JSON.stringify({
+        type: "match",
+        data: { path: { text: "src/bad-line.ts" }, lines: { text: "x" }, line_number: "4" },
+      }),
       JSON.stringify({ type: "summary", data: {} }),
       validMatch("src/missing-submatches.ts", 5),
       validMatch("src/non-array-submatches.ts", 6, { start: 7 }),
@@ -494,33 +535,39 @@ describe("code navigation HTTP wire schemas", () => {
   const validResponse = {
     backend: "search",
     complete: true,
-    definitions: [{
-      kind: "definition",
-      confidence: "likely",
-      filePath: "src/server.ts",
-      line: 42,
-      column: 10,
-      snippet: "export function startServer() {}",
-    }],
-    references: [{
-      kind: "reference",
-      confidence: "possible",
-      filePath: "src/index.ts",
-      line: 8,
-      column: 3,
-      snippet: "startServer();",
-    }],
+    definitions: [
+      {
+        kind: "definition",
+        confidence: "likely",
+        filePath: "src/server.ts",
+        line: 42,
+        column: 10,
+        snippet: "export function startServer() {}",
+      },
+    ],
+    references: [
+      {
+        kind: "reference",
+        confidence: "possible",
+        filePath: "src/index.ts",
+        line: 8,
+        column: 3,
+        snippet: "startServer();",
+      },
+    ],
     stats: { elapsedMs: 12, capped: false },
     searchScope: "head",
   };
 
   test("accepts requests with legacy navigation fields without validating them", () => {
-    const decoded = Option.getOrUndefined(decodeCodeNavRequest({
-      ...valid,
-      line: "not-a-line-number",
-      charStart: null,
-      language: { unsupported: true },
-    }));
+    const decoded = Option.getOrUndefined(
+      decodeCodeNavRequest({
+        ...valid,
+        line: "not-a-line-number",
+        charStart: null,
+        language: { unsupported: true },
+      }),
+    );
 
     expect(decoded).toMatchObject({
       symbol: "startServer",
@@ -530,16 +577,22 @@ describe("code navigation HTTP wire schemas", () => {
   });
 
   test("accepts a symbol that is nonempty after trimming", () => {
-    expect(Option.getOrUndefined(decodeCodeNavRequest({ ...valid, symbol: " startServer " }))).toBeDefined();
+    expect(
+      Option.getOrUndefined(decodeCodeNavRequest({ ...valid, symbol: " startServer " })),
+    ).toBeDefined();
   });
 
   test("accepts both sides without legacy navigation fields", () => {
     for (const side of ["old", "new"] as const) {
-      expect(Option.getOrUndefined(decodeCodeNavRequest({
-        symbol: "startServer",
-        filePath: "src/server.ts",
-        side,
-      }))).toMatchObject({ side });
+      expect(
+        Option.getOrUndefined(
+          decodeCodeNavRequest({
+            symbol: "startServer",
+            filePath: "src/server.ts",
+            side,
+          }),
+        ),
+      ).toMatchObject({ side });
     }
   });
 
@@ -561,12 +614,16 @@ describe("code navigation HTTP wire schemas", () => {
 
   test("accepts complete search and unavailable response variants", () => {
     expect(Option.getOrUndefined(decodeCodeNavResponse(validResponse))).toEqual(validResponse);
-    expect(Option.getOrUndefined(decodeCodeNavResponse({
-      ...validResponse,
-      backend: "unavailable",
-      definitions: [],
-      references: [],
-    }))).toBeDefined();
+    expect(
+      Option.getOrUndefined(
+        decodeCodeNavResponse({
+          ...validResponse,
+          backend: "unavailable",
+          definitions: [],
+          references: [],
+        }),
+      ),
+    ).toBeDefined();
   });
 
   test("rejects malformed response envelopes", () => {
@@ -584,7 +641,6 @@ describe("code navigation HTTP wire schemas", () => {
       expect(Option.getOrUndefined(decodeCodeNavResponse(malformed))).toBeUndefined();
     }
   });
-
 });
 
 // ---------------------------------------------------------------------------

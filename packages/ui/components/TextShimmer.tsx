@@ -1,5 +1,5 @@
-import React, { useMemo, type JSX } from 'react';
-import { motion } from 'motion/react';
+import React, { useMemo, type JSX } from "react";
+import { motion } from "motion/react";
 
 export interface TextShimmerProps {
   children: string;
@@ -11,15 +11,13 @@ export interface TextShimmerProps {
 
 function TextShimmerComponent({
   children,
-  as: Component = 'span',
+  as: Component = "span",
   className,
   duration = 2,
   spread = 2,
 }: TextShimmerProps) {
   // SAFETY: Component is React.ElementType from TextShimmerProps — motion.create expects IntrinsicElements key
-  const MotionComponent = motion.create(
-    Component as keyof JSX.IntrinsicElements
-  );
+  const MotionComponent = motion.create(Component as keyof JSX.IntrinsicElements);
 
   const dynamicSpread = useMemo(() => {
     return children.length * spread;
@@ -28,25 +26,25 @@ function TextShimmerComponent({
   return (
     <MotionComponent
       className={[
-        'relative inline-block bg-[length:250%_100%,auto] bg-clip-text',
-        'text-transparent [--base-color:#a1a1aa] [--base-gradient-color:#000]',
-        '[background-repeat:no-repeat,padding-box] [--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--base-gradient-color),#0000_calc(50%+var(--spread)))]',
-        'dark:[--base-color:#71717a] dark:[--base-gradient-color:#ffffff] dark:[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--base-gradient-color),#0000_calc(50%+var(--spread)))]',
+        "relative inline-block bg-[length:250%_100%,auto] bg-clip-text",
+        "text-transparent [--base-color:#a1a1aa] [--base-gradient-color:#000]",
+        "[background-repeat:no-repeat,padding-box] [--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--base-gradient-color),#0000_calc(50%+var(--spread)))]",
+        "dark:[--base-color:#71717a] dark:[--base-gradient-color:#ffffff] dark:[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--base-gradient-color),#0000_calc(50%+var(--spread)))]",
         className,
       ]
         .filter(Boolean)
-        .join(' ')}
-      initial={{ backgroundPosition: '100% center' }}
-      animate={{ backgroundPosition: '0% center' }}
+        .join(" ")}
+      initial={{ backgroundPosition: "100% center" }}
+      animate={{ backgroundPosition: "0% center" }}
       transition={{
         repeat: Infinity,
         duration,
-        ease: 'linear',
+        ease: "linear",
       }}
       style={
         // SAFETY: style is React.CSSProperties with CSS variable --spread
         {
-          '--spread': `${dynamicSpread}px`,
+          "--spread": `${dynamicSpread}px`,
           backgroundImage: `var(--bg), linear-gradient(var(--base-color), var(--base-color))`,
         } as React.CSSProperties
       }

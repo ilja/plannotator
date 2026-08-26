@@ -16,10 +16,7 @@
  */
 
 import { $ } from "bun";
-import {
-  startReviewServer,
-  handleReviewServerReady,
-} from "@plannotator/server/review";
+import { startReviewServer, handleReviewServerReady } from "@plannotator/server/review";
 
 // Embed the built HTML at compile time
 // @ts-ignore - Bun import attribute for text
@@ -29,7 +26,10 @@ const htmlContent: string = indexHtml;
 // Parse CLI arguments
 const args = process.argv.slice(2);
 const isStaged = args.includes("--staged");
-const gitRef = args.filter((arg) => arg !== "--staged").join(" ").trim();
+const gitRef = args
+  .filter((arg) => arg !== "--staged")
+  .join(" ")
+  .trim();
 
 // Build git diff command
 let diffCommand: string[];
@@ -70,7 +70,9 @@ const server = await startReviewServer({
     handleReviewServerReady(url, isRemote, port);
     console.error(`Code review at ${url}`);
     if (isRemote) {
-      console.error(`(Remote mode detected — if no browser opens automatically, use the URL above)`);
+      console.error(
+        `(Remote mode detected — if no browser opens automatically, use the URL above)`,
+      );
     }
   },
 });
@@ -86,12 +88,16 @@ server.stop();
 
 // Output the feedback as JSON
 console.log(
-  JSON.stringify({
-    gitRef: displayRef,
-    approved: result.approved,
-    feedback: result.feedback,
-    annotations: result.annotations,
-  }, null, 2)
+  JSON.stringify(
+    {
+      gitRef: displayRef,
+      approved: result.approved,
+      feedback: result.feedback,
+      annotations: result.annotations,
+    },
+    null,
+    2,
+  ),
 );
 
 process.exit(0);

@@ -1,5 +1,5 @@
-import React from 'react';
-import { ListMarker } from './ListMarker';
+import React from "react";
+import { ListMarker } from "./ListMarker";
 
 /**
  * Shared list-item body: the marker plus the item's text content. Used by the
@@ -49,11 +49,13 @@ export const ListItemBody: React.FC<ListItemBodyProps> = ({
         onToggle={onToggle}
       />
       {paragraphs.length === 1 ? (
-        <span className={textClassName} style={textStyle}>{renderInline(content)}</span>
+        <span className={textClassName} style={textStyle}>
+          {renderInline(content)}
+        </span>
       ) : (
         <div className={textClassName} style={textStyle}>
           {paragraphs.map((para, i) => (
-            <p key={i} className={i > 0 ? 'mt-3' : ''}>
+            <p key={i} className={i > 0 ? "mt-3" : ""}>
               {renderInline(para)}
             </p>
           ))}

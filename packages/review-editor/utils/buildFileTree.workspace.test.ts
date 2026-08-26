@@ -13,10 +13,7 @@ const diffFile = (path: string, overrides: Partial<DiffFile> = {}): DiffFile => 
 
 describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
   it("builds separate trees for different repo prefixes", () => {
-    const files = [
-      diffFile("repo-a/src/index.ts"),
-      diffFile("repo-b/src/index.ts"),
-    ];
+    const files = [diffFile("repo-a/src/index.ts"), diffFile("repo-b/src/index.ts")];
     const tree = buildFileTree(files);
 
     // With flat fallback: single root folder with only file children gets unwrapped
@@ -24,7 +21,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
     expect(tree.length).toBeGreaterThanOrEqual(2);
     // After collapseSingleChild, paths like repo-a/src/index.ts become:
     // folder: "repo-a/src" with file child "index.ts"
-    const names = tree.map(n => n.name);
+    const names = tree.map((n) => n.name);
     expect(names).toContain("repo-a/src");
     expect(names).toContain("repo-b/src");
   });
@@ -37,15 +34,15 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
     const tree = buildFileTree(files);
 
     // After collapseSingleChild: repo-a/src/utils becomes a single folder node
-    const repoA = tree.find(n => n.name === "repo-a/src/utils");
-    const repoB = tree.find(n => n.name === "repo-b/src/utils");
+    const repoA = tree.find((n) => n.name === "repo-a/src/utils");
+    const repoB = tree.find((n) => n.name === "repo-b/src/utils");
 
     expect(repoA).toBeDefined();
     expect(repoB).toBeDefined();
 
     // Each should have the helper.ts file as a child
-    const repoAFile = repoA?.children?.find(n => n.name === "helper.ts");
-    const repoBFile = repoB?.children?.find(n => n.name === "helper.ts");
+    const repoAFile = repoA?.children?.find((n) => n.name === "helper.ts");
+    const repoBFile = repoB?.children?.find((n) => n.name === "helper.ts");
 
     expect(repoAFile).toBeDefined();
     expect(repoBFile).toBeDefined();
@@ -71,7 +68,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
     expect(tree[0].type).toBe("folder");
 
     // Children: "api/src" (collapsed), "src" (from apps/src), "web/src" (collapsed)
-    const childNames = tree[0].children?.map(n => n.name).sort();
+    const childNames = tree[0].children?.map((n) => n.name).sort();
     expect(childNames).toEqual(["api/src", "src", "web/src"]);
   });
 
@@ -88,14 +85,12 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
 
     // After collapseSingleChild, packages/core/src collapses to "core/src"
     // and packages/shared/utils/helpers collapses to "shared/utils/helpers"
-    const children = tree[0].children?.map(n => n.name).sort();
+    const children = tree[0].children?.map((n) => n.name).sort();
     expect(children).toEqual(["core/src", "shared/utils/helpers"]);
   });
 
   it("collapses single-child folders correctly with repo prefixes", () => {
-    const files = [
-      diffFile("repo-a/src/components/Button.tsx"),
-    ];
+    const files = [diffFile("repo-a/src/components/Button.tsx")];
     const tree = buildFileTree(files);
 
     // After collapseSingleChild: repo-a/src/components collapses to single path
@@ -116,33 +111,28 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
     const tree = buildFileTree(files);
 
     // After collapseSingleChild: repo-a/src contains both files
-    const repoA = tree.find(n => n.name === "repo-a/src");
-    const repoB = tree.find(n => n.name === "repo-b/src");
+    const repoA = tree.find((n) => n.name === "repo-a/src");
+    const repoB = tree.find((n) => n.name === "repo-b/src");
 
     expect(repoA?.additions).toBe(15); // 10 + 5
-    expect(repoA?.deletions).toBe(7);  // 5 + 2
+    expect(repoA?.deletions).toBe(7); // 5 + 2
     expect(repoB?.additions).toBe(8);
     expect(repoB?.deletions).toBe(3);
   });
 
   it("handles repo labels with special characters", () => {
-    const files = [
-      diffFile("my-repo_2.0/src/index.ts"),
-      diffFile("my-repo_2.0-beta/src/app.ts"),
-    ];
+    const files = [diffFile("my-repo_2.0/src/index.ts"), diffFile("my-repo_2.0-beta/src/app.ts")];
     const tree = buildFileTree(files);
 
     // Two separate root-level folders after collapse
     expect(tree.length).toBeGreaterThanOrEqual(2);
-    const names = tree.map(n => n.name);
+    const names = tree.map((n) => n.name);
     expect(names).toContain("my-repo_2.0/src");
     expect(names).toContain("my-repo_2.0-beta/src");
   });
 
   it("preserves full prefixed path in node path property", () => {
-    const files = [
-      diffFile("owner/repo/src/index.ts"),
-    ];
+    const files = [diffFile("owner/repo/src/index.ts")];
     const tree = buildFileTree(files);
 
     // Collapses to "owner/repo/src" folder, then flat fallback unwraps
@@ -183,7 +173,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
     expect(tree[0].name).toBe("repo-a");
     expect(tree[0].type).toBe("folder");
 
-    const children = tree[0].children?.map(n => n.name).sort();
+    const children = tree[0].children?.map((n) => n.name).sort();
     expect(children).toEqual(["lib", "src"]);
   });
 });
@@ -191,11 +181,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
 describe("getAncestorPaths - workspace mode", () => {
   it("returns ancestor paths for repo-prefixed file", () => {
     const paths = getAncestorPaths("repo-a/src/utils/helper.ts");
-    expect(paths).toEqual([
-      "repo-a",
-      "repo-a/src",
-      "repo-a/src/utils",
-    ]);
+    expect(paths).toEqual(["repo-a", "repo-a/src", "repo-a/src/utils"]);
   });
 
   it("handles deeply nested repo labels", () => {
@@ -216,10 +202,7 @@ describe("getAncestorPaths - workspace mode", () => {
 
 describe("getAllFolderPaths - workspace mode", () => {
   it("collects all folder paths from repo-prefixed tree", () => {
-    const files = [
-      diffFile("repo-a/src/index.ts"),
-      diffFile("repo-b/src/app.ts"),
-    ];
+    const files = [diffFile("repo-a/src/index.ts"), diffFile("repo-b/src/app.ts")];
     const tree = buildFileTree(files);
     const folders = getAllFolderPaths(tree);
 
@@ -229,10 +212,7 @@ describe("getAllFolderPaths - workspace mode", () => {
   });
 
   it("collects nested repo label folders", () => {
-    const files = [
-      diffFile("apps/api/src/server.ts"),
-      diffFile("apps/web/src/app.ts"),
-    ];
+    const files = [diffFile("apps/api/src/server.ts"), diffFile("apps/web/src/app.ts")];
     const tree = buildFileTree(files);
     const folders = getAllFolderPaths(tree);
 

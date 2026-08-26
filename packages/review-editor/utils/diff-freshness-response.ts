@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect';
+import { Option, Schema } from "effect";
 
 const DiffFreshnessResponseSchema = Schema.Struct({
   fresh: Schema.Boolean,
@@ -19,7 +19,9 @@ const decodeString = Schema.decodeUnknownOption(Schema.String);
 const decodeNullableString = Schema.decodeUnknownOption(Schema.NullOr(Schema.String));
 
 /** Decode the unknown value returned by the `/api/diff/fresh` endpoint. */
-export function decodeDiffFreshnessResponse(value: UnknownValue): DiffFreshnessResponse | undefined {
+export function decodeDiffFreshnessResponse(
+  value: UnknownValue,
+): DiffFreshnessResponse | undefined {
   const root = Option.getOrUndefined(decodeRoot(value));
   if (!root) return undefined;
 

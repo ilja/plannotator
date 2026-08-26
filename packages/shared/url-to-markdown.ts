@@ -55,7 +55,7 @@ function isLocalUrl(url: string): boolean {
       hostname === "[::1]" ||
       hostname === "0.0.0.0" ||
       hostname.endsWith(".local") ||
-      hostname.startsWith('127.') ||
+      hostname.startsWith("127.") ||
       PRIVATE_IPV4.test(hostname)
     ) {
       return true;
@@ -132,7 +132,9 @@ async function readBodyWithLimit(res: Response): Promise<string> {
     // the size limit via the text result length as a best-effort fallback.
     const text = await res.text();
     if (text.length > MAX_BODY_BYTES) {
-      throw new Error(`Response too large (>${Math.round(MAX_BODY_BYTES / 1024 / 1024)}MB, max 10MB)`);
+      throw new Error(
+        `Response too large (>${Math.round(MAX_BODY_BYTES / 1024 / 1024)}MB, max 10MB)`,
+      );
     }
     return text;
   }
@@ -145,7 +147,9 @@ async function readBodyWithLimit(res: Response): Promise<string> {
     totalBytes += value.byteLength;
     if (totalBytes > MAX_BODY_BYTES) {
       reader.cancel();
-      throw new Error(`Response too large (>${Math.round(MAX_BODY_BYTES / 1024 / 1024)}MB, max 10MB)`);
+      throw new Error(
+        `Response too large (>${Math.round(MAX_BODY_BYTES / 1024 / 1024)}MB, max 10MB)`,
+      );
     }
     chunks.push(value);
   }
@@ -163,7 +167,9 @@ async function readBodyWithLimit(res: Response): Promise<string> {
 async function fetchRawText(url: string): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  const headers = { "User-Agent": "Mozilla/5.0 (compatible; Plannotator/1.0; +https://plannotator.ai)" };
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (compatible; Plannotator/1.0; +https://plannotator.ai)",
+  };
   try {
     let currentUrl = url;
     let res = await fetch(currentUrl, { headers, redirect: "manual", signal: controller.signal });
@@ -303,8 +309,7 @@ async function fetchViaTurndown(url: string): Promise<string> {
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (compatible; Plannotator/1.0; +https://plannotator.ai)",
+    "User-Agent": "Mozilla/5.0 (compatible; Plannotator/1.0; +https://plannotator.ai)",
     Accept: "text/html,application/xhtml+xml",
   };
 
@@ -333,14 +338,9 @@ async function fetchViaTurndown(url: string): Promise<string> {
       throw new Error(`HTTP ${res.status} ${res.statusText}`);
     }
     const contentType = res.headers.get("content-type") || "";
-    if (
-      !contentType.includes("text/html") &&
-      !contentType.includes("application/xhtml+xml")
-    ) {
+    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
       res.body?.cancel();
-      throw new Error(
-        `Not an HTML page (content-type: ${contentType})`,
-      );
+      throw new Error(`Not an HTML page (content-type: ${contentType})`);
     }
     const html = await readBodyWithLimit(res);
     return htmlToMarkdown(html);

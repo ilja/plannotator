@@ -1,13 +1,14 @@
-import React, { useEffect } from 'react';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { useReviewState } from '../ReviewStateContext';
-import { PRCommentsTab } from '../../components/PRCommentsTab';
+import React, { useEffect } from "react";
+import type { IDockviewPanelProps } from "dockview-react";
+import { useReviewState } from "../ReviewStateContext";
+import { PRCommentsTab } from "../../components/PRCommentsTab";
 
 /**
  * Dock panel wrapper for PR Comments.
  */
 export const ReviewPRCommentsPanel: React.FC<IDockviewPanelProps> = () => {
-  const { prContext, isPRContextLoading, prContextError, fetchPRContext, platformUser } = useReviewState();
+  const { prContext, isPRContextLoading, prContextError, fetchPRContext, platformUser } =
+    useReviewState();
 
   useEffect(() => {
     if (!prContext && !prContextError && !isPRContextLoading) fetchPRContext();

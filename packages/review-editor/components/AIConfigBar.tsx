@@ -1,7 +1,7 @@
-import type React from 'react';
-import { useState, useEffect, useRef } from 'react';
-import { getProviderMeta } from '@plannotator/ui/components/ProviderIcons';
-import type { AIProviderOption } from '@plannotator/ui/utils/aiProvider';
+import type React from "react";
+import { useState, useEffect, useRef } from "react";
+import { getProviderMeta } from "@plannotator/ui/components/ProviderIcons";
+import type { AIProviderOption } from "@plannotator/ui/utils/aiProvider";
 
 interface AIConfigBarProps {
   providers: AIProviderOption[];
@@ -23,8 +23,8 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
   hasSession,
 }) => {
   const [showSessionNote, setShowSessionNote] = useState(false);
-  const [openMenu, setOpenMenu] = useState<'provider' | 'model' | null>(null);
-  const [modelSearch, setModelSearch] = useState('');
+  const [openMenu, setOpenMenu] = useState<"provider" | "model" | null>(null);
+  const [modelSearch, setModelSearch] = useState("");
   const barRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -42,11 +42,11 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
     const handler = (e: MouseEvent) => {
       if (barRef.current && e.target instanceof Node && !barRef.current.contains(e.target)) {
         setOpenMenu(null);
-        setModelSearch('');
+        setModelSearch("");
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [openMenu]);
 
   if (providers.length === 0) {
@@ -57,16 +57,17 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
     );
   }
 
-  const currentProvider = providers.find(p => p.id === selectedProviderId) ?? providers[0];
+  const currentProvider = providers.find((p) => p.id === selectedProviderId) ?? providers[0];
   if (!currentProvider) return null;
   const effectiveProviderId = currentProvider.id;
 
   const meta = getProviderMeta(currentProvider.name);
   const Icon = meta.icon;
   const models = currentProvider.models ?? [];
-  const defaultModel = models.find(m => m.default) ?? models[0];
+  const defaultModel = models.find((m) => m.default) ?? models[0];
   const effectiveModel = selectedModel ?? defaultModel?.id;
-  const currentModelLabel = models.find(m => m.id === effectiveModel)?.label ?? defaultModel?.label;
+  const currentModelLabel =
+    models.find((m) => m.id === effectiveModel)?.label ?? defaultModel?.label;
 
   const handleProviderSelect = (id: string) => {
     if (hasSession) setShowSessionNote(true);
@@ -78,23 +79,32 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
     if (hasSession) setShowSessionNote(true);
     onModelChange(id);
     setOpenMenu(null);
-    setModelSearch('');
+    setModelSearch("");
   };
 
   const chevron = (
-    <svg className="w-2.5 h-2.5 text-muted-foreground/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <svg
+      className="w-2.5 h-2.5 text-muted-foreground/40"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+    >
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
     </svg>
   );
 
   return (
-    <div ref={barRef} className="relative border-t border-border/50 px-2 py-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+    <div
+      ref={barRef}
+      className="relative border-t border-border/50 px-2 py-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"
+    >
       {/* Provider selector */}
       {providers.length > 1 ? (
         <div className="relative">
           <button
             type="button"
-            onClick={() => setOpenMenu(openMenu === 'provider' ? null : 'provider')}
+            onClick={() => setOpenMenu(openMenu === "provider" ? null : "provider")}
             className="flex items-center gap-1.5 px-1 py-0.5 -mx-1 rounded hover:bg-muted/50 transition-colors"
           >
             <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -102,9 +112,9 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
             {chevron}
           </button>
 
-          {openMenu === 'provider' && (
+          {openMenu === "provider" && (
             <div className="ai-config-menu">
-              {providers.map(p => {
+              {providers.map((p) => {
                 const m = getProviderMeta(p.name);
                 const ProvIcon = m.icon;
                 const isActive = p.id === effectiveProviderId;
@@ -113,12 +123,18 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
                     key={p.id}
                     type="button"
                     onClick={() => handleProviderSelect(p.id)}
-                    className={`ai-config-menu-item ${isActive ? 'ai-config-menu-item-active' : ''}`}
+                    className={`ai-config-menu-item ${isActive ? "ai-config-menu-item-active" : ""}`}
                   >
                     <ProvIcon className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>{m.label}</span>
                     {isActive && (
-                      <svg className="w-3 h-3 ml-auto text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg
+                        className="w-3 h-3 ml-auto text-primary"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     )}
@@ -142,14 +158,14 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setOpenMenu(openMenu === 'model' ? null : 'model')}
+              onClick={() => setOpenMenu(openMenu === "model" ? null : "model")}
               className="flex items-center gap-1 px-1 py-0.5 -mx-1 rounded hover:bg-muted/50 transition-colors"
             >
               <span>{currentModelLabel}</span>
               {chevron}
             </button>
 
-            {openMenu === 'model' && (
+            {openMenu === "model" && (
               <div className="ai-config-menu">
                 {models.length > 8 && (
                   <div className="ai-config-menu-search">
@@ -158,27 +174,40 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
                       type="text"
                       placeholder="Filter models…"
                       value={modelSearch}
-                      onChange={e => setModelSearch(e.target.value)}
+                      onChange={(e) => setModelSearch(e.target.value)}
                       autoFocus
                     />
                   </div>
                 )}
-                <div className={models.length > 8 ? 'ai-config-menu-scroll' : ''}>
+                <div className={models.length > 8 ? "ai-config-menu-scroll" : ""}>
                   {models
-                    .filter(m => !modelSearch || m.label.toLowerCase().includes(modelSearch.toLowerCase()))
-                    .map(m => {
+                    .filter(
+                      (m) =>
+                        !modelSearch || m.label.toLowerCase().includes(modelSearch.toLowerCase()),
+                    )
+                    .map((m) => {
                       const isActive = m.id === effectiveModel;
                       return (
                         <button
                           key={m.id}
                           type="button"
                           onClick={() => handleModelSelect(m.id)}
-                          className={`ai-config-menu-item ${isActive ? 'ai-config-menu-item-active' : ''}`}
+                          className={`ai-config-menu-item ${isActive ? "ai-config-menu-item-active" : ""}`}
                         >
                           <span>{m.label}</span>
                           {isActive && (
-                            <svg className="w-3 h-3 ml-auto text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            <svg
+                              className="w-3 h-3 ml-auto text-primary"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2.5}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M5 13l4 4L19 7"
+                              />
                             </svg>
                           )}
                         </button>

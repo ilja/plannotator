@@ -58,10 +58,12 @@ const ImageAttachmentSchema = Schema.Struct({
 });
 const ChoiceValidationEvidenceSchema = Schema.Struct({
   question: Schema.String,
-  options: Schema.Array(Schema.Struct({
-    label: Schema.String,
-    text: Schema.String,
-  })),
+  options: Schema.Array(
+    Schema.Struct({
+      label: Schema.String,
+      text: Schema.String,
+    }),
+  ),
 });
 const AnnotationMetaSchema = Schema.Struct({
   parentTagName: Schema.String,
@@ -158,9 +160,7 @@ function unwrapBody(body: ExternalFields): ExternalFields[] | ParseError {
     const items: ExternalFields[] = [];
     for (let i = 0; i < annotationsCandidate.length; i++) {
       const item = annotationsCandidate[i];
-      const decoded = Option.getOrUndefined(
-        Schema.decodeUnknownOption(ExternalFieldsSchema)(item),
-      );
+      const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(ExternalFieldsSchema)(item));
       if (!decoded) {
         return { error: `annotations[${i}] must be an object` };
       }
@@ -181,9 +181,7 @@ function unwrapBody(body: ExternalFields): ExternalFields[] | ParseError {
 }
 
 function requireString(obj: ExternalFields, field: string, index: number): string | ParseError {
-  const decoded = Option.getOrUndefined(
-    Schema.decodeUnknownOption(Schema.String)(obj[field]),
-  );
+  const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(obj[field]));
   if (!decoded || decoded.length === 0) {
     return { error: `annotations[${index}] missing required "${field}" field` };
   }

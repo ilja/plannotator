@@ -9,7 +9,10 @@ import {
 
 describe("rewriteHtmlAssetReferences", () => {
   const rewrite = (html: string) =>
-    rewriteHtmlAssetReferences(html, (assetPath) => `/api/html-assets/t/${encodeHtmlAssetPath(assetPath)}`);
+    rewriteHtmlAssetReferences(
+      html,
+      (assetPath) => `/api/html-assets/t/${encodeHtmlAssetPath(assetPath)}`,
+    );
 
   test("rewrites direct local support assets", () => {
     const html = `<!doctype html>
@@ -34,8 +37,10 @@ describe("rewriteHtmlAssetReferences", () => {
     expect(out).toContain('background: url("/api/html-assets/t/hero.png#cover")');
     expect(out).toContain('src="/api/html-assets/t/app.js"');
     expect(out).toContain('src="/api/html-assets/t/images/logo.png"');
-    expect(out).toContain('srcset="/api/html-assets/t/small.png 1x, /api/html-assets/t/large.png 2x"');
-    expect(out).toContain('background-image: url(&quot;/api/html-assets/t/inline-bg.webp&quot;)');
+    expect(out).toContain(
+      'srcset="/api/html-assets/t/small.png 1x, /api/html-assets/t/large.png 2x"',
+    );
+    expect(out).toContain("background-image: url(&quot;/api/html-assets/t/inline-bg.webp&quot;)");
     expect(out).toContain('src="/api/html-assets/t/movie.mp4"');
     expect(out).toContain('poster="/api/html-assets/t/poster.jpg"');
     expect(out).toContain('src="/api/html-assets/t/intro.mp3"');
@@ -95,7 +100,9 @@ describe("html asset route helpers", () => {
   test("normalizes valid route paths", () => {
     expect(normalizeHtmlAssetRoutePath("assets/logo%20small.png")).toBe("assets/logo small.png");
     expect(normalizeHtmlAssetRoutePath("./assets/../logo.svg")).toBe("logo.svg");
-    expect(normalizeHtmlAssetRoutePath("assets/100%2525%20done.png")).toBe("assets/100%25 done.png");
+    expect(normalizeHtmlAssetRoutePath("assets/100%2525%20done.png")).toBe(
+      "assets/100%25 done.png",
+    );
   });
 
   test("rejects traversal and invalid encodings", () => {
@@ -107,7 +114,9 @@ describe("html asset route helpers", () => {
   test("returns expected content types", () => {
     expect(htmlAssetContentType("style.css")).toBe("text/css; charset=utf-8");
     expect(htmlAssetContentType("font.woff2")).toBe("font/woff2");
-    expect(htmlAssetContentType("site.webmanifest")).toBe("application/manifest+json; charset=utf-8");
+    expect(htmlAssetContentType("site.webmanifest")).toBe(
+      "application/manifest+json; charset=utf-8",
+    );
     expect(htmlAssetContentType("image.unknown")).toBeNull();
   });
 });

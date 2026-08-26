@@ -39,7 +39,13 @@ const SAMPLE_PAYLOAD = {
   p: "# Implementation Plan\n\n## Step 1: Add authentication\n\nWe'll use JWT tokens stored in httpOnly cookies.\n\n## Step 2: Create middleware\n\nAdd auth middleware to all protected routes.\n\n```typescript\nconst authMiddleware = async (req: Request) => {\n  const token = getCookie(req, 'auth');\n  if (!token) throw new UnauthorizedError();\n  return verify(token, SECRET);\n};\n```\n\n## Step 3: Update database schema\n\nAdd users table with email, password_hash, created_at columns.",
   a: [
     ["C", "Add auth middleware", "Consider rate limiting on login endpoint", "reviewer", []],
-    ["R", "JWT tokens stored in httpOnly cookies", "Use refresh token rotation instead of single JWT", null, []],
+    [
+      "R",
+      "JWT tokens stored in httpOnly cookies",
+      "Use refresh token rotation instead of single JWT",
+      null,
+      [],
+    ],
     ["D", "Add users table with email, password_hash, created_at columns.", null, []],
   ],
 };
@@ -79,9 +85,8 @@ describe("encrypt / decrypt round-trip", () => {
 
     // Flip a character in the middle of the ciphertext
     const mid = Math.floor(ciphertext.length / 2);
-    const tampered = ciphertext.slice(0, mid) +
-      (ciphertext[mid] === 'A' ? 'B' : 'A') +
-      ciphertext.slice(mid + 1);
+    const tampered =
+      ciphertext.slice(0, mid) + (ciphertext[mid] === "A" ? "B" : "A") + ciphertext.slice(mid + 1);
 
     expect(decrypt(tampered, key)).rejects.toThrow();
   });

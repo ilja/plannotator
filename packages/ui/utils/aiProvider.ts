@@ -6,13 +6,13 @@
  * random port, and localStorage is scoped by origin including port.
  */
 
-import { Option, Schema } from 'effect';
-import { storage } from './storage';
-import { AGENT_ORIGINS, getAgentAIProviderTypes, type Origin } from '@plannotator/shared/agents';
+import { Option, Schema } from "effect";
+import { storage } from "./storage";
+import { AGENT_ORIGINS, getAgentAIProviderTypes, type Origin } from "@plannotator/shared/agents";
 
-const PROVIDER_KEY = 'plannotator-ai-provider';
-const MODELS_KEY = 'plannotator-ai-models';
-const PROVIDER_BY_ORIGIN_KEY = 'plannotator-ai-provider-by-origin';
+const PROVIDER_KEY = "plannotator-ai-provider";
+const MODELS_KEY = "plannotator-ai-models";
+const PROVIDER_BY_ORIGIN_KEY = "plannotator-ai-provider-by-origin";
 
 const StoredRecordSchema = Schema.Record(Schema.String, Schema.Json);
 const OriginSchema = Schema.Literals(AGENT_ORIGINS);
@@ -47,22 +47,22 @@ export interface AIProviderSelection {
 }
 
 export const AI_REASONING_EFFORTS = [
-  { id: 'low', label: 'Low' },
-  { id: 'medium', label: 'Medium' },
-  { id: 'high', label: 'High' },
-  { id: 'xhigh', label: 'Max' },
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High" },
+  { id: "xhigh", label: "Max" },
 ] as const;
 
 export function isPiProvider(provider: AIProviderOption | null | undefined): boolean {
-  return provider?.id === 'pi-sdk' || provider?.name === 'pi-sdk';
+  return provider?.id === "pi-sdk" || provider?.name === "pi-sdk";
 }
 
 function isPiProviderId(providerId: string | null | undefined): boolean {
-  return providerId === 'pi-sdk' || providerId?.startsWith('pi-') === true;
+  return providerId === "pi-sdk" || providerId?.startsWith("pi-") === true;
 }
 
 export function originHasDedicatedAIProvider(origin: Origin | null | undefined): boolean {
-  return getAgentAIProviderTypes(origin).includes('pi-sdk');
+  return getAgentAIProviderTypes(origin).includes("pi-sdk");
 }
 
 function decodeStoredRecord(raw: string) {
@@ -153,9 +153,13 @@ export function findOriginAIProvider(
   providers: AIProviderOption[],
   origin: Origin | null | undefined,
 ): AIProviderOption | null {
-  const providerTypes = getAgentAIProviderTypes(origin).filter(providerType => providerType === 'pi-sdk');
+  const providerTypes = getAgentAIProviderTypes(origin).filter(
+    (providerType) => providerType === "pi-sdk",
+  );
   for (const providerType of providerTypes) {
-    const provider = providers.find(p => isPiProvider(p) && (p.id === providerType || p.name === providerType));
+    const provider = providers.find(
+      (p) => isPiProvider(p) && (p.id === providerType || p.name === providerType),
+    );
     if (provider) return provider;
   }
   return null;
@@ -167,12 +171,12 @@ export function resolveAIModelForProvider(
 ): string | null {
   if (!provider) return null;
   const models = provider.models ?? [];
-  const modelIds = new Set(models.map(m => m.id));
+  const modelIds = new Set(models.map((m) => m.id));
   const preferredModel = preferredModels[provider.id];
   if (preferredModel && (modelIds.size === 0 || modelIds.has(preferredModel))) {
     return preferredModel;
   }
-  const defaultModel = models.find(m => m.default) ?? models[0];
+  const defaultModel = models.find((m) => m.default) ?? models[0];
   return defaultModel?.id ?? null;
 }
 
@@ -188,7 +192,7 @@ export function resolveAIProviderSelection(options: {
   if (providers.length === 0) return { providerId: null, model: null };
 
   const byId = (id: string | null | undefined) =>
-    id ? providers.find(provider => provider.id === id) ?? null : null;
+    id ? (providers.find((provider) => provider.id === id) ?? null) : null;
 
   const provider =
     byId(origin ? settings.providerByOrigin[origin] : null) ??

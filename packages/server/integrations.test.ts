@@ -91,7 +91,9 @@ describe("buildHashtags", () => {
   });
 
   test("preserves slashes in auto tags with nested paths", () => {
-    expect(buildHashtags(undefined, ["plannotator/plans", "work"])).toBe("#plannotator/plans #work");
+    expect(buildHashtags(undefined, ["plannotator/plans", "work"])).toBe(
+      "#plannotator/plans #work",
+    );
   });
 });
 
@@ -168,7 +170,9 @@ describe("extractTags", () => {
   });
 
   test("limits to 7 tags", async () => {
-    const tags = await extractTags("# One Two Three Four\n\n```go\n```\n```python\n```\n```ruby\n```\n```swift\n```");
+    const tags = await extractTags(
+      "# One Two Three Four\n\n```go\n```\n```python\n```\n```ruby\n```\n```swift\n```",
+    );
     expect(tags.length).toBeLessThanOrEqual(7);
   });
 });

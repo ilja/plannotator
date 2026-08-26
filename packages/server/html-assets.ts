@@ -98,4 +98,3 @@ export function createHtmlAssetRegistry() {
 
   return { rewriteHtml, inlineHtml, handle };
 }
-

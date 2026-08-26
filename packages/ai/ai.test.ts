@@ -2,11 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { Schema } from "effect";
 import { SessionManager } from "./session-manager.ts";
 import { buildSystemPrompt, buildForkPreamble } from "./context.ts";
-import {
-  ProviderRegistry,
-  registerProviderFactory,
-  createProvider,
-} from "./provider.ts";
+import { ProviderRegistry, registerProviderFactory, createProvider } from "./provider.ts";
 import {
   AICapabilitiesResponseSchema,
   AbortResponseSchema,
@@ -14,12 +10,7 @@ import {
   SessionListResponseSchema,
   createAIEndpoints,
 } from "./endpoints.ts";
-import type {
-  AIProvider,
-  AISession,
-  AIMessage,
-  AIContext,
-} from "./types.ts";
+import type { AIProvider, AISession, AIMessage, AIContext } from "./types.ts";
 import {
   buildWindowsCommandScriptSpawnCommand,
   killWindowsProcessTree,
@@ -32,10 +23,7 @@ import {
 // Helpers — mock provider/session for testing
 // ---------------------------------------------------------------------------
 
-function mockSession(
-  id: string,
-  parentSessionId: string | null = null
-): AISession {
+function mockSession(id: string, parentSessionId: string | null = null): AISession {
   let active = false;
   return {
     get id() {
@@ -77,10 +65,7 @@ function mockProvider(name = "mock"): TestProvider {
     },
     async forkSession(opts) {
       const parent = opts.context.parent;
-      return mockSession(
-        `forked-${++sessionCounter}`,
-        parent?.sessionId ?? null
-      );
+      return mockSession(`forked-${++sessionCounter}`, parent?.sessionId ?? null);
     },
     async resumeSession(sessionId) {
       return mockSession(sessionId, null);
@@ -96,11 +81,7 @@ function mockProvider(name = "mock"): TestProvider {
 describe("command path helpers", () => {
   test("resolveWindowsCommandShim prefers a sibling .cmd for npm shims", () => {
     const raw = String.raw`C:\Users\Andrew\AppData\Roaming\npm\pi`;
-    const resolved = resolveWindowsCommandShim(
-      raw,
-      "win32",
-      (path) => path === `${raw}.cmd`,
-    );
+    const resolved = resolveWindowsCommandShim(raw, "win32", (path) => path === `${raw}.cmd`);
 
     expect(resolved).toBe(`${raw}.cmd`);
   });
@@ -117,17 +98,14 @@ describe("command path helpers", () => {
   });
 
   test("resolveCommandFromWhichOutput preserves the first non-Windows result", () => {
-    expect(
-      resolveCommandFromWhichOutput("/usr/local/bin/pi\n/usr/bin/pi\n", "darwin"),
-    ).toBe("/usr/local/bin/pi");
+    expect(resolveCommandFromWhichOutput("/usr/local/bin/pi\n/usr/bin/pi\n", "darwin")).toBe(
+      "/usr/local/bin/pi",
+    );
   });
 
   test("shouldSpawnViaShell only flags Windows command scripts", () => {
     expect(
-      shouldSpawnViaShell(
-        String.raw`C:\Users\Andrew\AppData\Roaming\npm\pi.cmd`,
-        "win32",
-      ),
+      shouldSpawnViaShell(String.raw`C:\Users\Andrew\AppData\Roaming\npm\pi.cmd`, "win32"),
     ).toBe(true);
     expect(shouldSpawnViaShell(String.raw`C:\tools\pi.exe`, "win32")).toBe(false);
     expect(shouldSpawnViaShell("/usr/local/bin/pi.cmd", "darwin")).toBe(false);
@@ -489,9 +467,7 @@ describe("ProviderRegistry", () => {
   });
 
   test("createProvider throws for unknown type", async () => {
-    await expect(createProvider({ type: "unknown-xyz" })).rejects.toThrow(
-      "No AI provider factory"
-    );
+    await expect(createProvider({ type: "unknown-xyz" })).rejects.toThrow("No AI provider factory");
   });
 });
 
@@ -539,7 +515,7 @@ describe("AI endpoints", () => {
     const { endpoints } = setup();
 
     const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
+      new Request("http://localhost/api/ai/capabilities"),
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(false);
@@ -550,7 +526,7 @@ describe("AI endpoints", () => {
     reg.register(mockProvider("mock"));
 
     const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
+      new Request("http://localhost/api/ai/capabilities"),
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(true);
@@ -563,7 +539,7 @@ describe("AI endpoints", () => {
     reg.register(mockProvider("pi-sdk"), "pi-fast");
 
     const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
+      new Request("http://localhost/api/ai/capabilities"),
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.defaultProvider).toBe("pi-fast");
@@ -583,7 +559,7 @@ describe("AI endpoints", () => {
     });
 
     const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
+      new Request("http://localhost/api/ai/capabilities"),
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.providers[0].models).toEqual([
@@ -597,7 +573,7 @@ describe("AI endpoints", () => {
     reg.register(mockProvider("mock-sdk"), "mock-1");
 
     const res = await endpoints["/api/ai/capabilities"](
-      new Request("http://localhost/api/ai/capabilities")
+      new Request("http://localhost/api/ai/capabilities"),
     );
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     const ids = data.providers.map((p: { id: string }) => p.id);
@@ -617,9 +593,11 @@ describe("AI endpoints", () => {
         body: JSON.stringify({
           context: { mode: "code-review", review: { patch: "+x" } },
         }),
-      })
+      }),
     );
-    const createData = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
+    const createData = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
+      await createRes.json(),
+    );
     expect(createData.sessionId).toBeDefined();
     expect(sm.size).toBe(1);
 
@@ -632,7 +610,7 @@ describe("AI endpoints", () => {
           sessionId: createData.sessionId,
           prompt: "What is this diff about?",
         }),
-      })
+      }),
     );
     expect(queryRes.headers.get("Content-Type")).toBe("text/event-stream");
 
@@ -654,7 +632,7 @@ describe("AI endpoints", () => {
           context: { mode: "code-review", review: { patch: "+x" } },
           providerId: "pi-fast",
         }),
-      })
+      }),
     );
     expect(createRes.status).toBe(200);
   });
@@ -679,7 +657,7 @@ describe("AI endpoints", () => {
           maxTurns: 9999,
           maxBudgetUsd: 9999,
         }),
-      })
+      }),
     );
 
     expect(createRes.status).toBe(200);
@@ -699,7 +677,7 @@ describe("AI endpoints", () => {
           context: { mode: "code-review", review: { patch: "+x" } },
           providerId: "nonexistent",
         }),
-      })
+      }),
     );
     expect(createRes.status).toBe(503);
     const data = await createRes.json();
@@ -717,9 +695,11 @@ describe("AI endpoints", () => {
         body: JSON.stringify({
           context: { mode: "code-review", review: { patch: "+x" } },
         }),
-      })
+      }),
     );
-    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
+    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
+      await createRes.json(),
+    );
 
     const queryRes = await endpoints["/api/ai/query"](
       new Request("http://localhost/api/ai/query", {
@@ -730,7 +710,7 @@ describe("AI endpoints", () => {
           prompt: "What changed?",
           contextUpdate: "New annotation: section 3 flagged",
         }),
-      })
+      }),
     );
     const text = await queryRes.text();
     expect(text).toContain("Context update");
@@ -749,9 +729,11 @@ describe("AI endpoints", () => {
         body: JSON.stringify({
           context: { mode: "code-review", review: { patch: "+x" } },
         }),
-      })
+      }),
     );
-    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
+    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
+      await createRes.json(),
+    );
 
     // First query should set the label
     await endpoints["/api/ai/query"](
@@ -762,7 +744,7 @@ describe("AI endpoints", () => {
           sessionId,
           prompt: "Why did we choose this approach?",
         }),
-      })
+      }),
     );
 
     const entry = sm.get(sessionId);
@@ -780,16 +762,18 @@ describe("AI endpoints", () => {
         body: JSON.stringify({
           context: { mode: "code-review", review: { patch: "+x" } },
         }),
-      })
+      }),
     );
-    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(await createRes.json());
+    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
+      await createRes.json(),
+    );
 
     const abortRes = await endpoints["/api/ai/abort"](
       new Request("http://localhost/api/ai/abort", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId }),
-      })
+      }),
     );
     const abortData = Schema.decodeUnknownSync(AbortResponseSchema)(await abortRes.json());
     expect(abortData.ok).toBe(true);
@@ -806,7 +790,7 @@ describe("AI endpoints", () => {
         body: JSON.stringify({
           context: { mode: "code-review", review: { patch: "+a" } },
         }),
-      })
+      }),
     );
     await endpoints["/api/ai/session"](
       new Request("http://localhost/api/ai/session", {
@@ -815,11 +799,11 @@ describe("AI endpoints", () => {
         body: JSON.stringify({
           context: { mode: "code-review", review: { patch: "+x" } },
         }),
-      })
+      }),
     );
 
     const listRes = await endpoints["/api/ai/sessions"](
-      new Request("http://localhost/api/ai/sessions")
+      new Request("http://localhost/api/ai/sessions"),
     );
     const sessions = Schema.decodeUnknownSync(SessionListResponseSchema)(await listRes.json());
     expect(sessions.length).toBe(2);
@@ -859,80 +843,105 @@ describe("mapPiEvent", () => {
   const SESSION_ID = "pi-session-123";
 
   test("text_delta from message_update", () => {
-    const result = mapPiEvent({
-      type: "message_update",
-      assistantMessageEvent: { type: "text_delta", delta: "Hello", contentIndex: 0, partial: {} },
-    }, SESSION_ID);
+    const result = mapPiEvent(
+      {
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta: "Hello", contentIndex: 0, partial: {} },
+      },
+      SESSION_ID,
+    );
     expect(result).toEqual([{ type: "text_delta", delta: "Hello" }]);
   });
 
   test("toolcall_end from message_update", () => {
-    const result = mapPiEvent({
-      type: "message_update",
-      assistantMessageEvent: {
-        type: "toolcall_end",
-        contentIndex: 0,
-        toolCall: { type: "toolCall", id: "tc_1", name: "read", arguments: { path: "/foo" } },
-        partial: {},
+    const result = mapPiEvent(
+      {
+        type: "message_update",
+        assistantMessageEvent: {
+          type: "toolcall_end",
+          contentIndex: 0,
+          toolCall: { type: "toolCall", id: "tc_1", name: "read", arguments: { path: "/foo" } },
+          partial: {},
+        },
       },
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "tool_use",
-      toolName: "read",
-      toolInput: { path: "/foo" },
-      toolUseId: "tc_1",
-    }]);
+      SESSION_ID,
+    );
+    expect(result).toEqual([
+      {
+        type: "tool_use",
+        toolName: "read",
+        toolInput: { path: "/foo" },
+        toolUseId: "tc_1",
+      },
+    ]);
   });
 
   test("tool_execution_end maps to tool_result", () => {
-    const result = mapPiEvent({
-      type: "tool_execution_end",
-      toolCallId: "tc_1",
-      toolName: "read",
-      result: "file contents",
-      isError: false,
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "tool_result",
-      toolUseId: "tc_1",
-      result: "file contents",
-    }]);
+    const result = mapPiEvent(
+      {
+        type: "tool_execution_end",
+        toolCallId: "tc_1",
+        toolName: "read",
+        result: "file contents",
+        isError: false,
+      },
+      SESSION_ID,
+    );
+    expect(result).toEqual([
+      {
+        type: "tool_result",
+        toolUseId: "tc_1",
+        result: "file contents",
+      },
+    ]);
   });
 
   test("tool_execution_end with error maps to tool_result with [Error] prefix", () => {
-    const result = mapPiEvent({
-      type: "tool_execution_end",
-      toolCallId: "tc_1",
-      toolName: "read",
-      result: "not found",
-      isError: true,
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "tool_result",
-      toolUseId: "tc_1",
-      result: "[Error] not found",
-    }]);
+    const result = mapPiEvent(
+      {
+        type: "tool_execution_end",
+        toolCallId: "tc_1",
+        toolName: "read",
+        result: "not found",
+        isError: true,
+      },
+      SESSION_ID,
+    );
+    expect(result).toEqual([
+      {
+        type: "tool_result",
+        toolUseId: "tc_1",
+        result: "[Error] not found",
+      },
+    ]);
   });
 
   test("agent_end maps to result", () => {
-    const result = mapPiEvent({
-      type: "agent_end",
-      messages: [],
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "result",
-      sessionId: SESSION_ID,
-      success: true,
-    }]);
+    const result = mapPiEvent(
+      {
+        type: "agent_end",
+        messages: [],
+      },
+      SESSION_ID,
+    );
+    expect(result).toEqual([
+      {
+        type: "result",
+        sessionId: SESSION_ID,
+        success: true,
+      },
+    ]);
   });
 
   test("process_exited maps to error", () => {
     const result = mapPiEvent({ type: "process_exited" }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "error",
-      error: "Pi process exited unexpectedly.",
-      code: "pi_process_exit",
-    }]);
+    expect(result).toEqual([
+      {
+        type: "error",
+        error: "Pi process exited unexpectedly.",
+        code: "pi_process_exit",
+      },
+    ]);
   });
 
   test("ignored events return empty", () => {
@@ -941,85 +950,143 @@ describe("mapPiEvent", () => {
     expect(mapPiEvent({ type: "turn_end", message: {}, toolResults: [] }, SESSION_ID)).toEqual([]);
     expect(mapPiEvent({ type: "message_start", message: {} }, SESSION_ID)).toEqual([]);
     expect(mapPiEvent({ type: "message_end", message: {} }, SESSION_ID)).toEqual([]);
-    expect(mapPiEvent({ type: "tool_execution_start", toolCallId: "x", toolName: "y", args: {} }, SESSION_ID)).toEqual([]);
+    expect(
+      mapPiEvent(
+        { type: "tool_execution_start", toolCallId: "x", toolName: "y", args: {} },
+        SESSION_ID,
+      ),
+    ).toEqual([]);
   });
 
   test("message_update with thinking events returns empty", () => {
-    const result = mapPiEvent({
-      type: "message_update",
-      assistantMessageEvent: { type: "thinking_delta", delta: "hmm", contentIndex: 0, partial: {} },
-    }, SESSION_ID);
+    const result = mapPiEvent(
+      {
+        type: "message_update",
+        assistantMessageEvent: {
+          type: "thinking_delta",
+          delta: "hmm",
+          contentIndex: 0,
+          partial: {},
+        },
+      },
+      SESSION_ID,
+    );
     expect(result).toEqual([]);
   });
 
   test("message_update with done returns empty", () => {
-    const result = mapPiEvent({
-      type: "message_update",
-      assistantMessageEvent: { type: "done", reason: "stop", message: {} },
-    }, SESSION_ID);
+    const result = mapPiEvent(
+      {
+        type: "message_update",
+        assistantMessageEvent: { type: "done", reason: "stop", message: {} },
+      },
+      SESSION_ID,
+    );
     expect(result).toEqual([]);
   });
 
   test("tool_execution_end with object result stringifies it", () => {
-    const result = mapPiEvent({
-      type: "tool_execution_end",
-      toolCallId: "tc_2",
-      toolName: "ls",
-      result: { files: ["a.ts", "b.ts"] },
-      isError: false,
-    }, SESSION_ID);
-    expect(result).toEqual([{
-      type: "tool_result",
-      toolUseId: "tc_2",
-      result: JSON.stringify({ files: ["a.ts", "b.ts"] }),
-    }]);
+    const result = mapPiEvent(
+      {
+        type: "tool_execution_end",
+        toolCallId: "tc_2",
+        toolName: "ls",
+        result: { files: ["a.ts", "b.ts"] },
+        isError: false,
+      },
+      SESSION_ID,
+    );
+    expect(result).toEqual([
+      {
+        type: "tool_result",
+        toolUseId: "tc_2",
+        result: JSON.stringify({ files: ["a.ts", "b.ts"] }),
+      },
+    ]);
   });
 
   test("malformed known events are ignored and incomplete errors use a fallback", () => {
     expect(mapPiEvent({ type: "message_update" }, SESSION_ID)).toEqual([]);
-    expect(mapPiEvent({
-      type: "message_update",
-      assistantMessageEvent: { type: "text_delta", delta: 42 },
-    }, SESSION_ID)).toEqual([]);
-    expect(mapPiEvent({
-      type: "message_update",
-      assistantMessageEvent: {
-        type: "toolcall_end",
-        toolCall: { id: "tc", name: "read", arguments: "bad" },
+    expect(
+      mapPiEvent(
+        {
+          type: "message_update",
+          assistantMessageEvent: { type: "text_delta", delta: 42 },
+        },
+        SESSION_ID,
+      ),
+    ).toEqual([]);
+    expect(
+      mapPiEvent(
+        {
+          type: "message_update",
+          assistantMessageEvent: {
+            type: "toolcall_end",
+            toolCall: { id: "tc", name: "read", arguments: "bad" },
+          },
+        },
+        SESSION_ID,
+      ),
+    ).toEqual([]);
+    expect(
+      mapPiEvent(
+        {
+          type: "tool_execution_end",
+          result: "missing required fields",
+        },
+        SESSION_ID,
+      ),
+    ).toEqual([]);
+    expect(
+      mapPiEvent(
+        {
+          type: "message_update",
+          assistantMessageEvent: { type: "error" },
+        },
+        SESSION_ID,
+      ),
+    ).toEqual([
+      {
+        type: "error",
+        error: "Stream error",
+        code: "pi_stream_error",
       },
-    }, SESSION_ID)).toEqual([]);
-    expect(mapPiEvent({
-      type: "tool_execution_end",
-      result: "missing required fields",
-    }, SESSION_ID)).toEqual([]);
-    expect(mapPiEvent({
-      type: "message_update",
-      assistantMessageEvent: { type: "error" },
-    }, SESSION_ID)).toEqual([{
-      type: "error",
-      error: "Stream error",
-      code: "pi_stream_error",
-    }]);
+    ]);
   });
 
   test("tool results preserve null, arrays, and booleans", () => {
-    expect(mapPiEvent({
-      type: "tool_execution_end",
-      toolCallId: "tc-null",
-      result: null,
-      isError: false,
-    }, SESSION_ID)[0]).toMatchObject({ result: "" });
-    expect(mapPiEvent({
-      type: "tool_execution_end",
-      toolCallId: "tc-array",
-      result: ["a", 2],
-      isError: false,
-    }, SESSION_ID)[0]).toMatchObject({ result: '["a",2]' });
-    expect(mapPiEvent({
-      type: "tool_execution_end",
-      toolCallId: "tc-bool",
-      result: true,
-      isError: false,
-    }, SESSION_ID)[0]).toMatchObject({ result: "true" });
+    expect(
+      mapPiEvent(
+        {
+          type: "tool_execution_end",
+          toolCallId: "tc-null",
+          result: null,
+          isError: false,
+        },
+        SESSION_ID,
+      )[0],
+    ).toMatchObject({ result: "" });
+    expect(
+      mapPiEvent(
+        {
+          type: "tool_execution_end",
+          toolCallId: "tc-array",
+          result: ["a", 2],
+          isError: false,
+        },
+        SESSION_ID,
+      )[0],
+    ).toMatchObject({ result: '["a",2]' });
+    expect(
+      mapPiEvent(
+        {
+          type: "tool_execution_end",
+          toolCallId: "tc-bool",
+          result: true,
+          isError: false,
+        },
+        SESSION_ID,
+      )[0],
+    ).toMatchObject({ result: "true" });
   });
 });

@@ -91,9 +91,7 @@ async function generateRemotePasteShareUrl(
   }
 
   const pasteParam =
-    pasteApiUrl !== DEFAULT_PASTE_API
-      ? `&paste=${base64UrlEncode(pasteApiUrl)}`
-      : "";
+    pasteApiUrl !== DEFAULT_PASTE_API ? `&paste=${base64UrlEncode(pasteApiUrl)}` : "";
   return `${shareBaseUrl}/p/${resultId}#key=${key}${pasteParam}`;
 }
 
@@ -140,8 +138,8 @@ export async function writeRemoteShareLink(
     const size = formatSize(new TextEncoder().encode(shareUrl).length);
     process.stderr.write(
       `\n  Open this link on your local machine to ${verb}:\n` +
-      `  ${shareUrl}\n\n` +
-      `  (${size} — ${noun}, annotations added in browser)\n\n`
+        `  ${shareUrl}\n\n` +
+        `  (${size} — ${noun}, annotations added in browser)\n\n`,
     );
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
@@ -150,7 +148,7 @@ export async function writeRemoteShareLink(
       : "";
     process.stderr.write(
       `\n  Warning: could not create remote share link for ${noun}.\n` +
-      `  ${reason}.${pasteHint}\n\n`
+        `  ${reason}.${pasteHint}\n\n`,
     );
   }
 }

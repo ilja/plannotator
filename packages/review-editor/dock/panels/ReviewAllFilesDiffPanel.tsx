@@ -1,7 +1,7 @@
-import React from 'react';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { AllFilesCodeView } from '../../components/AllFilesCodeView';
-import { useReviewState } from '../ReviewStateContext';
+import React from "react";
+import type { IDockviewPanelProps } from "dockview-react";
+import { AllFilesCodeView } from "../../components/AllFilesCodeView";
+import { useReviewState } from "../ReviewStateContext";
 
 export const ReviewAllFilesDiffPanel: React.FC<IDockviewPanelProps> = () => {
   const state = useReviewState();
@@ -41,7 +41,7 @@ export const ReviewAllFilesDiffPanel: React.FC<IDockviewPanelProps> = () => {
       // Debounced like ReviewDiffPanel: searchMatches derive from the
       // debounced query, so painting marks from the raw query mid-debounce
       // mismatches mark ids and re-walks every rendered item per keystroke.
-      searchQuery={state.isSearchPending ? '' : state.debouncedSearchQuery}
+      searchQuery={state.isSearchPending ? "" : state.debouncedSearchQuery}
       searchMatches={state.searchMatches}
       activeSearchMatchId={state.activeSearchMatchId}
       activeSearchMatch={state.allFilesActiveSearchMatch}
