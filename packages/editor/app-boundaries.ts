@@ -122,8 +122,6 @@ export const SaveNotesResponseSchema = Schema.Struct({
   results: Schema.optionalKey(
     Schema.Struct({
       obsidian: Schema.optionalKey(IntegrationResultSchema),
-      bear: Schema.optionalKey(IntegrationResultSchema),
-      octarine: Schema.optionalKey(IntegrationResultSchema),
     }),
   ),
 });

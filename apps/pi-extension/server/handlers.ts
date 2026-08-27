@@ -17,14 +17,12 @@ import {
 } from "../generated/draft.js";
 import { FAVICON_SVG } from "../generated/favicon.js";
 
-import { json, parseStrictBody, send, toWebRequest } from "./helpers";
+import { json, send, toWebRequest } from "./helpers";
 import {
   type IntegrationResult,
-  saveToBear,
   saveToObsidian,
-  saveToOctarine,
 } from "./integrations.js";
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 type Res = import("node:http").ServerResponse;
 
@@ -244,11 +242,9 @@ export function handleFavicon(res: Res): void {
   });
 }
 
-/** Save to external note apps (Obsidian, Bear, Octarine). Used by plan + annotate servers. */
+/** Save to Obsidian. Used by plan and annotate servers. */
 interface SaveNotesResults {
   obsidian?: IntegrationResult;
-  bear?: IntegrationResult;
-  octarine?: IntegrationResult;
 }
 
 const ObsidianConfigSchema = Schema.Struct({
@@ -259,52 +255,37 @@ const ObsidianConfigSchema = Schema.Struct({
   filenameSeparator: Schema.optionalKey(Schema.Literals(["space", "dash", "underscore"])),
 });
 
-const BearConfigSchema = Schema.Struct({
-  plan: Schema.String,
-  customTags: Schema.optionalKey(Schema.String),
-  tagPosition: Schema.optionalKey(Schema.Literals(["prepend", "append"])),
-});
-
-const OctarineConfigSchema = Schema.Struct({
-  plan: Schema.String,
-  workspace: Schema.String,
-  folder: Schema.String,
-});
-
-const NoteSaveRequestSchema = Schema.Struct({
-  obsidian: Schema.optionalKey(ObsidianConfigSchema),
-  bear: Schema.optionalKey(BearConfigSchema),
-  octarine: Schema.optionalKey(OctarineConfigSchema),
-});
+const SaveNotesBodySchema = Schema.Record(Schema.String, Schema.Unknown);
 
 export async function handleSaveNotesRequest(req: IncomingMessage, res: Res): Promise<void> {
   const results: SaveNotesResults = {};
   try {
-    const body = Schema.decodeUnknownSync(NoteSaveRequestSchema)(await parseStrictBody(req));
+    const body = Option.getOrUndefined(
+      Schema.decodeUnknownOption(SaveNotesBodySchema)(await toWebRequest(req).json()),
+    );
+    if (!body) {
+      json(res, { error: "Invalid JSON" }, 400);
+      return;
+    }
+    if (Object.keys(body).some((target) => target !== "obsidian")) {
+      json(res, { error: "Unsupported save target" }, 400);
+      return;
+    }
+
     const promises: Promise<void>[] = [];
-    const obsConfig = body.obsidian;
-    const bearConfig = body.bear;
-    const octConfig = body.octarine;
-    if (obsConfig?.vaultPath && obsConfig?.plan) {
-      promises.push(
-        saveToObsidian(obsConfig).then((r) => {
-          results.obsidian = r;
-        }),
+    if (Object.hasOwn(body, "obsidian")) {
+      const obsConfig = Option.getOrUndefined(
+        Schema.decodeUnknownOption(ObsidianConfigSchema)(body.obsidian),
       );
-    }
-    if (bearConfig?.plan) {
-      promises.push(
-        saveToBear(bearConfig).then((r) => {
-          results.bear = r;
-        }),
-      );
-    }
-    if (octConfig?.plan && octConfig?.workspace) {
-      promises.push(
-        saveToOctarine(octConfig).then((r) => {
-          results.octarine = r;
-        }),
-      );
+      if (!obsConfig) {
+        results.obsidian = { success: false, error: "Invalid Obsidian save configuration" };
+      } else if (obsConfig.vaultPath && obsConfig.plan) {
+        promises.push(
+          saveToObsidian(obsConfig).then((r) => {
+            results.obsidian = r;
+          }),
+        );
+      }
     }
     await Promise.allSettled(promises);
     for (const [name, result] of Object.entries(results)) {

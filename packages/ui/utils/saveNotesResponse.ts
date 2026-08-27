@@ -10,7 +10,7 @@ const SaveNotesResponseEnvelopeSchema = Schema.Struct({
   results: Schema.Record(Schema.String, Schema.Unknown),
 });
 
-const saveNotesTargets = ["obsidian", "bear", "octarine"] as const;
+const saveNotesTargets = ["obsidian"] as const;
 const decodeSaveNotesResponseEnvelope = Schema.decodeUnknownResult(SaveNotesResponseEnvelopeSchema);
 const decodeSaveNotesTarget = Schema.decodeUnknownResult(SaveNotesTargetSchema);
 
@@ -19,7 +19,7 @@ type SaveNotesTargetResult = Schema.Schema.Type<typeof SaveNotesTargetSchema>;
 type SaveNotesResults = Partial<Record<SaveNotesTarget, SaveNotesTargetResult>>;
 
 /**
- * Decodes a save-notes response while retaining valid Obsidian, Bear, and Octarine siblings.
+ * Decodes a save-notes response while retaining a valid Obsidian result.
  * The response envelope must contain a results record; malformed target results are omitted.
  */
 export function decodeSaveNotesResponse<Input>(

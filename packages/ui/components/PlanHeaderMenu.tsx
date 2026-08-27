@@ -20,14 +20,10 @@ interface PlanHeaderMenuProps {
   onCopyShareLink: () => void;
   onOpenImport: () => void;
   onSaveToObsidian: () => void;
-  onSaveToBear: () => void;
-  onSaveToOctarine: () => void;
   sharingEnabled: boolean;
   isApiMode: boolean;
   agentInstructionsEnabled: boolean;
   obsidianConfigured: boolean;
-  bearConfigured: boolean;
-  octarineConfigured: boolean;
 }
 
 export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
@@ -40,19 +36,14 @@ export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
   onCopyShareLink,
   onOpenImport,
   onSaveToObsidian,
-  onSaveToBear,
-  onSaveToOctarine,
   sharingEnabled,
   isApiMode,
   agentInstructionsEnabled,
   obsidianConfigured,
-  bearConfigured,
-  octarineConfigured,
 }) => {
   const { theme, setTheme } = useTheme();
 
-  const anyNotesAppConfigured =
-    isApiMode && (obsidianConfigured || bearConfigured || octarineConfigured);
+  const isObsidianSaveAvailable = isApiMode && obsidianConfigured;
 
   return (
     <ActionMenu
@@ -170,39 +161,17 @@ export const PlanHeaderMenu: React.FC<PlanHeaderMenuProps> = ({
             />
           )}
 
-          {anyNotesAppConfigured && (
+          {isObsidianSaveAvailable && (
             <>
               <ActionMenuDivider />
-              {obsidianConfigured && (
-                <ActionMenuItem
-                  onClick={() => {
-                    closeMenu();
-                    onSaveToObsidian();
-                  }}
-                  icon={<NoteIcon />}
-                  label="Save to Obsidian"
-                />
-              )}
-              {bearConfigured && (
-                <ActionMenuItem
-                  onClick={() => {
-                    closeMenu();
-                    onSaveToBear();
-                  }}
-                  icon={<NoteIcon />}
-                  label="Save to Bear"
-                />
-              )}
-              {octarineConfigured && (
-                <ActionMenuItem
-                  onClick={() => {
-                    closeMenu();
-                    onSaveToOctarine();
-                  }}
-                  icon={<NoteIcon />}
-                  label="Save to Octarine"
-                />
-              )}
+              <ActionMenuItem
+                onClick={() => {
+                  closeMenu();
+                  onSaveToObsidian();
+                }}
+                icon={<NoteIcon />}
+                label="Save to Obsidian"
+              />
             </>
           )}
 

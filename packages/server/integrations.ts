@@ -1,38 +1,27 @@
 /**
- * Note-taking app integrations (Obsidian, Bear)
+ * Note-taking app integrations (Obsidian).
  */
 
-import { $ } from "bun";
 import { join } from "path";
 import { mkdirSync, existsSync, statSync } from "fs";
 import { detectProjectName } from "./project";
 
 import {
   type ObsidianConfig,
-  type BearConfig,
-  type OctarineConfig,
   type IntegrationResult,
   extractTitle,
   generateFrontmatter,
   generateFilename,
-  generateOctarineFrontmatter,
-  stripH1,
-  buildHashtags,
-  buildBearContent,
   detectObsidianVaults,
 } from "@plannotator/shared/integrations-common";
 import { resolveUserPath } from "@plannotator/shared/resolve-file";
 
-export type { ObsidianConfig, BearConfig, OctarineConfig, IntegrationResult };
+export type { ObsidianConfig, IntegrationResult };
 export {
   detectObsidianVaults,
   extractTitle,
   generateFrontmatter,
   generateFilename,
-  generateOctarineFrontmatter,
-  stripH1,
-  buildHashtags,
-  buildBearContent,
 };
 
 /**
@@ -146,62 +135,6 @@ export async function saveToObsidian(config: ObsidianConfig): Promise<Integratio
     await Bun.write(filePath, content);
 
     return { success: true, path: filePath };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return { success: false, error: message };
-  }
-}
-
-/**
- * Save plan to Bear using x-callback-url
- */
-export async function saveToBear(config: BearConfig): Promise<IntegrationResult> {
-  try {
-    const { plan, customTags, tagPosition = "append" } = config;
-
-    const title = extractTitle(plan);
-    const body = stripH1(plan);
-
-    const tags = customTags?.trim() ? undefined : await extractTags(plan);
-    const hashtags = buildHashtags(customTags, tags ?? []);
-
-    const content = buildBearContent(body, hashtags, tagPosition);
-
-    const url = `bear://x-callback-url/create?title=${encodeURIComponent(title)}&text=${encodeURIComponent(content)}&open_note=no`;
-
-    await $`open ${url}`.quiet();
-
-    return { success: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return { success: false, error: message };
-  }
-}
-
-/**
- * Save plan to Octarine using octarine:// URI scheme
- */
-export async function saveToOctarine(config: OctarineConfig): Promise<IntegrationResult> {
-  try {
-    const { plan } = config;
-    const workspace = config.workspace.trim();
-    if (!workspace) return { success: false, error: "Workspace is required" };
-    const folder = config.folder.trim() || "plannotator";
-
-    const filename = generateFilename(plan);
-    // Strip .md — Octarine auto-adds it
-    const basename = filename.replace(/\.md$/, "");
-    const path = folder ? `${folder}/${basename}` : basename;
-
-    const tags = await extractTags(plan);
-    const frontmatter = generateOctarineFrontmatter(tags);
-    const content = `${frontmatter}\n\n${plan}`;
-
-    const url = `octarine://create?path=${encodeURIComponent(path)}&content=${encodeURIComponent(content)}&workspace=${encodeURIComponent(workspace)}&fresh=true&openAfter=false`;
-
-    await $`open ${url}`.quiet();
-
-    return { success: true, path };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return { success: false, error: message };

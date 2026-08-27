@@ -73,15 +73,13 @@ describe("editor API boundary parsers", () => {
     const response = parseSaveNotesResponse({
       results: {
         obsidian: { success: true, path: "/tmp/plan.md" },
-        bear: { success: false, error: "Unavailable" },
       },
     });
 
     expect(response.results?.obsidian?.success).toBe(true);
-    expect(response.results?.bear?.error).toBe("Unavailable");
     expect(() =>
       parseSaveNotesResponse({
-        results: { octarine: { success: "yes" } },
+        results: { obsidian: { success: "yes" } },
       }),
     ).toThrow();
   });

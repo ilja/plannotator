@@ -630,7 +630,7 @@ export async function startAnnotateServer(
             }
           }
 
-          // API: Save notes to external integrations (Obsidian, Bear, Octarine)
+          // API: Save notes to Obsidian
           if (url.pathname === "/api/save-notes" && req.method === "POST") {
             return handleSaveNotes(req);
           }

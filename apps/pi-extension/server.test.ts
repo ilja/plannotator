@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,6 +14,7 @@ import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { Schema } from "effect";
 import {
   canStageFiles,
   getGitContext,
@@ -39,6 +41,8 @@ const originalSemPath = process.env.PLANNOTATOR_SEM_PATH;
 const originalDataDir = process.env.PLANNOTATOR_DATA_DIR;
 const pathEnvKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 const originalPath = process.env[pathEnvKey];
+
+type SaveNotesRequestBody = Schema.Schema.Type<typeof Schema.Json>;
 
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -670,6 +674,60 @@ describe("pi annotate server", () => {
       server.stop();
     }
   });
+
+  test("keeps save-notes request validation and Obsidian saves in parity", async () => {
+    const vaultPath = makeTempDir("plannotator-pi-save-notes-");
+    process.env.PLANNOTATOR_PORT = String(await reservePort());
+    const server = await startAnnotateServer({
+      markdown: "# Test",
+      filePath: "test.md",
+      htmlContent: "<html></html>",
+      origin: "pi",
+    });
+    const saveNotes = (body: SaveNotesRequestBody) =>
+      fetch(`${server.url}/api/save-notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    try {
+      for (const body of [[], "not a save-notes object"]) {
+        const response = await saveNotes(body);
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: "Invalid JSON" });
+      }
+
+      for (const target of ["bear", "octarine"] as const) {
+        const response = await saveNotes({ [target]: {} });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: "Unsupported save target" });
+      }
+
+      const malformed = await saveNotes({ obsidian: { folder: "plannotator", plan: "# Test" } });
+      expect(malformed.status).toBe(200);
+      expect(await malformed.json()).toEqual({
+        ok: true,
+        results: {
+          obsidian: { success: false, error: "Invalid Obsidian save configuration" },
+        },
+      });
+
+      const valid = await saveNotes({
+        obsidian: { vaultPath, folder: "plannotator", plan: "# Test" },
+      });
+      expect(valid.status).toBe(200);
+      const saved: { results: { obsidian?: { success: boolean; path?: string } } } =
+        await valid.json();
+      const obsidian = saved.results.obsidian;
+      expect(obsidian?.success).toBe(true);
+      if (!obsidian?.path) throw new Error("Expected a saved Obsidian note path");
+      expect(existsSync(obsidian.path)).toBe(true);
+      expect(readFileSync(obsidian.path, "utf-8")).toContain("# Test");
+    } finally {
+      server.stop();
+    }
+  });
 });
 
 describe("pi review server", () => {
@@ -1121,7 +1179,7 @@ describe("pi review server", () => {
     }
   });
 
-  test("rejects non-object config and save-notes request bodies", async () => {
+  test("rejects non-object config request bodies", async () => {
     process.env.PLANNOTATOR_PORT = String(await reservePort());
     const annotateServer = await startAnnotateServer({
       markdown: "# Test",
@@ -1139,13 +1197,6 @@ describe("pi review server", () => {
       expect(configResponse.status).toBe(400);
       expect(await configResponse.json()).toEqual({ error: "Invalid request" });
 
-      const notesResponse = await fetch(`${annotateServer.url}/api/save-notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([]),
-      });
-      expect(notesResponse.status).toBe(500);
-      expect(await notesResponse.json()).toEqual({ error: "Save failed" });
     } finally {
       annotateServer.stop();
     }

@@ -62,15 +62,11 @@ interface AppHeaderProps {
   onCopyShareLink: () => void;
   onOpenImport: () => void;
   onSaveToObsidian: () => void;
-  onSaveToBear: () => void;
-  onSaveToOctarine: () => void;
 
   // PlanHeaderMenu config
   appVersion: string;
   agentInstructionsEnabled: boolean;
   obsidianConfigured: boolean;
-  bearConfigured: boolean;
-  octarineConfigured: boolean;
 }
 
 export const AppHeader = React.memo<AppHeaderProps>(
@@ -114,13 +110,9 @@ export const AppHeader = React.memo<AppHeaderProps>(
     onCopyShareLink,
     onOpenImport,
     onSaveToObsidian,
-    onSaveToBear,
-    onSaveToOctarine,
     appVersion,
     agentInstructionsEnabled,
     obsidianConfigured,
-    bearConfigured,
-    octarineConfigured,
   }) => {
     return (
       <header
@@ -257,14 +249,10 @@ export const AppHeader = React.memo<AppHeaderProps>(
             onCopyShareLink={onCopyShareLink}
             onOpenImport={onOpenImport}
             onSaveToObsidian={onSaveToObsidian}
-            onSaveToBear={onSaveToBear}
-            onSaveToOctarine={onSaveToOctarine}
             sharingEnabled={canShareCurrentSession}
             isApiMode={isApiMode}
             agentInstructionsEnabled={agentInstructionsEnabled}
             obsidianConfigured={obsidianConfigured}
-            bearConfigured={bearConfigured}
-            octarineConfigured={octarineConfigured}
           />
         </div>
       </header>

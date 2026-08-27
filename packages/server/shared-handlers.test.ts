@@ -204,67 +204,42 @@ describe("handleSaveNotes", () => {
     expect(json.results).toEqual({});
   });
 
-  test("returns a 400 JSON error for a non-object request body", async () => {
-    const response = await handleSaveNotes(saveNotesRequest("not a save-notes object"));
+  test("returns a 400 JSON error for non-record request bodies", async () => {
+    for (const body of [[], "not a save-notes object"] as const) {
+      const response = await handleSaveNotes(saveNotesRequest(body));
 
-    expect(response.status).toBe(400);
-    expect(response.headers.get("content-type")).toContain("application/json");
-    expect(await response.json()).toEqual({ error: "Invalid JSON" });
-  });
-
-  test("saves a valid target when another requested target is malformed", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "plannotator-save-notes-"));
-    try {
-      const response = await handleSaveNotes(
-        saveNotesRequest({
-          obsidian: {
-            vaultPath: tmpDir,
-            folder: "plannotator",
-            plan: "# Test Plan\n\nContent here",
-          },
-          bear: { customTags: "plannotator" },
-        }),
-      );
-
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json.results.obsidian).toHaveProperty("success", true);
-      expect(json.results.bear).toEqual({
-        success: false,
-        error: "Invalid Bear save configuration",
-      });
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
+      expect(response.status).toBe(400);
+      expect(response.headers.get("content-type")).toContain("application/json");
+      expect(await response.json()).toEqual({ error: "Invalid JSON" });
     }
   });
 
-  test("reports malformed Obsidian and Octarine target configurations", async () => {
-    for (const [target, config, error] of [
-      [
-        "obsidian",
-        { folder: "plannotator", plan: "# Test Plan" },
-        "Invalid Obsidian save configuration",
-      ],
-      [
-        "octarine",
-        { workspace: "workspace", folder: "plannotator" },
-        "Invalid Octarine save configuration",
-      ],
-    ] as const) {
-      const response = await handleSaveNotes(saveNotesRequest({ [target]: config }));
+  test("rejects removed save targets with a generic error", async () => {
+    for (const target of ["bear", "octarine"] as const) {
+      const response = await handleSaveNotes(saveNotesRequest({ [target]: {} }));
 
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json.results[target]).toEqual({ success: false, error });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "Unsupported save target" });
     }
+  });
+
+  test("reports a malformed Obsidian target configuration", async () => {
+    const response = await handleSaveNotes(
+      saveNotesRequest({ obsidian: { folder: "plannotator", plan: "# Test Plan" } }),
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.results.obsidian).toEqual({
+      success: false,
+      error: "Invalid Obsidian save configuration",
+    });
   });
 
   test("keeps schema-valid empty strings omitted by existing save gates", async () => {
     const response = await handleSaveNotes(
       saveNotesRequest({
         obsidian: { vaultPath: "", folder: "", plan: "" },
-        bear: { plan: "" },
-        octarine: { plan: "", workspace: "", folder: "" },
       }),
     );
 

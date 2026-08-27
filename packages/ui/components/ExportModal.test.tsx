@@ -2,9 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Option, Schema } from "effect";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { saveBearSettings } from "../utils/bear";
 import { saveObsidianSettings } from "../utils/obsidian";
-import { saveOctarineSettings } from "../utils/octarine";
 import { storage } from "../utils/storage";
 import { ExportModal } from "./ExportModal";
 
@@ -73,8 +71,6 @@ async function renderExportModal(storedSeparator = "space"): Promise<void> {
   });
   if (storedSeparator !== "space")
     storage.setItem("plannotator-obsidian-filename-separator", storedSeparator);
-  saveBearSettings({ enabled: false, customTags: "", tagPosition: "append", autoSave: false });
-  saveOctarineSettings({ enabled: false, workspace: "", folder: "plannotator", autoSave: false });
 
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -125,8 +121,6 @@ afterEach(async () => {
       autoSave: false,
       vaultBrowserEnabled: false,
     });
-    saveBearSettings({ enabled: false, customTags: "", tagPosition: "append", autoSave: false });
-    saveOctarineSettings({ enabled: false, workspace: "", folder: "plannotator", autoSave: false });
   }
 });
 

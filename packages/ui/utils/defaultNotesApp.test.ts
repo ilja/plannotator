@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe("getDefaultNotesApp", () => {
   test("accepts every supported notes app value", () => {
-    for (const app of ["obsidian", "bear", "octarine", "download", "ask"] as const) {
+    for (const app of ["obsidian", "download", "ask"] as const) {
       storedValues.set(STORAGE_KEY, app);
       expect(getDefaultNotesApp()).toBe(app);
     }
@@ -42,6 +42,14 @@ describe("getDefaultNotesApp", () => {
       storedValues.set(STORAGE_KEY, value);
       expect(getDefaultNotesApp()).toBe("ask");
       expect(storedValues.get(STORAGE_KEY)).toBe(value);
+    }
+  });
+
+  test("migrates removed persisted notes apps to ask", () => {
+    for (const value of ["bear", "octarine"]) {
+      storedValues.set(STORAGE_KEY, value);
+
+      expect(getDefaultNotesApp()).toBe("ask");
     }
   });
 });

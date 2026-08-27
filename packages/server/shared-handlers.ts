@@ -19,7 +19,7 @@ import {
   getDraftGeneration,
 } from "./draft";
 import { FAVICON_SVG } from "@plannotator/shared/favicon";
-import { saveToObsidian, saveToBear, saveToOctarine } from "./integrations";
+import { saveToObsidian } from "./integrations";
 import type { IntegrationResult } from "./integrations";
 
 const DraftGenerationSchema = Schema.Natural;
@@ -274,8 +274,6 @@ export async function handleServerReady(
 
 interface SaveNotesResults {
   obsidian?: IntegrationResult;
-  bear?: IntegrationResult;
-  octarine?: IntegrationResult;
 }
 
 const SaveNotesBodySchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -288,19 +286,7 @@ const ObsidianConfigSchema = Schema.Struct({
   filenameSeparator: Schema.optionalKey(Schema.Literals(["space", "dash", "underscore"])),
 });
 
-const BearConfigSchema = Schema.Struct({
-  plan: Schema.String,
-  customTags: Schema.optionalKey(Schema.String),
-  tagPosition: Schema.optionalKey(Schema.Literals(["prepend", "append"])),
-});
-
-const OctarineConfigSchema = Schema.Struct({
-  plan: Schema.String,
-  workspace: Schema.String,
-  folder: Schema.String,
-});
-
-/** Save to external note apps (Obsidian, Bear, Octarine). Used by plan + annotate servers. */
+/** Save to Obsidian. Used by plan and annotate servers. */
 export async function handleSaveNotes(req: Request): Promise<Response> {
   const results: SaveNotesResults = {};
 
@@ -309,6 +295,9 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
     const body = Schema.decodeUnknownOption(SaveNotesBodySchema)(rawBody);
     if (Option.isNone(body)) {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    if (Object.keys(body.value).some((target) => target !== "obsidian")) {
+      return Response.json({ error: "Unsupported save target" }, { status: 400 });
     }
 
     const promises: Promise<void>[] = [];
@@ -320,30 +309,6 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
         promises.push(
           saveToObsidian(config.value).then((r) => {
             results.obsidian = r;
-          }),
-        );
-      }
-    }
-    if (Object.hasOwn(body.value, "bear")) {
-      const config = Schema.decodeUnknownOption(BearConfigSchema)(body.value.bear);
-      if (Option.isNone(config)) {
-        results.bear = { success: false, error: "Invalid Bear save configuration" };
-      } else if (config.value.plan) {
-        promises.push(
-          saveToBear(config.value).then((r) => {
-            results.bear = r;
-          }),
-        );
-      }
-    }
-    if (Object.hasOwn(body.value, "octarine")) {
-      const config = Schema.decodeUnknownOption(OctarineConfigSchema)(body.value.octarine);
-      if (Option.isNone(config)) {
-        results.octarine = { success: false, error: "Invalid Octarine save configuration" };
-      } else if (config.value.plan && config.value.workspace) {
-        promises.push(
-          saveToOctarine(config.value).then((r) => {
-            results.octarine = r;
           }),
         );
       }

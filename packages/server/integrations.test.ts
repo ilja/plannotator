@@ -1,17 +1,8 @@
-/**
- * Bear Integration Tests
- *
- * Run: bun test packages/server/integrations.test.ts
- */
-
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "fs";
 import {
   extractTitle,
   extractTags,
-  stripH1,
-  buildHashtags,
-  buildBearContent,
   saveToObsidian,
 } from "./integrations";
 
@@ -39,100 +30,6 @@ describe("extractTitle", () => {
 
   test("removes special characters", () => {
     expect(extractTitle("# Fix [bug] #123")).toBe("Fix bug 123");
-  });
-});
-
-describe("stripH1", () => {
-  test("strips first H1 line", () => {
-    expect(stripH1("# My Plan\n\n## Section\nContent")).toBe("## Section\nContent");
-  });
-
-  test("strips H1 with any wording", () => {
-    expect(stripH1("# Whatever Title Here\nBody")).toBe("Body");
-  });
-
-  test("only strips first H1, not subsequent ones", () => {
-    const input = "# First\n\n# Second\nBody";
-    expect(stripH1(input)).toBe("# Second\nBody");
-  });
-
-  test("handles plan with no H1", () => {
-    expect(stripH1("Just text\nMore text")).toBe("Just text\nMore text");
-  });
-
-  test("does not strip ## H2 headings", () => {
-    expect(stripH1("## Not H1\nBody")).toBe("## Not H1\nBody");
-  });
-});
-
-describe("buildHashtags", () => {
-  test("uses custom tags when provided", () => {
-    expect(buildHashtags("plan, work", ["plannotator"])).toBe("#plan #work");
-  });
-
-  test("falls back to auto tags when custom is empty", () => {
-    expect(buildHashtags("", ["plannotator", "myproject"])).toBe("#plannotator #myproject");
-  });
-
-  test("falls back to auto tags when custom is undefined", () => {
-    expect(buildHashtags(undefined, ["plannotator"])).toBe("#plannotator");
-  });
-
-  test("filters empty tags from trailing comma", () => {
-    expect(buildHashtags("plan, work,", ["plannotator"])).toBe("#plan #work");
-  });
-
-  test("handles whitespace-only custom tags as empty", () => {
-    expect(buildHashtags("   ", ["auto"])).toBe("#auto");
-  });
-
-  test("preserves slashes in nested Bear tags", () => {
-    expect(buildHashtags("plannotator/plans, work/code", [])).toBe("#plannotator/plans #work/code");
-  });
-
-  test("preserves slashes in auto tags with nested paths", () => {
-    expect(buildHashtags(undefined, ["plannotator/plans", "work"])).toBe(
-      "#plannotator/plans #work",
-    );
-  });
-});
-
-describe("buildBearContent", () => {
-  test("appends tags by default", () => {
-    const result = buildBearContent("Body text", "#plan #work", "append");
-    expect(result).toBe("Body text\n\n#plan #work");
-  });
-
-  test("prepends tags when configured", () => {
-    const result = buildBearContent("Body text", "#plan #work", "prepend");
-    expect(result).toBe("#plan #work\n\nBody text");
-  });
-});
-
-describe("full Bear content pipeline", () => {
-  const plan = "# Add user authentication flow\n\n## Context\nSome content here";
-
-  test("no double title — H1 stripped from body", () => {
-    const body = stripH1(plan);
-    expect(body).not.toContain("# Add user");
-    expect(body).toStartWith("## Context");
-  });
-
-  test("custom tags prepended after title removal", () => {
-    const body = stripH1(plan);
-    const hashtags = buildHashtags("plan, work", []);
-    const content = buildBearContent(body, hashtags, "prepend");
-    expect(content).toStartWith("#plan #work");
-    expect(content).toContain("## Context");
-    expect(content).not.toContain("# Add user");
-  });
-
-  test("auto tags appended when no custom tags", () => {
-    const body = stripH1(plan);
-    const hashtags = buildHashtags("", ["plannotator", "dev"]);
-    const content = buildBearContent(body, hashtags, "append");
-    expect(content).toEndWith("#plannotator #dev");
-    expect(content).toStartWith("## Context");
   });
 });
 
