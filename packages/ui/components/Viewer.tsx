@@ -10,10 +10,10 @@ import React, {
 import { createPortal } from "react-dom";
 import hljs from "highlight.js";
 import {
-  Block,
-  Annotation,
   AnnotationType,
-  EditorMode,
+  type Block,
+  type Annotation,
+  type EditorMode,
   type ChoiceQuestionOption,
   type InputMethod,
   type ImageAttachment,
@@ -186,6 +186,592 @@ const FrontmatterCard: React.FC<{ frontmatter: Frontmatter }> = ({ frontmatter }
     </div>
   );
 };
+
+type HoveredBlock = { block: Block; element: HTMLElement };
+
+type ViewerCommentPopoverState = {
+  anchorEl: HTMLElement;
+  contextText: string;
+  selectedText?: string;
+  initialText?: string;
+  isGlobal: boolean;
+  codeBlock?: HoveredBlock;
+};
+
+type CodeBlockQuickLabelPickerState = {
+  anchorEl: HTMLElement;
+  codeBlock: HoveredBlock;
+};
+
+interface ViewerActionBarProps {
+  actionsLabelMode: ActionsLabelMode;
+  copied: boolean;
+  copyLabel?: string;
+  globalAttachments: ImageAttachment[];
+  globalCommentButtonRef: React.RefObject<HTMLButtonElement | null>;
+  hasLinkedDocument: boolean;
+  messagePickerInfo?: ViewerProps["messagePickerInfo"];
+  onAddGlobalAttachment?: (image: ImageAttachment) => void;
+  onCopyPlan: () => void;
+  onOpenGlobalComment: () => void;
+  onRemoveGlobalAttachment?: (path: string) => void;
+}
+
+const ViewerActionBar: React.FC<ViewerActionBarProps> = ({
+  actionsLabelMode,
+  copied,
+  copyLabel,
+  globalAttachments,
+  globalCommentButtonRef,
+  hasLinkedDocument,
+  messagePickerInfo,
+  onAddGlobalAttachment,
+  onCopyPlan,
+  onOpenGlobalComment,
+  onRemoveGlobalAttachment,
+}) => (
+  <>
+    {messagePickerInfo && (
+      <button
+        onClick={messagePickerInfo.onOpen}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-colors"
+        title="Pick a different message to annotate"
+      >
+        <MessagesIcon />
+        {actionsLabelMode === "full" && (
+          <span>
+            Message {messagePickerInfo.current} of {messagePickerInfo.total}
+          </span>
+        )}
+        {actionsLabelMode === "short" && (
+          <span>
+            {messagePickerInfo.current}/{messagePickerInfo.total}
+          </span>
+        )}
+      </button>
+    )}
+
+    {onAddGlobalAttachment && onRemoveGlobalAttachment && (
+      <AttachmentsButton
+        images={globalAttachments}
+        onAdd={onAddGlobalAttachment}
+        onRemove={onRemoveGlobalAttachment}
+        variant="toolbar"
+        hideLabel={actionsLabelMode === "icon"}
+      />
+    )}
+
+    <button
+      ref={globalCommentButtonRef}
+      onClick={onOpenGlobalComment}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-colors"
+      title="Add global comment"
+    >
+      <svg
+        className="w-3.5 h-3.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"
+        />
+      </svg>
+      {actionsLabelMode === "full" && <span>Global comment</span>}
+      {actionsLabelMode === "short" && <span>Comment</span>}
+    </button>
+
+    <button
+      onClick={onCopyPlan}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-colors"
+      title={copied ? "Copied!" : copyLabel || (hasLinkedDocument ? "Copy file" : "Copy plan")}
+    >
+      {copied ? (
+        <>
+          <svg
+            className="w-3.5 h-3.5 text-success"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          Copied!
+        </>
+      ) : (
+        <>
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+            />
+          </svg>
+          {actionsLabelMode === "full" && (
+            <span>{copyLabel || (hasLinkedDocument ? "Copy file" : "Copy plan")}</span>
+          )}
+          {actionsLabelMode === "short" && <span>Copy</span>}
+        </>
+      )}
+    </button>
+  </>
+);
+
+interface ViewerArticleHeaderProps extends ViewerActionBarProps {
+  blocks: Block[];
+  frontmatter?: Frontmatter | null;
+  gridEnabled: boolean;
+  isStuck: boolean;
+  linkedDocInfo?: LinkedDocBadgeInfo | null;
+  openInAppPath?: string | null;
+  repoInfo?: ViewerProps["repoInfo"];
+  showDemoBadge?: boolean;
+  sourceInfo?: string;
+  stickyActions: boolean;
+  stickySentinelRef: React.RefObject<HTMLDivElement | null>;
+}
+
+const ViewerArticleHeader: React.FC<ViewerArticleHeaderProps> = ({
+  blocks,
+  frontmatter,
+  gridEnabled,
+  isStuck,
+  linkedDocInfo,
+  openInAppPath,
+  repoInfo,
+  showDemoBadge,
+  sourceInfo,
+  stickyActions,
+  stickySentinelRef,
+  ...actionBarProps
+}) => (
+  <>
+    {(repoInfo || showDemoBadge || linkedDocInfo || sourceInfo || openInAppPath) && (
+      <div
+        data-print-hide
+        className={`absolute top-3 md:top-4 ${gridEnabled ? "left-3 md:left-5" : "left-0"}`}
+      >
+        <DocBadges
+          layout="column"
+          repoInfo={repoInfo}
+          showDemoBadge={showDemoBadge}
+          linkedDocInfo={linkedDocInfo}
+          sourceInfo={sourceInfo}
+          openInAppPath={openInAppPath}
+        />
+      </div>
+    )}
+
+    {stickyActions && (
+      <div ref={stickySentinelRef} className="h-0 w-0 float-right" aria-hidden="true" />
+    )}
+
+    <div
+      data-print-hide
+      data-sticky-actions
+      className={`${stickyActions ? "sticky top-3" : ""} z-30 float-right flex items-start gap-1 md:gap-2 rounded-lg p-1 md:p-2 transition-colors duration-150 ${isStuck ? "bg-card/95 backdrop-blur-sm shadow-sm" : ""} ${gridEnabled ? "-mr-3 md:-mr-5 lg:-mr-7 xl:-mr-9" : "-mr-1 md:-mr-2"} mt-6 md:-mt-5 lg:-mt-7 xl:-mt-9`}
+    >
+      <ViewerActionBar {...actionBarProps} />
+    </div>
+
+    {frontmatter && (
+      <>
+        <div className="clear-right md:hidden" />
+        <FrontmatterCard frontmatter={frontmatter} />
+      </>
+    )}
+    {!frontmatter && blocks.length > 0 && blocks[0].type !== "heading" && <div className="mt-4" />}
+  </>
+);
+
+interface ViewerBlockRendererContext {
+  annotations: Annotation[];
+  checkboxOverrides?: Map<string, boolean>;
+  githubRepo?: string;
+  headingSlugMap: Map<string, string>;
+  imageBaseDir?: string;
+  onImageClick: (src: string, alt: string) => void;
+  onNavigateAnchor: (hash: string) => boolean;
+  onOpenCodeFile?: (path: string) => void;
+  onOpenLinkedDoc?: (path: string) => void;
+  onSelectChoice: (block: Block, option: ChoiceQuestionOption) => void;
+  onToggleCheckbox?: (blockId: string, checked: boolean) => void;
+}
+
+const ViewerListGroup: React.FC<
+  ViewerBlockRendererContext & { blocks: Block[]; groupKey: string }
+> = ({ blocks, groupKey, headingSlugMap, ...rendererProps }) => {
+  const indices = computeListIndices(blocks);
+
+  return (
+    <div key={groupKey} data-pinpoint-group="list" className="py-1 -mx-2 px-2">
+      {blocks.map((block, index) => (
+        <BlockRenderer
+          key={block.id}
+          block={block}
+          orderedIndex={indices[index]}
+          headingAnchorId={headingSlugMap.get(block.id)}
+          {...rendererProps}
+        />
+      ))}
+    </div>
+  );
+};
+
+interface ViewerSingleBlockProps extends ViewerBlockRendererContext {
+  block: Block;
+  hoveredCodeBlock: HoveredBlock | null;
+  inputMethod: InputMethod;
+  onCodeBlockHover: (block: Block, element: HTMLElement) => void;
+  onCodeBlockLeave: () => void;
+  onTableHover: (block: Block, element: HTMLElement) => void;
+  onTableLeave: () => void;
+}
+
+const ViewerSingleBlock: React.FC<ViewerSingleBlockProps> = ({
+  block,
+  headingSlugMap,
+  hoveredCodeBlock,
+  inputMethod,
+  onCodeBlockHover,
+  onCodeBlockLeave,
+  onTableHover,
+  onTableLeave,
+  ...rendererProps
+}) => {
+  if (block.type === "code" && isMermaidLanguage(block.language)) {
+    return <MermaidBlock block={block} />;
+  }
+  if (block.type === "code" && isGraphvizLanguage(block.language)) {
+    return <GraphvizBlock block={block} />;
+  }
+  if (block.type === "table") {
+    return (
+      <TableBlock
+        block={block}
+        imageBaseDir={rendererProps.imageBaseDir}
+        onImageClick={rendererProps.onImageClick}
+        onOpenLinkedDoc={rendererProps.onOpenLinkedDoc}
+        onOpenCodeFile={rendererProps.onOpenCodeFile}
+        githubRepo={rendererProps.githubRepo}
+        onNavigateAnchor={rendererProps.onNavigateAnchor}
+        onHover={(element) => onTableHover(block, element)}
+        onLeave={onTableLeave}
+      />
+    );
+  }
+  if (block.type === "code") {
+    const isPinpoint = inputMethod === "pinpoint";
+    return (
+      <CodeBlock
+        block={block}
+        onHover={isPinpoint ? () => {} : (element) => onCodeBlockHover(block, element)}
+        onLeave={isPinpoint ? () => {} : onCodeBlockLeave}
+        isHovered={!isPinpoint && hoveredCodeBlock?.block.id === block.id}
+      />
+    );
+  }
+
+  return (
+    <BlockRenderer
+      block={block}
+      headingAnchorId={headingSlugMap.get(block.id)}
+      {...rendererProps}
+    />
+  );
+};
+
+interface ViewerBlockContentProps extends ViewerBlockRendererContext {
+  groups: RenderGroup[];
+  hoveredCodeBlock: HoveredBlock | null;
+  inputMethod: InputMethod;
+  onCodeBlockHover: (block: Block, element: HTMLElement) => void;
+  onCodeBlockLeave: () => void;
+  onTableHover: (block: Block, element: HTMLElement) => void;
+  onTableLeave: () => void;
+}
+
+const ViewerBlockContent: React.FC<ViewerBlockContentProps> = ({
+  groups,
+  hoveredCodeBlock,
+  inputMethod,
+  onCodeBlockHover,
+  onCodeBlockLeave,
+  onTableHover,
+  onTableLeave,
+  ...rendererContext
+}) =>
+  groups.map((group) =>
+    group.type === "list-group" ? (
+      <ViewerListGroup
+        key={group.key}
+        blocks={group.blocks}
+        groupKey={group.key}
+        {...rendererContext}
+      />
+    ) : (
+      <ViewerSingleBlock
+        key={group.block.id}
+        block={group.block}
+        hoveredCodeBlock={hoveredCodeBlock}
+        inputMethod={inputMethod}
+        onCodeBlockHover={onCodeBlockHover}
+        onCodeBlockLeave={onCodeBlockLeave}
+        onTableHover={onTableHover}
+        onTableLeave={onTableLeave}
+        {...rendererContext}
+      />
+    ),
+  );
+
+interface ViewerAnnotationToolbarsProps {
+  codeBlockToolbarExiting: boolean;
+  hoveredCodeBlock: HoveredBlock | null;
+  hoveredTable: HoveredBlock | null;
+  isTableToolbarExiting: boolean;
+  isTouchDevice: boolean;
+  onCodeBlockAnnotate: (type: AnnotationType) => void;
+  onCodeBlockQuickLabel: (label: QuickLabel) => void;
+  onCodeBlockRequestComment: (initialChar?: string) => void;
+  onCodeBlockToolbarClose: () => void;
+  onCodeToolbarMouseEnter: () => void;
+  onCodeToolbarMouseLeave: () => void;
+  onTableExpand: () => void;
+  onTableToolbarMouseEnter: () => void;
+  onTableToolbarMouseLeave: () => void;
+  toolbarState: { element: HTMLElement; selectionText: string } | null;
+  onAnnotate: (type: AnnotationType) => void;
+  onQuickLabel: (label: QuickLabel) => void;
+  onRequestComment: (initialChar?: string) => void;
+  onToolbarClose: () => void;
+}
+
+const ViewerAnnotationToolbars: React.FC<ViewerAnnotationToolbarsProps> = ({
+  codeBlockToolbarExiting,
+  hoveredCodeBlock,
+  hoveredTable,
+  isTableToolbarExiting,
+  isTouchDevice,
+  onAnnotate,
+  onCodeBlockAnnotate,
+  onCodeBlockQuickLabel,
+  onCodeBlockRequestComment,
+  onCodeBlockToolbarClose,
+  onCodeToolbarMouseEnter,
+  onCodeToolbarMouseLeave,
+  onQuickLabel,
+  onRequestComment,
+  onTableExpand,
+  onTableToolbarMouseEnter,
+  onTableToolbarMouseLeave,
+  onToolbarClose,
+  toolbarState,
+}) => (
+  <>
+    {toolbarState && (
+      <ToolbarErrorBoundary>
+        <AnnotationToolbar
+          element={toolbarState.element}
+          positionMode="center-above"
+          onAnnotate={onAnnotate}
+          onClose={onToolbarClose}
+          onRequestComment={onRequestComment}
+          onQuickLabel={onQuickLabel}
+          copyText={toolbarState.selectionText}
+          hideCopyButton={!isTouchDevice}
+          closeOnScrollOut
+        />
+      </ToolbarErrorBoundary>
+    )}
+
+    {hoveredTable && !toolbarState && (
+      <TableToolbar
+        element={hoveredTable.element}
+        markdown={hoveredTable.block.content}
+        isExiting={isTableToolbarExiting}
+        onExpand={onTableExpand}
+        onMouseEnter={onTableToolbarMouseEnter}
+        onMouseLeave={onTableToolbarMouseLeave}
+      />
+    )}
+
+    {hoveredCodeBlock && !toolbarState && (
+      <ToolbarErrorBoundary>
+        <AnnotationToolbar
+          element={hoveredCodeBlock.element}
+          positionMode="top-right"
+          onAnnotate={onCodeBlockAnnotate}
+          onClose={onCodeBlockToolbarClose}
+          onRequestComment={onCodeBlockRequestComment}
+          onQuickLabel={onCodeBlockQuickLabel}
+          isExiting={codeBlockToolbarExiting}
+          onMouseEnter={onCodeToolbarMouseEnter}
+          onMouseLeave={onCodeToolbarMouseLeave}
+        />
+      </ToolbarErrorBoundary>
+    )}
+  </>
+);
+
+interface ViewerTablePopoutProps {
+  container: HTMLDivElement | null;
+  imageBaseDir?: string;
+  onClose: () => void;
+  onImageClick: (src: string, alt: string) => void;
+  onOpenCodeFile?: (path: string) => void;
+  onOpenLinkedDoc?: (path: string) => void;
+  popoutTable: Block | null;
+  repoDisplay?: string;
+  scrollToAnchor: (hash: string) => boolean;
+}
+
+const ViewerTablePopout: React.FC<ViewerTablePopoutProps> = ({
+  container,
+  imageBaseDir,
+  onClose,
+  onImageClick,
+  onOpenCodeFile,
+  onOpenLinkedDoc,
+  popoutTable,
+  repoDisplay,
+  scrollToAnchor,
+}) => {
+  if (!popoutTable) return null;
+
+  return (
+    <TablePopout
+      block={popoutTable}
+      open
+      onClose={onClose}
+      container={container}
+      imageBaseDir={imageBaseDir}
+      onImageClick={onImageClick}
+      onOpenLinkedDoc={onOpenLinkedDoc}
+      onOpenCodeFile={onOpenCodeFile}
+      githubRepo={repoDisplay}
+      onNavigateAnchor={scrollToAnchor}
+    />
+  );
+};
+
+interface ViewerPinpointOverlayProps {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  inputMethod: InputMethod;
+  target: { element: HTMLElement; label: string } | null;
+}
+
+const ViewerPinpointOverlay: React.FC<ViewerPinpointOverlayProps> = ({
+  containerRef,
+  inputMethod,
+  target,
+}) => {
+  if (inputMethod !== "pinpoint") return null;
+
+  return <PinpointOverlay target={target} containerRef={containerRef} />;
+};
+
+interface ViewerAnnotationPopoversProps {
+  codeBlockQuickLabelPicker: CodeBlockQuickLabelPickerState | null;
+  hookCommentPopover: {
+    anchorEl: HTMLElement;
+    contextText: string;
+    selectedText?: string;
+    initialText?: string;
+  } | null;
+  hookQuickLabelPicker: { anchorEl: HTMLElement; cursorHint?: { x: number; y: number } } | null;
+  linkedDocInfo?: LinkedDocBadgeInfo | null;
+  onAskAI?: CommentAskAIHandler;
+  onCodeBlockQuickLabelDismiss: () => void;
+  onCodeBlockQuickLabelSelect: (label: QuickLabel) => void;
+  onHookCommentClose: () => void;
+  onHookCommentSubmit: (text: string, images?: ImageAttachment[]) => void;
+  onHookQuickLabelDismiss: () => void;
+  onHookQuickLabelSelect: (label: QuickLabel) => void;
+  onViewerCommentClose: () => void;
+  onViewerCommentSubmit: (text: string, images?: ImageAttachment[]) => void;
+  sourceInfo?: string;
+  viewerCommentPopover: ViewerCommentPopoverState | null;
+}
+
+const ViewerAnnotationPopovers: React.FC<ViewerAnnotationPopoversProps> = ({
+  codeBlockQuickLabelPicker,
+  hookCommentPopover,
+  hookQuickLabelPicker,
+  linkedDocInfo,
+  onAskAI,
+  onCodeBlockQuickLabelDismiss,
+  onCodeBlockQuickLabelSelect,
+  onHookCommentClose,
+  onHookCommentSubmit,
+  onHookQuickLabelDismiss,
+  onHookQuickLabelSelect,
+  onViewerCommentClose,
+  onViewerCommentSubmit,
+  sourceInfo,
+  viewerCommentPopover,
+}) => (
+  <>
+    {hookCommentPopover && (
+      <CommentPopover
+        anchorEl={hookCommentPopover.anchorEl}
+        contextText={hookCommentPopover.contextText}
+        isGlobal={false}
+        initialText={hookCommentPopover.initialText}
+        onSubmit={onHookCommentSubmit}
+        onClose={onHookCommentClose}
+        onAskAI={onAskAI}
+        askAIContext={{
+          kind: "selection",
+          label: "Selected text",
+          text: hookCommentPopover.selectedText ?? hookCommentPopover.contextText,
+          sourcePath: linkedDocInfo?.filepath ?? sourceInfo,
+        }}
+      />
+    )}
+    {viewerCommentPopover && (
+      <CommentPopover
+        anchorEl={viewerCommentPopover.anchorEl}
+        contextText={viewerCommentPopover.contextText}
+        isGlobal={viewerCommentPopover.isGlobal}
+        initialText={viewerCommentPopover.initialText}
+        onSubmit={onViewerCommentSubmit}
+        onClose={onViewerCommentClose}
+        onAskAI={onAskAI}
+        askAIContext={{
+          kind: viewerCommentPopover.isGlobal ? "general" : "selection",
+          label: viewerCommentPopover.isGlobal ? "Document" : "Code block",
+          text: viewerCommentPopover.selectedText,
+          sourcePath: linkedDocInfo?.filepath ?? sourceInfo,
+        }}
+      />
+    )}
+    {hookQuickLabelPicker && (
+      <FloatingQuickLabelPicker
+        anchorEl={hookQuickLabelPicker.anchorEl}
+        cursorHint={hookQuickLabelPicker.cursorHint}
+        onSelect={onHookQuickLabelSelect}
+        onDismiss={onHookQuickLabelDismiss}
+      />
+    )}
+    {codeBlockQuickLabelPicker && (
+      <FloatingQuickLabelPicker
+        anchorEl={codeBlockQuickLabelPicker.anchorEl}
+        onSelect={onCodeBlockQuickLabelSelect}
+        onDismiss={onCodeBlockQuickLabelDismiss}
+      />
+    )}
+  </>
+);
 
 export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
   (
@@ -681,6 +1267,110 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       setViewerCommentPopover(null);
     }, []);
 
+    const handleOpenGlobalComment = () => {
+      const anchorEl = globalCommentButtonRef.current;
+      if (!anchorEl) return;
+      setViewerCommentPopover({ anchorEl, contextText: "", isGlobal: true });
+    };
+
+    const clearTableHoverTimeout = () => {
+      if (!tableHoverTimeoutRef.current) return;
+      clearTimeout(tableHoverTimeoutRef.current);
+      tableHoverTimeoutRef.current = null;
+    };
+
+    const dismissTableToolbar = () => {
+      tableHoverTimeoutRef.current = setTimeout(() => {
+        setIsTableToolbarExiting(true);
+        setTimeout(() => {
+          setHoveredTable(null);
+          setIsTableToolbarExiting(false);
+        }, 150);
+      }, 100);
+    };
+
+    const handleTableHover = (block: Block, element: HTMLElement) => {
+      clearTableHoverTimeout();
+      setIsTableToolbarExiting(false);
+      if (!toolbarState) setHoveredTable({ block, element });
+    };
+
+    const handleTableToolbarMouseEnter = () => {
+      clearTableHoverTimeout();
+      setIsTableToolbarExiting(false);
+    };
+
+    const handleTableExpand = () => {
+      if (!hoveredTable) return;
+      setPopoutTable(hoveredTable.block);
+      setHoveredTable(null);
+      setIsTableToolbarExiting(false);
+      clearTableHoverTimeout();
+    };
+
+    const clearCodeBlockHoverTimeout = () => {
+      if (!hoverTimeoutRef.current) return;
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    };
+
+    const dismissCodeBlockToolbar = () => {
+      hoverTimeoutRef.current = setTimeout(() => {
+        setIsCodeBlockToolbarExiting(true);
+        setTimeout(() => {
+          setHoveredCodeBlock(null);
+          setIsCodeBlockToolbarExiting(false);
+        }, 150);
+      }, 100);
+    };
+
+    const handleCodeBlockHover = (block: Block, element: HTMLElement) => {
+      clearCodeBlockHoverTimeout();
+      setIsCodeBlockToolbarExiting(false);
+      if (!toolbarState) setHoveredCodeBlock({ block, element });
+    };
+
+    const handleCodeToolbarMouseEnter = () => {
+      clearCodeBlockHoverTimeout();
+      setIsCodeBlockToolbarExiting(false);
+    };
+
+    const handleCodeBlockQuickLabelSelect = (label: QuickLabel) => {
+      if (!codeBlockQuickLabelPicker) return;
+      const { block, element } = codeBlockQuickLabelPicker.codeBlock;
+      const codeEl = element.querySelector("code");
+      if (codeEl) {
+        applyCodeBlockAnnotation(
+          block.id,
+          codeEl,
+          AnnotationType.COMMENT,
+          `${label.emoji} ${label.text}`,
+          undefined,
+          true,
+          label.tip,
+        );
+      }
+      setCodeBlockQuickLabelPicker(null);
+      window.getSelection()?.removeAllRanges();
+    };
+
+    const handleCodeBlockQuickLabelDismiss = () => {
+      setCodeBlockQuickLabelPicker(null);
+      window.getSelection()?.removeAllRanges();
+    };
+
+    const handleImageClick = (src: string, alt: string) => {
+      setLightbox({ src, alt });
+    };
+
+    const handleLightboxClose = () => {
+      setLightbox(null);
+    };
+
+    const handleTablePopoutClose = () => {
+      setPopoutTable(null);
+    };
+
     const codePathValidation = useValidatedCodePaths(markdown, codePathBaseDir);
 
     return (
@@ -697,452 +1387,109 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
             // SAFETY: typographyStyle is React.CSSProperties per ViewerProps — spread is CSSProperties
             style={{ WebkitTouchCallout: "none", ...typographyStyle } as React.CSSProperties}
           >
-            {/* Repo info + demo badge + linked doc badge - top left */}
-            {(repoInfo || showDemoBadge || linkedDocInfo || sourceInfo || openInAppPath) && (
-              <div
-                data-print-hide
-                className={`absolute top-3 md:top-4 ${gridEnabled ? "left-3 md:left-5" : "left-0"}`}
-              >
-                <DocBadges
-                  layout="column"
-                  repoInfo={repoInfo}
-                  showDemoBadge={showDemoBadge}
-                  linkedDocInfo={linkedDocInfo}
-                  sourceInfo={sourceInfo}
-                  openInAppPath={openInAppPath}
-                />
-              </div>
-            )}
-
-            {/* Sentinel for sticky detection */}
-            {stickyActions && (
-              <div ref={stickySentinelRef} className="h-0 w-0 float-right" aria-hidden="true" />
-            )}
-
-            {/* Header buttons - top right */}
-            <div
-              data-print-hide
-              data-sticky-actions
-              className={`${stickyActions ? "sticky top-3" : ""} z-30 float-right flex items-start gap-1 md:gap-2 rounded-lg p-1 md:p-2 transition-colors duration-150 ${isStuck ? "bg-card/95 backdrop-blur-sm shadow-sm" : ""} ${gridEnabled ? "-mr-3 md:-mr-5 lg:-mr-7 xl:-mr-9" : "-mr-1 md:-mr-2"} mt-6 md:-mt-5 lg:-mt-7 xl:-mt-9`}
-            >
-              {messagePickerInfo && (
-                <button
-                  onClick={messagePickerInfo.onOpen}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-colors"
-                  title="Pick a different message to annotate"
-                >
-                  <MessagesIcon />
-                  {actionsLabelMode === "full" && (
-                    <span>
-                      Message {messagePickerInfo.current} of {messagePickerInfo.total}
-                    </span>
-                  )}
-                  {actionsLabelMode === "short" && (
-                    <span>
-                      {messagePickerInfo.current}/{messagePickerInfo.total}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {/* Attachments button */}
-              {onAddGlobalAttachment && onRemoveGlobalAttachment && (
-                <AttachmentsButton
-                  images={globalAttachments}
-                  onAdd={onAddGlobalAttachment}
-                  onRemove={onRemoveGlobalAttachment}
-                  variant="toolbar"
-                  hideLabel={actionsLabelMode === "icon"}
-                />
-              )}
-
-              {/* <span className="md:hidden">Comment</span><span className="hidden md:inline">Global comment</span> button */}
-              <button
-                ref={globalCommentButtonRef}
-                onClick={() => {
-                  setViewerCommentPopover({
-                    anchorEl: globalCommentButtonRef.current!,
-                    contextText: "",
-                    isGlobal: true,
-                  });
-                }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-colors"
-                title="Add global comment"
-              >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"
-                  />
-                </svg>
-                {actionsLabelMode === "full" && <span>Global comment</span>}
-                {actionsLabelMode === "short" && <span>Comment</span>}
-              </button>
-
-              {/* Copy plan/file button */}
-              <button
-                onClick={handleCopyPlan}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-md transition-colors"
-                title={
-                  copied ? "Copied!" : copyLabel || (linkedDocInfo ? "Copy file" : "Copy plan")
-                }
-              >
-                {copied ? (
-                  <>
-                    <svg
-                      className="w-3.5 h-3.5 text-success"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                    {actionsLabelMode === "full" && (
-                      <span>{copyLabel || (linkedDocInfo ? "Copy file" : "Copy plan")}</span>
-                    )}
-                    {actionsLabelMode === "short" && <span>Copy</span>}
-                  </>
-                )}
-              </button>
-            </div>
-            {frontmatter && (
-              <>
-                <div className="clear-right md:hidden" />
-                <FrontmatterCard frontmatter={frontmatter} />
-              </>
-            )}
-            {!frontmatter && blocks.length > 0 && blocks[0].type !== "heading" && (
-              <div className="mt-4" />
-            )}
-            {groupBlocks(blocks).map((group) =>
-              group.type === "list-group" ? (
-                (() => {
-                  const indices = computeListIndices(group.blocks);
-                  return (
-                    <div key={group.key} data-pinpoint-group="list" className="py-1 -mx-2 px-2">
-                      {group.blocks.map((block, i) => (
-                        <BlockRenderer
-                          imageBaseDir={imageBaseDir}
-                          onImageClick={(src, alt) => setLightbox({ src, alt })}
-                          key={block.id}
-                          block={block}
-                          orderedIndex={indices[i]}
-                          onOpenLinkedDoc={onOpenLinkedDoc}
-                          onOpenCodeFile={onOpenCodeFile}
-                          onToggleCheckbox={onToggleCheckbox}
-                          checkboxOverrides={checkboxOverrides}
-                          githubRepo={repoInfo?.display}
-                          headingAnchorId={headingSlugMap.get(block.id)}
-                          onNavigateAnchor={scrollToAnchor}
-                          annotations={annotations}
-                          onSelectChoice={handleSelectChoice}
-                        />
-                      ))}
-                    </div>
-                  );
-                })()
-              ) : group.block.type === "code" && isMermaidLanguage(group.block.language) ? (
-                <MermaidBlock key={group.block.id} block={group.block} />
-              ) : group.block.type === "code" && isGraphvizLanguage(group.block.language) ? (
-                <GraphvizBlock key={group.block.id} block={group.block} />
-              ) : group.block.type === "table" ? (
-                <TableBlock
-                  key={group.block.id}
-                  block={group.block}
-                  imageBaseDir={imageBaseDir}
-                  onImageClick={(src, alt) => setLightbox({ src, alt })}
-                  onOpenLinkedDoc={onOpenLinkedDoc}
-                  onOpenCodeFile={onOpenCodeFile}
-                  githubRepo={repoInfo?.display}
-                  onNavigateAnchor={scrollToAnchor}
-                  onHover={(element) => {
-                    if (tableHoverTimeoutRef.current) {
-                      clearTimeout(tableHoverTimeoutRef.current);
-                      tableHoverTimeoutRef.current = null;
-                    }
-                    setIsTableToolbarExiting(false);
-                    if (!toolbarState) {
-                      setHoveredTable({ block: group.block, element });
-                    }
-                  }}
-                  onLeave={() => {
-                    tableHoverTimeoutRef.current = setTimeout(() => {
-                      setIsTableToolbarExiting(true);
-                      setTimeout(() => {
-                        setHoveredTable(null);
-                        setIsTableToolbarExiting(false);
-                      }, 150);
-                    }, 100);
-                  }}
-                />
-              ) : group.block.type === "code" ? (
-                <CodeBlock
-                  key={group.block.id}
-                  block={group.block}
-                  onHover={
-                    inputMethod === "pinpoint"
-                      ? () => {}
-                      : (element) => {
-                          // Clear any pending leave timeout
-                          if (hoverTimeoutRef.current) {
-                            clearTimeout(hoverTimeoutRef.current);
-                            hoverTimeoutRef.current = null;
-                          }
-                          // Cancel exit animation if re-entering
-                          setIsCodeBlockToolbarExiting(false);
-                          // Only show hover toolbar if no selection toolbar is active
-                          if (!toolbarState) {
-                            setHoveredCodeBlock({ block: group.block, element });
-                          }
-                        }
-                  }
-                  onLeave={
-                    inputMethod === "pinpoint"
-                      ? () => {}
-                      : () => {
-                          // Delay then start exit animation
-                          hoverTimeoutRef.current = setTimeout(() => {
-                            setIsCodeBlockToolbarExiting(true);
-                            // After exit animation, unmount
-                            setTimeout(() => {
-                              setHoveredCodeBlock(null);
-                              setIsCodeBlockToolbarExiting(false);
-                            }, 150);
-                          }, 100);
-                        }
-                  }
-                  isHovered={
-                    inputMethod !== "pinpoint" && hoveredCodeBlock?.block.id === group.block.id
-                  }
-                />
-              ) : (
-                <BlockRenderer
-                  imageBaseDir={imageBaseDir}
-                  onImageClick={(src, alt) => setLightbox({ src, alt })}
-                  key={group.block.id}
-                  block={group.block}
-                  onOpenLinkedDoc={onOpenLinkedDoc}
-                  onOpenCodeFile={onOpenCodeFile}
-                  onNavigateAnchor={scrollToAnchor}
-                  onToggleCheckbox={onToggleCheckbox}
-                  checkboxOverrides={checkboxOverrides}
-                  githubRepo={repoInfo?.display}
-                  headingAnchorId={headingSlugMap.get(group.block.id)}
-                  annotations={annotations}
-                  onSelectChoice={handleSelectChoice}
-                />
-              ),
-            )}
-
-            {/* Text selection toolbar */}
-            {toolbarState && (
-              <ToolbarErrorBoundary>
-                <AnnotationToolbar
-                  element={toolbarState.element}
-                  positionMode="center-above"
-                  onAnnotate={handleAnnotate}
-                  onClose={handleToolbarClose}
-                  onRequestComment={handleRequestComment}
-                  onQuickLabel={handleQuickLabel}
-                  copyText={toolbarState.selectionText}
-                  hideCopyButton={!isTouchDevice}
-                  closeOnScrollOut
-                />
-              </ToolbarErrorBoundary>
-            )}
-
-            {/* Table hover toolbar */}
-            {hoveredTable && !toolbarState && (
-              <TableToolbar
-                element={hoveredTable.element}
-                markdown={hoveredTable.block.content}
-                isExiting={isTableToolbarExiting}
-                onExpand={() => {
-                  setPopoutTable(hoveredTable.block);
-                  setHoveredTable(null);
-                  setIsTableToolbarExiting(false);
-                  if (tableHoverTimeoutRef.current) {
-                    clearTimeout(tableHoverTimeoutRef.current);
-                    tableHoverTimeoutRef.current = null;
-                  }
-                }}
-                onMouseEnter={() => {
-                  if (tableHoverTimeoutRef.current) {
-                    clearTimeout(tableHoverTimeoutRef.current);
-                    tableHoverTimeoutRef.current = null;
-                  }
-                  setIsTableToolbarExiting(false);
-                }}
-                onMouseLeave={() => {
-                  tableHoverTimeoutRef.current = setTimeout(() => {
-                    setIsTableToolbarExiting(true);
-                    setTimeout(() => {
-                      setHoveredTable(null);
-                      setIsTableToolbarExiting(false);
-                    }, 150);
-                  }, 100);
-                }}
-              />
-            )}
-
-            {/* Code block hover toolbar */}
-            {hoveredCodeBlock && !toolbarState && (
-              <ToolbarErrorBoundary>
-                <AnnotationToolbar
-                  element={hoveredCodeBlock.element}
-                  positionMode="top-right"
-                  onAnnotate={handleCodeBlockAnnotate}
-                  onClose={handleCodeBlockToolbarClose}
-                  onRequestComment={handleCodeBlockRequestComment}
-                  onQuickLabel={handleCodeBlockQuickLabel}
-                  isExiting={isCodeBlockToolbarExiting}
-                  onMouseEnter={() => {
-                    if (hoverTimeoutRef.current) {
-                      clearTimeout(hoverTimeoutRef.current);
-                      hoverTimeoutRef.current = null;
-                    }
-                    setIsCodeBlockToolbarExiting(false);
-                  }}
-                  onMouseLeave={() => {
-                    hoverTimeoutRef.current = setTimeout(() => {
-                      setIsCodeBlockToolbarExiting(true);
-                      setTimeout(() => {
-                        setHoveredCodeBlock(null);
-                        setIsCodeBlockToolbarExiting(false);
-                      }, 150);
-                    }, 100);
-                  }}
-                />
-              </ToolbarErrorBoundary>
-            )}
-
-            {/* Table popout dialog — portaled into containerRef so annotations */}
-            {/* can walk into its text nodes the same way they do the inline table. */}
-            {popoutTable && (
-              <TablePopout
-                block={popoutTable}
-                open={!!popoutTable}
-                onClose={() => setPopoutTable(null)}
-                container={containerRef.current}
-                imageBaseDir={imageBaseDir}
-                onImageClick={(src, alt) => setLightbox({ src, alt })}
-                onOpenLinkedDoc={onOpenLinkedDoc}
-                onOpenCodeFile={onOpenCodeFile}
-                githubRepo={repoInfo?.display}
-                onNavigateAnchor={scrollToAnchor}
-              />
-            )}
-
-            {/* Pinpoint hover overlay */}
-            {inputMethod === "pinpoint" && (
-              <PinpointOverlay target={hoverTarget} containerRef={containerRef} />
-            )}
-
-            {/* Comment popover — hook handles text selection, Viewer handles global + code block */}
-            {hookCommentPopover && (
-              <CommentPopover
-                anchorEl={hookCommentPopover.anchorEl}
-                contextText={hookCommentPopover.contextText}
-                isGlobal={false}
-                initialText={hookCommentPopover.initialText}
-                onSubmit={hookCommentSubmit}
-                onClose={hookCommentClose}
-                onAskAI={onAskAI}
-                askAIContext={{
-                  kind: "selection",
-                  label: "Selected text",
-                  text: hookCommentPopover.selectedText ?? hookCommentPopover.contextText,
-                  sourcePath: linkedDocInfo?.filepath ?? sourceInfo,
-                }}
-              />
-            )}
-            {viewerCommentPopover && (
-              <CommentPopover
-                anchorEl={viewerCommentPopover.anchorEl}
-                contextText={viewerCommentPopover.contextText}
-                isGlobal={viewerCommentPopover.isGlobal}
-                initialText={viewerCommentPopover.initialText}
-                onSubmit={handleViewerCommentSubmit}
-                onClose={handleViewerCommentClose}
-                onAskAI={onAskAI}
-                askAIContext={{
-                  kind: viewerCommentPopover.isGlobal ? "general" : "selection",
-                  label: viewerCommentPopover.isGlobal ? "Document" : "Code block",
-                  text: viewerCommentPopover.selectedText,
-                  sourcePath: linkedDocInfo?.filepath ?? sourceInfo,
-                }}
-              />
-            )}
-
-            {/* Quick Label floating picker — hook handles text selection, Viewer handles code blocks */}
-            {hookQuickLabelPicker && (
-              <FloatingQuickLabelPicker
-                anchorEl={hookQuickLabelPicker.anchorEl}
-                cursorHint={hookQuickLabelPicker.cursorHint}
-                onSelect={hookFloatingQuickLabel}
-                onDismiss={hookQuickLabelPickerDismiss}
-              />
-            )}
-            {codeBlockQuickLabelPicker && (
-              <FloatingQuickLabelPicker
-                anchorEl={codeBlockQuickLabelPicker.anchorEl}
-                onSelect={(label: QuickLabel) => {
-                  const codeEl = codeBlockQuickLabelPicker.codeBlock.element.querySelector("code");
-                  if (codeEl) {
-                    applyCodeBlockAnnotation(
-                      codeBlockQuickLabelPicker.codeBlock.block.id,
-                      codeEl,
-                      AnnotationType.COMMENT,
-                      `${label.emoji} ${label.text}`,
-                      undefined,
-                      true,
-                      label.tip,
-                    );
-                  }
-                  setCodeBlockQuickLabelPicker(null);
-                  window.getSelection()?.removeAllRanges();
-                }}
-                onDismiss={() => {
-                  setCodeBlockQuickLabelPicker(null);
-                  window.getSelection()?.removeAllRanges();
-                }}
-              />
-            )}
+            <ViewerArticleHeader
+              actionsLabelMode={actionsLabelMode}
+              blocks={blocks}
+              copied={copied}
+              copyLabel={copyLabel}
+              frontmatter={frontmatter}
+              globalAttachments={globalAttachments}
+              globalCommentButtonRef={globalCommentButtonRef}
+              gridEnabled={gridEnabled}
+              hasLinkedDocument={!!linkedDocInfo}
+              isStuck={isStuck}
+              linkedDocInfo={linkedDocInfo}
+              messagePickerInfo={messagePickerInfo}
+              onAddGlobalAttachment={onAddGlobalAttachment}
+              onCopyPlan={handleCopyPlan}
+              onOpenGlobalComment={handleOpenGlobalComment}
+              onRemoveGlobalAttachment={onRemoveGlobalAttachment}
+              openInAppPath={openInAppPath}
+              repoInfo={repoInfo}
+              showDemoBadge={showDemoBadge}
+              sourceInfo={sourceInfo}
+              stickyActions={stickyActions}
+              stickySentinelRef={stickySentinelRef}
+            />
+            <ViewerBlockContent
+              annotations={annotations}
+              checkboxOverrides={checkboxOverrides}
+              githubRepo={repoInfo?.display}
+              groups={groupBlocks(blocks)}
+              headingSlugMap={headingSlugMap}
+              hoveredCodeBlock={hoveredCodeBlock}
+              imageBaseDir={imageBaseDir}
+              inputMethod={inputMethod}
+              onCodeBlockHover={handleCodeBlockHover}
+              onCodeBlockLeave={dismissCodeBlockToolbar}
+              onImageClick={handleImageClick}
+              onNavigateAnchor={scrollToAnchor}
+              onOpenCodeFile={onOpenCodeFile}
+              onOpenLinkedDoc={onOpenLinkedDoc}
+              onSelectChoice={handleSelectChoice}
+              onTableHover={handleTableHover}
+              onTableLeave={dismissTableToolbar}
+              onToggleCheckbox={onToggleCheckbox}
+            />
+            <ViewerAnnotationToolbars
+              codeBlockToolbarExiting={isCodeBlockToolbarExiting}
+              hoveredCodeBlock={hoveredCodeBlock}
+              hoveredTable={hoveredTable}
+              isTableToolbarExiting={isTableToolbarExiting}
+              isTouchDevice={isTouchDevice}
+              onAnnotate={handleAnnotate}
+              onCodeBlockAnnotate={handleCodeBlockAnnotate}
+              onCodeBlockQuickLabel={handleCodeBlockQuickLabel}
+              onCodeBlockRequestComment={handleCodeBlockRequestComment}
+              onCodeBlockToolbarClose={handleCodeBlockToolbarClose}
+              onCodeToolbarMouseEnter={handleCodeToolbarMouseEnter}
+              onCodeToolbarMouseLeave={dismissCodeBlockToolbar}
+              onQuickLabel={handleQuickLabel}
+              onRequestComment={handleRequestComment}
+              onTableExpand={handleTableExpand}
+              onTableToolbarMouseEnter={handleTableToolbarMouseEnter}
+              onTableToolbarMouseLeave={dismissTableToolbar}
+              onToolbarClose={handleToolbarClose}
+              toolbarState={toolbarState}
+            />
+            <ViewerTablePopout
+              container={containerRef.current}
+              imageBaseDir={imageBaseDir}
+              onClose={handleTablePopoutClose}
+              onImageClick={handleImageClick}
+              onOpenCodeFile={onOpenCodeFile}
+              onOpenLinkedDoc={onOpenLinkedDoc}
+              popoutTable={popoutTable}
+              repoDisplay={repoInfo?.display}
+              scrollToAnchor={scrollToAnchor}
+            />
+            <ViewerPinpointOverlay
+              containerRef={containerRef}
+              inputMethod={inputMethod}
+              target={hoverTarget}
+            />
+            <ViewerAnnotationPopovers
+              codeBlockQuickLabelPicker={codeBlockQuickLabelPicker}
+              hookCommentPopover={hookCommentPopover}
+              hookQuickLabelPicker={hookQuickLabelPicker}
+              linkedDocInfo={linkedDocInfo}
+              onAskAI={onAskAI}
+              onCodeBlockQuickLabelDismiss={handleCodeBlockQuickLabelDismiss}
+              onCodeBlockQuickLabelSelect={handleCodeBlockQuickLabelSelect}
+              onHookCommentClose={hookCommentClose}
+              onHookCommentSubmit={hookCommentSubmit}
+              onHookQuickLabelDismiss={hookQuickLabelPickerDismiss}
+              onHookQuickLabelSelect={hookFloatingQuickLabel}
+              onViewerCommentClose={handleViewerCommentClose}
+              onViewerCommentSubmit={handleViewerCommentSubmit}
+              sourceInfo={sourceInfo}
+              viewerCommentPopover={viewerCommentPopover}
+            />
           </article>
 
-          {/* Image lightbox */}
           {lightbox &&
             createPortal(
-              <ImageLightbox
-                src={lightbox.src}
-                alt={lightbox.alt}
-                onClose={() => setLightbox(null)}
-              />,
+              <ImageLightbox src={lightbox.src} alt={lightbox.alt} onClose={handleLightboxClose} />,
               document.body,
             )}
         </div>
