@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, resolve as resolvePath } from "node:path";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -74,16 +74,68 @@ export interface AnnotateServerResult {
   port: number;
   portSource: "env" | "remote-default" | "random";
   url: string;
-  waitForDecision: () => Promise<{
-    feedback: string;
-    annotations: readonly unknown[];
-    exit?: boolean;
-    approved?: boolean;
-    selectedMessageId?: string;
-    feedbackScope?: "message" | "messages";
-  }>;
+  waitForDecision: () => Promise<AnnotateDecision>;
   stop: () => void;
 }
+
+interface AnnotateServerOptions {
+  markdown: string;
+  filePath: string;
+  htmlContent: string;
+  origin?: string;
+  mode?: string;
+  folderPath?: string;
+  recentMessages?: { messageId: string; text: string; timestamp?: string }[];
+  sharingEnabled?: boolean;
+  shareBaseUrl?: string;
+  pasteApiUrl?: string;
+  sourceInfo?: string;
+  sourceConverted?: boolean;
+  gate?: boolean;
+  rawHtml?: string;
+  renderHtml?: boolean;
+  convertHtml?: boolean;
+  agentCwd?: string;
+}
+
+interface AnnotateDecision {
+  feedback: string;
+  annotations: readonly unknown[];
+  exit?: boolean;
+  approved?: boolean;
+  selectedMessageId?: string;
+  feedbackScope?: "message" | "messages";
+}
+
+interface AnnotateDecisionState {
+  promise: Promise<AnnotateDecision>;
+  resolve: (result: AnnotateDecision) => void;
+}
+
+interface HtmlAssetRegistry {
+  rewriteHtml: (htmlContent: string, htmlFilePath: string) => string;
+  inlineHtml: (htmlContent: string, htmlFilePath: string) => string;
+  handle: (res: ServerResponse, url: URL) => boolean;
+}
+
+interface SourceSaveState {
+  getPrimarySource: () => {
+    plan: string;
+    sourceSave:
+      | ReturnType<typeof disabledSourceSave>
+      | ReturnType<typeof createSourceSaveCapability>;
+  };
+  getReferenceRootPaths: () => string[];
+  initialSingleFileSourcePath: string | null;
+  openedSourceFilePaths: Set<string>;
+  singleFileSourceSaveEligible: boolean;
+}
+
+type AnnotateRouteHandler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+) => Promise<boolean> | boolean;
 
 const SourceSaveRequestSchema = Schema.Struct({
   path: Schema.optionalKey(Schema.String),
@@ -94,7 +146,21 @@ const SourceSaveRequestSchema = Schema.Struct({
   allowMissingBase: Schema.optionalKey(Schema.Boolean),
 });
 
-function createHtmlAssetRegistry() {
+type SourceSaveRequest = Schema.Schema.Type<typeof SourceSaveRequestSchema>;
+
+function createDecisionState(): AnnotateDecisionState {
+  let resolvePromise: (result: AnnotateDecision) => void = () => undefined;
+  const promise = new Promise<AnnotateDecision>((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  return {
+    promise,
+    resolve: (result) => resolvePromise(result),
+  };
+}
+
+function createHtmlAssetRegistry(): HtmlAssetRegistry {
   const rootsByToken = new Map<string, string>();
   const tokensByRoot = new Map<string, string>();
 
@@ -125,7 +191,7 @@ function createHtmlAssetRegistry() {
     return inlineHtmlLocalAssets(htmlContent, htmlFilePath);
   }
 
-  function handle(res: import("node:http").ServerResponse, url: URL): boolean {
+  function handle(res: ServerResponse, url: URL): boolean {
     const prefix = `${HTML_ASSET_ROUTE_PREFIX}/`;
     if (!url.pathname.startsWith(prefix)) return false;
 
@@ -186,111 +252,17 @@ function createHtmlAssetRegistry() {
   return { rewriteHtml, inlineHtml, handle };
 }
 
-export async function startAnnotateServer(options: {
-  markdown: string;
-  filePath: string;
-  htmlContent: string;
-  origin?: string;
-  mode?: string;
-  folderPath?: string;
-  recentMessages?: { messageId: string; text: string; timestamp?: string }[];
-  sharingEnabled?: boolean;
-  shareBaseUrl?: string;
-  pasteApiUrl?: string;
-  sourceInfo?: string;
-  sourceConverted?: boolean;
-  gate?: boolean;
-  rawHtml?: string;
-  renderHtml?: boolean;
-  convertHtml?: boolean;
-  agentCwd?: string;
-}): Promise<AnnotateServerResult> {
-  // Side-channel pre-warm so /api/doc/exists POSTs land on warm cache.
-  void warmFileListCache(process.cwd(), "code");
-  const gitUser = detectGitUser();
-  const sharingEnabled = options.sharingEnabled ?? resolveSharingEnabled(loadConfig());
-  const shareBaseUrl = (options.shareBaseUrl ?? process.env.PLANNOTATOR_SHARE_URL) || undefined;
-  const pasteApiUrl = (options.pasteApiUrl ?? process.env.PLANNOTATOR_PASTE_URL) || undefined;
-
-  let resolveDecision!: (result: {
-    feedback: string;
-    annotations: readonly unknown[];
-    exit?: boolean;
-    approved?: boolean;
-    selectedMessageId?: string;
-    feedbackScope?: "message" | "messages";
-  }) => void;
-  const decisionPromise = new Promise<{
-    feedback: string;
-    annotations: readonly unknown[];
-    exit?: boolean;
-    approved?: boolean;
-    selectedMessageId?: string;
-    feedbackScope?: "message" | "messages";
-  }>((r) => {
-    resolveDecision = r;
-  });
-
-  // Folder annotation has no stable markdown body, so key drafts by folder path instead.
+function createDraftKey(options: AnnotateServerOptions): string {
   const draftSource =
     options.mode === "annotate-folder" && options.folderPath
       ? `folder:${resolvePath(options.folderPath)}`
       : options.renderHtml && options.rawHtml
         ? options.rawHtml
         : options.markdown;
-  const draftKey = contentHash(draftSource);
+  return contentHash(draftSource);
+}
 
-  // Detect repo info (cached for this session)
-  const repoInfo = getRepoInfo();
-
-  const externalAnnotations = createExternalAnnotationHandler("plan");
-  const aiRuntime = await createPiAIRuntime();
-  const htmlAssets = createHtmlAssetRegistry();
-  let agentTerminalCapability: AgentTerminalCapability = {
-    enabled: false,
-    reason: "unsupported-runtime",
-  };
-
-  function isAllowedHtmlSharePath(targetPath: string): boolean {
-    const roots = new Set<string>([process.cwd()]);
-    if (options.folderPath) roots.add(options.folderPath);
-    if (!/^https?:\/\//i.test(options.filePath)) roots.add(dirname(options.filePath));
-    for (const root of roots) {
-      if (isWithinDirectory(targetPath, root)) return true;
-    }
-    return false;
-  }
-
-  function handleShareHtml(res: import("node:http").ServerResponse, url: URL): void {
-    if (/^https?:\/\//i.test(options.filePath)) {
-      json(res, { error: "Raw HTML sharing is unavailable for URL annotations" }, 400);
-      return;
-    }
-
-    const sourcePath = resolvePath(options.filePath);
-    const requestedPath = url.searchParams.get("path")
-      ? resolvePath(url.searchParams.get("path")!)
-      : sourcePath;
-    if (!/\.html?$/i.test(requestedPath)) {
-      json(res, { error: "Share HTML is only available for HTML documents" }, 400);
-      return;
-    }
-    if (!isAllowedHtmlSharePath(requestedPath)) {
-      json(res, { error: "Access denied" }, 403);
-      return;
-    }
-
-    try {
-      const htmlContent =
-        options.renderHtml && options.rawHtml && requestedPath === sourcePath
-          ? options.rawHtml
-          : readFileSync(requestedPath, "utf-8");
-      json(res, { shareHtml: htmlAssets.inlineHtml(htmlContent, requestedPath) });
-    } catch {
-      json(res, { error: "Failed to prepare share HTML" }, 500);
-    }
-  }
-
+function createSourceSaveState(options: AnnotateServerOptions): SourceSaveState {
   const sourceMode = options.mode || "annotate";
   const singleFileSourceSaveEligible =
     sourceMode === "annotate" &&
@@ -307,7 +279,8 @@ export async function startAnnotateServer(options: {
     : null;
   const openedSourceFilePaths = new Set<string>();
   if (initialSingleFileSourcePath) openedSourceFilePaths.add(initialSingleFileSourcePath);
-  const getPrimarySource = () => {
+
+  function getPrimarySource() {
     const mode = options.mode || "annotate";
     if (mode === "annotate-last") {
       return { plan: options.markdown, sourceSave: disabledSourceSave("message-mode") };
@@ -358,29 +331,131 @@ export async function startAnnotateServer(options: {
     } catch {
       return { plan: options.markdown, sourceSave: disabledSourceSave("unreadable-file") };
     }
+  }
+
+  return {
+    getPrimarySource,
+    getReferenceRootPaths: () =>
+      getAnnotateReferenceRootPaths({
+        mode: options.mode || "annotate",
+        filePath: options.filePath,
+        folderPath: options.folderPath,
+        initialSingleFileSourcePath,
+      }),
+    initialSingleFileSourcePath,
+    openedSourceFilePaths,
+    singleFileSourceSaveEligible,
   };
+}
 
-  const getReferenceRootPaths = () =>
-    getAnnotateReferenceRootPaths({
-      mode: options.mode || "annotate",
-      filePath: options.filePath,
-      folderPath: options.folderPath,
-      initialSingleFileSourcePath,
-    });
+function resolveSourceSaveTarget(
+  options: AnnotateServerOptions,
+  sourceSaveState: SourceSaveState,
+  body: SourceSaveRequest,
+): string | null {
+  if (sourceSaveState.singleFileSourceSaveEligible) {
+    const capability = createSourceSaveCapability(
+      "single-file",
+      sourceSaveState.initialSingleFileSourcePath ?? options.filePath,
+    );
+    return capability.enabled ? capability.path : sourceSaveState.initialSingleFileSourcePath;
+  }
+  if (options.mode !== "annotate-folder" || !options.folderPath || body.path === undefined) {
+    return null;
+  }
 
-  const server = createServer(async (req, res) => {
-    const url = requestUrl(req);
+  const targetPath = body.allowMissingBase
+    ? resolveFolderSourceFileForSave(body.path, options.folderPath)
+    : resolveFolderSourceFile(body.path, options.folderPath);
+  if (
+    body.allowMissingBase &&
+    targetPath &&
+    !existsSync(targetPath) &&
+    !sourceSaveState.openedSourceFilePaths.has(targetPath)
+  ) {
+    return null;
+  }
+  return targetPath;
+}
 
-    if (await externalAnnotations.handle(req, res, url)) return;
-    if (url.pathname.startsWith("/api/ai/") && (await handlePiAIRequest(req, res, url, aiRuntime)))
-      return;
+function sourceSaveStatus(result: ReturnType<typeof saveSourceFileAtomic>): number {
+  if (result.ok) return 200;
+  if (result.code === "conflict") return 409;
+  if (result.code === "invalid-request") return 400;
+  if (result.code === "not-writable") return 403;
+  return 500;
+}
 
-    if (url.pathname === "/api/plan" && req.method === "GET") {
+function isAllowedHtmlSharePath(options: AnnotateServerOptions, targetPath: string): boolean {
+  const roots = new Set<string>([process.cwd()]);
+  if (options.folderPath) roots.add(options.folderPath);
+  if (!/^https?:\/\//i.test(options.filePath)) roots.add(dirname(options.filePath));
+  for (const root of roots) {
+    if (isWithinDirectory(targetPath, root)) return true;
+  }
+  return false;
+}
+
+function handleShareHtml(
+  options: AnnotateServerOptions,
+  htmlAssets: HtmlAssetRegistry,
+  res: ServerResponse,
+  url: URL,
+): void {
+  if (/^https?:\/\//i.test(options.filePath)) {
+    json(res, { error: "Raw HTML sharing is unavailable for URL annotations" }, 400);
+    return;
+  }
+
+  const sourcePath = resolvePath(options.filePath);
+  const requestedPathParameter = url.searchParams.get("path");
+  const requestedPath = requestedPathParameter ? resolvePath(requestedPathParameter) : sourcePath;
+  if (!/\.html?$/i.test(requestedPath)) {
+    json(res, { error: "Share HTML is only available for HTML documents" }, 400);
+    return;
+  }
+  if (!isAllowedHtmlSharePath(options, requestedPath)) {
+    json(res, { error: "Access denied" }, 403);
+    return;
+  }
+
+  try {
+    const htmlContent =
+      options.renderHtml && options.rawHtml && requestedPath === sourcePath
+        ? options.rawHtml
+        : readFileSync(requestedPath, "utf-8");
+    json(res, { shareHtml: htmlAssets.inlineHtml(htmlContent, requestedPath) });
+  } catch {
+    json(res, { error: "Failed to prepare share HTML" }, 500);
+  }
+}
+
+function createAnnotateRouteHandlers(
+  options: AnnotateServerOptions,
+  draftKey: string,
+  gitUser: ReturnType<typeof detectGitUser>,
+  sharingEnabled: boolean,
+  shareBaseUrl: string | undefined,
+  pasteApiUrl: string | undefined,
+  repoInfo: ReturnType<typeof getRepoInfo>,
+  externalAnnotations: ReturnType<typeof createExternalAnnotationHandler>,
+  aiRuntime: Awaited<ReturnType<typeof createPiAIRuntime>>,
+  htmlAssets: HtmlAssetRegistry,
+  sourceSaveState: SourceSaveState,
+  resolveDecision: (result: AnnotateDecision) => void,
+  getAgentTerminalCapability: () => AgentTerminalCapability,
+): readonly AnnotateRouteHandler[] {
+  return [
+    async (req, res, url) => externalAnnotations.handle(req, res, url),
+    async (req, res, url) =>
+      url.pathname.startsWith("/api/ai/") && (await handlePiAIRequest(req, res, url, aiRuntime)),
+    (_req, res, url) => {
+      if (url.pathname !== "/api/plan" || _req.method !== "GET") return false;
       const displayRawHtml =
         options.renderHtml && options.rawHtml
           ? htmlAssets.rewriteHtml(options.rawHtml, options.filePath)
           : undefined;
-      const primarySource = getPrimarySource();
+      const primarySource = sourceSaveState.getPrimarySource();
       const planResponse = {
         plan: primarySource.plan,
         origin: options.origin ?? "pi",
@@ -398,15 +473,21 @@ export async function startAnnotateServer(options: {
         repoInfo,
         projectRoot: options.folderPath || process.cwd(),
         serverConfig: getServerConfig(gitUser),
-        agentTerminal: agentTerminalCapability,
+        agentTerminal: getAgentTerminalCapability(),
       };
       if (displayRawHtml) Object.assign(planResponse, { rawHtml: displayRawHtml });
       if (options.recentMessages)
         Object.assign(planResponse, { recentMessages: options.recentMessages });
       json(res, planResponse);
-    } else if (url.pathname === "/api/share-html" && req.method === "GET") {
-      handleShareHtml(res, url);
-    } else if (url.pathname === "/api/config" && req.method === "POST") {
+      return true;
+    },
+    (_req, res, url) => {
+      if (url.pathname !== "/api/share-html" || _req.method !== "GET") return false;
+      handleShareHtml(options, htmlAssets, res, url);
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/config" || req.method !== "POST") return false;
       try {
         const body = Schema.decodeUnknownSync(ConfigPatch)(await parseStrictBody(req));
         if (Object.keys(body).length > 0) saveConfig(body);
@@ -414,26 +495,34 @@ export async function startAnnotateServer(options: {
       } catch {
         json(res, { error: "Invalid request" }, 400);
       }
-    } else if (url.pathname === "/api/image") {
+      return true;
+    },
+    (_req, res, url) => {
+      if (url.pathname !== "/api/image") return false;
       handleImageRequest(res, url);
-    } else if (htmlAssets.handle(res, url)) {
-      return;
-    } else if (url.pathname === "/api/upload" && req.method === "POST") {
+      return true;
+    },
+    (_req, res, url) => htmlAssets.handle(res, url),
+    async (req, res, url) => {
+      if (url.pathname !== "/api/upload" || req.method !== "POST") return false;
       await handleUploadRequest(req, res);
-    } else if (url.pathname === "/api/open-in/apps" && req.method === "GET") {
-      // Remote/headless sessions can't open apps on the user's machine, and
-      // URL annotations have no local file to reveal — report unavailable so
-      // the UI hides the control entirely.
+      return true;
+    },
+    (_req, res, url) => {
+      if (url.pathname !== "/api/open-in/apps" || _req.method !== "GET") return false;
       const urlSource = /^https?:\/\//i.test(options.filePath);
       if (isRemoteSession() || urlSource) {
         json(res, { available: false, apps: [] });
-        return;
+        return true;
       }
       json(res, { available: true, apps: getAvailableOpenInApps() });
-    } else if (url.pathname === "/api/open-in" && req.method === "POST") {
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/open-in" || req.method !== "POST") return false;
       if (isRemoteSession() || /^https?:\/\//i.test(options.filePath)) {
         json(res, { ok: false, error: "Open in app is unavailable for this source" }, 400);
-        return;
+        return true;
       }
       try {
         const body = Option.getOrUndefined(
@@ -441,14 +530,12 @@ export async function startAnnotateServer(options: {
         );
         if (!body) {
           json(res, { ok: false, error: "Missing filePath" }, 400);
-          return;
+          return true;
         }
-        // Confine opens to the same reference roots /api/doc serves from,
-        // so any linked doc the user can view can also be opened.
-        const abs = resolveOpenInTarget(body.filePath, null, getReferenceRootPaths);
+        const abs = resolveOpenInTarget(body.filePath, null, sourceSaveState.getReferenceRootPaths);
         if (abs == null) {
           json(res, { ok: false, error: "Path is outside the allowed directory" }, 403);
-          return;
+          return true;
         }
         const result = await openFileInApp(abs, body.appId);
         json(res, result, 200);
@@ -459,11 +546,15 @@ export async function startAnnotateServer(options: {
           500,
         );
       }
-    } else if (url.pathname === "/api/draft") {
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/draft") return false;
       await handleDraftRequest(req, res, draftKey);
-    } else if (url.pathname === "/api/doc" && req.method === "GET") {
-      // Inject source file's directory as base for relative path resolution.
-      // Skip for URL annotations — there's no local directory to resolve against.
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/doc" || req.method !== "GET") return false;
       if (
         !url.searchParams.has("base") &&
         options.filePath &&
@@ -481,54 +572,33 @@ export async function startAnnotateServer(options: {
       }
       await handleDocRequest(res, url, {
         rewriteHtml: htmlAssets.rewriteHtml,
-        sourceSaveFilePath: singleFileSourceSaveEligible
-          ? (initialSingleFileSourcePath ?? options.filePath)
+        sourceSaveFilePath: sourceSaveState.singleFileSourceSaveEligible
+          ? (sourceSaveState.initialSingleFileSourcePath ?? options.filePath)
           : undefined,
         sourceSaveFolderPath: options.mode === "annotate-folder" ? options.folderPath : undefined,
-        onSourceDocumentServed: (path) => openedSourceFilePaths.add(path),
-        rootPaths: getReferenceRootPaths(),
+        onSourceDocumentServed: (path) => sourceSaveState.openedSourceFilePaths.add(path),
+        rootPaths: sourceSaveState.getReferenceRootPaths(),
       });
-    } else if (url.pathname === "/api/source/save" && req.method === "POST") {
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/source/save" || req.method !== "POST") return false;
       const body = Option.getOrUndefined(
         Schema.decodeUnknownOption(SourceSaveRequestSchema)(await parseBody(req)),
       );
       if (!body) {
         json(res, { ok: false, code: "invalid-request", message: "Invalid JSON body." }, 400);
-        return;
+        return true;
       }
 
-      let targetPath: string | null = null;
-      if (singleFileSourceSaveEligible) {
-        const capability = createSourceSaveCapability(
-          "single-file",
-          initialSingleFileSourcePath ?? options.filePath,
-        );
-        targetPath = capability.enabled ? capability.path : initialSingleFileSourcePath;
-      } else if (
-        options.mode === "annotate-folder" &&
-        options.folderPath &&
-        body.path !== undefined
-      ) {
-        targetPath = body.allowMissingBase
-          ? resolveFolderSourceFileForSave(body.path, options.folderPath)
-          : resolveFolderSourceFile(body.path, options.folderPath);
-        if (
-          body.allowMissingBase &&
-          targetPath &&
-          !existsSync(targetPath) &&
-          !openedSourceFilePaths.has(targetPath)
-        ) {
-          targetPath = null;
-        }
-      }
-
+      const targetPath = resolveSourceSaveTarget(options, sourceSaveState, body);
       if (!targetPath) {
         json(
           res,
           { ok: false, code: "not-writable", message: "This document cannot be saved to a file." },
           403,
         );
-        return;
+        return true;
       }
 
       const result = saveSourceFileAtomic(targetPath, body.text, body.baseHash, {
@@ -536,45 +606,67 @@ export async function startAnnotateServer(options: {
         missingBaseEol: body.baseEol,
         allowedRoot: options.mode === "annotate-folder" ? options.folderPath : undefined,
       });
-      const status = result.ok
-        ? 200
-        : result.code === "conflict"
-          ? 409
-          : result.code === "invalid-request"
-            ? 400
-            : result.code === "not-writable"
-              ? 403
-              : 500;
-      json(res, result, status);
-    } else if (url.pathname === "/api/doc/exists" && req.method === "POST") {
-      await handleDocExistsRequest(res, req, { rootPaths: getReferenceRootPaths() });
-    } else if (url.pathname === "/api/obsidian/vaults") {
+      json(res, result, sourceSaveStatus(result));
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/doc/exists" || req.method !== "POST") return false;
+      await handleDocExistsRequest(res, req, {
+        rootPaths: sourceSaveState.getReferenceRootPaths(),
+      });
+      return true;
+    },
+    (_req, res, url) => {
+      if (url.pathname !== "/api/obsidian/vaults") return false;
       handleObsidianVaultsRequest(res);
-    } else if (url.pathname === "/api/reference/obsidian/files" && req.method === "GET") {
+      return true;
+    },
+    (_req, res, url) => {
+      if (url.pathname !== "/api/reference/obsidian/files" || _req.method !== "GET") return false;
       handleObsidianFilesRequest(res, url);
-    } else if (url.pathname === "/api/reference/obsidian/doc" && req.method === "GET") {
+      return true;
+    },
+    (_req, res, url) => {
+      if (url.pathname !== "/api/reference/obsidian/doc" || _req.method !== "GET") return false;
       handleObsidianDocRequest(res, url);
-    } else if (url.pathname === "/api/reference/files" && req.method === "GET") {
+      return true;
+    },
+    async (_req, res, url) => {
+      if (url.pathname !== "/api/reference/files" || _req.method !== "GET") return false;
       await handleFileBrowserRequest(res, url);
-    } else if (url.pathname === "/api/reference/files/stream" && req.method === "GET") {
+      return true;
+    },
+    (req, res, url) => {
+      if (url.pathname !== "/api/reference/files/stream" || req.method !== "GET") return false;
       handleFileBrowserStreamRequest(req, res, url);
-      return;
-    } else if (url.pathname === "/favicon.svg") {
+      return true;
+    },
+    (_req, res, url) => {
+      if (url.pathname !== "/favicon.svg") return false;
       handleFavicon(res);
-    } else if (url.pathname === "/api/exit" && req.method === "POST") {
+      return true;
+    },
+    (req, res, url) => {
+      if (url.pathname !== "/api/exit" || req.method !== "POST") return false;
       deleteDraft(draftKey, readDraftGenerationFromUrl(req));
       resolveDecision({ feedback: "", annotations: [], exit: true });
       json(res, { ok: true });
-    } else if (url.pathname === "/api/approve" && req.method === "POST") {
+      return true;
+    },
+    (req, res, url) => {
+      if (url.pathname !== "/api/approve" || req.method !== "POST") return false;
       deleteDraft(draftKey, readDraftGenerationFromUrl(req));
       resolveDecision({ feedback: "", annotations: [], approved: true });
       json(res, { ok: true });
-    } else if (url.pathname === "/api/feedback" && req.method === "POST") {
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/feedback" || req.method !== "POST") return false;
       try {
         const request = decodeFeedbackRequest(await toWebRequest(req).json());
         if (!request) {
           json(res, { error: "Invalid request" }, 400);
-          return;
+          return true;
         }
         deleteDraft(draftKey, request.draftGeneration);
         resolveDecision({
@@ -588,12 +680,67 @@ export async function startAnnotateServer(options: {
         const message = err instanceof Error ? err.message : "Failed to process feedback";
         json(res, { error: message }, 500);
       }
-    } else if (url.pathname === "/api/save-notes" && req.method === "POST") {
+      return true;
+    },
+    async (req, res, url) => {
+      if (url.pathname !== "/api/save-notes" || req.method !== "POST") return false;
       await handleSaveNotesRequest(req, res);
-    } else {
-      html(res, options.htmlContent);
-    }
-  });
+      return true;
+    },
+  ];
+}
+
+async function handleAnnotateRequest(
+  handlers: readonly AnnotateRouteHandler[],
+  fallbackHtml: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const url = requestUrl(req);
+  for (const handler of handlers) {
+    if (await handler(req, res, url)) return;
+  }
+  html(res, fallbackHtml);
+}
+
+export async function startAnnotateServer(
+  options: AnnotateServerOptions,
+): Promise<AnnotateServerResult> {
+  // Side-channel pre-warm so /api/doc/exists POSTs land on warm cache.
+  void warmFileListCache(process.cwd(), "code");
+  const gitUser = detectGitUser();
+  const sharingEnabled = options.sharingEnabled ?? resolveSharingEnabled(loadConfig());
+  const shareBaseUrl = (options.shareBaseUrl ?? process.env.PLANNOTATOR_SHARE_URL) || undefined;
+  const pasteApiUrl = (options.pasteApiUrl ?? process.env.PLANNOTATOR_PASTE_URL) || undefined;
+  const decisionState = createDecisionState();
+  const draftKey = createDraftKey(options);
+  const repoInfo = getRepoInfo();
+  const externalAnnotations = createExternalAnnotationHandler("plan");
+  const aiRuntime = await createPiAIRuntime();
+  const htmlAssets = createHtmlAssetRegistry();
+  const sourceSaveState = createSourceSaveState(options);
+  let agentTerminalCapability: AgentTerminalCapability = {
+    enabled: false,
+    reason: "unsupported-runtime",
+  };
+  const handlers = createAnnotateRouteHandlers(
+    options,
+    draftKey,
+    gitUser,
+    sharingEnabled,
+    shareBaseUrl,
+    pasteApiUrl,
+    repoInfo,
+    externalAnnotations,
+    aiRuntime,
+    htmlAssets,
+    sourceSaveState,
+    decisionState.resolve,
+    () => agentTerminalCapability,
+  );
+  const server = createServer((req, res) =>
+    handleAnnotateRequest(handlers, options.htmlContent, req, res),
+  );
   const agentTerminal = await createNodeAgentTerminalBridge({
     enabled: supportsAnnotateAgentTerminalMode(options.mode || "annotate"),
     cwd: options.agentCwd ?? process.cwd(),
@@ -607,7 +754,7 @@ export async function startAnnotateServer(options: {
     port,
     portSource,
     url: `http://localhost:${port}`,
-    waitForDecision: () => decisionPromise,
+    waitForDecision: () => decisionState.promise,
     stop: () => {
       aiRuntime?.dispose();
       agentTerminal.dispose();
