@@ -93,6 +93,95 @@ function buildFileScopedBody(annotations: CodeAnnotation[]): string {
   return parts.join("\n\n");
 }
 
+type OrphanAnnotation = { reason: "full-stack" | "unmapped"; ann: CodeAnnotation };
+type AnnotationPartitions = [CodeAnnotation[], OrphanAnnotation[]];
+type EditorFileComments = [SubmissionTarget["fileComments"], Set<string>];
+
+function partitionAnnotations(annotations: CodeAnnotation[]): AnnotationPartitions {
+  const layerAnnotations: CodeAnnotation[] = [];
+  const orphanAnnotations: OrphanAnnotation[] = [];
+
+  for (const annotation of annotations) {
+    if (annotation.diffScope === "full-stack") {
+      orphanAnnotations.push({ reason: "full-stack", ann: annotation });
+    } else {
+      layerAnnotations.push(annotation);
+    }
+  }
+
+  return [layerAnnotations, orphanAnnotations];
+}
+
+function groupAnnotationsByPR(
+  layerAnnotations: CodeAnnotation[],
+  currentPrUrl: string | undefined,
+  orphanAnnotations: OrphanAnnotation[],
+): Map<string, CodeAnnotation[]> {
+  const annotationsByPR = new Map<string, CodeAnnotation[]>();
+  const hasMultiplePRs =
+    new Set(layerAnnotations.map((annotation) => annotation.prUrl).filter(Boolean)).size > 1;
+
+  for (const annotation of layerAnnotations) {
+    const key = annotation.prUrl ?? currentPrUrl ?? "_current";
+    if (!annotation.prUrl && hasMultiplePRs) {
+      orphanAnnotations.push({ reason: "unmapped", ann: annotation });
+      continue;
+    }
+    const group = annotationsByPR.get(key) || [];
+    group.push(annotation);
+    annotationsByPR.set(key, group);
+  }
+
+  return annotationsByPR;
+}
+
+function buildEditorFileComments(
+  editorAnnotations: Array<{
+    filePath: string;
+    lineStart: number;
+    lineEnd: number;
+    comment?: string;
+    selectedText?: string;
+  }>,
+  currentDiffPaths: Set<string>,
+): EditorFileComments {
+  const fileComments: SubmissionTarget["fileComments"] = [];
+  const files = new Set<string>();
+
+  for (const annotation of editorAnnotations) {
+    if (!currentDiffPaths.has(annotation.filePath)) continue;
+    const body = annotation.comment
+      ? `> ${annotation.selectedText}\n\n${annotation.comment}`
+      : `> ${annotation.selectedText}`;
+    if (!body.trim()) continue;
+    const isMultiLine = annotation.lineStart !== annotation.lineEnd;
+    fileComments.push({
+      path: annotation.filePath,
+      line: annotation.lineEnd,
+      side: "RIGHT",
+      body,
+      ...(isMultiLine && { start_line: annotation.lineStart, start_side: "RIGHT" }),
+    });
+    files.add(annotation.filePath);
+  }
+
+  return [fileComments, files];
+}
+
+function buildOrphanedFindings(orphanAnnotations: OrphanAnnotation[]): OrphanedFindings[] {
+  const reasons: OrphanedFindings["reason"][] = ["full-stack", "unmapped"];
+  const orphans: OrphanedFindings[] = [];
+  for (const reason of reasons) {
+    const annotations = orphanAnnotations
+      .filter((orphan) => orphan.reason === reason)
+      .map((orphan) => orphan.ann);
+    if (annotations.length > 0) {
+      orphans.push({ reason, annotations, markdown: exportReviewFeedback(annotations) });
+    }
+  }
+  return orphans;
+}
+
 export function buildReviewSubmission(
   allAnnotations: CodeAnnotation[],
   editorAnnotations: Array<{
@@ -107,58 +196,20 @@ export function buildReviewSubmission(
   currentPrMeta?: { number: number; title: string; repo: string },
 ): ReviewSubmission {
   const targets: SubmissionTarget[] = [];
-  const orphanAnnotations: { reason: "full-stack" | "unmapped"; ann: CodeAnnotation }[] = [];
-
-  // Separate postable (layer) from orphaned (full-stack)
-  const layerAnnotations: CodeAnnotation[] = [];
-  for (const ann of allAnnotations) {
-    if (ann.diffScope === "full-stack") {
-      orphanAnnotations.push({ reason: "full-stack", ann });
-    } else {
-      layerAnnotations.push(ann);
-    }
-  }
-
-  // Group layer annotations by prUrl
-  const byPR = new Map<string, CodeAnnotation[]>();
-  const hasMultiplePRs = new Set(layerAnnotations.map((a) => a.prUrl).filter(Boolean)).size > 1;
-
-  for (const ann of layerAnnotations) {
-    const key = ann.prUrl ?? currentPrUrl ?? "_current";
-    if (!ann.prUrl && hasMultiplePRs) {
-      orphanAnnotations.push({ reason: "unmapped", ann });
-      continue;
-    }
-    const group = byPR.get(key) || [];
-    group.push(ann);
-    byPR.set(key, group);
-  }
+  const [layerAnnotations, orphanAnnotations] = partitionAnnotations(allAnnotations);
+  const annotationsByPR = groupAnnotationsByPR(layerAnnotations, currentPrUrl, orphanAnnotations);
 
   // Build editor file comments (always attached to the current PR)
-  const editorFileComments: SubmissionTarget["fileComments"] = [];
-  const editorFiles = new Set<string>();
-  if (editorAnnotations.length > 0) {
-    for (const ea of editorAnnotations) {
-      if (!currentDiffPaths.has(ea.filePath)) continue;
-      const body = ea.comment ? `> ${ea.selectedText}\n\n${ea.comment}` : `> ${ea.selectedText}`;
-      if (!body.trim()) continue;
-      const isMultiLine = ea.lineStart !== ea.lineEnd;
-      editorFileComments.push({
-        path: ea.filePath,
-        line: ea.lineEnd,
-        side: "RIGHT" as const,
-        body,
-        ...(isMultiLine && { start_line: ea.lineStart, start_side: "RIGHT" as const }),
-      });
-      editorFiles.add(ea.filePath);
-    }
-  }
+  const [editorFileComments, editorFiles] = buildEditorFileComments(
+    editorAnnotations,
+    currentDiffPaths,
+  );
 
   // Build targets from PR groups
   const currentKey = currentPrUrl ?? "_current";
   let editorCommentsAttached = false;
 
-  for (const [prUrl, annotations] of byPR) {
+  for (const [prUrl, annotations] of annotationsByPR) {
     const sample = annotations[0];
     const fileComments = buildAnnotationFileComments(annotations);
     const fileScopedBody = buildFileScopedBody(annotations);
@@ -200,31 +251,7 @@ export function buildReviewSubmission(
     });
   }
 
-  // Build orphan groups
-  const orphans: OrphanedFindings[] = [];
-  const fullStackOrphans = orphanAnnotations
-    .filter((o) => o.reason === "full-stack")
-    .map((o) => o.ann);
-  const unmappedOrphans = orphanAnnotations
-    .filter((o) => o.reason === "unmapped")
-    .map((o) => o.ann);
-
-  if (fullStackOrphans.length > 0) {
-    orphans.push({
-      reason: "full-stack",
-      annotations: fullStackOrphans,
-      markdown: exportReviewFeedback(fullStackOrphans),
-    });
-  }
-  if (unmappedOrphans.length > 0) {
-    orphans.push({
-      reason: "unmapped",
-      annotations: unmappedOrphans,
-      markdown: exportReviewFeedback(unmappedOrphans),
-    });
-  }
-
-  return { targets, orphans };
+  return { targets, orphans: buildOrphanedFindings(orphanAnnotations) };
 }
 
 // ---------------------------------------------------------------------------
