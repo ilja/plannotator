@@ -146,6 +146,19 @@ type InitialSourceState =
   | { readonly eligible: false; readonly path: null }
   | { readonly eligible: true; readonly path: string };
 
+type AnnotateRouteHandler = (
+  req: Request,
+  url: URL,
+  disableIdleTimeout: () => void,
+) => Promise<Response | null>;
+
+function sourceSaveFailureStatus(code: string): number {
+  if (code === "conflict") return 409;
+  if (code === "invalid-request") return 400;
+  if (code === "not-writable") return 403;
+  return 500;
+}
+
 /**
  * Start the Annotate server
  *
@@ -351,6 +364,302 @@ export async function startAnnotateServer(
     resolveDecision = resolve;
   });
 
+  const handlePlanRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/plan" || req.method !== "GET") return null;
+
+    const displayRawHtml =
+      renderHtml && rawHtml ? htmlAssets.rewriteHtml(rawHtml, filePath) : undefined;
+    const primarySource = getPrimarySource();
+    const planResponse = {
+      plan: primarySource.plan,
+      origin,
+      mode,
+      filePath,
+      sourceInfo,
+      sourceConverted: sourceConverted ?? false,
+      sourceSave: primarySource.sourceSave,
+      gate,
+      renderAs: displayRawHtml ? ("html" as const) : ("markdown" as const),
+      convertHtml,
+      sharingEnabled,
+      shareBaseUrl,
+      pasteApiUrl,
+      repoInfo,
+      projectRoot: folderPath || process.cwd(),
+      isWSL: wslFlag,
+      serverConfig: getServerConfig(gitUser),
+      agentTerminal: agentTerminal.capability,
+    };
+    if (displayRawHtml) Object.assign(planResponse, { rawHtml: displayRawHtml });
+    if (recentMessages) Object.assign(planResponse, { recentMessages });
+    return Response.json(planResponse);
+  };
+
+  const handleShareHtmlRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/share-html" || req.method !== "GET") return null;
+    return loadShareHtml(url.searchParams.get("path"));
+  };
+
+  const handleOpenInAppsRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/open-in/apps" || req.method !== "GET") return null;
+    if (/^https?:\/\//i.test(filePath)) {
+      return Response.json({ available: false, apps: [] });
+    }
+    return handleOpenInApps();
+  };
+
+  const handleOpenInRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/open-in" || req.method !== "POST") return null;
+    if (/^https?:\/\//i.test(filePath)) {
+      return Response.json(
+        { ok: false, error: "Open in app is unavailable for this source" },
+        { status: 400 },
+      );
+    }
+    return handleOpenIn(req, { resolveRoot: getReferenceRootPaths });
+  };
+
+  const handleConfigRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/config" || req.method !== "POST") return null;
+    try {
+      const patch = Schema.decodeUnknownSync(ConfigPatch)(await req.json());
+      if (Object.keys(patch).length > 0) saveConfig(patch);
+      return Response.json({ ok: true });
+    } catch {
+      return Response.json({ error: "Invalid request" }, { status: 400 });
+    }
+  };
+
+  const handleImageRoute: AnnotateRouteHandler = async (req, url) => {
+    return url.pathname === "/api/image" ? handleImage(req) : null;
+  };
+
+  const handleHtmlAssetRoute: AnnotateRouteHandler = async (req, url) => {
+    return (await htmlAssets.handle(req, url)) ?? null;
+  };
+
+  const handleDocRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/doc" || req.method !== "GET") return null;
+
+    const docUrl = new URL(req.url);
+    let changed = false;
+    if (!docUrl.searchParams.has("base") && !/^https?:\/\//i.test(filePath)) {
+      docUrl.searchParams.set(
+        "base",
+        mode === "annotate-folder" && folderPath ? folderPath : dirname(filePath),
+      );
+      changed = true;
+    }
+    if (convertHtml && !docUrl.searchParams.has("convert")) {
+      docUrl.searchParams.set("convert", "1");
+      changed = true;
+    }
+    const docReq = changed ? new Request(docUrl.toString()) : req;
+    return handleDoc(docReq, {
+      rewriteHtml: htmlAssets.rewriteHtml,
+      sourceSaveFilePath: singleFileSourceSaveEligible
+        ? (initialSingleFileSourcePath ?? filePath)
+        : undefined,
+      sourceSaveFolderPath: mode === "annotate-folder" ? folderPath : undefined,
+      onSourceDocumentServed: (path) => openedSourceFilePaths.add(path),
+      rootPaths: getReferenceRootPaths(),
+    });
+  };
+
+  const handleSourceSaveRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/source/save" || req.method !== "POST") return null;
+
+    const body = Option.getOrUndefined(
+      Schema.decodeUnknownOption(SourceSaveRequestSchema)(await req.json()),
+    );
+    if (!body) {
+      return Response.json(
+        { ok: false, code: "invalid-request", message: "Invalid JSON body." },
+        { status: 400 },
+      );
+    }
+
+    let targetPath: string | null = null;
+    if (singleFileSourceSaveEligible) {
+      const capability = createSourceSaveCapability(
+        "single-file",
+        initialSingleFileSourcePath ?? filePath,
+      );
+      targetPath = capability.enabled ? capability.path : initialSingleFileSourcePath;
+    } else if (mode === "annotate-folder" && folderPath && body.path !== undefined) {
+      targetPath = body.allowMissingBase
+        ? resolveFolderSourceFileForSave(body.path, folderPath)
+        : resolveFolderSourceFile(body.path, folderPath);
+      if (
+        body.allowMissingBase &&
+        targetPath &&
+        !existsSync(targetPath) &&
+        !openedSourceFilePaths.has(targetPath)
+      ) {
+        targetPath = null;
+      }
+    }
+
+    if (!targetPath) {
+      return Response.json(
+        {
+          ok: false,
+          code: "not-writable",
+          message: "This document cannot be saved to a file.",
+        },
+        { status: 403 },
+      );
+    }
+
+    const result = saveSourceFileAtomic(targetPath, body.text, body.baseHash, {
+      allowMissingBase: body.allowMissingBase === true,
+      missingBaseEol: body.baseEol,
+      allowedRoot: mode === "annotate-folder" ? folderPath : undefined,
+    });
+    const status = result.ok ? 200 : sourceSaveFailureStatus(result.code);
+    return Response.json(result, { status });
+  };
+
+  const handleDocExistsRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/doc/exists" || req.method !== "POST") return null;
+    return handleDocExists(req, { rootPaths: getReferenceRootPaths() });
+  };
+
+  const handleObsidianVaultsRoute: AnnotateRouteHandler = async (_req, url) => {
+    return url.pathname === "/api/obsidian/vaults" ? handleObsidianVaults() : null;
+  };
+
+  const handleObsidianFilesRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/reference/obsidian/files" || req.method !== "GET") return null;
+    return handleObsidianFiles(req);
+  };
+
+  const handleObsidianDocRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/reference/obsidian/doc" || req.method !== "GET") return null;
+    return handleObsidianDoc(req);
+  };
+
+  const handleReferenceFilesRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/reference/files" || req.method !== "GET") return null;
+    return handleFileBrowserFiles(req);
+  };
+
+  const handleReferenceFilesStreamRoute: AnnotateRouteHandler = async (
+    req,
+    url,
+    disableIdleTimeout,
+  ) => {
+    if (url.pathname !== "/api/reference/files/stream" || req.method !== "GET") return null;
+    return handleFileBrowserFilesStream(req, { disableIdleTimeout });
+  };
+
+  const handleUploadRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/upload" || req.method !== "POST") return null;
+    return handleUpload(req);
+  };
+
+  const handleDraftRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/draft") return null;
+    if (req.method === "POST") return handleDraftSave(req, draftKey);
+    if (req.method === "DELETE") return handleDraftDelete(draftKey, req);
+    return handleDraftLoad(draftKey);
+  };
+
+  const handleExternalAnnotationsRoute: AnnotateRouteHandler = async (
+    req,
+    url,
+    disableIdleTimeout,
+  ) => {
+    return (await externalAnnotations.handle(req, url, { disableIdleTimeout })) ?? null;
+  };
+
+  const handleAIRoute: AnnotateRouteHandler = async (req, url, disableIdleTimeout) => {
+    if (!url.pathname.startsWith("/api/ai/")) return null;
+
+    // SAFETY: url.pathname is prefix-checked against /api/ai/ above, and
+    // AIEndpoints is keyed by exactly those API paths.
+    const handler = aiRuntime.endpoints[url.pathname as keyof AIEndpoints];
+    if (!handler) return Response.json({ error: "Not found" }, { status: 404 });
+    if (url.pathname === AI_QUERY_ENDPOINT) disableIdleTimeout();
+    return handler(req);
+  };
+
+  const handleExitRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/exit" || req.method !== "POST") return null;
+    deleteDraft(draftKey, readDraftGenerationFromUrl(req));
+    resolveDecision({ feedback: "", annotations: [], exit: true });
+    return Response.json({ ok: true });
+  };
+
+  const handleApproveRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/approve" || req.method !== "POST") return null;
+    deleteDraft(draftKey, readDraftGenerationFromUrl(req));
+    resolveDecision({ feedback: "", annotations: [], approved: true });
+    return Response.json({ ok: true });
+  };
+
+  const handleFeedbackRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/feedback" || req.method !== "POST") return null;
+    try {
+      const rawBody = await req.json();
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
+      );
+      if (!body) {
+        return Response.json({ error: "Invalid request" }, { status: 400 });
+      }
+
+      deleteDraft(draftKey, readDraftGenerationFromBody(body));
+      resolveDecision({
+        feedback: body.feedback || "",
+        annotations: body.annotations ? [...body.annotations] : [],
+        selectedMessageId: body.selectedMessageId,
+        feedbackScope: body.feedbackScope,
+      });
+
+      return Response.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to process feedback";
+      return Response.json({ error: message }, { status: 500 });
+    }
+  };
+
+  const handleSaveNotesRoute: AnnotateRouteHandler = async (req, url) => {
+    if (url.pathname !== "/api/save-notes" || req.method !== "POST") return null;
+    return handleSaveNotes(req);
+  };
+
+  const handleFaviconRoute: AnnotateRouteHandler = async (_req, url) => {
+    return url.pathname === "/favicon.svg" ? handleFavicon() : null;
+  };
+
+  const routeHandlers: AnnotateRouteHandler[] = [
+    handlePlanRoute,
+    handleShareHtmlRoute,
+    handleOpenInAppsRoute,
+    handleOpenInRoute,
+    handleConfigRoute,
+    handleImageRoute,
+    handleHtmlAssetRoute,
+    handleDocRoute,
+    handleSourceSaveRoute,
+    handleDocExistsRoute,
+    handleObsidianVaultsRoute,
+    handleObsidianFilesRoute,
+    handleObsidianDocRoute,
+    handleReferenceFilesRoute,
+    handleReferenceFilesStreamRoute,
+    handleUploadRoute,
+    handleDraftRoute,
+    handleExternalAnnotationsRoute,
+    handleAIRoute,
+    handleExitRoute,
+    handleApproveRoute,
+    handleFeedbackRoute,
+    handleSaveNotesRoute,
+    handleFaviconRoute,
+  ];
+
   // Start server with retry logic
   let server: ReturnType<typeof Bun.serve> | null = null;
 
@@ -363,298 +672,23 @@ export async function startAnnotateServer(
         // between bytes (e.g. while a permission prompt waits on the user).
         idleTimeout: 0,
 
-        async fetch(req, server) {
+        async fetch(req, bunServer) {
           const url = new URL(req.url);
 
           if (agentTerminal.matches(url.pathname)) {
-            if (agentTerminal.capability.enabled && agentTerminal.upgrade(req, server)) {
-              return;
-            }
+            if (agentTerminal.capability.enabled && agentTerminal.upgrade(req, bunServer)) return;
             return new Response("Agent terminal is unavailable", { status: 404 });
           }
           if (isAgentTerminalWsRoute(url.pathname)) {
             return new Response("Agent terminal is unavailable", { status: 404 });
           }
 
-          // API: Get plan content (reuse /api/plan so the plan editor UI works)
-          if (url.pathname === "/api/plan" && req.method === "GET") {
-            const displayRawHtml =
-              renderHtml && rawHtml ? htmlAssets.rewriteHtml(rawHtml, filePath) : undefined;
-            const primarySource = getPrimarySource();
-            const planResponse = {
-              plan: primarySource.plan,
-              origin,
-              mode,
-              filePath,
-              sourceInfo,
-              sourceConverted: sourceConverted ?? false,
-              sourceSave: primarySource.sourceSave,
-              gate,
-              renderAs: displayRawHtml ? ("html" as const) : ("markdown" as const),
-              convertHtml,
-              sharingEnabled,
-              shareBaseUrl,
-              pasteApiUrl,
-              repoInfo,
-              projectRoot: folderPath || process.cwd(),
-              isWSL: wslFlag,
-              serverConfig: getServerConfig(gitUser),
-              agentTerminal: agentTerminal.capability,
-            };
-            if (displayRawHtml) Object.assign(planResponse, { rawHtml: displayRawHtml });
-            if (recentMessages) Object.assign(planResponse, { recentMessages });
-            return Response.json(planResponse);
+          const disableIdleTimeout = () => bunServer.timeout(req, 0);
+          for (const handleRoute of routeHandlers) {
+            const response = await handleRoute(req, url, disableIdleTimeout);
+            if (response) return response;
           }
 
-          if (url.pathname === "/api/share-html" && req.method === "GET") {
-            return loadShareHtml(url.searchParams.get("path"));
-          }
-
-          // API: List apps the host can open a file in (Open in App control).
-          if (url.pathname === "/api/open-in/apps" && req.method === "GET") {
-            // A URL annotation source has no local file to open — mirror Pi and
-            // report unavailable so the UI hides the control entirely.
-            if (/^https?:\/\//i.test(filePath)) {
-              return Response.json({ available: false, apps: [] });
-            }
-            return handleOpenInApps();
-          }
-
-          // API: Open the annotated file in an app. A URL source has no local
-          // file; any other open is confined to the same reference roots
-          // /api/doc serves from, so any linked doc the user can view can also
-          // be opened — and nothing outside the session can.
-          if (url.pathname === "/api/open-in" && req.method === "POST") {
-            if (/^https?:\/\//i.test(filePath)) {
-              return Response.json(
-                { ok: false, error: "Open in app is unavailable for this source" },
-                { status: 400 },
-              );
-            }
-            return handleOpenIn(req, { resolveRoot: getReferenceRootPaths });
-          }
-
-          // API: Update user config (write-back to ~/.plannotator/config.json)
-          if (url.pathname === "/api/config" && req.method === "POST") {
-            try {
-              const patch = Schema.decodeUnknownSync(ConfigPatch)(await req.json());
-              if (Object.keys(patch).length > 0) saveConfig(patch);
-              return Response.json({ ok: true });
-            } catch {
-              return Response.json({ error: "Invalid request" }, { status: 400 });
-            }
-          }
-
-          // API: Serve images (local paths or temp uploads)
-          if (url.pathname === "/api/image") {
-            return handleImage(req);
-          }
-
-          const htmlAssetResponse = await htmlAssets.handle(req, url);
-          if (htmlAssetResponse) {
-            return htmlAssetResponse;
-          }
-
-          // API: Serve a linked markdown document. The annotate session owns the
-          // source-file base and --markdown preference, so enforce both here.
-          if (url.pathname === "/api/doc" && req.method === "GET") {
-            const docUrl = new URL(req.url);
-            let changed = false;
-            if (!docUrl.searchParams.has("base") && !/^https?:\/\//i.test(filePath)) {
-              docUrl.searchParams.set(
-                "base",
-                mode === "annotate-folder" && folderPath ? folderPath : dirname(filePath),
-              );
-              changed = true;
-            }
-            if (convertHtml && !docUrl.searchParams.has("convert")) {
-              docUrl.searchParams.set("convert", "1");
-              changed = true;
-            }
-            const docReq = changed ? new Request(docUrl.toString()) : req;
-            return handleDoc(docReq, {
-              rewriteHtml: htmlAssets.rewriteHtml,
-              sourceSaveFilePath: singleFileSourceSaveEligible
-                ? (initialSingleFileSourcePath ?? filePath)
-                : undefined,
-              sourceSaveFolderPath: mode === "annotate-folder" ? folderPath : undefined,
-              onSourceDocumentServed: (path) => openedSourceFilePaths.add(path),
-              rootPaths: getReferenceRootPaths(),
-            });
-          }
-
-          if (url.pathname === "/api/source/save" && req.method === "POST") {
-            const body = Option.getOrUndefined(
-              Schema.decodeUnknownOption(SourceSaveRequestSchema)(await req.json()),
-            );
-            if (!body) {
-              return Response.json(
-                { ok: false, code: "invalid-request", message: "Invalid JSON body." },
-                { status: 400 },
-              );
-            }
-
-            let targetPath: string | null = null;
-            if (singleFileSourceSaveEligible) {
-              const capability = createSourceSaveCapability(
-                "single-file",
-                initialSingleFileSourcePath ?? filePath,
-              );
-              targetPath = capability.enabled ? capability.path : initialSingleFileSourcePath;
-            } else if (mode === "annotate-folder" && folderPath && body.path !== undefined) {
-              targetPath = body.allowMissingBase
-                ? resolveFolderSourceFileForSave(body.path, folderPath)
-                : resolveFolderSourceFile(body.path, folderPath);
-              if (
-                body.allowMissingBase &&
-                targetPath &&
-                !existsSync(targetPath) &&
-                !openedSourceFilePaths.has(targetPath)
-              ) {
-                targetPath = null;
-              }
-            }
-
-            if (!targetPath) {
-              return Response.json(
-                {
-                  ok: false,
-                  code: "not-writable",
-                  message: "This document cannot be saved to a file.",
-                },
-                { status: 403 },
-              );
-            }
-
-            const result = saveSourceFileAtomic(targetPath, body.text, body.baseHash, {
-              allowMissingBase: body.allowMissingBase === true,
-              missingBaseEol: body.baseEol,
-              allowedRoot: mode === "annotate-folder" ? folderPath : undefined,
-            });
-            const status = result.ok
-              ? 200
-              : result.code === "conflict"
-                ? 409
-                : result.code === "invalid-request"
-                  ? 400
-                  : result.code === "not-writable"
-                    ? 403
-                    : 500;
-            return Response.json(result, { status });
-          }
-
-          // API: Batch existence check for code-file paths the renderer detected
-          if (url.pathname === "/api/doc/exists" && req.method === "POST") {
-            return handleDocExists(req, { rootPaths: getReferenceRootPaths() });
-          }
-
-          // API: Detect Obsidian vaults
-          if (url.pathname === "/api/obsidian/vaults") {
-            return handleObsidianVaults();
-          }
-
-          // API: List Obsidian vault files as a tree
-          if (url.pathname === "/api/reference/obsidian/files" && req.method === "GET") {
-            return handleObsidianFiles(req);
-          }
-
-          // API: Read an Obsidian vault document
-          if (url.pathname === "/api/reference/obsidian/doc" && req.method === "GET") {
-            return handleObsidianDoc(req);
-          }
-
-          // API: List markdown files in a directory as a tree
-          if (url.pathname === "/api/reference/files" && req.method === "GET") {
-            return handleFileBrowserFiles(req);
-          }
-
-          // API: Watch file browser roots and refresh the tree/status snapshot on changes
-          if (url.pathname === "/api/reference/files/stream" && req.method === "GET") {
-            return handleFileBrowserFilesStream(req, {
-              disableIdleTimeout: () => server.timeout(req, 0),
-            });
-          }
-
-          // API: Upload image -> save to temp -> return path
-          if (url.pathname === "/api/upload" && req.method === "POST") {
-            return handleUpload(req);
-          }
-
-          // API: Annotation draft persistence
-          if (url.pathname === "/api/draft") {
-            if (req.method === "POST") return handleDraftSave(req, draftKey);
-            if (req.method === "DELETE") return handleDraftDelete(draftKey, req);
-            return handleDraftLoad(draftKey);
-          }
-
-          // API: External annotations (SSE-based, for any external tool)
-          const externalResponse = await externalAnnotations.handle(req, url, {
-            disableIdleTimeout: () => server.timeout(req, 0),
-          });
-          if (externalResponse) return externalResponse;
-
-          if (url.pathname.startsWith("/api/ai/")) {
-            // SAFETY: url.pathname is prefix-checked against /api/ai/ above, and
-            // AIEndpoints is keyed by exactly those API paths.
-            const handler = aiRuntime.endpoints[url.pathname as keyof AIEndpoints];
-            if (handler) {
-              if (url.pathname === AI_QUERY_ENDPOINT) {
-                server.timeout(req, 0);
-              }
-              return handler(req);
-            }
-            return Response.json({ error: "Not found" }, { status: 404 });
-          }
-
-          // API: Exit annotation session without feedback
-          if (url.pathname === "/api/exit" && req.method === "POST") {
-            deleteDraft(draftKey, readDraftGenerationFromUrl(req));
-            resolveDecision({ feedback: "", annotations: [], exit: true });
-            return Response.json({ ok: true });
-          }
-
-          // API: Approve the annotation session (review-gate UX)
-          if (url.pathname === "/api/approve" && req.method === "POST") {
-            deleteDraft(draftKey, readDraftGenerationFromUrl(req));
-            resolveDecision({ feedback: "", annotations: [], approved: true });
-            return Response.json({ ok: true });
-          }
-
-          // API: Submit annotation feedback
-          if (url.pathname === "/api/feedback" && req.method === "POST") {
-            try {
-              const rawBody = await req.json();
-              const body = Option.getOrUndefined(
-                Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
-              );
-              if (!body) {
-                return Response.json({ error: "Invalid request" }, { status: 400 });
-              }
-
-              deleteDraft(draftKey, readDraftGenerationFromBody(body));
-              resolveDecision({
-                feedback: body.feedback || "",
-                annotations: body.annotations ? [...body.annotations] : [],
-                selectedMessageId: body.selectedMessageId,
-                feedbackScope: body.feedbackScope,
-              });
-
-              return Response.json({ ok: true });
-            } catch (err) {
-              const message = err instanceof Error ? err.message : "Failed to process feedback";
-              return Response.json({ error: message }, { status: 500 });
-            }
-          }
-
-          // API: Save notes to Obsidian
-          if (url.pathname === "/api/save-notes" && req.method === "POST") {
-            return handleSaveNotes(req);
-          }
-
-          // Favicon
-          if (url.pathname === "/favicon.svg") return handleFavicon();
-
-          // Serve embedded HTML for all other routes (SPA)
           return new Response(htmlContent, {
             headers: { "Content-Type": "text/html" },
           });
