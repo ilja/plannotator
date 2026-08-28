@@ -129,6 +129,26 @@ function getFileTabTitle(filePath: string): string {
   return filePath.split("/").pop() ?? filePath;
 }
 
+interface DiffSwitchRequest {
+  diffType: string;
+  base?: string;
+  hideWhitespace: boolean;
+}
+
+function buildDiffSwitchRequest(
+  diffType: string,
+  baseOverride: string | undefined,
+  selectedBase: string | null,
+  hideWhitespace: boolean,
+): DiffSwitchRequest {
+  const base = baseOverride ?? selectedBase;
+  return {
+    diffType,
+    ...(base && { base }),
+    hideWhitespace,
+  };
+}
+
 interface ReviewNavigationShortcutOptions {
   hasSearchableFiles: boolean;
   isSearchPending: boolean;
@@ -1486,13 +1506,11 @@ const ReviewApp: React.FC = () => {
         const res = await fetch("/api/diff/switch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            diffType: fullDiffType,
-            // Server ignores base for modes that don't use it (uncommitted/staged/etc),
-            // so forwarding unconditionally is safe and keeps the request shape uniform.
-            ...((baseOverride ?? selectedBase) && { base: baseOverride ?? selectedBase }),
-            hideWhitespace: diffHideWhitespace,
-          }),
+          // Server ignores base for modes that don't use it (uncommitted/staged/etc),
+          // so forwarding it when available keeps the request shape uniform.
+          body: JSON.stringify(
+            buildDiffSwitchRequest(fullDiffType, baseOverride, selectedBase, diffHideWhitespace),
+          ),
         });
 
         if (!res.ok) throw new Error("Failed to switch diff");
