@@ -11,7 +11,6 @@ import {
 } from "@plannotator/ui/components/ToolbarButtons";
 import { AgentReviewActions } from "./components/AgentReviewActions";
 import { DiffOptionsPopover } from "./components/DiffOptionsPopover";
-import { storage } from "@plannotator/ui/utils/storage";
 import { CompletionOverlay } from "@plannotator/ui/components/CompletionOverlay";
 import { GitHubIcon } from "@plannotator/ui/components/GitHubIcon";
 import { RepoIcon } from "@plannotator/ui/components/RepoIcon";
@@ -48,7 +47,7 @@ import { useAIChat } from "./hooks/useAIChat";
 import { toast } from "sonner";
 import { useCodeNav, type CodeNavRequest } from "./hooks/useCodeNav";
 import { buildPendingAIContext, type PendingAIContext } from "./utils/pendingAIContext";
-import { isTypingTarget, useReviewSearch } from "./hooks/useReviewSearch";
+import { isTypingTarget, useReviewSearch, type ReviewSearchMatch } from "./hooks/useReviewSearch";
 import { useReviewNavigationShortcuts } from "./hooks/useReviewNavigationShortcuts";
 import { useEditorAnnotations } from "@plannotator/ui/hooks/useEditorAnnotations";
 import { useExternalAnnotations } from "@plannotator/ui/hooks/useExternalAnnotations";
@@ -80,13 +79,7 @@ import {
   type InitialDiffResponse,
 } from "./utils/initial-diff-response";
 import { loadReviewAICapabilitiesState } from "./utils/ai-capabilities-response";
-import { readPRActionResponse } from "./utils/pr-action-response";
-import {
-  ReviewSubmissionDialog,
-  buildReviewSubmission,
-  type ReviewSubmission,
-  type SubmissionTarget,
-} from "./components/ReviewSubmissionDialog";
+import { ReviewSubmissionDialog } from "./components/ReviewSubmissionDialog";
 import { ReviewStateProvider, type ReviewState } from "./dock/ReviewStateContext";
 import { reviewPanelComponents } from "./dock/reviewPanelComponents";
 import { ReviewDockTabRenderer } from "./dock/ReviewDockTabRenderer";
@@ -108,6 +101,7 @@ import { annotationMatchesPrScope } from "./utils/annotationScope";
 import type { DiffOption, GitContext } from "@plannotator/shared/types";
 import type { PRDiffScope, PRDiffScopeOption, PRStackInfo } from "@plannotator/shared/pr-stack";
 import { altKey } from "@plannotator/ui/utils/platform";
+import { usePlatformReviewActions } from "./hooks/usePlatformReviewActions";
 
 declare const __APP_VERSION__: string;
 
@@ -274,34 +268,6 @@ const ReviewApp: React.FC = () => {
     handleLoadFullDiff,
     handlePRSwitch,
   } = usePRStack(prStackCallbacksRef);
-  const [reviewDestination, setReviewDestination] = useState<"agent" | "platform">(() => {
-    const stored = storage.getItem("plannotator-review-dest");
-    return stored === "agent" ? "agent" : "platform"; // 'github' (legacy) → 'platform'
-  });
-  const [showDestinationMenu, setShowDestinationMenu] = useState(false);
-  const [isPlatformActioning, setIsPlatformActioning] = useState(false);
-  const [platformActionError, setPlatformActionError] = useState<string | null>(null);
-  const [platformUser, setPlatformUser] = useState<string | null>(null);
-  const [platformCommentDialog, setPlatformCommentDialog] = useState<{
-    action: "approve" | "comment";
-    plan: ReviewSubmission;
-  } | null>(null);
-  const [platformGeneralComment, setPlatformGeneralComment] = useState("");
-  const [platformOpenPR, setPlatformOpenPR] = useState(() => {
-    const platformSetting = storage.getItem("plannotator-platform-open-pr");
-    if (platformSetting !== null) return platformSetting !== "false";
-
-    const legacyGitHubSetting = storage.getItem("plannotator-github-open-pr");
-    if (legacyGitHubSetting !== null) {
-      storage.setItem("plannotator-platform-open-pr", legacyGitHubSetting);
-      return legacyGitHubSetting !== "false";
-    }
-
-    return true;
-  });
-
-  // GitHub mode is active when selected and pull request metadata is available.
-  const platformMode = reviewDestination === "platform" && !!prMetadata;
   const prNumberLabel = prMetadata ? `#${prMetadata.number}` : "";
   const displayRepo = prMetadata ? getDisplayRepo(prMetadata) : "";
   const appVersion = __APP_VERSION__;
@@ -460,6 +426,32 @@ const ReviewApp: React.FC = () => {
   }, [annotations, externalAnnotations]);
   const allAnnotationsRef = useRef(allAnnotations);
   allAnnotationsRef.current = allAnnotations;
+
+  const {
+    reviewDestination,
+    selectReviewDestination,
+    showDestinationMenu,
+    setShowDestinationMenu,
+    isPlatformActioning,
+    platformActionError,
+    platformUser,
+    setPlatformUser,
+    platformCommentDialog,
+    platformGeneralComment,
+    setPlatformGeneralComment,
+    platformOpenPR,
+    setPlatformOpenPR,
+    platformMode,
+    openPlatformDialog,
+    closePlatformDialog,
+    submitPlatformAction,
+  } = usePlatformReviewActions({
+    allAnnotations,
+    editorAnnotations,
+    files,
+    prMetadata,
+    onSubmitted: setSubmitted,
+  });
 
   // Auto-save code annotation drafts
   const { draftBanner, restoreDraft, getDraftGeneration, dismissDraft } = useCodeAnnotationDraft({
@@ -1936,182 +1928,6 @@ const ReviewApp: React.FC = () => {
     }
   }, [getDraftGeneration]);
 
-  // Submit reviews to one or more PRs via /api/pr-action
-  const handlePlatformAction = useCallback(
-    async (action: "approve" | "comment", plan: ReviewSubmission, generalComment?: string) => {
-      setIsPlatformActioning(true);
-      setPlatformActionError(null);
-
-      try {
-        const bodyForTarget = (target: SubmissionTarget) => {
-          const parts: string[] = [];
-          if (generalComment) parts.push(generalComment);
-          parts.push("Review from Plannotator");
-          if (target.fileScopedBody) parts.push(target.fileScopedBody);
-          return parts.join("\n\n");
-        };
-
-        // For approve, only post to the currently viewed PR.
-        // For comment with no targets but a general comment, create a minimal target.
-        let targets = plan.targets;
-        if (action === "approve" || (targets.length === 0 && generalComment?.trim())) {
-          const currentTarget = plan.targets.find((t) => t.prUrl === prMetadata?.url);
-          targets = currentTarget
-            ? [currentTarget]
-            : [
-                {
-                  prUrl: prMetadata?.url ?? "",
-                  prNumber: prMetadata?.number ?? 0,
-                  prTitle: prMetadata?.title ?? "",
-                  prRepo: prMetadata ? getDisplayRepo(prMetadata) : "",
-                  fileComments: [],
-                  fileScopedBody: "",
-                  fileCount: 0,
-                  annotationCount: 0,
-                  status: "pending" as const,
-                },
-              ];
-        }
-
-        const openUrls: string[] = [];
-        const results = await Promise.allSettled(
-          targets.map(async (target): Promise<SubmissionTarget> => {
-            if (target.status === "success") return target;
-            try {
-              const prRes = await fetch("/api/pr-action", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action,
-                  body: bodyForTarget(target),
-                  fileComments: target.fileComments,
-                  targetPrUrl: target.prUrl || undefined,
-                }),
-              });
-              const prResult = await readPRActionResponse(prRes);
-              if (!prResult.ok) {
-                return { ...target, status: "failed", error: prResult.error };
-              }
-              if (prResult.prUrl) openUrls.push(prResult.prUrl);
-              return { ...target, status: "success" };
-            } catch (err) {
-              return {
-                ...target,
-                status: "failed",
-                error: err instanceof Error ? err.message : "Network error",
-              };
-            }
-          }),
-        );
-        const updatedTargets = results.map((r, i) =>
-          r.status === "fulfilled"
-            ? r.value
-            : { ...targets[i], status: "failed" as const, error: "Unexpected error" },
-        );
-        const allOk = updatedTargets.every((t) => t.status === "success");
-
-        if (!allOk) {
-          setPlatformCommentDialog((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  plan: { ...plan, targets: updatedTargets },
-                }
-              : null,
-          );
-          return;
-        }
-
-        setPlatformCommentDialog(null);
-        setSubmitted(action === "approve" ? "approved" : "feedback");
-
-        if (platformOpenPR) {
-          for (const url of openUrls) window.open(url, "_blank");
-        }
-
-        const prLinks = openUrls.join(", ");
-        const statusMessage =
-          action === "approve"
-            ? `Pull request approved on GitHub${prLinks ? ": " + prLinks : ""}`
-            : `Pull request reviewed on GitHub${prLinks ? ": " + prLinks : ""}`;
-        fetch("/api/feedback", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          keepalive: true,
-          body: JSON.stringify({
-            approved: false,
-            feedback: statusMessage,
-            annotations: [],
-          }),
-        }).catch(() => {});
-      } catch (err) {
-        setPlatformActionError(err instanceof Error ? err.message : "Failed to submit review");
-      } finally {
-        setIsPlatformActioning(false);
-      }
-    },
-    [platformOpenPR, prMetadata],
-  );
-
-  const openPlatformDialog = useCallback(
-    (action: "approve" | "comment") => {
-      const diffPaths = new Set(files.map((f) => f.path));
-      const prMeta = prMetadata
-        ? {
-            number: prMetadata.number,
-            title: prMetadata.title,
-            repo: getDisplayRepo(prMetadata),
-          }
-        : undefined;
-      const plan = buildReviewSubmission(
-        allAnnotations,
-        editorAnnotations,
-        prMetadata?.url,
-        diffPaths,
-        prMeta,
-      );
-      setPlatformGeneralComment("");
-      setPlatformCommentDialog({ action, plan });
-    },
-    [allAnnotations, editorAnnotations, files, prMetadata],
-  );
-
-  // Double-tap Option/Alt to toggle review destination (PR mode only)
-  useEffect(() => {
-    if (!prMetadata) return;
-    let lastAltUp = 0;
-    const DOUBLE_TAP_WINDOW = 300;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Alt" || e.repeat) return;
-      const tag = e.target instanceof HTMLElement ? e.target.tagName : undefined;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== "Alt") return;
-      const now = Date.now();
-      if (now - lastAltUp < DOUBLE_TAP_WINDOW) {
-        setReviewDestination((prev) => {
-          const next = prev === "platform" ? "agent" : "platform";
-          storage.setItem("plannotator-review-dest", next);
-          setPlatformActionError(null);
-          return next;
-        });
-        lastAltUp = 0;
-      } else {
-        lastAltUp = now;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, [prMetadata]);
-
   // Cmd/Ctrl+Enter keyboard shortcut to approve or send feedback
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -2125,7 +1941,7 @@ const ReviewApp: React.FC = () => {
         const canSubmit = isApproveAction || hasTargets || platformGeneralComment.trim();
         if (!canSubmit) return;
         e.preventDefault();
-        handlePlatformAction(
+        submitPlatformAction(
           platformCommentDialog.action,
           platformCommentDialog.plan,
           platformGeneralComment,
@@ -2182,7 +1998,7 @@ const ReviewApp: React.FC = () => {
     openPlatformDialog,
     handleApprove,
     handleSendFeedback,
-    handlePlatformAction,
+    submitPlatformAction,
   ]);
 
   if (isLoading) {
@@ -2397,10 +2213,8 @@ const ReviewApp: React.FC = () => {
                             <div className="absolute right-0 top-full mt-1 py-1 bg-popover border border-border rounded-lg shadow-xl z-50 min-w-[160px]">
                               <button
                                 onClick={() => {
-                                  setReviewDestination("platform");
-                                  storage.setItem("plannotator-review-dest", "platform");
+                                  selectReviewDestination("platform");
                                   setShowDestinationMenu(false);
-                                  setPlatformActionError(null);
                                 }}
                                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
                                   reviewDestination === "platform"
@@ -2413,10 +2227,8 @@ const ReviewApp: React.FC = () => {
                               </button>
                               <button
                                 onClick={() => {
-                                  setReviewDestination("agent");
-                                  storage.setItem("plannotator-review-dest", "agent");
+                                  selectReviewDestination("agent");
                                   setShowDestinationMenu(false);
-                                  setPlatformActionError(null);
                                 }}
                                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
                                   reviewDestination === "agent"
@@ -3178,17 +2990,16 @@ const ReviewApp: React.FC = () => {
               platformOpenPR={platformOpenPR}
               onPlatformOpenPRChange={(checked) => {
                 setPlatformOpenPR(checked);
-                storage.setItem("plannotator-platform-open-pr", String(checked));
               }}
               onConfirm={() => {
                 if (!platformCommentDialog) return;
-                handlePlatformAction(
+                submitPlatformAction(
                   platformCommentDialog.action,
                   platformCommentDialog.plan,
                   platformGeneralComment,
                 );
               }}
-              onCancel={() => setPlatformCommentDialog(null)}
+              onCancel={closePlatformDialog}
               isSubmitting={isPlatformActioning}
             />
           </div>
