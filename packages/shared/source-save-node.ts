@@ -28,13 +28,8 @@ export function hashSourceBytes(bytes: Uint8Array): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-function isFileExistsError(error: any): boolean {
-  return (
-    error instanceof Object &&
-    "code" in error &&
-    // SAFETY: NodeJS.ErrnoException has optional code; guard checks instanceof Object and "code" in error
-    (error as { code?: unknown }).code === "EEXIST"
-  );
+function isFileExistsError(error: Error): boolean {
+  return "code" in error && error.code === "EEXIST";
 }
 
 export function detectSourceEol(text: string): SourceFileEol {
@@ -244,6 +239,99 @@ export function createSourceSaveCapability(
   }
 }
 
+function resolveAllowedSourceSaveRoot(
+  allowedRootPath: string | undefined,
+): string | null | undefined {
+  if (!allowedRootPath) return undefined;
+  try {
+    return realpathSync(resolveUserPath(allowedRootPath));
+  } catch {
+    return null;
+  }
+}
+
+interface PreparedSourceSaveTarget {
+  readonly filePath: string;
+  readonly before: SourceFileSnapshot;
+  readonly mode: number | undefined;
+  readonly outputEol: SourceFileEol;
+  readonly recreateMissingBase: boolean;
+}
+
+function prepareSourceSaveTarget(
+  filePath: string,
+  baseHash: string,
+  allowMissingBase: boolean | undefined,
+  missingBaseEol: SourceFileEol | undefined,
+  allowedRoot: string | undefined,
+): PreparedSourceSaveTarget | SourceSaveResponse {
+  try {
+    const real = realpathSync(filePath);
+    if (allowedRoot && !isWithinProjectRoot(real, allowedRoot)) {
+      return {
+        ok: false,
+        code: "not-writable",
+        message: "This file cannot be saved outside the allowed folder.",
+      };
+    }
+    const stat = statSync(real);
+    if (!stat.isFile()) {
+      return {
+        ok: false,
+        code: "not-writable",
+        message: "This path is not a writable file.",
+      };
+    }
+    const before = readSourceFileSnapshot(real);
+    return {
+      filePath: real,
+      before,
+      mode: stat.mode,
+      outputEol: before.eol,
+      recreateMissingBase: false,
+    };
+  } catch {
+    if (existsSync(filePath) || !allowMissingBase) {
+      return {
+        ok: false,
+        code: "not-writable",
+        message: "This file is missing or cannot be read.",
+      };
+    }
+    try {
+      const realParent = realpathSync(dirname(filePath));
+      const resolvedFilePath = join(realParent, basename(filePath));
+      if (allowedRoot && !isWithinProjectRoot(resolvedFilePath, allowedRoot)) {
+        return {
+          ok: false,
+          code: "not-writable",
+          message: "This file cannot be saved outside the allowed folder.",
+        };
+      }
+      const before: SourceFileSnapshot = {
+        text: "",
+        hash: baseHash,
+        mtimeMs: 0,
+        size: 0,
+        eol: isSourceFileEol(missingBaseEol) ? missingBaseEol : "lf",
+      };
+      return {
+        filePath: resolvedFilePath,
+        before,
+        mode: undefined,
+        outputEol: before.eol,
+        recreateMissingBase: true,
+      };
+    } catch {
+      return {
+        ok: false,
+        code: "not-writable",
+        message: "This file is missing or cannot be recreated.",
+      };
+    }
+  }
+}
+
 export function saveSourceFileAtomic(
   filePath: string,
   text: string,
@@ -262,86 +350,24 @@ export function saveSourceFileAtomic(
     };
   }
 
-  let allowedRoot: string | null = null;
-  if (options.allowedRoot) {
-    try {
-      allowedRoot = realpathSync(resolveUserPath(options.allowedRoot));
-    } catch {
-      return {
-        ok: false,
-        code: "not-writable",
-        message: "This file cannot be saved outside the allowed folder.",
-      };
-    }
+  const allowedRoot = resolveAllowedSourceSaveRoot(options.allowedRoot);
+  if (allowedRoot === null) {
+    return {
+      ok: false,
+      code: "not-writable",
+      message: "This file cannot be saved outside the allowed folder.",
+    };
   }
-
-  let before: SourceFileSnapshot;
-  let mode: number | undefined;
-  let outputEol: SourceFileEol;
-  let recreateMissingBase = false;
-  try {
-    const real = realpathSync(filePath);
-    if (allowedRoot && !isWithinProjectRoot(real, allowedRoot)) {
-      return {
-        ok: false,
-        code: "not-writable",
-        message: "This file cannot be saved outside the allowed folder.",
-      };
-    }
-    const stat = statSync(real);
-    if (!stat.isFile()) {
-      return {
-        ok: false,
-        code: "not-writable",
-        message: "This path is not a writable file.",
-      };
-    }
-    mode = stat.mode;
-    before = readSourceFileSnapshot(real);
-    filePath = real;
-    outputEol = before.eol;
-  } catch {
-    if (existsSync(filePath)) {
-      return {
-        ok: false,
-        code: "not-writable",
-        message: "This file is missing or cannot be read.",
-      };
-    }
-    if (!options.allowMissingBase) {
-      return {
-        ok: false,
-        code: "not-writable",
-        message: "This file is missing or cannot be read.",
-      };
-    }
-    try {
-      const realParent = realpathSync(dirname(filePath));
-      filePath = join(realParent, basename(filePath));
-      if (allowedRoot && !isWithinProjectRoot(filePath, allowedRoot)) {
-        return {
-          ok: false,
-          code: "not-writable",
-          message: "This file cannot be saved outside the allowed folder.",
-        };
-      }
-      before = {
-        text: "",
-        hash: baseHash,
-        mtimeMs: 0,
-        size: 0,
-        eol: isSourceFileEol(options.missingBaseEol) ? options.missingBaseEol : "lf",
-      };
-      outputEol = before.eol;
-      recreateMissingBase = true;
-    } catch {
-      return {
-        ok: false,
-        code: "not-writable",
-        message: "This file is missing or cannot be recreated.",
-      };
-    }
-  }
+  const target = prepareSourceSaveTarget(
+    filePath,
+    baseHash,
+    options.allowMissingBase,
+    options.missingBaseEol,
+    allowedRoot,
+  );
+  if ("ok" in target) return target;
+  const { before, mode, outputEol, recreateMissingBase } = target;
+  filePath = target.filePath;
 
   if (before.hash !== baseHash) {
     return {
@@ -373,7 +399,7 @@ export function saveSourceFileAtomic(
         // missing-file check.
         linkSync(tmp, filePath);
       } catch (error) {
-        if (isFileExistsError(error)) {
+        if (error instanceof Error && isFileExistsError(error)) {
           const current = readSourceFileSnapshot(filePath);
           try {
             unlinkSync(tmp);
