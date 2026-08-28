@@ -486,6 +486,134 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
 // Subcomponents
 // ---------------------------------------------------------------------------
 
+function getThreadLineLabel(thread: PRReviewThread): string {
+  if (thread.startLine && thread.line && thread.startLine !== thread.line) {
+    return `L${thread.startLine}–${thread.line}`;
+  }
+
+  return thread.line ? `L${thread.line}` : "";
+}
+
+function getReplyLabel(count: number): string {
+  return `${count} repl${count === 1 ? "y" : "ies"}`;
+}
+
+const ThreadCardHeader: React.FC<{
+  thread: PRReviewThread;
+  author: string;
+  replyCount: number;
+  lineLabel: string;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}> = ({ thread, author, replyCount, lineLabel, isCollapsed, onToggleCollapse }) => (
+  <div
+    className="flex items-center justify-between"
+    onClick={(e) => {
+      e.stopPropagation();
+      onToggleCollapse();
+    }}
+  >
+    <div className="flex items-center gap-2 min-w-0">
+      <span
+        className={`text-xs font-semibold truncate ${thread.isResolved ? "line-through text-muted-foreground" : "text-foreground"}`}
+      >
+        {author || "unknown"}
+      </span>
+      {thread.isOutdated && (
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning flex-shrink-0">
+          Outdated
+        </span>
+      )}
+      {thread.isResolved && (
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-success/15 text-success flex-shrink-0">
+          Resolved
+        </span>
+      )}
+      {thread.path && (
+        <span className="text-[10px] font-mono text-muted-foreground truncate flex-shrink min-w-0">
+          {thread.path.split("/").pop()}
+          {lineLabel ? `:${lineLabel}` : ""}
+        </span>
+      )}
+    </div>
+    <div className="flex items-center gap-2 flex-shrink-0">
+      {replyCount > 0 && (
+        <span className="text-[10px] text-muted-foreground">{getReplyLabel(replyCount)}</span>
+      )}
+      <span className="text-[10px] text-muted-foreground">
+        {formatRelativeTime(thread.comments[0]?.createdAt ?? "")}
+      </span>
+      <svg
+        className={`w-3 h-3 text-muted-foreground/40 transition-transform duration-150 ${isCollapsed ? "" : "rotate-180"}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
+  </div>
+);
+
+const ThreadCardBody: React.FC<{
+  first: PRComment;
+  replies: PRComment[];
+  isDimmed: boolean;
+  isExpanded: boolean;
+  onExpand: () => void;
+}> = ({ first, replies, isDimmed, isExpanded, onExpand }) => (
+  <>
+    {first.diffHunk && (
+      <div className="mt-2">
+        <DiffHunkPreview hunk={first.diffHunk} maxHeight={96} />
+      </div>
+    )}
+    {first.body && (
+      <div className={`relative mt-2 ${isDimmed && !isExpanded ? "max-h-16 overflow-hidden" : ""}`}>
+        <div
+          className={`text-xs leading-relaxed review-comment-markdown ${isDimmed && !isExpanded ? "text-muted-foreground" : "text-foreground/80"}`}
+        >
+          <MarkdownBody markdown={first.body} />
+        </div>
+        {isDimmed && !isExpanded && (
+          <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-card to-transparent pointer-events-none" />
+        )}
+      </div>
+    )}
+    {isDimmed && !isExpanded && (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onExpand();
+        }}
+        className="mt-1 text-[10px] text-primary/70 hover:text-primary transition-colors"
+      >
+        Show full comment
+        {replies.length > 0 ? ` + ${getReplyLabel(replies.length)}` : ""}
+      </button>
+    )}
+    {(!isDimmed || isExpanded) && replies.length > 0 && (
+      <div className="mt-2 ml-4 space-y-2 border-l border-border/30 pl-3">
+        {replies.map((reply) => (
+          <div key={reply.id}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-semibold text-foreground">{reply.author}</span>
+              <span className="text-[10px] text-muted-foreground">
+                {formatRelativeTime(reply.createdAt)}
+              </span>
+            </div>
+            <div className="text-xs text-foreground/80 leading-relaxed review-comment-markdown">
+              <MarkdownBody markdown={reply.body} />
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+    <PRCommentLinkActions url={first.url} body={first.body} />
+  </>
+);
+
 function ThreadCard({
   thread,
   isSelected,
@@ -504,12 +632,7 @@ function ThreadCard({
   if (!first) return null;
   const replies = thread.comments.slice(1);
   const isDimmed = thread.isResolved || thread.isOutdated;
-  const lineLabel =
-    thread.startLine && thread.line && thread.startLine !== thread.line
-      ? `L${thread.startLine}–${thread.line}`
-      : thread.line
-        ? `L${thread.line}`
-        : "";
+  const lineLabel = getThreadLineLabel(thread);
 
   return (
     <div
@@ -525,124 +648,22 @@ function ThreadCard({
           : "border-border/40 hover:shadow-[0_2px_6px_rgba(0,0,0,0.08)]"
       }`}
     >
-      {/* Header */}
-      <div
-        className="flex items-center justify-between"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleCollapse();
-        }}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <span
-            className={`text-xs font-semibold truncate ${thread.isResolved ? "line-through text-muted-foreground" : "text-foreground"}`}
-          >
-            {first.author || "unknown"}
-          </span>
-          {thread.isOutdated && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning flex-shrink-0">
-              Outdated
-            </span>
-          )}
-          {thread.isResolved && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-success/15 text-success flex-shrink-0">
-              Resolved
-            </span>
-          )}
-          {thread.path && (
-            <span className="text-[10px] font-mono text-muted-foreground truncate flex-shrink min-w-0">
-              {thread.path.split("/").pop()}
-              {lineLabel ? `:${lineLabel}` : ""}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {replies.length > 0 && (
-            <span className="text-[10px] text-muted-foreground">
-              {replies.length} repl{replies.length === 1 ? "y" : "ies"}
-            </span>
-          )}
-          <span className="text-[10px] text-muted-foreground">
-            {formatRelativeTime(first.createdAt)}
-          </span>
-          <svg
-            className={`w-3 h-3 text-muted-foreground/40 transition-transform duration-150 ${isCollapsed ? "" : "rotate-180"}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </div>
-
-      {/* Body */}
+      <ThreadCardHeader
+        thread={thread}
+        author={first.author}
+        replyCount={replies.length}
+        lineLabel={lineLabel}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={onToggleCollapse}
+      />
       {!isCollapsed && (
-        <>
-          {/* Diff hunk */}
-          {first.diffHunk && (
-            <div className="mt-2">
-              <DiffHunkPreview hunk={first.diffHunk} maxHeight={96} />
-            </div>
-          )}
-
-          {/* First comment body — truncated with fade for resolved/outdated */}
-          {first.body && (
-            <div
-              className={`relative mt-2 ${isDimmed && !isExpanded ? "max-h-16 overflow-hidden" : ""}`}
-            >
-              <div
-                className={`text-xs leading-relaxed review-comment-markdown ${isDimmed && !isExpanded ? "text-muted-foreground" : "text-foreground/80"}`}
-              >
-                <MarkdownBody markdown={first.body} />
-              </div>
-              {isDimmed && !isExpanded && (
-                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-card to-transparent pointer-events-none" />
-              )}
-            </div>
-          )}
-
-          {/* Expand button for dimmed threads */}
-          {isDimmed && !isExpanded && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsExpanded(true);
-              }}
-              className="mt-1 text-[10px] text-primary/70 hover:text-primary transition-colors"
-            >
-              Show full comment
-              {replies.length > 0
-                ? ` + ${replies.length} repl${replies.length === 1 ? "y" : "ies"}`
-                : ""}
-            </button>
-          )}
-
-          {/* Replies — only shown when expanded or not dimmed */}
-          {(!isDimmed || isExpanded) && replies.length > 0 && (
-            <div className="mt-2 ml-4 space-y-2 border-l border-border/30 pl-3">
-              {replies.map((reply) => (
-                <div key={reply.id}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-semibold text-foreground">
-                      {reply.author}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {formatRelativeTime(reply.createdAt)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-foreground/80 leading-relaxed review-comment-markdown">
-                    <MarkdownBody markdown={reply.body} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Actions */}
-          <PRCommentLinkActions url={first.url} body={first.body} />
-        </>
+        <ThreadCardBody
+          first={first}
+          replies={replies}
+          isDimmed={isDimmed}
+          isExpanded={isExpanded}
+          onExpand={() => setIsExpanded(true)}
+        />
       )}
     </div>
   );
