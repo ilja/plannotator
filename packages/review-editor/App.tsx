@@ -125,6 +125,143 @@ function getFileTabTitle(filePath: string): string {
   return filePath.split("/").pop() ?? filePath;
 }
 
+interface ReviewNavigationShortcutOptions {
+  hasSearchableFiles: boolean;
+  isSearchPending: boolean;
+  searchMatches: ReviewSearchMatch[];
+  showDestinationMenu: boolean;
+  showExportModal: boolean;
+  isSearchOpen: boolean;
+  searchQuery: string;
+  openSearch: () => void;
+  stepSearchMatch: (direction: number) => void;
+  clearSearch: () => void;
+  closeSearch: () => void;
+  isFileTreeOpen: boolean;
+  setIsFileTreeOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowDestinationMenu: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowExportModal: React.Dispatch<React.SetStateAction<boolean>>;
+  isSidebarOpen: boolean;
+  openSidebar: () => void;
+  closeSidebar: () => void;
+}
+
+function handleReviewSearchShortcut(
+  event: KeyboardEvent,
+  options: ReviewNavigationShortcutOptions,
+): boolean {
+  if (
+    !(event.metaKey || event.ctrlKey) ||
+    event.key.toLowerCase() !== "f" ||
+    isTypingTarget(event.target)
+  ) {
+    return false;
+  }
+  if (options.hasSearchableFiles) {
+    event.preventDefault();
+    options.setIsFileTreeOpen(true);
+    options.openSearch();
+  }
+  return true;
+}
+
+function handleReviewSearchNavigationShortcut(
+  event: KeyboardEvent,
+  options: ReviewNavigationShortcutOptions,
+): boolean {
+  if (
+    (event.key !== "Enter" && event.key !== "F3") ||
+    options.searchMatches.length === 0 ||
+    options.isSearchPending ||
+    isTypingTarget(event.target)
+  ) {
+    return false;
+  }
+  event.preventDefault();
+  options.stepSearchMatch(event.shiftKey ? -1 : 1);
+  return true;
+}
+
+function handleReviewEscapeShortcut(
+  event: KeyboardEvent,
+  options: ReviewNavigationShortcutOptions,
+): boolean {
+  if (event.key !== "Escape") return false;
+  if (options.showDestinationMenu) {
+    options.setShowDestinationMenu(false);
+  } else if (options.showExportModal) {
+    options.setShowExportModal(false);
+  } else if (options.isSearchOpen) {
+    if (options.searchQuery) options.clearSearch();
+    else options.closeSearch();
+  } else if (options.searchQuery) {
+    options.clearSearch();
+  }
+  return true;
+}
+
+function handleFileTreeShortcut(
+  event: KeyboardEvent,
+  setIsFileTreeOpen: React.Dispatch<React.SetStateAction<boolean>>,
+): boolean {
+  if (
+    !(event.metaKey || event.ctrlKey) ||
+    event.shiftKey ||
+    event.altKey ||
+    event.key.toLowerCase() !== "b" ||
+    isTypingTarget(event.target)
+  ) {
+    return false;
+  }
+  event.preventDefault();
+  setIsFileTreeOpen((previous) => !previous);
+  return true;
+}
+
+function handleReviewSidebarShortcut(
+  event: KeyboardEvent,
+  options: ReviewNavigationShortcutOptions,
+): void {
+  if (!(event.metaKey || event.ctrlKey) || event.key !== "." || isTypingTarget(event.target)) {
+    return;
+  }
+  event.preventDefault();
+  if (options.isSidebarOpen) options.closeSidebar();
+  else options.openSidebar();
+}
+
+function useReviewNavigationShortcuts(options: ReviewNavigationShortcutOptions): void {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (handleReviewSearchShortcut(event, options)) return;
+      if (handleReviewSearchNavigationShortcut(event, options)) return;
+      if (handleReviewEscapeShortcut(event, options)) return;
+      if (handleFileTreeShortcut(event, options.setIsFileTreeOpen)) return;
+      handleReviewSidebarShortcut(event, options);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    options.showExportModal,
+    options.showDestinationMenu,
+    options.isSearchOpen,
+    options.searchQuery,
+    options.searchMatches,
+    options.isSearchPending,
+    options.openSearch,
+    options.stepSearchMatch,
+    options.clearSearch,
+    options.closeSearch,
+    options.hasSearchableFiles,
+    options.isSidebarOpen,
+    options.openSidebar,
+    options.closeSidebar,
+    options.isFileTreeOpen,
+    options.setIsFileTreeOpen,
+  ]);
+}
+
 const ReviewApp: React.FC = () => {
   const { resolvedMode } = useTheme();
   const [diffData, setDiffData] = useState<DiffData | null>(null);
@@ -835,85 +972,26 @@ const ReviewApp: React.FC = () => {
   }, [dockApi, files, openAllFilesPanel]);
 
   // Global keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl+F to focus file search when diff files are available.
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && !isTypingTarget(e.target)) {
-        if (hasSearchableFiles) {
-          e.preventDefault();
-          setIsFileTreeOpen(true);
-          openSearch();
-        }
-        return;
-      }
-
-      // Enter/F3 to step through search matches
-      if (
-        (e.key === "Enter" || e.key === "F3") &&
-        searchMatches.length > 0 &&
-        !isSearchPending &&
-        !isTypingTarget(e.target)
-      ) {
-        e.preventDefault();
-        stepSearchMatch(e.shiftKey ? -1 : 1);
-        return;
-      }
-
-      // Escape closes modals or clears search
-      if (e.key === "Escape") {
-        if (showDestinationMenu) {
-          setShowDestinationMenu(false);
-        } else if (showExportModal) {
-          setShowExportModal(false);
-        } else if (isSearchOpen) {
-          if (searchQuery) {
-            clearSearch();
-          } else {
-            closeSearch();
-          }
-        } else if (searchQuery) {
-          clearSearch();
-        }
-      }
-      // Cmd/Ctrl+B to toggle file tree
-      if (
-        (e.metaKey || e.ctrlKey) &&
-        !e.shiftKey &&
-        !e.altKey &&
-        e.key.toLowerCase() === "b" &&
-        !isTypingTarget(e.target)
-      ) {
-        e.preventDefault();
-        setIsFileTreeOpen((prev) => !prev);
-      }
-      // Cmd/Ctrl+. to toggle sidebar
-      if ((e.metaKey || e.ctrlKey) && e.key === "." && !isTypingTarget(e.target)) {
-        e.preventDefault();
-        if (reviewSidebar.isOpen) reviewSidebar.close();
-        else reviewSidebar.open();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    showExportModal,
+  useReviewNavigationShortcuts({
+    hasSearchableFiles,
+    isSearchPending,
+    searchMatches,
     showDestinationMenu,
+    showExportModal,
     isSearchOpen,
     searchQuery,
-    searchMatches,
-    isSearchPending,
     openSearch,
     stepSearchMatch,
     clearSearch,
     closeSearch,
-    hasSearchableFiles,
-    reviewSidebar.isOpen,
-    reviewSidebar.open,
-    reviewSidebar.close,
     isFileTreeOpen,
-  ]);
+    setIsFileTreeOpen,
+    setShowDestinationMenu,
+    setShowExportModal,
+    isSidebarOpen: reviewSidebar.isOpen,
+    openSidebar: reviewSidebar.open,
+    closeSidebar: reviewSidebar.close,
+  });
 
   // Load diff content - try API first, fall back to demo
   useEffect(() => {
