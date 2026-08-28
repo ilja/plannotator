@@ -351,6 +351,52 @@ export function classifyFindingPlacement(
   return { scope: "general", filePath: "", lineStart: 0, lineEnd: 0 };
 }
 
+interface ReviewInputLocation {
+  readonly scope: string;
+  readonly filePath: string;
+  readonly lineStart: number;
+  readonly lineEnd: number;
+}
+
+function resolveReviewInputLocation(
+  obj: ExternalFields,
+  index: number,
+): ReviewInputLocation | ParseError {
+  const scopeCandidate =
+    Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(obj.scope)) ?? "line";
+  if (!VALID_SCOPES.includes(scopeCandidate)) {
+    return {
+      error: `annotations[${index}] invalid scope "${scopeCandidate}". Must be one of: ${VALID_SCOPES.join(", ")}`,
+    };
+  }
+
+  if (scopeCandidate === "general") {
+    return { scope: scopeCandidate, filePath: "", lineStart: 0, lineEnd: 0 };
+  }
+
+  const filePath = requireString(obj, "filePath", index);
+  if (filePath instanceof Object) return filePath;
+  if (scopeCandidate !== "line") {
+    return {
+      scope: scopeCandidate,
+      filePath,
+      lineStart:
+        Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineStart)) ?? 0,
+      lineEnd: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineEnd)) ?? 0,
+    };
+  }
+
+  const lineStart = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineStart));
+  if (lineStart === undefined) {
+    return { error: `annotations[${index}] missing required "lineStart" field` };
+  }
+  const lineEnd = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineEnd));
+  if (lineEnd === undefined) {
+    return { error: `annotations[${index}] missing required "lineEnd" field` };
+  }
+  return { scope: scopeCandidate, filePath, lineStart, lineEnd };
+}
+
 export function transformReviewInput(
   body: ExternalFields,
 ): { annotations: ReviewAnnotation[] } | ParseError {
@@ -364,50 +410,8 @@ export function transformReviewInput(
     const source = requireString(obj, "source", i);
     if (source instanceof Object) return source;
 
-    // scope: optional, defaults to "line"
-    const scopeCandidate =
-      Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(obj.scope)) ?? "line";
-    if (!VALID_SCOPES.includes(scopeCandidate)) {
-      return {
-        error: `annotations[${i}] invalid scope "${scopeCandidate}". Must be one of: ${VALID_SCOPES.join(", ")}`,
-      };
-    }
-
-    // Location requirements depend on scope:
-    //   line    → filePath + lineStart + lineEnd required. A finding that claims
-    //             a line must carry one, so a broken line finding is rejected
-    //             rather than quietly passing as a vaguer comment.
-    //   file    → filePath required; line ignored (defaults to 0).
-    //   general → no file, no line (review-level; defaults to "" / 0).
-    let filePath = "";
-    let lineStart = 0;
-    let lineEnd = 0;
-    if (scopeCandidate !== "general") {
-      const fp = requireString(obj, "filePath", i);
-      if (fp instanceof Object) return fp;
-      filePath = fp;
-      if (scopeCandidate === "line") {
-        const lineStartCandidate = Option.getOrUndefined(
-          Schema.decodeUnknownOption(Schema.Number)(obj.lineStart),
-        );
-        if (lineStartCandidate === undefined) {
-          return { error: `annotations[${i}] missing required "lineStart" field` };
-        }
-        const lineEndCandidate = Option.getOrUndefined(
-          Schema.decodeUnknownOption(Schema.Number)(obj.lineEnd),
-        );
-        if (lineEndCandidate === undefined) {
-          return { error: `annotations[${i}] missing required "lineEnd" field` };
-        }
-        lineStart = lineStartCandidate;
-        lineEnd = lineEndCandidate;
-      } else {
-        lineStart =
-          Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineStart)) ?? 0;
-        lineEnd =
-          Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(obj.lineEnd)) ?? 0;
-      }
-    }
+    const location = resolveReviewInputLocation(obj, i);
+    if ("error" in location) return location;
 
     // side: optional, defaults to "new"
     const sideCandidate =
@@ -459,10 +463,10 @@ export function transformReviewInput(
     const annotation: ReviewAnnotation = {
       id: crypto.randomUUID(),
       type: typeCandidate,
-      scope: scopeCandidate,
-      filePath,
-      lineStart,
-      lineEnd,
+      scope: location.scope,
+      filePath: location.filePath,
+      lineStart: location.lineStart,
+      lineEnd: location.lineEnd,
       side: sideCandidate,
       text: textCandidate,
       suggestedCode: suggestedCandidate,
