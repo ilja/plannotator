@@ -90,6 +90,342 @@ function computePosition(anchorRect: DOMRect): PopoverPosition {
   return { top, left, flipAbove, width };
 }
 
+interface DialogBodyProps {
+  popoverRef: React.RefObject<HTMLDivElement | null>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  contextText: string;
+  text: string;
+  images: ImageAttachment[];
+  isGlobal: boolean;
+  allowImages: boolean;
+  hasAskAIAction: boolean;
+  askAIDisabled: boolean;
+  hasUnsavedContent: boolean;
+  allowEmptySubmit: boolean;
+  initialText: string;
+  onCollapse: () => void;
+  onClose: () => void;
+  onTextChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onAddImage: (image: ImageAttachment) => void;
+  onRemoveImage: (path: string) => void;
+  onPointerDown: React.PointerEventHandler<HTMLDivElement>;
+  onAskAI: () => void;
+  onSubmit: () => void;
+}
+
+const DialogBody: React.FC<DialogBodyProps> = ({
+  popoverRef,
+  textareaRef,
+  contextText,
+  text,
+  images,
+  isGlobal,
+  allowImages,
+  hasAskAIAction,
+  askAIDisabled,
+  hasUnsavedContent,
+  allowEmptySubmit,
+  initialText,
+  onCollapse,
+  onClose,
+  onTextChange,
+  onKeyDown,
+  onAddImage,
+  onRemoveImage,
+  onPointerDown,
+  onAskAI,
+  onSubmit,
+}) => {
+  const headerLabel = isGlobal
+    ? "Global Comment"
+    : contextText
+      ? `"${contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText}"`
+      : "Comment";
+  const canAskAI = hasAskAIAction && !askAIDisabled && text.trim().length > 0;
+  const canSubmit = hasUnsavedContent || (allowEmptySubmit && initialText.trim().length > 0);
+
+  return (
+    <div
+      data-comment-popover="true"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+
+      {/* Dialog card */}
+      <div
+        ref={popoverRef}
+        className="relative w-full max-w-xl bg-popover border border-border rounded-xl shadow-2xl flex flex-col"
+        style={{
+          animation: "comment-dialog-in 0.15s ease-out",
+        }}
+        onPointerDown={onPointerDown}
+      >
+        <style>{`
+        @keyframes comment-dialog-in {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+          <span className="text-xs text-muted-foreground truncate max-w-[400px]">
+            {headerLabel}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onCollapse}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Collapse"
+            >
+              <CollapseIcon />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Close"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+        </div>
+
+        {/* Textarea */}
+        <div className="px-4 py-3 flex-1">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={onTextChange}
+            onKeyDown={onKeyDown}
+            placeholder={isGlobal ? "Add a global comment..." : "Add a comment..."}
+            className="w-full bg-transparent text-sm placeholder:text-muted-foreground resize-none focus:outline-none min-h-48 max-h-96 px-1 py-0.5"
+            style={
+              // SAFETY: fieldSizing is valid CSSProperties; React typing is closed
+              { fieldSizing: "content" } as React.CSSProperties
+            }
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            {allowImages && (
+              <AttachmentsButton
+                images={images}
+                onAdd={onAddImage}
+                onRemove={onRemoveImage}
+                variant="inline"
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {hasAskAIAction && (
+              <button
+                onClick={onAskAI}
+                disabled={!canAskAI}
+                className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-primary hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title={canAskAI ? "Ask AI this question" : "Type a question to ask AI"}
+              >
+                <SparklesIcon className="w-3 h-3" />
+                Ask AI
+              </button>
+            )}
+            <span className="text-[10px] text-muted-foreground">{submitHint}</span>
+            <button
+              onClick={onSubmit}
+              disabled={!canSubmit}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            >
+              {isGlobal ? "Add" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface PositionedPopoverBodyProps {
+  popoverRef: React.RefObject<HTMLDivElement | null>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  dragHandleProps: {
+    onPointerDown: React.PointerEventHandler<HTMLDivElement>;
+    style: React.CSSProperties;
+  };
+  style: React.CSSProperties;
+  offscreen: "above" | "below" | null;
+  contextText: string;
+  text: string;
+  images: ImageAttachment[];
+  isGlobal: boolean;
+  allowImages: boolean;
+  hasAskAIAction: boolean;
+  askAIDisabled: boolean;
+  hasUnsavedContent: boolean;
+  allowEmptySubmit: boolean;
+  initialText: string;
+  onScrollToPopover: () => void;
+  onExpand: () => void;
+  onClose: () => void;
+  onTextChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onAddImage: (image: ImageAttachment) => void;
+  onRemoveImage: (path: string) => void;
+  onPointerDown: React.PointerEventHandler<HTMLDivElement>;
+  onAskAI: () => void;
+  onSubmit: () => void;
+}
+
+const PositionedPopoverBody: React.FC<PositionedPopoverBodyProps> = ({
+  popoverRef,
+  textareaRef,
+  dragHandleProps,
+  style,
+  offscreen,
+  contextText,
+  text,
+  images,
+  isGlobal,
+  allowImages,
+  hasAskAIAction,
+  askAIDisabled,
+  hasUnsavedContent,
+  allowEmptySubmit,
+  initialText,
+  onScrollToPopover,
+  onExpand,
+  onClose,
+  onTextChange,
+  onKeyDown,
+  onAddImage,
+  onRemoveImage,
+  onPointerDown,
+  onAskAI,
+  onSubmit,
+}) => {
+  const headerLabel = isGlobal
+    ? "Global Comment"
+    : contextText
+      ? `"${contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText}"`
+      : "Comment";
+  const canAskAI = hasAskAIAction && !askAIDisabled && text.trim().length > 0;
+  const canSubmit = hasUnsavedContent || (allowEmptySubmit && initialText.trim().length > 0);
+
+  return (
+    <>
+      {offscreen && (
+        <button
+          type="button"
+          data-popover-layer="true"
+          onClick={onScrollToPopover}
+          title="Scroll back to your open comment"
+          className={`fixed left-1/2 -translate-x-1/2 z-[101] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-popover border border-border shadow-lg text-xs text-muted-foreground hover:text-foreground transition-colors ${offscreen === "above" ? "top-3" : "bottom-3"}`}
+        >
+          {offscreen === "above" ? <ChevronUpIcon /> : <ChevronDownIcon />}
+          <span>Open comment</span>
+        </button>
+      )}
+      <div
+        ref={popoverRef}
+        data-comment-popover="true"
+        className="fixed z-[100] bg-popover border border-border rounded-xl shadow-2xl flex flex-col"
+        style={style}
+        onPointerDown={onPointerDown}
+      >
+        <style>{`
+        @keyframes comment-popover-in {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes comment-popover-in-above {
+          from { opacity: 0; transform: translateY(-100%) translateY(8px); }
+          to { opacity: 1; transform: translateY(-100%); }
+        }
+      `}</style>
+
+        {/* Header (draggable) */}
+        <div
+          className="flex items-center justify-between px-3 py-2 border-b border-border/50"
+          {...dragHandleProps}
+        >
+          <span className="text-xs text-muted-foreground truncate max-w-[260px]">
+            {headerLabel}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onExpand}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Expand"
+            >
+              <ExpandIcon />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Close"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+        </div>
+
+        {/* Textarea */}
+        <div className="px-3 py-2">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={onTextChange}
+            onKeyDown={onKeyDown}
+            placeholder={isGlobal ? "Add a global comment..." : "Add a comment..."}
+            className="w-full bg-transparent text-sm placeholder:text-muted-foreground resize-none focus:outline-none max-h-64 min-h-[4.5rem] px-1 py-0.5"
+            style={
+              // SAFETY: fieldSizing is valid CSSProperties; React typing is closed
+              { fieldSizing: "content" } as React.CSSProperties
+            }
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-3 py-2 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            {allowImages && (
+              <AttachmentsButton
+                images={images}
+                onAdd={onAddImage}
+                onRemove={onRemoveImage}
+                variant="inline"
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {hasAskAIAction && (
+              <button
+                onClick={onAskAI}
+                disabled={!canAskAI}
+                className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-primary hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title={canAskAI ? "Ask AI this question" : "Type a question to ask AI"}
+              >
+                <SparklesIcon className="w-3 h-3" />
+                Ask AI
+              </button>
+            )}
+            <span className="text-[10px] text-muted-foreground">{submitHint}</span>
+            <button
+              onClick={onSubmit}
+              disabled={!canSubmit}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            >
+              {isGlobal ? "Add" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 export const CommentPopover: React.FC<CommentPopoverProps> = ({
   anchorEl,
   anchorRect,
@@ -295,244 +631,103 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
     }
   };
 
-  const headerLabel = isGlobal
-    ? "Global Comment"
-    : contextText
-      ? `"${contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText}"`
-      : "Comment";
+  const handleTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(event.target.value);
+  };
 
-  const canSubmit = hasUnsavedContent || (allowEmptySubmit && initialText.trim().length > 0);
-  const canAskAI = !!onAskAI && !askAIDisabled && text.trim().length > 0;
+  const handleAddImage = (image: ImageAttachment) => {
+    setImages((previousImages) => [...previousImages, image]);
+  };
+
+  const handleRemoveImage = (path: string) => {
+    setImages((previousImages) => previousImages.filter((image) => image.path !== path));
+  };
+
+  const handleCollapse = () => {
+    setMode("popover");
+  };
+
+  const handleExpand = () => {
+    setMode("dialog");
+  };
+
+  const handlePopoverPointerDown: React.PointerEventHandler<HTMLDivElement> = (event) => {
+    event.stopPropagation();
+  };
+
+  const hasAskAIAction = !!onAskAI;
 
   if (mode === "dialog") {
     return createPortal(
-      <div
-        data-comment-popover="true"
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      >
-        {/* Backdrop */}
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-
-        {/* Dialog card */}
-        <div
-          ref={popoverRef}
-          className="relative w-full max-w-xl bg-popover border border-border rounded-xl shadow-2xl flex flex-col"
-          style={{
-            animation: "comment-dialog-in 0.15s ease-out",
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <style>{`
-            @keyframes comment-dialog-in {
-              from { opacity: 0; transform: scale(0.95); }
-              to { opacity: 1; transform: scale(1); }
-            }
-          `}</style>
-
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-            <span className="text-xs text-muted-foreground truncate max-w-[400px]">
-              {headerLabel}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setMode("popover")}
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title="Collapse"
-              >
-                <CollapseIcon />
-              </button>
-              <button
-                onClick={onClose}
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title="Close"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-          </div>
-
-          {/* Textarea */}
-          <div className="px-4 py-3 flex-1">
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={isGlobal ? "Add a global comment..." : "Add a comment..."}
-              className="w-full bg-transparent text-sm placeholder:text-muted-foreground resize-none focus:outline-none min-h-48 max-h-96 px-1 py-0.5"
-              style={
-                // SAFETY: fieldSizing is valid CSSProperties; React typing is closed
-                { fieldSizing: "content" } as React.CSSProperties
-              }
-            />
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
-            <div className="flex items-center gap-2">
-              {allowImages && (
-                <AttachmentsButton
-                  images={images}
-                  onAdd={(img) => setImages((prev) => [...prev, img])}
-                  onRemove={(path) => setImages((prev) => prev.filter((i) => i.path !== path))}
-                  variant="inline"
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              {onAskAI && (
-                <button
-                  onClick={handleAskAI}
-                  disabled={!canAskAI}
-                  className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-primary hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title={canAskAI ? "Ask AI this question" : "Type a question to ask AI"}
-                >
-                  <SparklesIcon className="w-3 h-3" />
-                  Ask AI
-                </button>
-              )}
-              <span className="text-[10px] text-muted-foreground">{submitHint}</span>
-              <button
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-              >
-                {isGlobal ? "Add" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>,
+      <DialogBody
+        popoverRef={popoverRef}
+        textareaRef={textareaRef}
+        contextText={contextText}
+        text={text}
+        images={images}
+        isGlobal={isGlobal}
+        allowImages={allowImages}
+        hasAskAIAction={hasAskAIAction}
+        askAIDisabled={askAIDisabled}
+        hasUnsavedContent={hasUnsavedContent}
+        allowEmptySubmit={allowEmptySubmit}
+        initialText={initialText}
+        onCollapse={handleCollapse}
+        onClose={onClose}
+        onTextChange={handleTextChange}
+        onKeyDown={handleKeyDown}
+        onAddImage={handleAddImage}
+        onRemoveImage={handleRemoveImage}
+        onPointerDown={handlePopoverPointerDown}
+        onAskAI={handleAskAI}
+        onSubmit={handleSubmit}
+      />,
       document.body,
     );
   }
 
-  // Popover mode
   if (!position) return null;
 
+  const positionedPopoverStyle: React.CSSProperties = dragPosition
+    ? { top: dragPosition.top, left: dragPosition.left, width: position.width }
+    : {
+        top: position.top,
+        left: position.left,
+        width: position.width,
+        transform: position.flipAbove ? "translateY(-100%)" : undefined,
+        animation: position.flipAbove
+          ? "comment-popover-in-above 0.15s ease-out"
+          : "comment-popover-in 0.15s ease-out",
+      };
+
   return createPortal(
-    <>
-      {offscreen && (
-        <button
-          type="button"
-          data-popover-layer="true"
-          onClick={scrollToPopover}
-          title="Scroll back to your open comment"
-          className={`fixed left-1/2 -translate-x-1/2 z-[101] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-popover border border-border shadow-lg text-xs text-muted-foreground hover:text-foreground transition-colors ${offscreen === "above" ? "top-3" : "bottom-3"}`}
-        >
-          {offscreen === "above" ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          <span>Open comment</span>
-        </button>
-      )}
-      <div
-        ref={popoverRef}
-        data-comment-popover="true"
-        className="fixed z-[100] bg-popover border border-border rounded-xl shadow-2xl flex flex-col"
-        style={
-          dragPosition
-            ? { top: dragPosition.top, left: dragPosition.left, width: position.width }
-            : {
-                top: position.top,
-                left: position.left,
-                width: position.width,
-                transform: position.flipAbove ? "translateY(-100%)" : undefined,
-                animation: position.flipAbove
-                  ? "comment-popover-in-above 0.15s ease-out"
-                  : "comment-popover-in 0.15s ease-out",
-              }
-        }
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <style>{`
-        @keyframes comment-popover-in {
-          from { opacity: 0; transform: translateY(-8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes comment-popover-in-above {
-          from { opacity: 0; transform: translateY(-100%) translateY(8px); }
-          to { opacity: 1; transform: translateY(-100%); }
-        }
-      `}</style>
-
-        {/* Header (draggable) */}
-        <div
-          className="flex items-center justify-between px-3 py-2 border-b border-border/50"
-          {...dragHandleProps}
-        >
-          <span className="text-xs text-muted-foreground truncate max-w-[260px]">
-            {headerLabel}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setMode("dialog")}
-              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              title="Expand"
-            >
-              <ExpandIcon />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              title="Close"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        </div>
-
-        {/* Textarea */}
-        <div className="px-3 py-2">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isGlobal ? "Add a global comment..." : "Add a comment..."}
-            className="w-full bg-transparent text-sm placeholder:text-muted-foreground resize-none focus:outline-none max-h-64 min-h-[4.5rem] px-1 py-0.5"
-            style={
-              // SAFETY: fieldSizing is valid CSSProperties; React typing is closed
-              { fieldSizing: "content" } as React.CSSProperties
-            }
-          />
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-3 py-2 border-t border-border/50">
-          <div className="flex items-center gap-2">
-            {allowImages && (
-              <AttachmentsButton
-                images={images}
-                onAdd={(img) => setImages((prev) => [...prev, img])}
-                onRemove={(path) => setImages((prev) => prev.filter((i) => i.path !== path))}
-                variant="inline"
-              />
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            {onAskAI && (
-              <button
-                onClick={handleAskAI}
-                disabled={!canAskAI}
-                className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-primary hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title={canAskAI ? "Ask AI this question" : "Type a question to ask AI"}
-              >
-                <SparklesIcon className="w-3 h-3" />
-                Ask AI
-              </button>
-            )}
-            <span className="text-[10px] text-muted-foreground">{submitHint}</span>
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            >
-              {isGlobal ? "Add" : "Save"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </>,
+    <PositionedPopoverBody
+      popoverRef={popoverRef}
+      textareaRef={textareaRef}
+      dragHandleProps={dragHandleProps}
+      style={positionedPopoverStyle}
+      offscreen={offscreen}
+      contextText={contextText}
+      text={text}
+      images={images}
+      isGlobal={isGlobal}
+      allowImages={allowImages}
+      hasAskAIAction={hasAskAIAction}
+      askAIDisabled={askAIDisabled}
+      hasUnsavedContent={hasUnsavedContent}
+      allowEmptySubmit={allowEmptySubmit}
+      initialText={initialText}
+      onScrollToPopover={scrollToPopover}
+      onExpand={handleExpand}
+      onClose={onClose}
+      onTextChange={handleTextChange}
+      onKeyDown={handleKeyDown}
+      onAddImage={handleAddImage}
+      onRemoveImage={handleRemoveImage}
+      onPointerDown={handlePopoverPointerDown}
+      onAskAI={handleAskAI}
+      onSubmit={handleSubmit}
+    />,
     document.body,
   );
 };
