@@ -68,6 +68,120 @@ interface ReviewSidebarProps {
   onOpenPRPanel?: (type: "summary" | "comments" | "checks") => void;
 }
 
+interface AnnotationGroups {
+  generalAnnotations: CodeAnnotation[];
+  groupedAnnotations: Map<string, CodeAnnotation[]>;
+  prGroups: Map<string, Map<string, CodeAnnotation[]>> | null;
+  isMultiPR: boolean;
+}
+
+const SCOPE_ORDER = { general: 0, file: 1, line: 2 } as const;
+
+function getAnnotationScope(annotation: CodeAnnotation): CodeAnnotationScope {
+  return annotation.scope ?? "line";
+}
+
+function compareCodeAnnotations(a: CodeAnnotation, b: CodeAnnotation): number {
+  const aScope = getAnnotationScope(a);
+  const bScope = getAnnotationScope(b);
+
+  if (aScope !== bScope) {
+    return SCOPE_ORDER[aScope] - SCOPE_ORDER[bScope];
+  }
+
+  return aScope === "line" ? a.lineStart - b.lineStart : b.createdAt - a.createdAt;
+}
+
+function useAnnotationGroups(annotations: CodeAnnotation[]): AnnotationGroups {
+  return React.useMemo(() => {
+    const generalAnnotations: CodeAnnotation[] = [];
+    const placedAnnotations: CodeAnnotation[] = [];
+
+    for (const annotation of annotations) {
+      if (getAnnotationScope(annotation) === "general") {
+        generalAnnotations.push(annotation);
+      } else {
+        placedAnnotations.push(annotation);
+      }
+    }
+
+    generalAnnotations.sort((a, b) => b.createdAt - a.createdAt);
+
+    const groupedAnnotations = groupAnnotationsByFile(placedAnnotations);
+    const prGroups = hasMultiplePRs(placedAnnotations)
+      ? groupAnnotationsByPR(placedAnnotations)
+      : null;
+
+    return {
+      generalAnnotations,
+      groupedAnnotations,
+      prGroups,
+      isMultiPR: prGroups !== null,
+    };
+  }, [annotations]);
+}
+
+function groupAnnotationsByFile(annotations: CodeAnnotation[]): Map<string, CodeAnnotation[]> {
+  const groupedAnnotations = new Map<string, CodeAnnotation[]>();
+
+  for (const annotation of annotations) {
+    const fileAnnotations = groupedAnnotations.get(annotation.filePath) ?? [];
+    fileAnnotations.push(annotation);
+    groupedAnnotations.set(annotation.filePath, fileAnnotations);
+  }
+
+  for (const fileAnnotations of groupedAnnotations.values()) {
+    fileAnnotations.sort(compareCodeAnnotations);
+  }
+
+  return groupedAnnotations;
+}
+
+function hasMultiplePRs(annotations: CodeAnnotation[]): boolean {
+  return new Set(annotations.map((annotation) => annotation.prUrl).filter(Boolean)).size > 1;
+}
+
+function groupAnnotationsByPR(
+  annotations: CodeAnnotation[],
+): Map<string, Map<string, CodeAnnotation[]>> {
+  const prGroups = new Map<string, Map<string, CodeAnnotation[]>>();
+
+  for (const annotation of annotations) {
+    const prKey = annotation.prUrl ?? "_none";
+    const fileAnnotations = prGroups.get(prKey) ?? new Map<string, CodeAnnotation[]>();
+    const annotationsForFile = fileAnnotations.get(annotation.filePath) ?? [];
+    annotationsForFile.push(annotation);
+    fileAnnotations.set(annotation.filePath, annotationsForFile);
+    prGroups.set(prKey, fileAnnotations);
+  }
+
+  for (const fileAnnotations of prGroups.values()) {
+    for (const annotationsForFile of fileAnnotations.values()) {
+      annotationsForFile.sort(compareCodeAnnotations);
+    }
+  }
+
+  return prGroups;
+}
+
+function useQuickCopyFeedback(feedbackMarkdown?: string) {
+  const [copied, setCopied] = useState(false);
+
+  const copyFeedback = async () => {
+    if (!feedbackMarkdown) return;
+
+    try {
+      await navigator.clipboard.writeText(feedbackMarkdown);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  };
+
+  return { copied, copyFeedback };
+}
+
 const SuggestionPreview: React.FC<{ code: string; originalCode?: string; language?: string }> = ({
   code,
   originalCode,
@@ -107,22 +221,348 @@ const SuggestionPreview: React.FC<{ code: string; originalCode?: string; languag
   );
 };
 
-const SCOPE_ORDER = { general: 0, file: 1, line: 2 } as const;
-
-function getAnnotationScope(annotation: CodeAnnotation): CodeAnnotationScope {
-  return annotation.scope ?? "line";
+interface AnnotationCardProps {
+  annotation: CodeAnnotation;
+  isSelected: boolean;
+  onNavigateToAnnotation: (id: string) => void;
+  onDeleteAnnotation: (id: string) => void;
 }
 
-function compareCodeAnnotations(a: CodeAnnotation, b: CodeAnnotation): number {
-  const aScope = getAnnotationScope(a);
-  const bScope = getAnnotationScope(b);
+const AnnotationCard: React.FC<AnnotationCardProps> = ({
+  annotation,
+  isSelected,
+  onNavigateToAnnotation,
+  onDeleteAnnotation,
+}) => {
+  const scope = getAnnotationScope(annotation);
+  const isFileScope = scope === "file";
+  const isGeneralScope = scope === "general";
 
-  if (aScope !== bScope) {
-    return SCOPE_ORDER[aScope] - SCOPE_ORDER[bScope];
-  }
+  return (
+    <div
+      onClick={() => onNavigateToAnnotation(annotation.id)}
+      className={`group relative p-2.5 rounded border cursor-pointer transition-colors duration-150 ${
+        isSelected ? "bg-primary/5 border-primary/30" : "border-transparent hover:bg-muted/30"
+      }`}
+    >
+      <CommentMeta
+        leading={
+          isGeneralScope ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+              general
+            </span>
+          ) : isFileScope ? (
+            <FileNameChip path={annotation.filePath} />
+          ) : (
+            <span className="text-[10px] font-mono text-muted-foreground">
+              {annotation.lineStart === annotation.lineEnd
+                ? `L${annotation.lineStart}`
+                : `L${annotation.lineStart}-${annotation.lineEnd}`}
+              {annotation.tokenText && (
+                <span className="ml-1 text-primary/70">{`\`${annotation.tokenText.length > 30 ? annotation.tokenText.slice(0, 27) + "..." : annotation.tokenText}\``}</span>
+              )}
+            </span>
+          )
+        }
+        conventionalLabel={annotation.conventionalLabel}
+        decorations={annotation.decorations}
+        reviewProfileLabel={annotation.reviewProfileLabel}
+        source={annotation.source}
+        author={annotation.author}
+        createdAt={annotation.createdAt}
+      />
+      {annotation.text && (
+        <div className="text-xs text-foreground/80 line-clamp-2 review-comment-markdown">
+          {renderInlineMarkdown(annotation.text)}
+        </div>
+      )}
+      {annotation.suggestedCode && !isGeneralScope && (
+        <div className="mt-1.5">
+          <SuggestionPreview
+            code={annotation.suggestedCode}
+            originalCode={annotation.originalCode}
+            language={detectLanguage(annotation.filePath)}
+          />
+        </div>
+      )}
+      <CommentActions
+        copyText={annotation.text ? commentCopyText(annotation, scope) : undefined}
+        onDelete={() => onDeleteAnnotation(annotation.id)}
+      />
+    </div>
+  );
+};
 
-  return aScope === "line" ? a.lineStart - b.lineStart : b.createdAt - a.createdAt;
+interface AnnotationCardsProps {
+  annotations: CodeAnnotation[];
+  selectedAnnotationId: string | null;
+  onNavigateToAnnotation: (id: string) => void;
+  onDeleteAnnotation: (id: string) => void;
 }
+
+const AnnotationCards: React.FC<AnnotationCardsProps> = ({
+  annotations,
+  selectedAnnotationId,
+  onNavigateToAnnotation,
+  onDeleteAnnotation,
+}) => (
+  <div className="space-y-1">
+    {annotations.map((annotation) => (
+      <AnnotationCard
+        key={annotation.id}
+        annotation={annotation}
+        isSelected={selectedAnnotationId === annotation.id}
+        onNavigateToAnnotation={onNavigateToAnnotation}
+        onDeleteAnnotation={onDeleteAnnotation}
+      />
+    ))}
+  </div>
+);
+
+interface FileAnnotationGroupProps extends AnnotationCardsProps {
+  filePath: string;
+  stickyTopClassName?: string;
+}
+
+const FileAnnotationGroup: React.FC<FileAnnotationGroupProps> = ({
+  filePath,
+  stickyTopClassName = "top-0",
+  ...annotationCardsProps
+}) => (
+  <div>
+    <div
+      className={`sticky ${stickyTopClassName} z-10 bg-background/95 backdrop-blur-sm px-2 py-1 text-xs font-mono text-muted-foreground truncate`}
+    >
+      {filePath.split("/").pop()}
+    </div>
+    <AnnotationCards {...annotationCardsProps} />
+  </div>
+);
+
+function getPRLabel(prUrl: string, fileAnnotations: Map<string, CodeAnnotation[]>): string {
+  if (prUrl === "_none") return "Local Changes";
+
+  const sample = Array.from(fileAnnotations.values())[0]?.[0];
+  return `${sample?.prRepo ? `${sample.prRepo}` : ""}#${sample?.prNumber ?? "?"} ${sample?.prTitle ?? ""}`;
+}
+
+interface PRAnnotationGroupsProps extends AnnotationCardsProps {
+  prGroups: Map<string, Map<string, CodeAnnotation[]>>;
+}
+
+const PRAnnotationGroups: React.FC<PRAnnotationGroupsProps> = ({
+  prGroups,
+  ...annotationCardsProps
+}) => (
+  <>
+    {Array.from(prGroups.entries()).map(([prUrl, fileAnnotations]) => (
+      <div key={prUrl}>
+        <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm px-2 py-1.5 text-[10px] font-medium text-accent/80 border-b border-border/30 mb-1">
+          {getPRLabel(prUrl, fileAnnotations)}
+        </div>
+        <div className="space-y-4">
+          {Array.from(fileAnnotations.entries()).map(([filePath, annotations]) => (
+            <FileAnnotationGroup
+              key={filePath}
+              filePath={filePath}
+              annotations={annotations}
+              stickyTopClassName="top-7"
+              {...annotationCardsProps}
+            />
+          ))}
+        </div>
+      </div>
+    ))}
+  </>
+);
+
+const EmptyAnnotations: React.FC = () => (
+  <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+    <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+      <svg
+        className="w-5 h-5 text-muted-foreground"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+        />
+      </svg>
+    </div>
+    <p className="text-xs text-muted-foreground">Click on lines to add annotations</p>
+  </div>
+);
+
+interface AnnotationsTabProps extends AnnotationCardsProps {
+  annotations: CodeAnnotation[];
+  annotationGroups: AnnotationGroups;
+  editorAnnotations?: EditorAnnotation[];
+  onDeleteEditorAnnotation?: (id: string) => void;
+}
+
+const AnnotationsTab: React.FC<AnnotationsTabProps> = ({
+  annotations,
+  annotationGroups,
+  editorAnnotations,
+  onDeleteEditorAnnotation,
+  ...annotationCardsProps
+}) => {
+  const { generalAnnotations, groupedAnnotations, prGroups, isMultiPR } = annotationGroups;
+  const totalCount = annotations.length + (editorAnnotations?.length ?? 0);
+
+  return (
+    <div className="p-2 space-y-1.5">
+      {totalCount === 0 ? (
+        <EmptyAnnotations />
+      ) : (
+        <div className="p-2 space-y-4">
+          {generalAnnotations.length > 0 && (
+            <div>
+              <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-2 py-1 text-xs font-medium text-muted-foreground">
+                General
+              </div>
+              <AnnotationCards annotations={generalAnnotations} {...annotationCardsProps} />
+            </div>
+          )}
+          {isMultiPR && prGroups ? (
+            <PRAnnotationGroups prGroups={prGroups} {...annotationCardsProps} />
+          ) : (
+            Array.from(groupedAnnotations.entries()).map(([filePath, annotations]) => (
+              <FileAnnotationGroup
+                key={filePath}
+                filePath={filePath}
+                annotations={annotations}
+                {...annotationCardsProps}
+              />
+            ))
+          )}
+        </div>
+      )}
+      <EditorAnnotations
+        annotations={annotations}
+        editorAnnotations={editorAnnotations}
+        onDeleteEditorAnnotation={onDeleteEditorAnnotation}
+      />
+    </div>
+  );
+};
+
+interface EditorAnnotationsProps {
+  annotations: CodeAnnotation[];
+  editorAnnotations?: EditorAnnotation[];
+  onDeleteEditorAnnotation?: (id: string) => void;
+}
+
+const EditorAnnotations: React.FC<EditorAnnotationsProps> = ({
+  annotations,
+  editorAnnotations,
+  onDeleteEditorAnnotation,
+}) => {
+  if (!editorAnnotations || editorAnnotations.length === 0) return null;
+
+  return (
+    <>
+      {annotations.length > 0 && (
+        <div className="flex items-center gap-2 pt-2 pb-1">
+          <div className="flex-1 border-t border-border/30" />
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Editor
+          </span>
+          <div className="flex-1 border-t border-border/30" />
+        </div>
+      )}
+      {editorAnnotations.map((annotation) => (
+        <EditorAnnotationCard
+          key={annotation.id}
+          annotation={annotation}
+          variant="code-review"
+          onDelete={() => onDeleteEditorAnnotation?.(annotation.id)}
+        />
+      ))}
+    </>
+  );
+};
+
+interface SidebarHeaderProps {
+  activeTab: ReviewSidebarTab;
+  annotationCount: number;
+  aiMessageCount: number;
+}
+
+const SidebarHeader: React.FC<SidebarHeaderProps> = ({
+  activeTab,
+  annotationCount,
+  aiMessageCount,
+}) => {
+  const count = activeTab === "annotations" ? annotationCount : aiMessageCount;
+
+  return (
+    <div
+      className="px-3 flex items-center border-b border-border/50"
+      style={{ height: "var(--panel-header-h)" }}
+    >
+      <div className="flex items-center gap-2 w-full min-w-0">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
+          {activeTab === "annotations" ? "Annotations" : "AI"}
+        </h2>
+        {count > 0 && (
+          <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+            {count}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface QuickCopyFooterProps {
+  copied: boolean;
+  onCopy: () => void;
+}
+
+const QuickCopyFooter: React.FC<QuickCopyFooterProps> = ({ copied, onCopy }) => (
+  <div className="p-2 border-t border-border/50">
+    <button
+      onClick={onCopy}
+      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-muted/50"
+    >
+      {copied ? <CopiedFeedbackIcon /> : <CopyFeedbackIcon />}
+      {copied ? "Copied" : "Copy Feedback"}
+    </button>
+  </div>
+);
+
+const CopiedFeedbackIcon: React.FC = () => (
+  <svg
+    className="w-3.5 h-3.5 text-success"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2}
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+  </svg>
+);
+
+const CopyFeedbackIcon: React.FC = () => (
+  <svg
+    className="w-3.5 h-3.5"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+    />
+  </svg>
+);
 
 export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */ ({
   isOpen,
@@ -158,265 +598,34 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */ ({
   hasAISession,
   _onOpenPRPanel,
 }) => {
-  const totalCount = annotations.length + (editorAnnotations?.length ?? 0);
-  const [copied, setCopied] = useState(false);
-
-  const handleQuickCopy = async () => {
-    if (!feedbackMarkdown) return;
-    try {
-      await navigator.clipboard.writeText(feedbackMarkdown);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
-      console.error("Failed to copy:", e);
-    }
-  };
-
-  // Split out general (review-level) comments — they belong to no file — then
-  // group the rest by file, optionally by PR first.
-  const { generalAnnotations, groupedAnnotations, prGroups, isMultiPR } = React.useMemo(() => {
-    const general: CodeAnnotation[] = [];
-    const placed: CodeAnnotation[] = [];
-    for (const ann of annotations) {
-      if ((ann.scope ?? "line") === "general") general.push(ann);
-      else placed.push(ann);
-    }
-    general.sort((a, b) => b.createdAt - a.createdAt);
-
-    const prUrls = new Set(placed.map((a) => a.prUrl).filter(Boolean));
-    const multiPR = prUrls.size > 1;
-
-    const grouped = new Map<string, CodeAnnotation[]>();
-    for (const ann of placed) {
-      const existing = grouped.get(ann.filePath) || [];
-      existing.push(ann);
-      grouped.set(ann.filePath, existing);
-    }
-    for (const [, anns] of grouped) {
-      anns.sort(compareCodeAnnotations);
-    }
-
-    let prs: Map<string, Map<string, CodeAnnotation[]>> | null = null;
-    if (multiPR) {
-      prs = new Map();
-      for (const ann of placed) {
-        const prKey = ann.prUrl ?? "_none";
-        if (!prs.has(prKey)) prs.set(prKey, new Map());
-        const fileMap = prs.get(prKey)!;
-        const existing = fileMap.get(ann.filePath) || [];
-        existing.push(ann);
-        fileMap.set(ann.filePath, existing);
-      }
-      for (const fileMap of prs.values()) {
-        for (const anns of fileMap.values()) {
-          anns.sort(compareCodeAnnotations);
-        }
-      }
-    }
-
-    return {
-      generalAnnotations: general,
-      groupedAnnotations: grouped,
-      prGroups: prs,
-      isMultiPR: multiPR,
-    };
-  }, [annotations]);
+  const { copied, copyFeedback } = useQuickCopyFeedback(feedbackMarkdown);
+  const annotationGroups = useAnnotationGroups(annotations);
+  const totalAnnotationCount = annotations.length + (editorAnnotations?.length ?? 0);
 
   if (!isOpen) return null;
-
-  function renderAnnotationCard(annotation: CodeAnnotation) {
-    const isSelected = selectedAnnotationId === annotation.id;
-    const scope = getAnnotationScope(annotation);
-    const isFileScope = scope === "file";
-    const isGeneralScope = scope === "general";
-    return (
-      <div
-        key={annotation.id}
-        onClick={() => onNavigateToAnnotation(annotation.id)}
-        className={`group relative p-2.5 rounded border cursor-pointer transition-colors duration-150 ${
-          isSelected ? "bg-primary/5 border-primary/30" : "border-transparent hover:bg-muted/30"
-        }`}
-      >
-        <CommentMeta
-          leading={
-            isGeneralScope ? (
-              <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                general
-              </span>
-            ) : isFileScope ? (
-              <FileNameChip path={annotation.filePath} />
-            ) : (
-              <span className="text-[10px] font-mono text-muted-foreground">
-                {annotation.lineStart === annotation.lineEnd
-                  ? `L${annotation.lineStart}`
-                  : `L${annotation.lineStart}-${annotation.lineEnd}`}
-                {annotation.tokenText && (
-                  <span className="ml-1 text-primary/70">{`\`${annotation.tokenText.length > 30 ? annotation.tokenText.slice(0, 27) + "..." : annotation.tokenText}\``}</span>
-                )}
-              </span>
-            )
-          }
-          conventionalLabel={annotation.conventionalLabel}
-          decorations={annotation.decorations}
-          reviewProfileLabel={annotation.reviewProfileLabel}
-          source={annotation.source}
-          author={annotation.author}
-          createdAt={annotation.createdAt}
-        />
-        {annotation.text && (
-          <div className="text-xs text-foreground/80 line-clamp-2 review-comment-markdown">
-            {renderInlineMarkdown(annotation.text)}
-          </div>
-        )}
-        {annotation.suggestedCode && !isGeneralScope && (
-          <div className="mt-1.5">
-            <SuggestionPreview
-              code={annotation.suggestedCode}
-              originalCode={annotation.originalCode}
-              language={detectLanguage(annotation.filePath)}
-            />
-          </div>
-        )}
-        <CommentActions
-          copyText={annotation.text ? commentCopyText(annotation, scope) : undefined}
-          onDelete={() => onDeleteAnnotation(annotation.id)}
-        />
-      </div>
-    );
-  }
 
   return (
     <aside
       className="border-l border-border/50 bg-card/30 backdrop-blur-sm flex flex-col flex-shrink-0"
       style={{ width: width ?? 288 }}
     >
-      {/* Header */}
-      <div
-        className="px-3 flex items-center border-b border-border/50"
-        style={{ height: "var(--panel-header-h)" }}
-      >
-        <div className="flex items-center gap-2 w-full min-w-0">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
-            {activeTab === "annotations" ? "Annotations" : "AI"}
-          </h2>
-          {activeTab === "annotations" && totalCount > 0 && (
-            <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-              {totalCount}
-            </span>
-          )}
-          {activeTab === "ai" && aiMessages.length > 0 && (
-            <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-              {aiMessages.length}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Content */}
+      <SidebarHeader
+        activeTab={activeTab}
+        annotationCount={totalAnnotationCount}
+        aiMessageCount={aiMessages.length}
+      />
       <OverlayScrollArea className="flex-1 min-h-0">
-        {/* Annotations tab */}
-        {activeTab === "annotations" && (
-          <div className="p-2 space-y-1.5">
-            {totalCount === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-center px-4">
-                <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
-                  <svg
-                    className="w-5 h-5 text-muted-foreground"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                    />
-                  </svg>
-                </div>
-                <p className="text-xs text-muted-foreground">Click on lines to add annotations</p>
-              </div>
-            ) : (
-              <div className="p-2 space-y-4">
-                {generalAnnotations.length > 0 && (
-                  <div>
-                    <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-2 py-1 text-xs font-medium text-muted-foreground">
-                      General
-                    </div>
-                    <div className="space-y-1">
-                      {generalAnnotations.map((annotation) => renderAnnotationCard(annotation))}
-                    </div>
-                  </div>
-                )}
-                {isMultiPR && prGroups
-                  ? Array.from(prGroups.entries()).map(([prUrl, fileMap]) => {
-                      const sample = fileMap.values().next().value?.[0];
-                      const prLabel =
-                        prUrl === "_none"
-                          ? "Local Changes"
-                          : `${sample?.prRepo ? `${sample.prRepo}` : ""}#${sample?.prNumber ?? "?"} ${sample?.prTitle ?? ""}`;
-                      return (
-                        <div key={prUrl}>
-                          <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm px-2 py-1.5 text-[10px] font-medium text-accent/80 border-b border-border/30 mb-1">
-                            {prLabel}
-                          </div>
-                          <div className="space-y-4">
-                            {Array.from(fileMap.entries()).map(([filePath, fileAnnotations]) => (
-                              <div key={filePath}>
-                                <div className="sticky top-7 z-10 bg-background/95 backdrop-blur-sm px-2 py-1 text-xs font-mono text-muted-foreground truncate">
-                                  {filePath.split("/").pop()}
-                                </div>
-                                <div className="space-y-1">
-                                  {fileAnnotations.map((annotation) =>
-                                    renderAnnotationCard(annotation),
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })
-                  : Array.from(groupedAnnotations.entries()).map(([filePath, fileAnnotations]) => (
-                      <div key={filePath}>
-                        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-2 py-1 text-xs font-mono text-muted-foreground truncate">
-                          {filePath.split("/").pop()}
-                        </div>
-                        <div className="space-y-1">
-                          {fileAnnotations.map((annotation) => renderAnnotationCard(annotation))}
-                        </div>
-                      </div>
-                    ))}
-              </div>
-            )}
-
-            {/* Editor annotations (VS Code) */}
-            {editorAnnotations && editorAnnotations.length > 0 && (
-              <>
-                {annotations.length > 0 && (
-                  <div className="flex items-center gap-2 pt-2 pb-1">
-                    <div className="flex-1 border-t border-border/30" />
-                    <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                      Editor
-                    </span>
-                    <div className="flex-1 border-t border-border/30" />
-                  </div>
-                )}
-                {editorAnnotations.map((ann) => (
-                  <EditorAnnotationCard
-                    key={ann.id}
-                    annotation={ann}
-                    variant="code-review"
-                    onDelete={() => onDeleteEditorAnnotation?.(ann.id)}
-                  />
-                ))}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* AI tab */}
-        {activeTab === "ai" && (
+        {activeTab === "annotations" ? (
+          <AnnotationsTab
+            annotations={annotations}
+            annotationGroups={annotationGroups}
+            selectedAnnotationId={selectedAnnotationId}
+            onNavigateToAnnotation={onNavigateToAnnotation}
+            onDeleteAnnotation={onDeleteAnnotation}
+            editorAnnotations={editorAnnotations}
+            onDeleteEditorAnnotation={onDeleteEditorAnnotation}
+          />
+        ) : (
           <AITab
             messages={aiMessages}
             isCreatingSession={isAICreatingSession}
@@ -437,47 +646,8 @@ export const ReviewSidebar: React.FC<ReviewSidebarProps> = /* React.memo */ ({
           />
         )}
       </OverlayScrollArea>
-
-      {/* Quick Copy Footer — annotations tab only */}
-      {activeTab === "annotations" && feedbackMarkdown && totalCount > 0 && (
-        <div className="p-2 border-t border-border/50">
-          <button
-            onClick={handleQuickCopy}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-muted/50"
-          >
-            {copied ? (
-              <>
-                <svg
-                  className="w-3.5 h-3.5 text-success"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                Copied
-              </>
-            ) : (
-              <>
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                  />
-                </svg>
-                Copy Feedback
-              </>
-            )}
-          </button>
-        </div>
+      {activeTab === "annotations" && feedbackMarkdown && totalAnnotationCount > 0 && (
+        <QuickCopyFooter copied={copied} onCopy={copyFeedback} />
       )}
     </aside>
   );
