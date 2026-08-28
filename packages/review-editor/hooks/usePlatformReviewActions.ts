@@ -9,9 +9,14 @@ import {
   type SubmissionTarget,
 } from "../components/ReviewSubmissionDialog";
 import { readPRActionResponse } from "../utils/pr-action-response";
+import {
+  buildPlatformReviewActionBody,
+  selectPlatformReviewTargets,
+  type PlatformReviewAction,
+} from "../utils/platformReviewSubmission";
 
-export type PlatformReviewAction = "approve" | "comment";
 export type ReviewDestination = "agent" | "platform";
+export type { PlatformReviewAction } from "../utils/platformReviewSubmission";
 
 interface PlatformReviewDialog {
   action: PlatformReviewAction;
@@ -48,44 +53,6 @@ export interface PlatformReviewActions {
     plan: ReviewSubmission,
     generalComment?: string,
   ) => Promise<void>;
-}
-
-function buildPlatformActionBody(target: SubmissionTarget, generalComment?: string): string {
-  const parts: string[] = [];
-  if (generalComment) parts.push(generalComment);
-  parts.push("Review from Plannotator");
-  if (target.fileScopedBody) parts.push(target.fileScopedBody);
-  return parts.join("\n\n");
-}
-
-// For approval, post only to the active pull request. A comment with no inline
-// targets still posts when the reviewer supplied a general comment.
-function selectPlatformActionTargets(
-  action: PlatformReviewAction,
-  plan: ReviewSubmission,
-  generalComment: string | undefined,
-  prMetadata: PRMetadata | null,
-): SubmissionTarget[] {
-  if (action !== "approve" && (plan.targets.length > 0 || !generalComment?.trim())) {
-    return plan.targets;
-  }
-
-  const currentTarget = plan.targets.find((target) => target.prUrl === prMetadata?.url);
-  if (currentTarget) return [currentTarget];
-
-  return [
-    {
-      prUrl: prMetadata?.url ?? "",
-      prNumber: prMetadata?.number ?? 0,
-      prTitle: prMetadata?.title ?? "",
-      prRepo: prMetadata ? getDisplayRepo(prMetadata) : "",
-      fileComments: [],
-      fileScopedBody: "",
-      fileCount: 0,
-      annotationCount: 0,
-      status: "pending",
-    },
-  ];
 }
 
 export function usePlatformReviewActions({
@@ -141,7 +108,7 @@ export function usePlatformReviewActions({
       setPlatformActionError(null);
 
       try {
-        const targets = selectPlatformActionTargets(action, plan, generalComment, prMetadata);
+        const targets = selectPlatformReviewTargets(action, plan, generalComment, prMetadata);
         const openUrls: string[] = [];
         const results = await Promise.allSettled(
           targets.map(async (target): Promise<SubmissionTarget> => {
@@ -152,7 +119,7 @@ export function usePlatformReviewActions({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   action,
-                  body: buildPlatformActionBody(target, generalComment),
+                  body: buildPlatformReviewActionBody(target, generalComment),
                   fileComments: target.fileComments,
                   targetPrUrl: target.prUrl || undefined,
                 }),

@@ -71,7 +71,8 @@ import { usePRSession, type PRSessionUpdate } from "./hooks/usePRSession";
 import { useAnnotationFactory } from "./hooks/useAnnotationFactory";
 import { DEMO_DIFF } from "./demoData";
 import { exportReviewFeedback } from "./utils/exportFeedback";
-import { buildReviewFeedbackAnnotations } from "./utils/reviewFeedbackAnnotations";
+import { useAgentReviewActions } from "./hooks/useAgentReviewActions";
+import { useReviewSubmissionShortcut } from "./hooks/useReviewSubmissionShortcut";
 import { parseDiffToFiles } from "./utils/diffParser";
 import {
   decodeDiffSwitchResponse,
@@ -235,9 +236,6 @@ const ReviewApp: React.FC = () => {
   const [agentCwd, setAgentCwd] = useState<string | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
-  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
   const [submitted, setSubmitted] = useState<"approved" | "feedback" | "exited" | false>(false);
   const [showApproveWarning, setShowApproveWarning] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
@@ -1846,160 +1844,43 @@ const ReviewApp: React.FC = () => {
 
   const totalAnnotationCount = allAnnotations.length + editorAnnotations.length;
 
-  // Send feedback to OpenCode via API
-  const handleSendFeedback = useCallback(async () => {
-    if (totalAnnotationCount === 0) {
-      setShowNoAnnotationsDialog(true);
-      return;
-    }
-    setIsSendingFeedback(true);
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          draftGeneration: getDraftGeneration(),
-          approved: false,
-          feedback: feedbackMarkdown,
-          annotations: buildReviewFeedbackAnnotations(allAnnotations, editorAnnotations),
-        }),
-      });
-      if (res.ok) {
-        setSubmitted("feedback");
-      } else {
-        throw new Error("Failed to send");
-      }
-    } catch (err) {
-      console.error("Failed to send feedback:", err);
-      setCopyFeedback("Failed to send");
-      setTimeout(() => setCopyFeedback(null), 2000);
-      setIsSendingFeedback(false);
-    }
-  }, [
-    totalAnnotationCount,
-    feedbackMarkdown,
+  const {
+    isSendingFeedback,
+    isApproving,
+    isExiting,
+    sendFeedback: handleSendFeedback,
+    approveReview: handleApprove,
+    exitReview: handleExit,
+  } = useAgentReviewActions({
     allAnnotations,
     editorAnnotations,
+    feedbackMarkdown,
+    totalAnnotationCount,
     getDraftGeneration,
-  ]);
+    onSubmitted: setSubmitted,
+    onFeedbackStatusChange: setCopyFeedback,
+    onNoAnnotations: () => setShowNoAnnotationsDialog(true),
+  });
 
-  // Exit review session without sending any feedback
-  const handleExit = useCallback(async () => {
-    setIsExiting(true);
-    try {
-      const res = await fetch(`/api/exit?draftGeneration=${getDraftGeneration()}`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        setSubmitted("exited");
-      } else {
-        throw new Error("Failed to exit");
-      }
-    } catch (error) {
-      console.error("Failed to exit review:", error);
-      setIsExiting(false);
-    }
-  }, [getDraftGeneration]);
-
-  // Approve without feedback (LGTM)
-  const handleApprove = useCallback(async () => {
-    setIsApproving(true);
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          draftGeneration: getDraftGeneration(),
-          approved: true,
-          feedback: "LGTM - no changes requested.", // unused — integrations branch on `approved` flag
-          annotations: [],
-        }),
-      });
-      if (res.ok) {
-        setSubmitted("approved");
-      } else {
-        throw new Error("Failed to send");
-      }
-    } catch (err) {
-      console.error("Failed to approve:", err);
-      setCopyFeedback("Failed to send");
-      setTimeout(() => setCopyFeedback(null), 2000);
-      setIsApproving(false);
-    }
-  }, [getDraftGeneration]);
-
-  // Cmd/Ctrl+Enter keyboard shortcut to approve or send feedback
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
-
-      // If the platform post dialog is open, Cmd+Enter submits it
-      if (platformCommentDialog) {
-        if (submitted || isPlatformActioning) return;
-        const isApproveAction = platformCommentDialog.action === "approve";
-        const hasTargets = platformCommentDialog.plan.targets.length > 0;
-        const canSubmit = isApproveAction || hasTargets || platformGeneralComment.trim();
-        if (!canSubmit) return;
-        e.preventDefault();
-        submitPlatformAction(
-          platformCommentDialog.action,
-          platformCommentDialog.plan,
-          platformGeneralComment,
-        );
-        return;
-      }
-
-      const tag = e.target instanceof HTMLElement ? e.target.tagName : undefined;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning)
-        return;
-      if (submitted || isSendingFeedback || isApproving || isExiting || isPlatformActioning) return;
-      if (!origin) return; // Demo mode
-
-      e.preventDefault();
-
-      if (platformMode) {
-        // GitHub mode: No annotations → Approve on GitHub, otherwise → Post Review
-        const isOwnPR = !!platformUser && prMetadata?.author === platformUser;
-        if (totalAnnotationCount === 0 && !isOwnPR) {
-          openPlatformDialog("approve");
-        } else {
-          openPlatformDialog("comment");
-        }
-      } else {
-        // Agent mode: No annotations → Approve, otherwise → Send Feedback
-        if (totalAnnotationCount === 0) {
-          handleApprove();
-        } else {
-          handleSendFeedback();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    showExportModal,
-    showNoAnnotationsDialog,
-    showApproveWarning,
-    showExitWarning,
+  useReviewSubmissionShortcut({
     platformCommentDialog,
     platformGeneralComment,
-    submitted,
+    submitted: !!submitted,
     isSendingFeedback,
     isApproving,
     isExiting,
     isPlatformActioning,
-    origin,
-    platformMode,
-    platformUser,
-    prMetadata,
+    isDemoMode: !origin,
+    isPlatformMode: platformMode,
+    isOwnPullRequest: !!platformUser && prMetadata?.author === platformUser,
     totalAnnotationCount,
-    openPlatformDialog,
-    handleApprove,
-    handleSendFeedback,
+    hasBlockingDialog:
+      showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning,
     submitPlatformAction,
-  ]);
+    openPlatformDialog,
+    approveReview: handleApprove,
+    sendFeedback: handleSendFeedback,
+  });
 
   if (isLoading) {
     return (
