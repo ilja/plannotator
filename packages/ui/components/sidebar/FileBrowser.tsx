@@ -213,7 +213,7 @@ export function getAggregateWorkspaceChange(
   );
 }
 
-const TreeNode: React.FC<{
+interface TreeNodeProps {
   node: VaultNode;
   depth: number;
   dirPath: string;
@@ -225,12 +225,69 @@ const TreeNode: React.FC<{
   highlightedFiles?: Set<string>;
   editStatuses?: Map<string, FileEditStatus>;
   workspaceStatus?: WorkspaceStatusPayload;
-}> = ({
+}
+
+interface TreeMarker {
+  label: string;
+  className: string;
+  title: string;
+}
+
+function getEditMarker(editStatus: FileEditStatus | undefined): TreeMarker | null {
+  if (editStatus?.status === "conflict") {
+    return { label: "!", className: "bg-destructive/15 text-destructive", title: "Save conflict" };
+  }
+  if (editStatus?.status === "error") {
+    return { label: "!", className: "bg-destructive/15 text-destructive", title: "Save failed" };
+  }
+  if (editStatus?.status === "missing") {
+    return {
+      label: "!",
+      className: "bg-warning/15 text-warning-foreground",
+      title: "File missing on disk",
+    };
+  }
+  if (editStatus?.status === "saving") {
+    return { label: "...", className: "bg-primary/10 text-primary", title: "Saving" };
+  }
+  if (editStatus?.dirty) {
+    return { label: "•", className: "bg-primary/10 text-primary", title: "Unsaved edits" };
+  }
+  if (editStatus?.status === "saved") {
+    return { label: "✓", className: "bg-success/15 text-success", title: "Saved" };
+  }
+  return null;
+}
+
+function getWorkspaceStatusMarker(
+  workspaceChange: WorkspaceFileChange | undefined,
+): TreeMarker | null {
+  if (workspaceChange?.status === "added") {
+    return { label: "A", className: "text-success", title: "Added file" };
+  }
+  if (workspaceChange?.status === "untracked") {
+    return { label: "U", className: "text-primary", title: "Untracked file" };
+  }
+  if (workspaceChange?.status === "deleted") {
+    return { label: "D", className: "text-destructive", title: "Deleted file" };
+  }
+  if (workspaceChange?.status === "renamed") {
+    return {
+      label: "R",
+      className: "text-[#007aff]",
+      title: workspaceChange.oldPath ? `Renamed from ${workspaceChange.oldPath}` : "Renamed file",
+    };
+  }
+  if (workspaceChange?.status === "conflicted") {
+    return { label: "!", className: "text-destructive", title: "Git conflict" };
+  }
+  return null;
+}
+
+const FileTreeNode: React.FC<TreeNodeProps> = ({
   node,
   depth,
   dirPath,
-  expandedFolders,
-  onToggleFolder,
   onSelectFile,
   activeFile,
   annotationCounts,
@@ -238,81 +295,11 @@ const TreeNode: React.FC<{
   editStatuses,
   workspaceStatus,
 }) => {
-  const folderKey = `${dirPath}:${node.path}`;
   const absolutePath = `${dirPath}/${node.path}`;
-  const isExpanded = expandedFolders.has(folderKey);
   const isActive = node.type === "file" && absolutePath === activeFile;
   const paddingLeft = 8 + depth * 14;
 
-  if (node.type === "folder") {
-    const aggregateCount = annotationCounts
-      ? getAggregateCount(node, dirPath, annotationCounts, workspaceStatus)
-      : 0;
-    const aggregateChange = getAggregateWorkspaceChange(node, dirPath, workspaceStatus);
-    return (
-      <>
-        <button
-          onClick={() => onToggleFolder(folderKey)}
-          className="file-tree-folder w-full flex items-center gap-1.5 py-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors rounded-sm"
-          style={{ paddingLeft }}
-        >
-          <svg
-            className={`w-3 h-3 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-          <svg
-            className="w-3 h-3 flex-shrink-0 text-muted-foreground/60"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-            />
-          </svg>
-          <span className="truncate">{node.name}</span>
-          <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 text-[10px]">
-            {(aggregateChange.additions > 0 || aggregateChange.deletions > 0) && (
-              <>
-                {aggregateChange.additions > 0 && (
-                  <span className="additions">+{aggregateChange.additions}</span>
-                )}
-                {aggregateChange.deletions > 0 && (
-                  <span className="deletions">-{aggregateChange.deletions}</span>
-                )}
-              </>
-            )}
-            {aggregateCount > 0 && <CountBadge count={aggregateCount} />}
-          </div>
-        </button>
-        {isExpanded &&
-          node.children?.map((child) => (
-            <TreeNode
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-              dirPath={dirPath}
-              expandedFolders={expandedFolders}
-              onToggleFolder={onToggleFolder}
-              onSelectFile={onSelectFile}
-              activeFile={activeFile}
-              annotationCounts={annotationCounts}
-              highlightedFiles={highlightedFiles}
-              editStatuses={editStatuses}
-              workspaceStatus={workspaceStatus}
-            />
-          ))}
-      </>
-    );
-  }
+  if (node.type === "folder") return null;
 
   const displayName = node.name.replace(/\.(mdx?|txt|html?)$/i, "");
   const lookupCandidates = getPathLookupCandidates(absolutePath, node.path, workspaceStatus);
@@ -322,44 +309,8 @@ const TreeNode: React.FC<{
   const workspaceChange = getWorkspaceChange(absolutePath, workspaceStatus, node.path);
   const isDeleted = workspaceChange?.status === "deleted";
   const isSelectionDisabled = isFileTreeSelectionDisabled(workspaceChange, editStatus);
-  const editMarker =
-    editStatus?.status === "conflict" || editStatus?.status === "error"
-      ? {
-          label: "!",
-          className: "bg-destructive/15 text-destructive",
-          title: editStatus.status === "conflict" ? "Save conflict" : "Save failed",
-        }
-      : editStatus?.status === "missing"
-        ? {
-            label: "!",
-            className: "bg-warning/15 text-warning-foreground",
-            title: "File missing on disk",
-          }
-        : editStatus?.status === "saving"
-          ? { label: "...", className: "bg-primary/10 text-primary", title: "Saving" }
-          : editStatus?.dirty
-            ? { label: "•", className: "bg-primary/10 text-primary", title: "Unsaved edits" }
-            : editStatus?.status === "saved"
-              ? { label: "✓", className: "bg-success/15 text-success", title: "Saved" }
-              : null;
-  const statusMarker =
-    workspaceChange?.status === "added"
-      ? { label: "A", className: "text-success", title: "Added file" }
-      : workspaceChange?.status === "untracked"
-        ? { label: "U", className: "text-primary", title: "Untracked file" }
-        : workspaceChange?.status === "deleted"
-          ? { label: "D", className: "text-destructive", title: "Deleted file" }
-          : workspaceChange?.status === "renamed"
-            ? {
-                label: "R",
-                className: "text-[#007aff]",
-                title: workspaceChange.oldPath
-                  ? `Renamed from ${workspaceChange.oldPath}`
-                  : "Renamed file",
-              }
-            : workspaceChange?.status === "conflicted"
-              ? { label: "!", className: "text-destructive", title: "Git conflict" }
-              : null;
+  const editMarker = getEditMarker(editStatus);
+  const statusMarker = getWorkspaceStatusMarker(workspaceChange);
   return (
     <button
       onClick={() => {
@@ -421,6 +372,94 @@ const TreeNode: React.FC<{
       </div>
     </button>
   );
+};
+
+const FolderTreeNode: React.FC<TreeNodeProps> = ({
+  node,
+  depth,
+  dirPath,
+  expandedFolders,
+  onToggleFolder,
+  onSelectFile,
+  activeFile,
+  annotationCounts,
+  highlightedFiles,
+  editStatuses,
+  workspaceStatus,
+}) => {
+  if (node.type === "file") return null;
+
+  const folderKey = `${dirPath}:${node.path}`;
+  const isExpanded = expandedFolders.has(folderKey);
+  const aggregateCount = annotationCounts
+    ? getAggregateCount(node, dirPath, annotationCounts, workspaceStatus)
+    : 0;
+  const aggregateChange = getAggregateWorkspaceChange(node, dirPath, workspaceStatus);
+
+  return (
+    <>
+      <button
+        onClick={() => onToggleFolder(folderKey)}
+        className="file-tree-folder w-full flex items-center gap-1.5 py-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors rounded-sm"
+        style={{ paddingLeft: 8 + depth * 14 }}
+      >
+        <svg
+          className={`w-3 h-3 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <svg
+          className="w-3 h-3 flex-shrink-0 text-muted-foreground/60"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+          />
+        </svg>
+        <span className="truncate">{node.name}</span>
+        <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 text-[10px]">
+          {aggregateChange.additions > 0 && (
+            <span className="additions">+{aggregateChange.additions}</span>
+          )}
+          {aggregateChange.deletions > 0 && (
+            <span className="deletions">-{aggregateChange.deletions}</span>
+          )}
+          {aggregateCount > 0 && <CountBadge count={aggregateCount} />}
+        </div>
+      </button>
+      {isExpanded &&
+        node.children?.map((child) => (
+          <TreeNode
+            key={child.path}
+            node={child}
+            depth={depth + 1}
+            dirPath={dirPath}
+            expandedFolders={expandedFolders}
+            onToggleFolder={onToggleFolder}
+            onSelectFile={onSelectFile}
+            activeFile={activeFile}
+            annotationCounts={annotationCounts}
+            highlightedFiles={highlightedFiles}
+            editStatuses={editStatuses}
+            workspaceStatus={workspaceStatus}
+          />
+        ))}
+    </>
+  );
+};
+
+const TreeNode: React.FC<TreeNodeProps> = (props) => {
+  if (props.node.type === "folder") return <FolderTreeNode {...props} />;
+  return <FileTreeNode {...props} />;
 };
 
 const DirSection: React.FC<{
