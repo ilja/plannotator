@@ -20,7 +20,7 @@ const headingStyle = (scale: number): React.CSSProperties => ({
   fontSize: `calc(var(--annotation-prose-font-size, 15px) * ${scale})`,
 });
 
-export const BlockRenderer: React.FC<{
+interface BlockRendererProps {
   block: Block;
   onOpenLinkedDoc?: (path: string) => void;
   onOpenCodeFile?: (path: string) => void;
@@ -34,135 +34,172 @@ export const BlockRenderer: React.FC<{
   onNavigateAnchor?: (hash: string) => void;
   annotations?: Annotation[];
   onSelectChoice?: (block: Block, option: ChoiceQuestionOption) => void;
-}> = ({
+}
+
+const HeadingBlockRenderer: React.FC<BlockRendererProps> = ({
   block,
-  onOpenLinkedDoc,
-  onOpenCodeFile,
+  headingAnchorId,
   imageBaseDir,
   onImageClick,
+  onOpenLinkedDoc,
+  onOpenCodeFile,
+  githubRepo,
+  onNavigateAnchor,
+}) => {
+  // SAFETY: block.level is 1-3 heading level, so the template produces a valid h1/h2/h3 tag.
+  const Tag = `h${block.level || 1}` as React.ElementType;
+  const styles =
+    {
+      1: "text-2xl font-bold mb-4 mt-6 first:mt-0 tracking-tight",
+      2: "text-xl font-semibold mb-3 mt-8 text-foreground/90",
+      3: "text-base font-semibold mb-2 mt-6 text-foreground/80",
+    }[block.level || 1] || "text-base font-semibold mb-2 mt-4";
+
+  return (
+    <Tag
+      id={headingAnchorId}
+      className={styles}
+      style={headingStyle(block.level === 1 ? 1.6 : block.level === 2 ? 1.35 : 1.1)}
+      data-block-id={block.id}
+      data-block-type="heading"
+    >
+      <InlineMarkdown
+        imageBaseDir={imageBaseDir}
+        onImageClick={onImageClick}
+        text={block.content}
+        onOpenLinkedDoc={onOpenLinkedDoc}
+        onOpenCodeFile={onOpenCodeFile}
+        githubRepo={githubRepo}
+        onNavigateAnchor={onNavigateAnchor}
+      />
+    </Tag>
+  );
+};
+
+const BlockquoteRenderer: React.FC<BlockRendererProps> = ({
+  block,
+  imageBaseDir,
+  onImageClick,
+  onOpenLinkedDoc,
+  onOpenCodeFile,
+  githubRepo,
+  onNavigateAnchor,
+}) => {
+  if (block.alertKind) {
+    return (
+      <AlertBlock
+        blockId={block.id}
+        kind={block.alertKind}
+        body={block.content}
+        onOpenLinkedDoc={onOpenLinkedDoc}
+        onOpenCodeFile={onOpenCodeFile}
+        imageBaseDir={imageBaseDir}
+        onImageClick={onImageClick}
+        githubRepo={githubRepo}
+        onNavigateAnchor={onNavigateAnchor}
+      />
+    );
+  }
+
+  const paragraphs = block.content.split(/\n\n+/);
+  return (
+    <blockquote
+      className="border-l-2 border-primary/50 pl-4 my-4 text-muted-foreground italic"
+      style={proseStyle}
+      data-block-id={block.id}
+    >
+      {paragraphs.map((para, index) => (
+        <p key={index} className={index > 0 ? "mt-2" : ""}>
+          <InlineMarkdown
+            imageBaseDir={imageBaseDir}
+            onImageClick={onImageClick}
+            text={para}
+            onOpenLinkedDoc={onOpenLinkedDoc}
+            onOpenCodeFile={onOpenCodeFile}
+            githubRepo={githubRepo}
+            onNavigateAnchor={onNavigateAnchor}
+          />
+        </p>
+      ))}
+    </blockquote>
+  );
+};
+
+const ListItemBlockRenderer: React.FC<BlockRendererProps> = ({
+  block,
   onToggleCheckbox,
   checkboxOverrides,
   orderedIndex,
+  imageBaseDir,
+  onImageClick,
+  onOpenLinkedDoc,
+  onOpenCodeFile,
   githubRepo,
-  headingAnchorId,
   onNavigateAnchor,
-  annotations,
-  onSelectChoice,
 }) => {
+  const indent = (block.level || 0) * 1.25;
+  const isCheckbox = block.checked !== undefined;
+  const isChecked = checkboxOverrides?.has(block.id)
+    ? checkboxOverrides.get(block.id)!
+    : block.checked;
+  const isInteractive = isCheckbox && !!onToggleCheckbox;
+  const textClass = `leading-relaxed ${isCheckbox && isChecked ? "text-muted-foreground line-through" : "text-foreground/90"}`;
+  const inlineProps = {
+    imageBaseDir,
+    onImageClick,
+    onOpenLinkedDoc,
+    onOpenCodeFile,
+    githubRepo,
+    onNavigateAnchor,
+  };
+
+  return (
+    <div
+      className="flex items-start gap-3 my-1.5"
+      data-block-id={block.id}
+      style={{ marginLeft: `${indent}rem` }}
+    >
+      <ListItemBody
+        level={block.level || 0}
+        ordered={block.ordered}
+        orderedIndex={orderedIndex}
+        checked={isChecked}
+        interactive={isInteractive}
+        onToggle={isInteractive ? () => onToggleCheckbox!(block.id, !isChecked) : undefined}
+        textClassName={textClass}
+        textStyle={proseStyle}
+        content={block.content}
+        renderInline={(text) => <InlineMarkdown {...inlineProps} text={text} />}
+      />
+    </div>
+  );
+};
+
+export const BlockRenderer: React.FC<BlockRendererProps> = (props) => {
+  const {
+    block,
+    onOpenLinkedDoc,
+    onOpenCodeFile,
+    imageBaseDir,
+    onImageClick,
+    githubRepo,
+    onNavigateAnchor,
+    annotations,
+    onSelectChoice,
+  } = props;
   const selectedChoiceAnnotation = annotations?.find((ann) =>
     isChoiceAnnotationForBlock(ann, block.id),
   );
 
   switch (block.type) {
-    case "heading": {
-      // SAFETY: block.level is 1-3 heading level, Template literal produces valid h1/h2/h3 tag
-      const Tag = `h${block.level || 1}` as React.ElementType;
-      const styles =
-        {
-          1: "text-2xl font-bold mb-4 mt-6 first:mt-0 tracking-tight",
-          2: "text-xl font-semibold mb-3 mt-8 text-foreground/90",
-          3: "text-base font-semibold mb-2 mt-6 text-foreground/80",
-        }[block.level || 1] || "text-base font-semibold mb-2 mt-4";
-      return (
-        <Tag
-          id={headingAnchorId}
-          className={styles}
-          style={headingStyle(block.level === 1 ? 1.6 : block.level === 2 ? 1.35 : 1.1)}
-          data-block-id={block.id}
-          data-block-type="heading"
-        >
-          <InlineMarkdown
-            imageBaseDir={imageBaseDir}
-            onImageClick={onImageClick}
-            text={block.content}
-            onOpenLinkedDoc={onOpenLinkedDoc}
-            onOpenCodeFile={onOpenCodeFile}
-            githubRepo={githubRepo}
-            onNavigateAnchor={onNavigateAnchor}
-          />
-        </Tag>
-      );
-    }
+    case "heading":
+      return <HeadingBlockRenderer {...props} />;
 
-    case "blockquote": {
-      if (block.alertKind) {
-        return (
-          <AlertBlock
-            blockId={block.id}
-            kind={block.alertKind}
-            body={block.content}
-            onOpenLinkedDoc={onOpenLinkedDoc}
-            onOpenCodeFile={onOpenCodeFile}
-            imageBaseDir={imageBaseDir}
-            onImageClick={onImageClick}
-            githubRepo={githubRepo}
-            onNavigateAnchor={onNavigateAnchor}
-          />
-        );
-      }
-      // Content may span multiple merged `>` lines. Split on blank-line
-      // paragraph breaks so `> a\n>\n> b` renders as two <p> children.
-      const paragraphs = block.content.split(/\n\n+/);
-      return (
-        <blockquote
-          className="border-l-2 border-primary/50 pl-4 my-4 text-muted-foreground italic"
-          style={proseStyle}
-          data-block-id={block.id}
-        >
-          {paragraphs.map((para, i) => (
-            <p key={i} className={i > 0 ? "mt-2" : ""}>
-              <InlineMarkdown
-                imageBaseDir={imageBaseDir}
-                onImageClick={onImageClick}
-                text={para}
-                onOpenLinkedDoc={onOpenLinkedDoc}
-                onOpenCodeFile={onOpenCodeFile}
-                githubRepo={githubRepo}
-                onNavigateAnchor={onNavigateAnchor}
-              />
-            </p>
-          ))}
-        </blockquote>
-      );
-    }
+    case "blockquote":
+      return <BlockquoteRenderer {...props} />;
 
-    case "list-item": {
-      const indent = (block.level || 0) * 1.25; // 1.25rem per level
-      const isCheckbox = block.checked !== undefined;
-      const isChecked = checkboxOverrides?.has(block.id)
-        ? checkboxOverrides.get(block.id)!
-        : block.checked;
-      const isInteractive = isCheckbox && !!onToggleCheckbox;
-      const textClass = `leading-relaxed ${isCheckbox && isChecked ? "text-muted-foreground line-through" : "text-foreground/90"}`;
-      const inlineProps = {
-        imageBaseDir,
-        onImageClick,
-        onOpenLinkedDoc,
-        onOpenCodeFile,
-        githubRepo,
-        onNavigateAnchor,
-      };
-      return (
-        <div
-          className="flex items-start gap-3 my-1.5"
-          data-block-id={block.id}
-          style={{ marginLeft: `${indent}rem` }}
-        >
-          <ListItemBody
-            level={block.level || 0}
-            ordered={block.ordered}
-            orderedIndex={orderedIndex}
-            checked={isChecked}
-            interactive={isInteractive}
-            onToggle={isInteractive ? () => onToggleCheckbox!(block.id, !isChecked) : undefined}
-            textClassName={textClass}
-            textStyle={proseStyle}
-            content={block.content}
-            renderInline={(text) => <InlineMarkdown {...inlineProps} text={text} />}
-          />
-        </div>
-      );
-    }
+    case "list-item":
+      return <ListItemBlockRenderer {...props} />;
 
     case "code":
       return <CodeBlock block={block} onHover={() => {}} onLeave={() => {}} isHovered={false} />;
