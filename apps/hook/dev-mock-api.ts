@@ -6,6 +6,7 @@
  */
 import type { Plugin } from "vite";
 import { existsSync, readFileSync, statSync } from "fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve } from "path";
 import { isCodeFilePath } from "../../packages/shared/code-file";
 import { preloadFile } from "@pierre/diffs/ssr";
@@ -228,70 +229,113 @@ const versionPlans: VersionPlanTable = {
   // Version 3 is the current demo document — served live by the editor.
 };
 
+async function serveHookStatus(res: ServerResponse): Promise<void> {
+  res.setHeader("Content-Type", "application/json");
+  try {
+    const { readImprovementHook, getImprovementHookExpectedPath } =
+      await import("@plannotator/shared/improvement-hooks");
+    const { loadConfig } = await import("@plannotator/shared/config");
+    const { composeImproveContext } = await import("@plannotator/shared/pfm-reminder");
+    const config = loadConfig();
+    const hook = readImprovementHook("enterplanmode-improve");
+    const pfmEnabled = config.pfmReminder === true;
+    const composed = composeImproveContext({
+      pfmEnabled,
+      improvementHookContent: hook?.content ?? null,
+    });
+    res.end(
+      JSON.stringify({
+        pfmReminder: { enabled: pfmEnabled },
+        improvementHook: {
+          present: !!hook,
+          filePath: hook?.filePath ?? getImprovementHookExpectedPath("enterplanmode-improve"),
+          fileSize: hook?.content?.length ?? null,
+          content: hook?.content ?? null,
+        },
+        composedLength: composed?.length ?? null,
+      }),
+    );
+  } catch {
+    res.end(
+      JSON.stringify({
+        pfmReminder: { enabled: false },
+        improvementHook: {
+          present: false,
+          filePath: "~/.plannotator/hooks/compound/enterplanmode-improve-hook.txt",
+          fileSize: null,
+          content: null,
+        },
+        composedLength: null,
+      }),
+    );
+  }
+}
+
+function acceptConfigPatch(req: IncomingMessage, res: ServerResponse): void {
+  let body = "";
+  req.on("data", (chunk: Buffer) => {
+    body += chunk.toString();
+  });
+  req.on("end", () => {
+    // Dev mock: accept any config patch, persist via cookie only.
+    // Avoid importing @plannotator/shared/config here — that file pulls in
+    // Node-only data-dir and fails to resolve under Vite's ESM loader.
+    try {
+      JSON.parse(body);
+    } catch {}
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ ok: true }));
+  });
+}
+
+async function serveDocument(reqUrl: string, res: ServerResponse): Promise<void> {
+  const url = new URL(reqUrl, "http://localhost");
+  const reqPath = url.searchParams.get("path");
+  if (!reqPath) {
+    res.statusCode = 400;
+    res.end(JSON.stringify({ error: "Missing path parameter" }));
+    return;
+  }
+  const base = url.searchParams.get("base");
+  const repoRoot = resolve(import.meta.dirname, "../..");
+  const resolved = resolve(base || repoRoot, reqPath);
+  if (!existsSync(resolved) || statSync(resolved).isDirectory()) {
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: `File not found: ${reqPath}` }));
+    return;
+  }
+  const contents = readFileSync(resolved, "utf-8");
+  res.setHeader("Content-Type", "application/json");
+  if (!isCodeFilePath(reqPath)) {
+    res.end(JSON.stringify({ markdown: contents, filepath: resolved }));
+    return;
+  }
+  const displayName = resolved.split("/").pop() || resolved;
+  let prerenderedHTML: string | undefined;
+  try {
+    const result = await preloadFile({
+      file: { name: displayName, contents },
+      options: { disableFileHeader: true },
+    });
+    prerenderedHTML = result.prerenderedHTML;
+  } catch {
+    /* fall back to client-side rendering */
+  }
+  res.end(JSON.stringify({ codeFile: true, contents, filepath: resolved, prerenderedHTML }));
+}
+
 export function devMockApi(): Plugin {
   return {
     name: "plannotator-dev-mock-api",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         if (req.url === "/api/hooks/status") {
-          res.setHeader("Content-Type", "application/json");
-          try {
-            const { readImprovementHook, getImprovementHookExpectedPath } =
-              await import("@plannotator/shared/improvement-hooks");
-            const { loadConfig } = await import("@plannotator/shared/config");
-            const { composeImproveContext } = await import("@plannotator/shared/pfm-reminder");
-            const config = loadConfig();
-            const hook = readImprovementHook("enterplanmode-improve");
-            const pfmEnabled = config.pfmReminder === true;
-            const composed = composeImproveContext({
-              pfmEnabled,
-              improvementHookContent: hook?.content ?? null,
-            });
-            res.end(
-              JSON.stringify({
-                pfmReminder: { enabled: pfmEnabled },
-                improvementHook: {
-                  present: !!hook,
-                  filePath:
-                    hook?.filePath ?? getImprovementHookExpectedPath("enterplanmode-improve"),
-                  fileSize: hook?.content?.length ?? null,
-                  content: hook?.content ?? null,
-                },
-                composedLength: composed?.length ?? null,
-              }),
-            );
-          } catch {
-            res.end(
-              JSON.stringify({
-                pfmReminder: { enabled: false },
-                improvementHook: {
-                  present: false,
-                  filePath: "~/.plannotator/hooks/compound/enterplanmode-improve-hook.txt",
-                  fileSize: null,
-                  content: null,
-                },
-                composedLength: null,
-              }),
-            );
-          }
+          await serveHookStatus(res);
           return;
         }
 
         if (req.url === "/api/config" && req.method === "POST") {
-          let body = "";
-          req.on("data", (chunk: Buffer) => {
-            body += chunk.toString();
-          });
-          req.on("end", () => {
-            // Dev mock: accept any config patch, persist via cookie only.
-            // Avoid importing @plannotator/shared/config here — that file pulls in
-            // Node-only data-dir and fails to resolve under Vite's ESM loader.
-            try {
-              JSON.parse(body);
-            } catch {}
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ ok: true }));
-          });
+          acceptConfigPatch(req, res);
           return;
         }
 
@@ -334,41 +378,7 @@ export function devMockApi(): Plugin {
         }
 
         if (req.url?.startsWith("/api/doc?")) {
-          const url = new URL(req.url, "http://localhost");
-          const reqPath = url.searchParams.get("path");
-          if (!reqPath) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: "Missing path parameter" }));
-            return;
-          }
-          const base = url.searchParams.get("base");
-          const repoRoot = resolve(import.meta.dirname, "../..");
-          const resolved = resolve(base || repoRoot, reqPath);
-          if (!existsSync(resolved) || statSync(resolved).isDirectory()) {
-            res.statusCode = 404;
-            res.end(JSON.stringify({ error: `File not found: ${reqPath}` }));
-            return;
-          }
-          const contents = readFileSync(resolved, "utf-8");
-          res.setHeader("Content-Type", "application/json");
-          if (isCodeFilePath(reqPath)) {
-            const displayName = resolved.split("/").pop() || resolved;
-            let prerenderedHTML: string | undefined;
-            try {
-              const result = await preloadFile({
-                file: { name: displayName, contents },
-                options: { disableFileHeader: true },
-              });
-              prerenderedHTML = result.prerenderedHTML;
-            } catch {
-              /* fall back to client-side rendering */
-            }
-            res.end(
-              JSON.stringify({ codeFile: true, contents, filepath: resolved, prerenderedHTML }),
-            );
-          } else {
-            res.end(JSON.stringify({ markdown: contents, filepath: resolved }));
-          }
+          await serveDocument(req.url, res);
           return;
         }
 
