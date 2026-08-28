@@ -71,6 +71,18 @@ interface DirectEditsPanelItem {
   onDiscard?: () => void;
 }
 
+type TimelineEntry =
+  | {
+      kind: "plan";
+      ts: number;
+      annotation: Annotation;
+    }
+  | {
+      kind: "code";
+      ts: number;
+      annotation: CodeAnnotation;
+    };
+
 interface PanelProps {
   isOpen: boolean;
   annotations: Annotation[];
@@ -96,6 +108,400 @@ interface PanelProps {
    *  above the annotation timeline with expandable unified diffs. */
   directEdits?: DirectEditsPanelItem[] | null;
 }
+
+interface AnnotationPanelHeaderProps {
+  isMobile: boolean;
+  onClose?: () => void;
+  otherFileAnnotations?: { count: number; files: number };
+  onOtherFileAnnotationsClick?: () => void;
+  totalCount: number;
+}
+
+const AnnotationPanelHeader: React.FC<AnnotationPanelHeaderProps> = ({
+  isMobile,
+  onClose,
+  otherFileAnnotations,
+  onOtherFileAnnotationsClick,
+  totalCount,
+}) => (
+  <div className="border-b border-border/50">
+    <div className="flex h-10 items-center justify-between px-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-xs font-medium text-foreground">Annotations</h2>
+        {totalCount > 0 && (
+          <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/10 px-1 font-mono text-[10px] font-medium tabular-nums text-primary">
+            {totalCount}
+          </span>
+        )}
+      </div>
+      {isMobile && onClose && (
+        <button
+          onClick={onClose}
+          className="relative rounded-md p-1.5 text-muted-foreground transition-colors before:absolute before:-inset-1.5 before:content-[''] hover:text-foreground md:hidden"
+          title="Close panel"
+          aria-label="Close panel"
+        >
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+    {otherFileAnnotations && otherFileAnnotations.count > 0 && (
+      <button
+        onClick={onOtherFileAnnotationsClick}
+        className="px-3 pb-2 text-[10px] text-primary/70 hover:text-primary transition-colors cursor-pointer"
+        title="Show annotated files in sidebar"
+      >
+        +{otherFileAnnotations.count} in {otherFileAnnotations.files} other file
+        {otherFileAnnotations.files === 1 ? "" : "s"}
+      </button>
+    )}
+  </div>
+);
+
+interface AnnotationTimelineRowProps {
+  entry: TimelineEntry;
+  onDelete: (id: string) => void;
+  onDeleteCodeAnnotation?: (id: string) => void;
+  onEdit?: (id: string, updates: Partial<Annotation>) => void;
+  onEditCodeAnnotation?: (id: string, updates: Partial<CodeAnnotation>) => void;
+  onSelect: (id: string) => void;
+  onSelectCodeAnnotation?: (id: string) => void;
+  selectedId: string | null;
+}
+
+const AnnotationTimelineRow: React.FC<AnnotationTimelineRowProps> = ({
+  entry,
+  onDelete,
+  onDeleteCodeAnnotation,
+  onEdit,
+  onEditCodeAnnotation,
+  onSelect,
+  onSelectCodeAnnotation,
+  selectedId,
+}) => {
+  if (entry.kind === "plan") {
+    const { annotation } = entry;
+    const handleSelect = () => onSelect(annotation.id);
+    const handleDelete = () => onDelete(annotation.id);
+    const handleEdit = onEdit
+      ? (updates: Partial<Annotation>) => onEdit(annotation.id, updates)
+      : undefined;
+
+    return (
+      <AnnotationCard
+        annotation={annotation}
+        isSelected={selectedId === annotation.id}
+        isMe={isCurrentUser(annotation.author)}
+        onSelect={handleSelect}
+        onDelete={handleDelete}
+        onEdit={handleEdit}
+      />
+    );
+  }
+
+  const { annotation } = entry;
+  const handleSelect = () => onSelectCodeAnnotation?.(annotation.id);
+  const handleDelete = () => onDeleteCodeAnnotation?.(annotation.id);
+  const handleEdit = onEditCodeAnnotation
+    ? (updates: Partial<CodeAnnotation>) => onEditCodeAnnotation(annotation.id, updates)
+    : undefined;
+
+  return (
+    <CodeAnnotationCard
+      annotation={annotation}
+      isSelected={selectedId === annotation.id}
+      isMe={isCurrentUser(annotation.author)}
+      onSelect={handleSelect}
+      onDelete={handleDelete}
+      onEdit={handleEdit}
+    />
+  );
+};
+
+interface AnnotationTimelineRowsProps {
+  onDelete: (id: string) => void;
+  onDeleteCodeAnnotation?: (id: string) => void;
+  onEdit?: (id: string, updates: Partial<Annotation>) => void;
+  onEditCodeAnnotation?: (id: string, updates: Partial<CodeAnnotation>) => void;
+  onSelect: (id: string) => void;
+  onSelectCodeAnnotation?: (id: string) => void;
+  selectedId: string | null;
+  timelineEntries: TimelineEntry[];
+}
+
+const AnnotationTimelineRows: React.FC<AnnotationTimelineRowsProps> = ({
+  timelineEntries,
+  ...rowProps
+}) => (
+  <>
+    {timelineEntries.map((entry) => (
+      <AnnotationTimelineRow key={entry.annotation.id} entry={entry} {...rowProps} />
+    ))}
+  </>
+);
+
+interface DirectEditRowsProps {
+  directEdits?: DirectEditsPanelItem[] | null;
+}
+
+const DirectEditRows: React.FC<DirectEditRowsProps> = ({ directEdits }) => (
+  <>
+    {directEdits?.map((directEdit) => (
+      <DirectEditCard key={directEdit.id} {...directEdit} />
+    ))}
+  </>
+);
+
+interface EditorAnnotationRowsProps {
+  editorAnnotations?: EditorAnnotation[];
+  hasTimelineEntries: boolean;
+  onDeleteEditorAnnotation?: (id: string) => void;
+}
+
+const EditorAnnotationRows: React.FC<EditorAnnotationRowsProps> = ({
+  editorAnnotations,
+  hasTimelineEntries,
+  onDeleteEditorAnnotation,
+}) => {
+  if (!editorAnnotations || editorAnnotations.length === 0) return null;
+
+  return (
+    <>
+      {hasTimelineEntries && (
+        <div className="flex items-center gap-2 pt-2 pb-1">
+          <div className="flex-1 border-t border-border/30" />
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Editor
+          </span>
+          <div className="flex-1 border-t border-border/30" />
+        </div>
+      )}
+      {editorAnnotations.map((annotation) => {
+        const handleDelete = () => onDeleteEditorAnnotation?.(annotation.id);
+
+        return (
+          <EditorAnnotationCard
+            key={annotation.id}
+            annotation={annotation}
+            onDelete={handleDelete}
+          />
+        );
+      })}
+    </>
+  );
+};
+
+interface AnnotationTimelineProps {
+  directEdits?: DirectEditsPanelItem[] | null;
+  editorAnnotations?: EditorAnnotation[];
+  onDelete: (id: string) => void;
+  onDeleteCodeAnnotation?: (id: string) => void;
+  onDeleteEditorAnnotation?: (id: string) => void;
+  onEdit?: (id: string, updates: Partial<Annotation>) => void;
+  onEditCodeAnnotation?: (id: string, updates: Partial<CodeAnnotation>) => void;
+  onSelect: (id: string) => void;
+  onSelectCodeAnnotation?: (id: string) => void;
+  selectedId: string | null;
+  timelineEntries: TimelineEntry[];
+  totalCount: number;
+}
+
+const AnnotationTimeline: React.FC<AnnotationTimelineProps> = ({
+  directEdits,
+  editorAnnotations,
+  onDelete,
+  onDeleteCodeAnnotation,
+  onDeleteEditorAnnotation,
+  onEdit,
+  onEditCodeAnnotation,
+  onSelect,
+  onSelectCodeAnnotation,
+  selectedId,
+  timelineEntries,
+  totalCount,
+}) => (
+  <>
+    <DirectEditRows directEdits={directEdits} />
+    {totalCount === 0 ? (
+      (!directEdits || directEdits.length === 0) && (
+        <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+          <p className="text-xs text-muted-foreground/60">No annotations yet</p>
+          <p className="mt-1 text-[11px] text-muted-foreground/40">Select text to annotate</p>
+        </div>
+      )
+    ) : (
+      <>
+        <AnnotationTimelineRows
+          timelineEntries={timelineEntries}
+          onDelete={onDelete}
+          onDeleteCodeAnnotation={onDeleteCodeAnnotation}
+          onEdit={onEdit}
+          onEditCodeAnnotation={onEditCodeAnnotation}
+          onSelect={onSelect}
+          onSelectCodeAnnotation={onSelectCodeAnnotation}
+          selectedId={selectedId}
+        />
+        <EditorAnnotationRows
+          editorAnnotations={editorAnnotations}
+          hasTimelineEntries={timelineEntries.length > 0}
+          onDeleteEditorAnnotation={onDeleteEditorAnnotation}
+        />
+      </>
+    )}
+  </>
+);
+
+interface AnnotationPanelFooterProps {
+  copiedText: boolean;
+  onQuickCopy: () => void;
+  onShare?: () => void;
+  sharingEnabled: boolean;
+  showQuickCopy: boolean;
+  totalCount: number;
+}
+
+const AnnotationPanelFooter: React.FC<AnnotationPanelFooterProps> = ({
+  copiedText,
+  onQuickCopy,
+  onShare,
+  sharingEnabled,
+  showQuickCopy,
+  totalCount,
+}) => {
+  if (totalCount === 0) return null;
+
+  return (
+    <div className="border-t border-border/50 px-3 py-2 flex gap-1.5">
+      {showQuickCopy && (
+        <button
+          onClick={onQuickCopy}
+          className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors ${
+            copiedText
+              ? "text-green-500"
+              : "text-muted-foreground hover:bg-surface-1 hover:text-foreground"
+          }`}
+        >
+          {copiedText ? (
+            <>
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Copied
+            </>
+          ) : (
+            <>
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+              Copy
+            </>
+          )}
+        </button>
+      )}
+      {sharingEnabled && onShare && (
+        <button
+          onClick={onShare}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors text-muted-foreground hover:bg-surface-1 hover:text-foreground"
+        >
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+            />
+          </svg>
+          Share
+        </button>
+      )}
+    </div>
+  );
+};
+
+interface AnnotationPanelContentProps extends AnnotationPanelHeaderProps, AnnotationTimelineProps {
+  copiedText: boolean;
+  listRef: React.RefObject<HTMLDivElement | null>;
+  onQuickCopy: () => void;
+  onShare?: () => void;
+  sharingEnabled: boolean;
+  showQuickCopy: boolean;
+  width?: number | string;
+}
+
+const AnnotationPanelContent: React.FC<AnnotationPanelContentProps> = ({
+  copiedText,
+  isMobile,
+  listRef,
+  onClose,
+  onOtherFileAnnotationsClick,
+  onQuickCopy,
+  onShare,
+  otherFileAnnotations,
+  sharingEnabled,
+  showQuickCopy,
+  totalCount,
+  width,
+  ...timelineProps
+}) => (
+  <aside
+    data-annotation-panel="true"
+    data-plan-sidebar="right"
+    className={`border-l border-border/50 bg-card flex flex-col flex-shrink-0 ${
+      isMobile ? "fixed top-12 bottom-0 right-0 z-[60] w-full max-w-sm shadow-2xl bg-card" : ""
+    }`}
+    style={isMobile ? undefined : { width: width ?? 288 }}
+  >
+    <AnnotationPanelHeader
+      isMobile={isMobile}
+      onClose={onClose}
+      otherFileAnnotations={otherFileAnnotations}
+      onOtherFileAnnotationsClick={onOtherFileAnnotationsClick}
+      totalCount={totalCount}
+    />
+    <OverlayScrollArea className="flex-1 min-h-0">
+      <div ref={listRef} className="p-2 flex flex-col gap-1.5">
+        <AnnotationTimeline totalCount={totalCount} {...timelineProps} />
+      </div>
+    </OverlayScrollArea>
+    <AnnotationPanelFooter
+      copiedText={copiedText}
+      onQuickCopy={onQuickCopy}
+      onShare={onShare}
+      sharingEnabled={sharingEnabled}
+      showQuickCopy={showQuickCopy}
+      totalCount={totalCount}
+    />
+  </aside>
+);
 
 export const AnnotationPanel: React.FC<PanelProps> = ({
   isOpen,
@@ -125,7 +531,7 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
   const sortedAnnotations = [...annotations].sort((a, b) => a.createdA - b.createdA);
   const sortedCodeAnnotations = [...codeAnnotations].sort((a, b) => a.createdAt - b.createdAt);
-  const timelineEntries = [
+  const timelineEntries: TimelineEntry[] = [
     ...sortedAnnotations.map((annotation) => ({
       kind: "plan" as const,
       ts: annotation.createdA,
@@ -139,7 +545,6 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   ].sort((a, b) => a.ts - b.ts);
   const totalCount = annotations.length + codeAnnotations.length + (editorAnnotations?.length ?? 0);
 
-  // Scroll selected annotation card into view
   useEffect(() => {
     if (!selectedId || !listRef.current) return;
     const card = listRef.current.querySelector(`[data-annotation-id="${selectedId}"]`);
@@ -148,204 +553,43 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
     }
   }, [selectedId]);
 
+  const resetCopiedText = () => setCopiedText(false);
+  const handleQuickCopy = async () => {
+    if (!onQuickCopy) return;
+
+    await onQuickCopy();
+    setCopiedText(true);
+    setTimeout(resetCopiedText, 2000);
+  };
+
   if (!isOpen) return null;
 
   const panel = (
-    <aside
-      data-annotation-panel="true"
-      data-plan-sidebar="right"
-      className={`border-l border-border/50 bg-card flex flex-col flex-shrink-0 ${
-        isMobile ? "fixed top-12 bottom-0 right-0 z-[60] w-full max-w-sm shadow-2xl bg-card" : ""
-      }`}
-      style={isMobile ? undefined : { width: width ?? 288 }}
-    >
-      {/* Header */}
-      <div className="border-b border-border/50">
-        <div className="flex h-10 items-center justify-between px-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xs font-medium text-foreground">Annotations</h2>
-            {totalCount > 0 && (
-              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/10 px-1 font-mono text-[10px] font-medium tabular-nums text-primary">
-                {totalCount}
-              </span>
-            )}
-          </div>
-          {isMobile && onClose && (
-            <button
-              onClick={onClose}
-              className="relative rounded-md p-1.5 text-muted-foreground transition-colors before:absolute before:-inset-1.5 before:content-[''] hover:text-foreground md:hidden"
-              title="Close panel"
-              aria-label="Close panel"
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-        {otherFileAnnotations && otherFileAnnotations.count > 0 && (
-          <button
-            onClick={onOtherFileAnnotationsClick}
-            className="px-3 pb-2 text-[10px] text-primary/70 hover:text-primary transition-colors cursor-pointer"
-            title="Show annotated files in sidebar"
-          >
-            +{otherFileAnnotations.count} in {otherFileAnnotations.files} other file
-            {otherFileAnnotations.files === 1 ? "" : "s"}
-          </button>
-        )}
-      </div>
-
-      {/* List */}
-      <OverlayScrollArea className="flex-1 min-h-0">
-        <div ref={listRef} className="p-2 flex flex-col gap-1.5">
-          {directEdits?.map((item) => (
-            <DirectEditsCard key={item.id} {...item} />
-          ))}
-          {totalCount === 0 ? (
-            (!directEdits || directEdits.length === 0) && (
-              <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-                <p className="text-xs text-muted-foreground/60">No annotations yet</p>
-                <p className="mt-1 text-[11px] text-muted-foreground/40">Select text to annotate</p>
-              </div>
-            )
-          ) : (
-            <>
-              {timelineEntries.map((entry) =>
-                entry.kind === "plan" ? (
-                  <AnnotationCard
-                    key={entry.annotation.id}
-                    annotation={entry.annotation}
-                    isSelected={selectedId === entry.annotation.id}
-                    isMe={isCurrentUser(entry.annotation.author)}
-                    onSelect={() => onSelect(entry.annotation.id)}
-                    onDelete={() => onDelete(entry.annotation.id)}
-                    onEdit={
-                      onEdit
-                        ? (updates: Partial<Annotation>) => onEdit(entry.annotation.id, updates)
-                        : undefined
-                    }
-                  />
-                ) : (
-                  <CodeAnnotationCard
-                    key={entry.annotation.id}
-                    annotation={entry.annotation}
-                    isSelected={selectedId === entry.annotation.id}
-                    isMe={isCurrentUser(entry.annotation.author)}
-                    onSelect={() => onSelectCodeAnnotation?.(entry.annotation.id)}
-                    onDelete={() => onDeleteCodeAnnotation?.(entry.annotation.id)}
-                    onEdit={
-                      onEditCodeAnnotation
-                        ? (updates: Partial<CodeAnnotation>) =>
-                            onEditCodeAnnotation(entry.annotation.id, updates)
-                        : undefined
-                    }
-                  />
-                ),
-              )}
-              {editorAnnotations && editorAnnotations.length > 0 && (
-                <>
-                  {timelineEntries.length > 0 && (
-                    <div className="flex items-center gap-2 pt-2 pb-1">
-                      <div className="flex-1 border-t border-border/30" />
-                      <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                        Editor
-                      </span>
-                      <div className="flex-1 border-t border-border/30" />
-                    </div>
-                  )}
-                  {editorAnnotations.map((ann) => (
-                    <EditorAnnotationCard
-                      key={ann.id}
-                      annotation={ann}
-                      onDelete={() => onDeleteEditorAnnotation?.(ann.id)}
-                    />
-                  ))}
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </OverlayScrollArea>
-
-      {/* Quick Actions Footer */}
-      {totalCount > 0 && (
-        <div className="border-t border-border/50 px-3 py-2 flex gap-1.5">
-          {onQuickCopy && (
-            <button
-              onClick={async () => {
-                await onQuickCopy();
-                setCopiedText(true);
-                setTimeout(() => setCopiedText(false), 2000);
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors ${
-                copiedText
-                  ? "text-green-500"
-                  : "text-muted-foreground hover:bg-surface-1 hover:text-foreground"
-              }`}
-            >
-              {copiedText ? (
-                <>
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Copied
-                </>
-              ) : (
-                <>
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                  Copy
-                </>
-              )}
-            </button>
-          )}
-          {sharingEnabled && onShare && (
-            <button
-              onClick={onShare}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors text-muted-foreground hover:bg-surface-1 hover:text-foreground"
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                />
-              </svg>
-              Share
-            </button>
-          )}
-        </div>
-      )}
-    </aside>
+    <AnnotationPanelContent
+      copiedText={copiedText}
+      directEdits={directEdits}
+      editorAnnotations={editorAnnotations}
+      isMobile={isMobile}
+      listRef={listRef}
+      onClose={onClose}
+      onDelete={onDelete}
+      onDeleteCodeAnnotation={onDeleteCodeAnnotation}
+      onDeleteEditorAnnotation={onDeleteEditorAnnotation}
+      onEdit={onEdit}
+      onEditCodeAnnotation={onEditCodeAnnotation}
+      onOtherFileAnnotationsClick={onOtherFileAnnotationsClick}
+      onQuickCopy={handleQuickCopy}
+      onSelect={onSelect}
+      onSelectCodeAnnotation={onSelectCodeAnnotation}
+      onShare={onShare}
+      otherFileAnnotations={otherFileAnnotations}
+      selectedId={selectedId}
+      sharingEnabled={sharingEnabled}
+      showQuickCopy={onQuickCopy !== undefined}
+      timelineEntries={timelineEntries}
+      totalCount={totalCount}
+      width={width}
+    />
   );
 
   if (isMobile) {
@@ -379,7 +623,7 @@ function formatTimestamp(ts: number): string {
 /** Pinned card for committed direct edits: +N/−M summary, expandable unified
  *  diff, and a two-step discard. Not part of the annotation timeline — edits
  *  are document state, not a selection-anchored note. */
-const DirectEditsCard: React.FC<{
+const DirectEditCard: React.FC<{
   title?: string;
   label?: string;
   added: number;
