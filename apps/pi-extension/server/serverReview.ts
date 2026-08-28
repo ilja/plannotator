@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import os from "node:os";
 import { basename } from "node:path";
 
@@ -131,8 +131,10 @@ const piCodeNavRuntime: CodeNavRuntime = {
       }
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
-      proc.stdout!.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
-      proc.stderr!.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+      const stdout = proc.stdout;
+      if (stdout) stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+      const stderr = proc.stderr;
+      if (stderr) stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
       proc.on("close", (code: number | null) => {
         if (timer) clearTimeout(timer);
         resolve({
@@ -215,10 +217,17 @@ export async function startReviewServer(options: {
   /** Called when server starts with the URL, remote status, and port */
   onReady?: (url: string, isRemote: boolean, port: number) => void;
 }): Promise<ReviewServerResult> {
+  function resolveOptionalUrl(
+    configuredValue: string | undefined,
+    environmentValue: string | undefined,
+  ): string | undefined {
+    return (configuredValue ?? environmentValue) || undefined;
+  }
+
   const gitUser = detectGitUser();
   const sharingEnabled = options.sharingEnabled ?? resolveSharingEnabled(loadConfig());
-  const shareBaseUrl = (options.shareBaseUrl ?? process.env.PLANNOTATOR_SHARE_URL) || undefined;
-  const pasteApiUrl = (options.pasteApiUrl ?? process.env.PLANNOTATOR_PASTE_URL) || undefined;
+  const shareBaseUrl = resolveOptionalUrl(options.shareBaseUrl, process.env.PLANNOTATOR_SHARE_URL);
+  const pasteApiUrl = resolveOptionalUrl(options.pasteApiUrl, process.env.PLANNOTATOR_PASTE_URL);
   let draftKey = contentHash(options.rawPatch);
   let prMeta = options.prMetadata;
   const isPRMode = !!prMeta;
@@ -251,19 +260,23 @@ export async function startReviewServer(options: {
     string,
     { metadata: PRMetadata; rawPatch: string; patchIncomplete?: boolean }
   >();
-  if (isPRMode && prMeta) {
+
+  function cacheInitialPr(): void {
+    if (!isPRMode || !prMeta) return;
     prSwitchCache.set(prMeta.url, {
       metadata: prMeta,
       rawPatch: options.rawPatch,
       patchIncomplete: layerPatchIncomplete,
     });
   }
+  cacheInitialPr();
   const prStackTreeCache = new Map<string, import("../generated/pr-types.js").PRStackTree | null>();
 
   // Fetch full stack tree (best-effort — always try in PR mode so root PRs
   // that target the default branch can still discover descendant PRs)
   let prStackTree: import("../generated/pr-types.js").PRStackTree | null = null;
-  if (prRef && prMeta) {
+  async function fetchInitialPrStack(): Promise<void> {
+    if (!prRef || !prMeta) return;
     try {
       prStackTree = await fetchPRStack(prRef, prMeta);
     } catch {
@@ -279,10 +292,12 @@ export async function startReviewServer(options: {
       );
     }
   }
+  if (prRef && prMeta) await fetchInitialPrStack();
 
   // Fetch GitHub viewed file state (non-blocking — errors are silently ignored)
   let initialViewedFiles: string[] = [];
-  if (isPRMode && prRef) {
+  async function fetchInitialViewedFiles(): Promise<void> {
+    if (!isPRMode || !prRef) return;
     try {
       const viewedMap = await fetchPRViewedFiles(prRef);
       initialViewedFiles = Object.entries(viewedMap)
@@ -292,13 +307,16 @@ export async function startReviewServer(options: {
       // Non-fatal: viewed state is best-effort
     }
   }
+  if (isPRMode && prRef) await fetchInitialViewedFiles();
 
-  let resolveDecision!: (result: {
+  let resolveDecision: (result: {
     approved: boolean;
     feedback: string;
     annotations: readonly unknown[];
     exit?: boolean;
-  }) => void;
+  }) => void = () => {
+    throw new Error("Review decision resolver is not initialized");
+  };
   const decisionPromise = new Promise<{
     approved: boolean;
     feedback: string;
@@ -308,26 +326,39 @@ export async function startReviewServer(options: {
     resolveDecision = resolve;
   });
 
-  let repoInfo = prMeta
-    ? {
+  function resolveInitialRepoInfo() {
+    if (prMeta) {
+      return {
         display: getDisplayRepo(prMeta),
         branch: `PR #${prMeta.number}`,
-      }
-    : workspace
-      ? { display: basename(workspace.root), branch: "Workspace" }
-      : getRepoInfo();
+      };
+    }
+    if (workspace) return { display: basename(workspace.root), branch: "Workspace" };
+    return getRepoInfo();
+  }
+  let repoInfo = resolveInitialRepoInfo();
   const editorAnnotations = createEditorAnnotationHandler();
   const externalAnnotations = createExternalAnnotationHandler("review");
 
   let currentPatch = options.rawPatch;
   let currentGitRef = options.gitRef;
-  const initialDiffType = workspace
-    ? (Option.getOrUndefined(
-        Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(options.diffType ?? workspace.diffType),
-      ) ?? workspace.diffType)
-    : (Option.getOrUndefined(
+  function resolveInitialDiffType(): DiffType | WorkspaceDiffType {
+    if (workspace) {
+      return (
+        Option.getOrUndefined(
+          Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(
+            options.diffType ?? workspace.diffType,
+          ),
+        ) ?? workspace.diffType
+      );
+    }
+    return (
+      Option.getOrUndefined(
         Schema.decodeUnknownOption(DiffTypeSchema)(options.diffType ?? "uncommitted"),
-      ) ?? "uncommitted");
+      ) ?? "uncommitted"
+    );
+  }
+  const initialDiffType = resolveInitialDiffType();
   let currentDiffType: DiffType | WorkspaceDiffType = initialDiffType;
   let currentError = options.error;
   let currentHideWhitespace = loadConfig().diffOptions?.hideWhitespace ?? false;
@@ -405,13 +436,15 @@ export async function startReviewServer(options: {
   captureDiffFingerprint();
 
   // Fire-and-forget: query the remote for its actual default branch.
-  if (options.gitContext && !options.initialBase && !isPRMode) {
+  function detectDefaultCompareTarget(): void {
+    if (!options.gitContext || options.initialBase || isPRMode) return;
     detectRemoteDefaultCompareTarget(options.gitContext.cwd, sessionVcsType)
       .then((remote) => {
         if (remote && !baseEverSwitched) currentBase = remote;
       })
       .catch(() => {});
   }
+  detectDefaultCompareTarget();
 
   // Agent jobs — background process manager (late-binds serverUrl via getter)
   let serverUrl = "";
@@ -531,313 +564,366 @@ export async function startReviewServer(options: {
 
   const aiRuntime = await createPiAIRuntime({ getCwd: resolveAgentCwd });
 
-  const server = createServer(async (req, res) => {
-    const url = requestUrl(req);
+  type ReviewRouteHandler = (
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ) => Promise<false | void>;
+  type ReviewRouteMatcher = (req: IncomingMessage, url: URL) => boolean;
+  type ReviewRoute = readonly [ReviewRouteMatcher, ReviewRouteHandler];
 
-    if (url.pathname === "/api/diff" && req.method === "GET") {
-      json(res, {
-        rawPatch: currentPatch,
-        gitRef: currentGitRef,
-        origin: options.origin ?? "pi",
-        mode: isWorkspaceMode ? "workspace" : undefined,
-        diffType: hasLocalAccess || isWorkspaceMode ? currentDiffType : undefined,
-        // Echo the active base so page refresh/reconnect rehydrates the
-        // picker to what the server is actually using, not the detected default.
-        base: hasLocalAccess ? currentBase : undefined,
-        hideWhitespace: currentHideWhitespace,
-        ...(workspace && { diffOptions: workspace.diffOptions }),
-        gitContext: hasLocalAccess ? options.gitContext : undefined,
-        sharingEnabled,
-        shareBaseUrl,
-        pasteApiUrl,
-        repoInfo,
-        isWSL: wslFlag,
-        // PR mode advertises the ready PR checkout (null while warming), so
-        // the Open-in button gates correctly from the initial load — not the
-        // launch repo. Non-PR keeps the workspace/local cwd.
-        ...(isPRMode
-          ? { agentCwd: resolvePRLocalCwd() }
-          : workspace
-            ? { agentCwd: workspace.root }
-            : options.agentCwd
-              ? { agentCwd: options.agentCwd }
-              : {}),
-        ...(isPRMode && {
-          prMetadata: prMeta,
-          platformUser,
-          prStackInfo,
-          prStackTree,
-          prDiffScope: currentPRDiffScope,
-          prDiffScopeOptions,
+  async function handleDiffRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/diff" && req.method === "GET")) return false;
+    json(res, {
+      rawPatch: currentPatch,
+      gitRef: currentGitRef,
+      origin: options.origin ?? "pi",
+      mode: isWorkspaceMode ? "workspace" : undefined,
+      diffType: hasLocalAccess || isWorkspaceMode ? currentDiffType : undefined,
+      // Echo the active base so page refresh/reconnect rehydrates the
+      // picker to what the server is actually using, not the detected default.
+      base: hasLocalAccess ? currentBase : undefined,
+      hideWhitespace: currentHideWhitespace,
+      ...(workspace && { diffOptions: workspace.diffOptions }),
+      gitContext: hasLocalAccess ? options.gitContext : undefined,
+      sharingEnabled,
+      shareBaseUrl,
+      pasteApiUrl,
+      repoInfo,
+      isWSL: wslFlag,
+      // PR mode advertises the ready PR checkout (null while warming), so
+      // the Open-in button gates correctly from the initial load — not the
+      // launch repo. Non-PR keeps the workspace/local cwd.
+      ...(isPRMode
+        ? { agentCwd: resolvePRLocalCwd() }
+        : workspace
+          ? { agentCwd: workspace.root }
+          : options.agentCwd
+            ? { agentCwd: options.agentCwd }
+            : {}),
+      ...(isPRMode && {
+        prMetadata: prMeta,
+        platformUser,
+        prStackInfo,
+        prStackTree,
+        prDiffScope: currentPRDiffScope,
+        prDiffScopeOptions,
+      }),
+      ...(isPRMode &&
+        layerPatchIncomplete && {
+          prPatchIncomplete: true,
+          prPatchUpgradeAvailable: layerUpgradeAvailable,
         }),
-        ...(isPRMode &&
-          layerPatchIncomplete && {
-            prPatchIncomplete: true,
-            prPatchUpgradeAvailable: layerUpgradeAvailable,
-          }),
-        ...(isPRMode && initialViewedFiles.length > 0 && { viewedFiles: initialViewedFiles }),
-        ...(currentError && { error: currentError }),
-        semanticDiff: await getSemanticDiffAdvert(),
-        serverConfig: getServerConfig(gitUser),
-      });
-    } else if (url.pathname === "/api/open-in/apps" && req.method === "GET") {
-      json(res, { apps: getAvailableOpenInApps() });
-    } else if (url.pathname === "/api/open-in" && req.method === "POST") {
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(OpenInRequestSchema)(await parseBody(req)),
-        );
-        if (!body) {
-          json(res, { error: "Missing filePath" }, 400);
-          return;
-        }
-        const target = resolveOpenInTarget(body.filePath, body.base ?? null, resolveOpenInRoot);
-        if (!target) {
-          json(res, { error: "Path escapes review root" }, 400);
-          return;
-        }
-        const result = await openFileInApp(target, body.appId);
-        if (result.ok) {
-          json(res, { ok: true });
-        } else {
-          json(res, { error: result.error }, 500);
-        }
-      } catch (err) {
-        json(res, { error: err instanceof Error ? err.message : "Failed to open file" }, 500);
-      }
-    } else if (url.pathname === "/api/diff/fresh" && req.method === "GET") {
-      // Cheap staleness probe — has the underlying VCS state changed since
-      // the current diff snapshot was computed? Best-effort: anything that
-      // cannot be fingerprinted reports fresh (no banner).
-      // In PR review the local checkout can appear (pool warmup) or change
-      // (in-place PR switch) after the initial /api/diff, so re-advertise it
-      // on every probe — the Open-in control tracks the current checkout
-      // without a page reload. Null until a usable checkout exists (the pool
-      // resolves a path only once ready). Non-PR sessions omit this field.
-      const prCwdAdvert = isPRMode ? { agentCwd: resolvePRLocalCwd() } : {};
-      const baseline = currentFingerprint;
-      if (baseline == null) {
-        json(res, { fresh: true, ...prCwdAdvert });
-        return;
-      }
-      const probe = await computeDiffFingerprint();
-      // A diff switch landing mid-probe replaces the snapshot (and its
-      // fingerprint); report fresh and let the next poll compare against
-      // the new baseline.
-      if (currentFingerprint !== baseline) {
-        json(res, { fresh: true, ...prCwdAdvert });
-        return;
-      }
-      const fresh = probe == null || probe === baseline;
-      // The probe fingerprint lets the client distinguish "still the same
-      // staleness I dismissed" from "ANOTHER change landed since".
-      const freshResponse = { fresh, ...prCwdAdvert };
-      if (!fresh) Object.assign(freshResponse, { fingerprint: probe });
-      json(res, freshResponse);
-    } else if (url.pathname === "/api/semantic-diff" && req.method === "GET") {
-      json(res, await getSemanticDiff(url));
-    } else if (url.pathname === "/api/diff/switch" && req.method === "POST") {
-      if (!hasLocalAccess && !workspace) {
-        json(res, { error: "Not available without local file access" }, 400);
-        return;
-      }
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(DiffSwitchRequestSchema)(await parseBody(req)),
-        );
-        if (!body) {
-          json(res, { error: "Missing diffType" }, 400);
-          return;
-        }
-        const workspaceDiffType = Option.getOrUndefined(
-          Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(body.diffType),
-        );
-        const vcsDiffType = Option.getOrUndefined(
-          Schema.decodeUnknownOption(DiffTypeSchema)(body.diffType),
-        );
-        if (body.hideWhitespace !== undefined) {
-          currentHideWhitespace = body.hideWhitespace;
-        }
-        if (workspace) {
-          if (!workspaceDiffType) {
-            json(res, { error: "Invalid workspace diff type" }, 400);
-            return;
-          }
-          const snapshot = await workspace.rebuild({
-            diffType: workspaceDiffType,
-            hideWhitespace: currentHideWhitespace,
-          });
-          currentPatch = snapshot.rawPatch;
-          currentGitRef = snapshot.gitRef;
-          currentDiffType = workspace.diffType;
-          currentError = snapshot.error;
-          draftKey = contentHash(currentPatch);
-          captureDiffFingerprint();
+      ...(isPRMode && initialViewedFiles.length > 0 && { viewedFiles: initialViewedFiles }),
+      ...(currentError && { error: currentError }),
+      semanticDiff: await getSemanticDiffAdvert(),
+      serverConfig: getServerConfig(gitUser),
+    });
+  }
 
-          const workspaceResponse = {
-            rawPatch: currentPatch,
-            gitRef: currentGitRef,
-            diffType: currentDiffType,
-            diffOptions: workspace.diffOptions,
-            hideWhitespace: currentHideWhitespace,
-            semanticDiff: await getSemanticDiffAdvert(),
-          };
-          if (currentError) Object.assign(workspaceResponse, { error: currentError });
-          json(res, workspaceResponse);
+  async function handleOpenInAppsRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/open-in/apps" && req.method === "GET")) return false;
+    json(res, { apps: getAvailableOpenInApps() });
+  }
+
+  async function handleOpenInRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/open-in" && req.method === "POST")) return false;
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(OpenInRequestSchema)(await parseBody(req)),
+      );
+      if (!body) {
+        json(res, { error: "Missing filePath" }, 400);
+        return;
+      }
+      const target = resolveOpenInTarget(body.filePath, body.base ?? null, resolveOpenInRoot);
+      if (!target) {
+        json(res, { error: "Path escapes review root" }, 400);
+        return;
+      }
+      const result = await openFileInApp(target, body.appId);
+      if (result.ok) {
+        json(res, { ok: true });
+      } else {
+        json(res, { error: result.error }, 500);
+      }
+    } catch (err) {
+      json(res, { error: err instanceof Error ? err.message : "Failed to open file" }, 500);
+    }
+  }
+
+  async function handleFreshDiffRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/diff/fresh" && req.method === "GET")) return false;
+    // Cheap staleness probe — has the underlying VCS state changed since
+    // the current diff snapshot was computed? Best-effort: anything that
+    // cannot be fingerprinted reports fresh (no banner).
+    // In PR review the local checkout can appear (pool warmup) or change
+    // (in-place PR switch) after the initial /api/diff, so re-advertise it
+    // on every probe — the Open-in control tracks the current checkout
+    // without a page reload. Null until a usable checkout exists (the pool
+    // resolves a path only once ready). Non-PR sessions omit this field.
+    const prCwdAdvert = isPRMode ? { agentCwd: resolvePRLocalCwd() } : {};
+    const baseline = currentFingerprint;
+    if (baseline == null) {
+      json(res, { fresh: true, ...prCwdAdvert });
+      return;
+    }
+    const probe = await computeDiffFingerprint();
+    // A diff switch landing mid-probe replaces the snapshot (and its
+    // fingerprint); report fresh and let the next poll compare against
+    // the new baseline.
+    if (currentFingerprint !== baseline) {
+      json(res, { fresh: true, ...prCwdAdvert });
+      return;
+    }
+    const fresh = probe == null || probe === baseline;
+    // The probe fingerprint lets the client distinguish "still the same
+    // staleness I dismissed" from "ANOTHER change landed since".
+    const freshResponse = { fresh, ...prCwdAdvert };
+    if (!fresh) Object.assign(freshResponse, { fingerprint: probe });
+    json(res, freshResponse);
+  }
+
+  async function handleSemanticDiffRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/semantic-diff" && req.method === "GET")) return false;
+    json(res, await getSemanticDiff(url));
+  }
+
+  async function handleDiffSwitchRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/diff/switch" && req.method === "POST")) return false;
+    if (!hasLocalAccess && !workspace) {
+      json(res, { error: "Not available without local file access" }, 400);
+      return;
+    }
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(DiffSwitchRequestSchema)(await parseBody(req)),
+      );
+      if (!body) {
+        json(res, { error: "Missing diffType" }, 400);
+        return;
+      }
+      const workspaceDiffType = Option.getOrUndefined(
+        Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(body.diffType),
+      );
+      const vcsDiffType = Option.getOrUndefined(
+        Schema.decodeUnknownOption(DiffTypeSchema)(body.diffType),
+      );
+      if (body.hideWhitespace !== undefined) {
+        currentHideWhitespace = body.hideWhitespace;
+      }
+      if (workspace) {
+        if (!workspaceDiffType) {
+          json(res, { error: "Invalid workspace diff type" }, 400);
           return;
         }
-        if (!vcsDiffType) {
-          json(res, { error: "Invalid diff type" }, 400);
-          return;
-        }
-        const detectedBase = detectedCompareTarget();
-        const base = resolveBaseBranch(body.base, detectedBase);
-        const defaultCwd = options.gitContext?.cwd;
-        const result = await runVcsDiff(vcsDiffType, base, defaultCwd, {
+        const snapshot = await workspace.rebuild({
+          diffType: workspaceDiffType,
           hideWhitespace: currentHideWhitespace,
         });
-        currentPatch = result.patch;
-        currentGitRef = result.label;
-        currentDiffType = vcsDiffType;
-        currentBase = base;
-        baseEverSwitched = true;
-        currentError = result.error;
+        currentPatch = snapshot.rawPatch;
+        currentGitRef = snapshot.gitRef;
+        currentDiffType = workspace.diffType;
+        currentError = snapshot.error;
+        draftKey = contentHash(currentPatch);
         captureDiffFingerprint();
 
-        // Recompute gitContext for the effective cwd so the client's
-        // sidebar reflects the worktree we're now reviewing.
-        // Best-effort: on failure the client keeps its existing context.
-        let updatedContext: GitContext | undefined;
-        if (options.gitContext) {
-          try {
-            const effectiveCwd = resolveVcsCwd(vcsDiffType, options.gitContext.cwd);
-            updatedContext = await getVcsContext(effectiveCwd, sessionVcsType);
-          } catch {
-            /* best-effort */
-          }
-        }
-
-        const switchResponse = {
+        const workspaceResponse = {
           rawPatch: currentPatch,
           gitRef: currentGitRef,
           diffType: currentDiffType,
-          // Echo the base the server actually used. resolveBaseBranch
-          // trusts the caller verbatim; this echo lets the client
-          // confirm the request landed (and pick it up when the client
-          // didn't supply one and we fell back to detected default).
-          base: currentBase,
+          diffOptions: workspace.diffOptions,
           hideWhitespace: currentHideWhitespace,
           semanticDiff: await getSemanticDiffAdvert(),
         };
-        if (updatedContext) Object.assign(switchResponse, { gitContext: updatedContext });
-        if (currentError) Object.assign(switchResponse, { error: currentError });
-        json(res, switchResponse);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to switch diff";
-        json(res, { error: message }, 500);
-      }
-    } else if (url.pathname === "/api/pr-diff-scope" && req.method === "POST") {
-      if (!isPRMode || !prMeta) {
-        json(res, { error: "Not in PR mode" }, 400);
+        if (currentError) Object.assign(workspaceResponse, { error: currentError });
+        json(res, workspaceResponse);
         return;
       }
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(PrDiffScopeRequestSchema)(await parseBody(req)),
-        );
-        if (!body) {
-          json(res, { error: "Invalid PR diff scope" }, 400);
-          return;
+      if (!vcsDiffType) {
+        json(res, { error: "Invalid diff type" }, 400);
+        return;
+      }
+      const detectedBase = detectedCompareTarget();
+      const base = resolveBaseBranch(body.base, detectedBase);
+      const defaultCwd = options.gitContext?.cwd;
+      const result = await runVcsDiff(vcsDiffType, base, defaultCwd, {
+        hideWhitespace: currentHideWhitespace,
+      });
+      currentPatch = result.patch;
+      currentGitRef = result.label;
+      currentDiffType = vcsDiffType;
+      currentBase = base;
+      baseEverSwitched = true;
+      currentError = result.error;
+      captureDiffFingerprint();
+
+      // Recompute gitContext for the effective cwd so the client's
+      // sidebar reflects the worktree we're now reviewing.
+      // Best-effort: on failure the client keeps its existing context.
+      let updatedContext: GitContext | undefined;
+      if (options.gitContext) {
+        try {
+          const effectiveCwd = resolveVcsCwd(vcsDiffType, options.gitContext.cwd);
+          updatedContext = await getVcsContext(effectiveCwd, sessionVcsType);
+        } catch {
+          /* best-effort */
         }
+      }
 
-        const scopeEpoch = ++prScopeEpoch;
-        // A newer scope select or pr-switch landed while this request was
-        // parked on an await: drop this request's writes and return the
-        // newest state so the client converges on it.
-        const respondSuperseded = async () => {
-          const semanticDiff = await getSemanticDiffAdvert();
-          const supersededResponse = {
-            rawPatch: currentPatch,
-            gitRef: currentGitRef,
-            prDiffScope: currentPRDiffScope,
-            semanticDiff,
-          };
-          if (layerPatchIncomplete)
-            Object.assign(supersededResponse, {
-              prPatchIncomplete: true,
-              prPatchUpgradeAvailable: layerUpgradeAvailable,
-            });
-          if (currentError) Object.assign(supersededResponse, { error: currentError });
-          json(res, supersededResponse);
+      const switchResponse = {
+        rawPatch: currentPatch,
+        gitRef: currentGitRef,
+        diffType: currentDiffType,
+        // Echo the base the server actually used. resolveBaseBranch
+        // trusts the caller verbatim; this echo lets the client
+        // confirm the request landed (and pick it up when the client
+        // didn't supply one and we fell back to detected default).
+        base: currentBase,
+        hideWhitespace: currentHideWhitespace,
+        semanticDiff: await getSemanticDiffAdvert(),
+      };
+      if (updatedContext) Object.assign(switchResponse, { gitContext: updatedContext });
+      if (currentError) Object.assign(switchResponse, { error: currentError });
+      json(res, switchResponse);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to switch diff";
+      json(res, { error: message }, 500);
+    }
+  }
+
+  async function handlePrDiffScopeRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/pr-diff-scope" && req.method === "POST")) return false;
+    if (!isPRMode || !prMeta) {
+      json(res, { error: "Not in PR mode" }, 400);
+      return;
+    }
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrDiffScopeRequestSchema)(await parseBody(req)),
+      );
+      if (!body) {
+        json(res, { error: "Invalid PR diff scope" }, 400);
+        return;
+      }
+
+      const scopePrMetadata = prMeta;
+      const scopeEpoch = ++prScopeEpoch;
+      // A newer scope select or pr-switch landed while this request was
+      // parked on an await: drop this request's writes and return the
+      // newest state so the client converges on it.
+      const respondSuperseded = async () => {
+        const semanticDiff = await getSemanticDiffAdvert();
+        const supersededResponse = {
+          rawPatch: currentPatch,
+          gitRef: currentGitRef,
+          prDiffScope: currentPRDiffScope,
+          semanticDiff,
         };
+        if (layerPatchIncomplete)
+          Object.assign(supersededResponse, {
+            prPatchIncomplete: true,
+            prPatchUpgradeAvailable: layerUpgradeAvailable,
+          });
+        if (currentError) Object.assign(supersededResponse, { error: currentError });
+        json(res, supersededResponse);
+      };
 
-        if (body.scope === "layer") {
-          // Upgrade path: GitHub withheld per-file content for this
-          // PR (too large). Once a pool checkout exists, recompute the
-          // exact layer diff locally and replace the truncated API
-          // reconstruction. Snapshot the PR before the await — a pr-switch
-          // landing mid-recompute must not have its patch overwritten with
-          // the previous PR's diff.
-          const upgradeMeta = prMeta;
-          let upgradeError: string | undefined;
-          if (layerPatchIncomplete && options.worktreePool && upgradeMeta) {
-            let upgradeCwd: string | undefined;
-            try {
-              upgradeCwd = (await options.worktreePool.ensure(reviewRuntime, upgradeMeta)).path;
-            } catch {
-              // Pool can't make a worktree (e.g. cross-repo pool after a
-              // pr-switch). The initial clone is still the right repo —
-              // pr-switch enforces same-project — and the recompute diffs
-              // explicit SHAs (fetching missing ones), so fall back to it.
-              upgradeCwd =
-                options.agentCwd && existsSync(options.agentCwd) ? options.agentCwd : undefined;
-            }
-            if (upgradeCwd && prMeta === upgradeMeta) {
-              const result = await runPRLayerLocalDiff(reviewRuntime, upgradeMeta, upgradeCwd);
-              if (prMeta === upgradeMeta) {
-                if (!result.error) {
-                  originalPRPatch = result.patch;
-                  originalPRError = undefined;
-                  layerPatchIncomplete = false;
-                  prSwitchCache.set(upgradeMeta.url, {
-                    metadata: upgradeMeta,
-                    rawPatch: result.patch,
-                    patchIncomplete: false,
-                  });
-                } else {
-                  upgradeError = `Could not recompute the full diff locally: ${result.error}`;
-                  console.error(`Local PR diff recompute failed: ${result.error}`);
-                }
+      async function switchToLayerDiff(): Promise<void> {
+        // Upgrade path: GitHub withheld per-file content for this
+        // PR (too large). Once a pool checkout exists, recompute the
+        // exact layer diff locally and replace the truncated API
+        // reconstruction. Snapshot the PR before the await — a pr-switch
+        // landing mid-recompute must not have its patch overwritten with
+        // the previous PR's diff.
+        const upgradeMeta = prMeta;
+        let upgradeError: string | undefined;
+        if (layerPatchIncomplete && options.worktreePool && upgradeMeta) {
+          let upgradeCwd: string | undefined;
+          try {
+            upgradeCwd = (await options.worktreePool.ensure(reviewRuntime, upgradeMeta)).path;
+          } catch {
+            // Pool can't make a worktree (e.g. cross-repo pool after a
+            // pr-switch). The initial clone is still the right repo —
+            // pr-switch enforces same-project — and the recompute diffs
+            // explicit SHAs (fetching missing ones), so fall back to it.
+            upgradeCwd =
+              options.agentCwd && existsSync(options.agentCwd) ? options.agentCwd : undefined;
+          }
+          if (upgradeCwd && prMeta === upgradeMeta) {
+            const result = await runPRLayerLocalDiff(reviewRuntime, upgradeMeta, upgradeCwd);
+            if (prMeta === upgradeMeta) {
+              if (!result.error) {
+                originalPRPatch = result.patch;
+                originalPRError = undefined;
+                layerPatchIncomplete = false;
+                prSwitchCache.set(upgradeMeta.url, {
+                  metadata: upgradeMeta,
+                  rawPatch: result.patch,
+                  patchIncomplete: false,
+                });
+              } else {
+                upgradeError = `Could not recompute the full diff locally: ${result.error}`;
+                console.error(`Local PR diff recompute failed: ${result.error}`);
               }
             }
           }
-          if (scopeEpoch !== prScopeEpoch) return respondSuperseded();
-          currentPatch = originalPRPatch;
-          currentGitRef = originalPRGitRef;
-          currentError = originalPRError;
-          currentPRDiffScope = "layer";
-          // The upgrade changed the patch this session serves; drafts must
-          // key off it so a pr-switch round-trip (which rehashes from the
-          // cache) resolves to the same key.
-          if (!layerPatchIncomplete) draftKey = contentHash(currentPatch);
-          captureDiffFingerprint();
-          const layerResponse = {
-            rawPatch: currentPatch,
-            gitRef: currentGitRef,
-            prDiffScope: currentPRDiffScope,
-            semanticDiff: await getSemanticDiffAdvert(),
-          };
-          if (layerPatchIncomplete)
-            Object.assign(layerResponse, {
-              prPatchIncomplete: true,
-              prPatchUpgradeAvailable: layerUpgradeAvailable,
-            });
-          if (currentError ?? upgradeError)
-            Object.assign(layerResponse, { error: currentError ?? upgradeError });
-          json(res, layerResponse);
-          return;
         }
+        if (scopeEpoch !== prScopeEpoch) return respondSuperseded();
+        currentPatch = originalPRPatch;
+        currentGitRef = originalPRGitRef;
+        currentError = originalPRError;
+        currentPRDiffScope = "layer";
+        // The upgrade changed the patch this session serves; drafts must
+        // key off it so a pr-switch round-trip (which rehashes from the
+        // cache) resolves to the same key.
+        if (!layerPatchIncomplete) draftKey = contentHash(currentPatch);
+        captureDiffFingerprint();
+        const layerResponse = {
+          rawPatch: currentPatch,
+          gitRef: currentGitRef,
+          prDiffScope: currentPRDiffScope,
+          semanticDiff: await getSemanticDiffAdvert(),
+        };
+        if (layerPatchIncomplete)
+          Object.assign(layerResponse, {
+            prPatchIncomplete: true,
+            prPatchUpgradeAvailable: layerUpgradeAvailable,
+          });
+        if (currentError ?? upgradeError)
+          Object.assign(layerResponse, { error: currentError ?? upgradeError });
+        json(res, layerResponse);
+      }
 
+      async function switchToFullStackDiff(): Promise<void> {
         const fullStackOption = prDiffScopeOptions.find((option) => option.id === "full-stack");
         if (!fullStackOption?.enabled || !(options.worktreePool || options.agentCwd)) {
           json(res, { error: "Full stack diff requires a stacked PR and a local checkout" }, 400);
@@ -845,9 +931,9 @@ export async function startReviewServer(options: {
         }
 
         const fullStackCwd =
-          (options.worktreePool && prMeta ? options.worktreePool.resolve(prMeta.url) : undefined) ??
+          (options.worktreePool ? options.worktreePool.resolve(scopePrMetadata.url) : undefined) ??
           options.agentCwd;
-        const result = await runPRFullStackDiff(reviewRuntime, prMeta, fullStackCwd);
+        const result = await runPRFullStackDiff(reviewRuntime, scopePrMetadata, fullStackCwd);
 
         if (result.error) {
           json(res, { error: result.error }, 400);
@@ -866,230 +952,293 @@ export async function startReviewServer(options: {
           prDiffScope: currentPRDiffScope,
           semanticDiff: await getSemanticDiffAdvert(),
         });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to switch PR diff scope";
-        json(res, { error: message }, 500);
       }
-    } else if (url.pathname === "/api/pr-switch" && req.method === "POST") {
-      if (!isPRMode || !prRef) {
-        return json(res, { error: "Not in PR mode" }, 400);
+
+      if (body.scope === "layer") {
+        await switchToLayerDiff();
+        return;
       }
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(PrSwitchRequestSchema)(await parseBody(req)),
-        );
-        if (!body) return json(res, { error: "Missing PR URL" }, 400);
-        const newRef = parsePRUrl(body.url);
-        if (!newRef) return json(res, { error: "Invalid PR URL" }, 400);
-        if (!isSameProject(newRef, prRef!))
-          return json(res, { error: "Cannot switch to a PR in a different repository" }, 400);
+      await switchToFullStackDiff();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to switch PR diff scope";
+      json(res, { error: message }, 500);
+    }
+  }
 
-        const cached = prSwitchCache.get(body.url);
-        const pr = cached ?? (await fetchPR(newRef));
-        if (!cached) prSwitchCache.set(body.url, pr);
-        // Bump the scope epoch so a scope request parked on a long await
-        // cannot overwrite this switch.
-        prScopeEpoch++;
-        prMeta = pr.metadata;
-        prRef = prRefFromMetadata(pr.metadata);
-        currentPatch = pr.rawPatch;
-        currentGitRef = `PR #${pr.metadata.number}`;
-        currentError = undefined;
-        originalPRPatch = pr.rawPatch;
-        originalPRGitRef = currentGitRef;
-        originalPRError = undefined;
-        currentPRDiffScope = "layer";
-        layerPatchIncomplete = pr.patchIncomplete ?? false;
-        draftKey = contentHash(pr.rawPatch);
-        prListCache = null;
-        captureDiffFingerprint();
+  async function handlePrSwitchRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<false | void> {
+    if (!isPRMode || !prRef) {
+      return json(res, { error: "Not in PR mode" }, 400);
+    }
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrSwitchRequestSchema)(await parseBody(req)),
+      );
+      if (!body) return json(res, { error: "Missing PR URL" }, 400);
+      const switchRequest = body;
+      const newRef = parsePRUrl(switchRequest.url);
+      if (!newRef) return json(res, { error: "Invalid PR URL" }, 400);
+      const currentPrRef = prRef;
+      if (!currentPrRef) return json(res, { error: "Not in PR mode" }, 400);
+      if (!isSameProject(newRef, currentPrRef))
+        return json(res, { error: "Cannot switch to a PR in a different repository" }, 400);
 
-        prStackInfo = getPRStackInfo(pr.metadata);
-        if (prStackTreeCache.has(body.url)) {
-          prStackTree = prStackTreeCache.get(body.url) ?? null;
-        } else {
-          try {
-            prStackTree = await fetchPRStack(prRef, pr.metadata);
-          } catch {
-            prStackTree = null;
-          }
-          prStackTreeCache.set(body.url, prStackTree);
-        }
+      const cached = prSwitchCache.get(switchRequest.url);
+      const pr = cached ?? (await fetchPR(newRef));
+      if (!cached) prSwitchCache.set(switchRequest.url, pr);
+      // Bump the scope epoch so a scope request parked on a long await
+      // cannot overwrite this switch.
+      prScopeEpoch++;
+      prMeta = pr.metadata;
+      prRef = prRefFromMetadata(pr.metadata);
+      currentPatch = pr.rawPatch;
+      currentGitRef = `PR #${pr.metadata.number}`;
+      currentError = undefined;
+      originalPRPatch = pr.rawPatch;
+      originalPRGitRef = currentGitRef;
+      originalPRError = undefined;
+      currentPRDiffScope = "layer";
+      layerPatchIncomplete = pr.patchIncomplete ?? false;
+      draftKey = contentHash(pr.rawPatch);
+      prListCache = null;
+      captureDiffFingerprint();
+      const switchedPrRef = prRef;
 
-        let hasLocalForNewPR = false;
-        if (options.worktreePool) {
-          try {
-            await options.worktreePool.ensure(reviewRuntime, pr.metadata);
-            hasLocalForNewPR = true;
-          } catch {}
-        } else if (options.agentCwd) {
-          hasLocalForNewPR = await checkoutPRHead(reviewRuntime, pr.metadata, options.agentCwd);
-        }
-
-        prStackInfo = resolveStackInfo(pr.metadata, prStackTree, prStackInfo);
-
-        prDiffScopeOptions = prStackInfo
-          ? getPRDiffScopeOptions(pr.metadata, hasLocalForNewPR)
-          : [];
-
-        let switchedViewedFiles: string[] = [];
+      async function fetchPrStackTree(): Promise<void> {
         try {
-          const viewedMap = await fetchPRViewedFiles(prRef);
-          switchedViewedFiles = Object.entries(viewedMap)
-            .filter(([, v]) => v)
-            .map(([p]) => p);
-        } catch {}
-        initialViewedFiles = switchedViewedFiles;
-
-        repoInfo = {
-          display: getDisplayRepo(pr.metadata),
-          branch: `PR #${pr.metadata.number}`,
-        };
-
-        const switchResponse = {
-          rawPatch: currentPatch,
-          gitRef: currentGitRef,
-          prMetadata: pr.metadata,
-          // The new PR's checkout (null while warming) so Open-in re-roots
-          // immediately on switch instead of waiting for the 5s probe.
-          agentCwd: resolvePRLocalCwd() ?? null,
-          prStackInfo,
-          prStackTree,
-          prDiffScope: currentPRDiffScope,
-          prDiffScopeOptions,
-          repoInfo,
-          semanticDiff: await getSemanticDiffAdvert(),
-        };
-        if (layerPatchIncomplete)
-          Object.assign(switchResponse, {
-            prPatchIncomplete: true,
-            prPatchUpgradeAvailable: layerUpgradeAvailable,
-          });
-        if (switchedViewedFiles.length > 0)
-          Object.assign(switchResponse, { viewedFiles: switchedViewedFiles });
-        if (currentError) Object.assign(switchResponse, { error: currentError });
-        return json(res, switchResponse);
-      } catch (err) {
-        return json(
-          res,
-          { error: err instanceof Error ? err.message : "Failed to switch PR" },
-          500,
-        );
-      }
-    } else if (url.pathname === "/api/pr-list" && req.method === "GET") {
-      if (!isPRMode || !prRef) {
-        return json(res, { error: "Not in PR mode" }, 400);
-      }
-      try {
-        const now = Date.now();
-        if (prListCache && now - prListCacheTime < 30_000) {
-          return json(res, { prs: prListCache });
+          prStackTree = await fetchPRStack(switchedPrRef, pr.metadata);
+        } catch {
+          prStackTree = null;
         }
-        const prs = await fetchPRList(prRef);
-        prListCache = prs;
-        prListCacheTime = now;
-        return json(res, { prs });
-      } catch {
-        return json(res, { error: "Failed to fetch PR list" }, 500);
+        prStackTreeCache.set(switchRequest.url, prStackTree);
       }
-    } else if (url.pathname === "/api/pr-context" && req.method === "GET") {
-      if (!isPRMode || !prRef) {
-        json(res, { error: "Not in PR mode" }, 400);
+
+      function refreshPrStackTree(): Promise<void> | null {
+        prStackInfo = getPRStackInfo(pr.metadata);
+        if (prStackTreeCache.has(switchRequest.url)) {
+          prStackTree = prStackTreeCache.get(switchRequest.url) ?? null;
+          return null;
+        }
+        return fetchPrStackTree();
+      }
+
+      async function ensureNewPrWorktree(): Promise<boolean> {
+        const pool = options.worktreePool;
+        if (!pool) return false;
+        try {
+          await pool.ensure(reviewRuntime, pr.metadata);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function checkoutNewPr(): Promise<boolean> | null {
+        if (options.worktreePool) return ensureNewPrWorktree();
+        if (options.agentCwd) return checkoutPRHead(reviewRuntime, pr.metadata, options.agentCwd);
+        return null;
+      }
+
+      const stackTreeRefresh = refreshPrStackTree();
+      if (stackTreeRefresh) await stackTreeRefresh;
+      const checkout = checkoutNewPr();
+      const hasLocalForNewPR = checkout ? await checkout : false;
+
+      prStackInfo = resolveStackInfo(pr.metadata, prStackTree, prStackInfo);
+
+      prDiffScopeOptions = prStackInfo ? getPRDiffScopeOptions(pr.metadata, hasLocalForNewPR) : [];
+
+      let switchedViewedFiles: string[] = [];
+      try {
+        const viewedMap = await fetchPRViewedFiles(prRef);
+        switchedViewedFiles = Object.entries(viewedMap)
+          .filter(([, v]) => v)
+          .map(([p]) => p);
+      } catch {}
+      initialViewedFiles = switchedViewedFiles;
+
+      repoInfo = {
+        display: getDisplayRepo(pr.metadata),
+        branch: `PR #${pr.metadata.number}`,
+      };
+
+      const switchResponse = {
+        rawPatch: currentPatch,
+        gitRef: currentGitRef,
+        prMetadata: pr.metadata,
+        // The new PR's checkout (null while warming) so Open-in re-roots
+        // immediately on switch instead of waiting for the 5s probe.
+        agentCwd: resolvePRLocalCwd() ?? null,
+        prStackInfo,
+        prStackTree,
+        prDiffScope: currentPRDiffScope,
+        prDiffScopeOptions,
+        repoInfo,
+        semanticDiff: await getSemanticDiffAdvert(),
+      };
+      if (layerPatchIncomplete)
+        Object.assign(switchResponse, {
+          prPatchIncomplete: true,
+          prPatchUpgradeAvailable: layerUpgradeAvailable,
+        });
+      if (switchedViewedFiles.length > 0)
+        Object.assign(switchResponse, { viewedFiles: switchedViewedFiles });
+      if (currentError) Object.assign(switchResponse, { error: currentError });
+      return json(res, switchResponse);
+    } catch (err) {
+      return json(res, { error: err instanceof Error ? err.message : "Failed to switch PR" }, 500);
+    }
+  }
+
+  async function handlePrListRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/pr-list" && req.method === "GET")) return false;
+    if (!isPRMode || !prRef) {
+      return json(res, { error: "Not in PR mode" }, 400);
+    }
+    try {
+      const now = Date.now();
+      if (prListCache && now - prListCacheTime < 30_000) {
+        return json(res, { prs: prListCache });
+      }
+      const prs = await fetchPRList(prRef);
+      prListCache = prs;
+      prListCacheTime = now;
+      return json(res, { prs });
+    } catch {
+      return json(res, { error: "Failed to fetch PR list" }, 500);
+    }
+  }
+
+  async function handlePrContextRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/pr-context" && req.method === "GET")) return false;
+    if (!isPRMode || !prRef) {
+      json(res, { error: "Not in PR mode" }, 400);
+      return;
+    }
+    try {
+      const context = await fetchPRContext(prRef);
+      json(res, context);
+    } catch (err) {
+      json(
+        res,
+        {
+          error: err instanceof Error ? err.message : "Failed to fetch PR context",
+        },
+        500,
+      );
+    }
+  }
+
+  async function handlePrActionRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/pr-action" && req.method === "POST")) return false;
+    if (!isPRMode || !prMeta || !prRef) {
+      json(res, { error: "Not in PR mode" }, 400);
+      return;
+    }
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrActionRequestSchema)(await parseBody(req)),
+      );
+      if (!body) {
+        json(res, { error: "Invalid PR action request" }, 400);
         return;
       }
-      try {
-        const context = await fetchPRContext(prRef);
-        json(res, context);
-      } catch (err) {
-        json(
-          res,
-          {
-            error: err instanceof Error ? err.message : "Failed to fetch PR context",
-          },
-          500,
-        );
-      }
-    } else if (url.pathname === "/api/pr-action" && req.method === "POST") {
-      if (!isPRMode || !prMeta || !prRef) {
-        json(res, { error: "Not in PR mode" }, 400);
-        return;
-      }
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(PrActionRequestSchema)(await parseBody(req)),
-        );
-        if (!body) {
-          json(res, { error: "Invalid PR action request" }, 400);
+      const fileComments = [...(body.fileComments ?? [])];
+      const targetPrUrl = body.targetPrUrl;
+
+      let targetRef = prRef;
+      let targetHeadSha = prMeta.headSha;
+      let targetUrl = prMeta.url;
+
+      if (targetPrUrl) {
+        const cached = prSwitchCache.get(targetPrUrl);
+        if (!cached) {
+          json(res, { error: "Target PR not found in session" }, 400);
           return;
         }
-        const fileComments = [...(body.fileComments ?? [])];
-        const targetPrUrl = body.targetPrUrl;
-
-        let targetRef = prRef;
-        let targetHeadSha = prMeta.headSha;
-        let targetUrl = prMeta.url;
-
-        if (targetPrUrl) {
-          const cached = prSwitchCache.get(targetPrUrl);
-          if (!cached) {
-            json(res, { error: "Target PR not found in session" }, 400);
-            return;
-          }
-          targetRef = prRefFromMetadata(cached.metadata);
-          targetHeadSha = cached.metadata.headSha;
-          targetUrl = cached.metadata.url;
-        } else if (currentPRDiffScope !== "layer") {
-          json(res, { error: "Switch to Layer diff before posting a GitHub review" }, 400);
-          return;
-        }
-
-        console.error(
-          `[pr-action] ${body.action} with ${fileComments.length} file comment(s), target=${targetUrl}, headSha=${targetHeadSha}`,
-        );
-        await submitPRReview(targetRef, targetHeadSha, body.action, body.body, fileComments);
-        console.error(`[pr-action] Success`);
-        json(res, { ok: true, prUrl: targetUrl });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to submit PR review";
-        console.error(`[pr-action] Failed: ${message}`);
-        json(res, { error: message }, 500);
-      }
-    } else if (url.pathname === "/api/pr-viewed" && req.method === "POST") {
-      if (!isPRMode || !prMeta || !prRef) {
-        json(res, { error: "Not in PR mode" }, 400);
+        targetRef = prRefFromMetadata(cached.metadata);
+        targetHeadSha = cached.metadata.headSha;
+        targetUrl = cached.metadata.url;
+      } else if (currentPRDiffScope !== "layer") {
+        json(res, { error: "Switch to Layer diff before posting a GitHub review" }, 400);
         return;
       }
-      const prNodeId = prMeta.prNodeId;
-      if (!prNodeId) {
-        json(res, { error: "PR node ID not available" }, 400);
+
+      console.error(
+        `[pr-action] ${body.action} with ${fileComments.length} file comment(s), target=${targetUrl}, headSha=${targetHeadSha}`,
+      );
+      await submitPRReview(targetRef, targetHeadSha, body.action, body.body, fileComments);
+      console.error(`[pr-action] Success`);
+      json(res, { ok: true, prUrl: targetUrl });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to submit PR review";
+      console.error(`[pr-action] Failed: ${message}`);
+      json(res, { error: message }, 500);
+    }
+  }
+
+  async function handlePrViewedRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/pr-viewed" && req.method === "POST")) return false;
+    if (!isPRMode || !prMeta || !prRef) {
+      json(res, { error: "Not in PR mode" }, 400);
+      return;
+    }
+    const prNodeId = prMeta.prNodeId;
+    if (!prNodeId) {
+      json(res, { error: "PR node ID not available" }, 400);
+      return;
+    }
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrViewedRequestSchema)(await parseBody(req)),
+      );
+      if (!body) {
+        json(res, { error: "Invalid viewed request" }, 400);
         return;
       }
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(PrViewedRequestSchema)(await parseBody(req)),
-        );
-        if (!body) {
-          json(res, { error: "Invalid viewed request" }, 400);
-          return;
-        }
-        await markPRFilesViewed(prRef, prNodeId, [...body.filePaths], body.viewed);
-        json(res, { ok: true });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to update viewed state";
-        console.error("[plannotator] /api/pr-viewed error:", message);
-        json(res, { error: message }, 500);
-      }
-    } else if (url.pathname === "/api/file-content" && req.method === "GET") {
+      await markPRFilesViewed(prRef, prNodeId, [...body.filePaths], body.viewed);
+      json(res, { ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update viewed state";
+      console.error("[plannotator] /api/pr-viewed error:", message);
+      json(res, { error: message }, 500);
+    }
+  }
+
+  async function handleFileContentRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    function readFilePaths(): [string, string | undefined] | null {
       const filePath = url.searchParams.get("path");
       if (!filePath) {
         json(res, { error: "Missing path" }, 400);
-        return;
+        return null;
       }
       try {
         validateFilePath(filePath);
       } catch {
         json(res, { error: "Invalid path" }, 400);
-        return;
+        return null;
       }
       const oldPath = url.searchParams.get("oldPath") || undefined;
       if (oldPath) {
@@ -1097,270 +1246,440 @@ export async function startReviewServer(options: {
           validateFilePath(oldPath);
         } catch {
           json(res, { error: "Invalid path" }, 400);
-          return;
+          return null;
         }
+      }
+      return [filePath, oldPath];
+    }
+
+    const filePaths = readFilePaths();
+    if (!filePaths) return;
+    const [filePath, oldPath] = filePaths;
+
+    async function respondWithWorkspaceFileContent(): Promise<boolean> {
+      if (!workspace) return false;
+      try {
+        const result = await workspace.getFileContents(filePath, oldPath);
+        json(res, result);
+      } catch (error) {
+        json(
+          res,
+          { error: error instanceof Error ? error.message : "No file access available" },
+          400,
+        );
+      }
+      return true;
+    }
+
+    async function respondWithFullStackFileContent(): Promise<boolean> {
+      const fileContentCwd =
+        options.worktreePool && prMeta
+          ? options.worktreePool.resolve(prMeta.url)
+          : options.agentCwd;
+      if (
+        !isPRMode ||
+        currentPRDiffScope !== "full-stack" ||
+        !fileContentCwd ||
+        !prMeta?.defaultBranch
+      ) {
+        return false;
+      }
+      const baseRef = await resolvePRFullStackBaseRef(
+        reviewRuntime,
+        prMeta.defaultBranch,
+        fileContentCwd,
+      );
+      if (!baseRef) {
+        json(res, { oldContent: null, newContent: null });
+        return true;
+      }
+      const result = await getFileContentsForDiffCore(
+        reviewRuntime,
+        "merge-base",
+        baseRef,
+        filePath,
+        oldPath,
+        fileContentCwd,
+      );
+      json(res, result);
+      return true;
+    }
+
+    async function respondWithLocalFileContent(): Promise<boolean> {
+      if (!hasLocalAccess || isPRMode) return false;
+      const detectedBase = detectedCompareTarget();
+      const base = resolveBaseBranch(url.searchParams.get("base") ?? undefined, detectedBase);
+      const defaultCwd = options.gitContext?.cwd;
+      const diffType = getCurrentVcsDiffType();
+      if (!diffType) {
+        json(res, { error: "No local diff type available" }, 400);
+        return true;
+      }
+      const result = await getVcsFileContentsForDiff(diffType, base, filePath, oldPath, defaultCwd);
+      json(res, result);
+      return true;
+    }
+
+    if (workspace) {
+      await respondWithWorkspaceFileContent();
+      return;
+    }
+
+    const fileContentCwd =
+      options.worktreePool && prMeta ? options.worktreePool.resolve(prMeta.url) : options.agentCwd;
+    if (
+      isPRMode &&
+      currentPRDiffScope === "full-stack" &&
+      fileContentCwd &&
+      prMeta?.defaultBranch
+    ) {
+      await respondWithFullStackFileContent();
+      return;
+    }
+
+    // Local mode first (matches Bun server priority)
+    if (hasLocalAccess && !isPRMode) {
+      await respondWithLocalFileContent();
+      return;
+    }
+
+    // PR mode: fetch from the GitHub API using merge-base/head SHAs
+    if (isPRMode && prRef && prMeta) {
+      try {
+        const oldSha = prMeta.mergeBaseSha ?? prMeta.baseSha;
+        const [oldContent, newContent] = await Promise.all([
+          fetchPRFileContent(prRef, oldSha, oldPath || filePath),
+          fetchPRFileContent(prRef, prMeta.headSha, filePath),
+        ]);
+        json(res, { oldContent, newContent });
+      } catch (err) {
+        json(
+          res,
+          {
+            error: err instanceof Error ? err.message : "Failed to fetch file content",
+          },
+          500,
+        );
+      }
+      return;
+    }
+
+    json(res, { error: "No file access available" }, 400);
+  }
+
+  async function handleCodeNavigationResolveRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/code-nav/resolve" && req.method === "POST")) return false;
+    const hasCodeNavAccess =
+      !!workspace || !!options.gitContext || !!options.agentCwd || !!options.worktreePool;
+    if (!hasCodeNavAccess) {
+      json(res, { error: "Code navigation requires local access" }, 400);
+      return;
+    }
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(CodeNavRequestSchema)(await parseBody(req)),
+      );
+      if (!body) {
+        json(res, { error: "Invalid request body" }, 400);
+        return;
+      }
+      const error = validateCodeNavRequest(body);
+      if (error) {
+        json(res, { error }, 400);
+        return;
+      }
+      const navCwd = resolveAgentCwd();
+      const changedFiles = extractChangedFiles(currentPatch);
+      const result = await resolveCodeNav(piCodeNavRuntime, body, navCwd, changedFiles);
+      json(res, result);
+    } catch (err) {
+      json(res, { error: err instanceof Error ? err.message : "Code navigation failed" }, 500);
+    }
+  }
+
+  async function handleCodeNavigationFileRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/code-nav/file" && req.method === "GET")) return false;
+    const hasCodeNavAccess =
+      !!workspace || !!options.gitContext || !!options.agentCwd || !!options.worktreePool;
+    if (!hasCodeNavAccess) {
+      json(res, { error: "Code navigation requires local access" }, 400);
+      return;
+    }
+    const filePath = url.searchParams.get("path");
+    if (!filePath) {
+      json(res, { error: "Missing path" }, 400);
+      return;
+    }
+    try {
+      validateFilePath(filePath);
+    } catch {
+      json(res, { error: "Invalid path" }, 400);
+      return;
+    }
+    try {
+      const navCwd = resolveAgentCwd();
+      const content = readFileSync(`${navCwd}/${filePath}`, "utf-8");
+      json(res, { content });
+    } catch {
+      json(res, { error: "File not found" }, 404);
+    }
+  }
+
+  async function handleGitAddRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/git-add" && req.method === "POST")) return false;
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(GitAddRequestSchema)(await parseBody(req)),
+      );
+      if (!body) {
+        json(res, { error: "Missing filePath" }, 400);
+        return;
+      }
+      const undo = body.undo === true;
+      try {
+        validateFilePath(body.filePath);
+      } catch {
+        json(res, { error: "Invalid path" }, 400);
+        return;
       }
 
       if (workspace) {
         try {
-          const result = await workspace.getFileContents(filePath, oldPath);
-          json(res, result);
+          await workspace.stageFile(body.filePath, undo);
+          json(res, { ok: true });
         } catch (error) {
           json(
             res,
-            { error: error instanceof Error ? error.message : "No file access available" },
+            { error: error instanceof Error ? error.message : "Failed to stage file" },
             400,
           );
         }
         return;
       }
 
-      const fileContentCwd =
-        options.worktreePool && prMeta
-          ? options.worktreePool.resolve(prMeta.url)
-          : options.agentCwd;
-      if (
-        isPRMode &&
-        currentPRDiffScope === "full-stack" &&
-        fileContentCwd &&
-        prMeta?.defaultBranch
-      ) {
-        const baseRef = await resolvePRFullStackBaseRef(
-          reviewRuntime,
-          prMeta.defaultBranch,
-          fileContentCwd,
-        );
-        if (!baseRef) {
-          json(res, { oldContent: null, newContent: null });
-          return;
-        }
-        const result = await getFileContentsForDiffCore(
-          reviewRuntime,
-          "merge-base",
-          baseRef,
-          filePath,
-          oldPath,
-          fileContentCwd,
-        );
-        json(res, result);
+      const diffType = getCurrentVcsDiffType();
+      if (!diffType) {
+        json(res, { error: "Staging not available" }, 400);
+        return;
+      }
+      const stageCwd = resolveVcsCwd(diffType, options.gitContext?.cwd);
+      if (isPRMode || !(await canStageFiles(diffType, stageCwd))) {
+        json(res, { error: "Staging not available" }, 400);
         return;
       }
 
-      // Local mode first (matches Bun server priority)
-      if (hasLocalAccess && !isPRMode) {
-        const detectedBase = detectedCompareTarget();
-        const base = resolveBaseBranch(url.searchParams.get("base") ?? undefined, detectedBase);
-        const defaultCwd = options.gitContext?.cwd;
-        const diffType = getCurrentVcsDiffType();
-        if (!diffType) {
-          json(res, { error: "No local diff type available" }, 400);
-          return;
-        }
-        const result = await getVcsFileContentsForDiff(
-          diffType,
-          base,
-          filePath,
-          oldPath,
-          defaultCwd,
-        );
-        json(res, result);
-        return;
+      if (undo) {
+        await unstageFile(diffType, body.filePath, stageCwd);
+      } else {
+        await stageFile(diffType, body.filePath, stageCwd);
       }
 
-      // PR mode: fetch from the GitHub API using merge-base/head SHAs
-      if (isPRMode && prRef && prMeta) {
-        try {
-          const oldSha = prMeta.mergeBaseSha ?? prMeta.baseSha;
-          const [oldContent, newContent] = await Promise.all([
-            fetchPRFileContent(prRef, oldSha, oldPath || filePath),
-            fetchPRFileContent(prRef, prMeta.headSha, filePath),
-          ]);
-          json(res, { oldContent, newContent });
-        } catch (err) {
-          json(
-            res,
-            {
-              error: err instanceof Error ? err.message : "Failed to fetch file content",
-            },
-            500,
-          );
-        }
-        return;
-      }
-
-      json(res, { error: "No file access available" }, 400);
-    } else if (url.pathname === "/api/code-nav/resolve" && req.method === "POST") {
-      const hasCodeNavAccess =
-        !!workspace || !!options.gitContext || !!options.agentCwd || !!options.worktreePool;
-      if (!hasCodeNavAccess) {
-        json(res, { error: "Code navigation requires local access" }, 400);
-        return;
-      }
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(CodeNavRequestSchema)(await parseBody(req)),
-        );
-        if (!body) {
-          json(res, { error: "Invalid request body" }, 400);
-          return;
-        }
-        const error = validateCodeNavRequest(body);
-        if (error) {
-          json(res, { error }, 400);
-          return;
-        }
-        const navCwd = resolveAgentCwd();
-        const changedFiles = extractChangedFiles(currentPatch);
-        const result = await resolveCodeNav(piCodeNavRuntime, body, navCwd, changedFiles);
-        json(res, result);
-      } catch (err) {
-        json(res, { error: err instanceof Error ? err.message : "Code navigation failed" }, 500);
-      }
-    } else if (url.pathname === "/api/code-nav/file" && req.method === "GET") {
-      const hasCodeNavAccess =
-        !!workspace || !!options.gitContext || !!options.agentCwd || !!options.worktreePool;
-      if (!hasCodeNavAccess) {
-        json(res, { error: "Code navigation requires local access" }, 400);
-        return;
-      }
-      const filePath = url.searchParams.get("path");
-      if (!filePath) {
-        json(res, { error: "Missing path" }, 400);
-        return;
-      }
-      try {
-        validateFilePath(filePath);
-      } catch {
-        json(res, { error: "Invalid path" }, 400);
-        return;
-      }
-      try {
-        const navCwd = resolveAgentCwd();
-        const content = readFileSync(`${navCwd}/${filePath}`, "utf-8");
-        json(res, { content });
-      } catch {
-        json(res, { error: "File not found" }, 404);
-      }
-    } else if (url.pathname === "/api/git-add" && req.method === "POST") {
-      try {
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(GitAddRequestSchema)(await parseBody(req)),
-        );
-        if (!body) {
-          json(res, { error: "Missing filePath" }, 400);
-          return;
-        }
-        const undo = body.undo === true;
-        try {
-          validateFilePath(body.filePath);
-        } catch {
-          json(res, { error: "Invalid path" }, 400);
-          return;
-        }
-
-        if (workspace) {
-          try {
-            await workspace.stageFile(body.filePath, undo);
-            json(res, { ok: true });
-          } catch (error) {
-            json(
-              res,
-              { error: error instanceof Error ? error.message : "Failed to stage file" },
-              400,
-            );
-          }
-          return;
-        }
-
-        const diffType = getCurrentVcsDiffType();
-        if (!diffType) {
-          json(res, { error: "Staging not available" }, 400);
-          return;
-        }
-        const stageCwd = resolveVcsCwd(diffType, options.gitContext?.cwd);
-        if (isPRMode || !(await canStageFiles(diffType, stageCwd))) {
-          json(res, { error: "Staging not available" }, 400);
-          return;
-        }
-
-        if (undo) {
-          await unstageFile(diffType, body.filePath, stageCwd);
-        } else {
-          await stageFile(diffType, body.filePath, stageCwd);
-        }
-
-        json(res, { ok: true });
-      } catch (err) {
-        json(res, { error: err instanceof Error ? err.message : "Failed to stage file" }, 500);
-      }
-    } else if (url.pathname === "/api/config" && req.method === "POST") {
-      try {
-        const body = Schema.decodeUnknownSync(ConfigPatch)(await parseStrictBody(req));
-        if (Object.keys(body).length > 0) saveConfig(body);
-        json(res, { ok: true });
-      } catch {
-        json(res, { error: "Invalid request" }, 400);
-      }
-    } else if (url.pathname === "/api/image") {
-      handleImageRequest(res, url);
-    } else if (url.pathname === "/api/upload" && req.method === "POST") {
-      await handleUploadRequest(req, res);
-    } else if (url.pathname === "/api/draft") {
-      await handleDraftRequest(req, res, draftKey);
-    } else if (url.pathname.startsWith("/api/ai/")) {
-      if (
-        req.method === "POST" &&
-        url.pathname === "/api/ai/session" &&
-        options.worktreePool &&
-        prMeta
-      ) {
-        const checkout = resolvePRLocalCwd();
-        if (!checkout) {
-          json(
-            res,
-            {
-              error:
-                "Local PR checkout unavailable — Ask AI can't read the PR files right now. Retry shortly.",
-            },
-            503,
-          );
-          return;
-        }
-      }
-      await handlePiAIRequest(req, res, url, aiRuntime);
-      return;
-    } else if (url.pathname === "/favicon.svg") {
-      handleFavicon(res);
-    } else if (await editorAnnotations.handle(req, res, url)) {
-      return;
-    } else if (await externalAnnotations.handle(req, res, url)) {
-      return;
-    } else if (url.pathname === "/api/exit" && req.method === "POST") {
-      deleteDraft(draftKey, readDraftGenerationFromUrl(req));
-      resolveDecision({ approved: false, feedback: "", annotations: [], exit: true });
       json(res, { ok: true });
-    } else if (url.pathname === "/api/feedback" && req.method === "POST") {
-      try {
-        const request = decodeFeedbackRequest(await toWebRequest(req).json());
-        if (!request) {
-          json(res, { error: "Invalid request" }, 400);
-          return;
-        }
-        deleteDraft(draftKey, request.draftGeneration);
-        resolveDecision({
-          approved: request.approved ?? false,
-          feedback: request.feedback ?? "",
-          annotations: request.annotations ?? [],
-        });
-        json(res, { ok: true });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to process feedback";
-        json(res, { error: message }, 500);
-      }
-    } else {
-      html(res, options.htmlContent);
+    } catch (err) {
+      json(res, { error: err instanceof Error ? err.message : "Failed to stage file" }, 500);
     }
-  });
+  }
+
+  async function handleConfigRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/config" && req.method === "POST")) return false;
+    try {
+      const body = Schema.decodeUnknownSync(ConfigPatch)(await parseStrictBody(req));
+      if (Object.keys(body).length > 0) saveConfig(body);
+      json(res, { ok: true });
+    } catch {
+      json(res, { error: "Invalid request" }, 400);
+    }
+  }
+
+  async function handleImageRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/image")) return false;
+    handleImageRequest(res, url);
+  }
+
+  async function handleUploadRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/upload" && req.method === "POST")) return false;
+    await handleUploadRequest(req, res);
+  }
+
+  async function handleDraftRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/draft")) return false;
+    await handleDraftRequest(req, res, draftKey);
+  }
+
+  async function handleAiRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!url.pathname.startsWith("/api/ai/")) return false;
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/ai/session" &&
+      options.worktreePool &&
+      prMeta
+    ) {
+      const checkout = resolvePRLocalCwd();
+      if (!checkout) {
+        json(
+          res,
+          {
+            error:
+              "Local PR checkout unavailable — Ask AI can't read the PR files right now. Retry shortly.",
+          },
+          503,
+        );
+        return;
+      }
+    }
+    await handlePiAIRequest(req, res, url, aiRuntime);
+  }
+
+  async function handleFaviconRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/favicon.svg")) return false;
+    handleFavicon(res);
+  }
+
+  async function handleExitRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/exit" && req.method === "POST")) return false;
+    deleteDraft(draftKey, readDraftGenerationFromUrl(req));
+    resolveDecision({ approved: false, feedback: "", annotations: [], exit: true });
+    json(res, { ok: true });
+  }
+
+  async function handleFeedbackRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<false | void> {
+    if (!(url.pathname === "/api/feedback" && req.method === "POST")) return false;
+    try {
+      const request = decodeFeedbackRequest(await toWebRequest(req).json());
+      if (!request) {
+        json(res, { error: "Invalid request" }, 400);
+        return;
+      }
+      deleteDraft(draftKey, request.draftGeneration);
+      resolveDecision({
+        approved: request.approved ?? false,
+        feedback: request.feedback ?? "",
+        annotations: request.annotations ?? [],
+      });
+      json(res, { ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to process feedback";
+      json(res, { error: message }, 500);
+    }
+  }
+
+  const routes: readonly ReviewRoute[] = [
+    [(req, url) => url.pathname === "/api/diff" && req.method === "GET", handleDiffRoute],
+    [
+      (req, url) => url.pathname === "/api/open-in/apps" && req.method === "GET",
+      handleOpenInAppsRoute,
+    ],
+    [(req, url) => url.pathname === "/api/open-in" && req.method === "POST", handleOpenInRoute],
+    [
+      (req, url) => url.pathname === "/api/diff/fresh" && req.method === "GET",
+      handleFreshDiffRoute,
+    ],
+    [
+      (req, url) => url.pathname === "/api/semantic-diff" && req.method === "GET",
+      handleSemanticDiffRoute,
+    ],
+    [
+      (req, url) => url.pathname === "/api/diff/switch" && req.method === "POST",
+      handleDiffSwitchRoute,
+    ],
+    [
+      (req, url) => url.pathname === "/api/pr-diff-scope" && req.method === "POST",
+      handlePrDiffScopeRoute,
+    ],
+    [(req, url) => url.pathname === "/api/pr-switch" && req.method === "POST", handlePrSwitchRoute],
+    [(req, url) => url.pathname === "/api/pr-list" && req.method === "GET", handlePrListRoute],
+    [
+      (req, url) => url.pathname === "/api/pr-context" && req.method === "GET",
+      handlePrContextRoute,
+    ],
+    [(req, url) => url.pathname === "/api/pr-action" && req.method === "POST", handlePrActionRoute],
+    [(req, url) => url.pathname === "/api/pr-viewed" && req.method === "POST", handlePrViewedRoute],
+    [
+      (req, url) => url.pathname === "/api/file-content" && req.method === "GET",
+      handleFileContentRoute,
+    ],
+    [
+      (req, url) => url.pathname === "/api/code-nav/resolve" && req.method === "POST",
+      handleCodeNavigationResolveRoute,
+    ],
+    [
+      (req, url) => url.pathname === "/api/code-nav/file" && req.method === "GET",
+      handleCodeNavigationFileRoute,
+    ],
+    [(req, url) => url.pathname === "/api/git-add" && req.method === "POST", handleGitAddRoute],
+    [(req, url) => url.pathname === "/api/config" && req.method === "POST", handleConfigRoute],
+    [(req, url) => url.pathname === "/api/image", handleImageRoute],
+    [(req, url) => url.pathname === "/api/upload" && req.method === "POST", handleUploadRoute],
+    [(req, url) => url.pathname === "/api/draft", handleDraftRoute],
+    [(req, url) => url.pathname.startsWith("/api/ai/"), handleAiRoute],
+    [(req, url) => url.pathname === "/favicon.svg", handleFaviconRoute],
+  ];
+
+  async function handleReviewRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const url = requestUrl(req);
+    const route = routes.find(([matches]) => matches(req, url));
+    if (route) {
+      await route[1](req, res, url);
+      return;
+    }
+    if (await editorAnnotations.handle(req, res, url)) return;
+    if (await externalAnnotations.handle(req, res, url)) return;
+    if (url.pathname === "/api/exit" && req.method === "POST") {
+      await handleExitRoute(req, res, url);
+      return;
+    }
+    if (url.pathname === "/api/feedback" && req.method === "POST") {
+      await handleFeedbackRoute(req, res, url);
+      return;
+    }
+    html(res, options.htmlContent);
+  }
+
+  const server = createServer(handleReviewRequest);
 
   const { port, portSource } = await listenOnPort(server);
   serverUrl = `http://localhost:${port}`;
