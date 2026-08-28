@@ -208,6 +208,46 @@ async function openGlimpse(url: string): Promise<boolean> {
   });
 }
 
+async function openConfiguredBrowser(
+  url: string,
+  browser: string,
+  plannotatorBrowser: string | undefined,
+  platform: NodeJS.Platform,
+  wsl: boolean,
+): Promise<void> {
+  if (plannotatorBrowser && platform === "darwin") {
+    if (plannotatorBrowser.includes("/") && !plannotatorBrowser.endsWith(".app")) {
+      await $`${plannotatorBrowser} ${url}`.quiet();
+    } else {
+      await $`open -a ${plannotatorBrowser} ${url}`.quiet();
+    }
+    return;
+  }
+
+  if ((platform === "win32" || wsl) && plannotatorBrowser) {
+    await $`cmd.exe /c start "" ${plannotatorBrowser} ${url}`.quiet();
+    return;
+  }
+
+  await $`${browser} ${url}`.quiet();
+}
+
+async function openSystemBrowser(
+  url: string,
+  platform: NodeJS.Platform,
+  wsl: boolean,
+): Promise<void> {
+  if (platform === "win32" || wsl) {
+    await $`cmd.exe /c start ${url}`.quiet();
+    return;
+  }
+  if (platform === "darwin") {
+    await $`open ${url}`.quiet();
+    return;
+  }
+  await $`xdg-open ${url}`.quiet();
+}
+
 export async function openBrowser(
   url: string,
   options?: { isRemote?: boolean; useGlimpse?: boolean },
@@ -239,26 +279,9 @@ export async function openBrowser(
     const wsl = await isWSL();
 
     if (browser) {
-      if (plannotatorBrowser && platform === "darwin") {
-        if (plannotatorBrowser.includes("/") && !plannotatorBrowser.endsWith(".app")) {
-          await $`${plannotatorBrowser} ${url}`.quiet();
-        } else {
-          await $`open -a ${plannotatorBrowser} ${url}`.quiet();
-        }
-      } else if ((platform === "win32" || wsl) && plannotatorBrowser) {
-        await $`cmd.exe /c start "" ${plannotatorBrowser} ${url}`.quiet();
-      } else {
-        await $`${browser} ${url}`.quiet();
-      }
+      await openConfiguredBrowser(url, browser, plannotatorBrowser, platform, wsl);
     } else {
-      // Default system browser
-      if (platform === "win32" || wsl) {
-        await $`cmd.exe /c start ${url}`.quiet();
-      } else if (platform === "darwin") {
-        await $`open ${url}`.quiet();
-      } else {
-        await $`xdg-open ${url}`.quiet();
-      }
+      await openSystemBrowser(url, platform, wsl);
     }
     return true;
   } catch {
