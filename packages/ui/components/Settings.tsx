@@ -155,14 +155,14 @@ const DEFAULT_DIFF_TYPE_OPTIONS = [
   },
 ];
 
-function SegmentedControl<T extends string>({
+function SegmentedControl({
   options,
   value,
   onChange,
 }: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
 }) {
   return (
     <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
@@ -533,7 +533,9 @@ const ReviewDisplayTab: React.FC = () => {
         <SegmentedControl
           options={DIFF_STYLE_OPTIONS}
           value={diffStyle}
-          onChange={(v) => configStore.set("diffStyle", v)}
+          onChange={(value) => {
+            if (value === "split" || value === "unified") configStore.set("diffStyle", value);
+          }}
         />
       </div>
 
@@ -548,7 +550,9 @@ const ReviewDisplayTab: React.FC = () => {
         <SegmentedControl
           options={OVERFLOW_OPTIONS}
           value={diffOverflow}
-          onChange={(v) => configStore.set("diffOverflow", v)}
+          onChange={(value) => {
+            if (value === "scroll" || value === "wrap") configStore.set("diffOverflow", value);
+          }}
         />
       </div>
 
@@ -563,7 +567,11 @@ const ReviewDisplayTab: React.FC = () => {
         <SegmentedControl
           options={INDICATOR_OPTIONS}
           value={diffIndicators}
-          onChange={(v) => configStore.set("diffIndicators", v)}
+          onChange={(value) => {
+            if (value === "bars" || value === "classic" || value === "none") {
+              configStore.set("diffIndicators", value);
+            }
+          }}
         />
       </div>
 
@@ -580,7 +588,11 @@ const ReviewDisplayTab: React.FC = () => {
         <SegmentedControl
           options={LINE_DIFF_OPTIONS}
           value={diffLineDiffType}
-          onChange={(v) => configStore.set("diffLineDiffType", v)}
+          onChange={(value) => {
+            if (value === "word-alt" || value === "word" || value === "char" || value === "none") {
+              configStore.set("diffLineDiffType", value);
+            }
+          }}
         />
       </div>
 
@@ -615,7 +627,11 @@ const ReviewDisplayTab: React.FC = () => {
           <SegmentedControl
             options={LINE_BG_INTENSITY_OPTIONS}
             value={diffLineBgIntensity}
-            onChange={(v) => configStore.set("diffLineBgIntensity", v)}
+            onChange={(value) => {
+              if (value === "subtle" || value === "normal" || value === "strong") {
+                configStore.set("diffLineBgIntensity", value);
+              }
+            }}
           />
         </div>
       )}
@@ -858,6 +874,1213 @@ const CommentsTab: React.FC = () => {
   );
 };
 
+type SettingsNavigationItem = {
+  id: SettingsTab;
+  label: string;
+};
+
+interface SettingsNavigationProps {
+  mainTabs: SettingsNavigationItem[];
+  integrationTabs: SettingsNavigationItem[];
+  activeTab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
+}
+
+const SettingsNavigation: React.FC<SettingsNavigationProps> = ({
+  mainTabs,
+  integrationTabs,
+  activeTab,
+  onTabChange,
+}) => (
+  <>
+    <nav className="md:hidden flex overflow-x-auto border-b border-border px-2 py-1.5 gap-1 flex-shrink-0">
+      {[...mainTabs, ...integrationTabs].map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onTabChange(tab.id)}
+          className={`px-3 py-1.5 rounded text-xs whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === tab.id
+              ? "bg-primary/10 text-primary font-medium"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </nav>
+
+    <nav className="hidden md:block w-40 border-r border-border p-2 flex-shrink-0">
+      <div className="space-y-0.5">
+        {mainTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            className={`w-full text-left px-3 py-1.5 rounded text-sm transition-colors flex items-center justify-between ${
+              activeTab === tab.id
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {integrationTabs.length > 0 && (
+        <>
+          <div className="mx-2 my-2 border-t border-border/50" />
+          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            Integrations
+          </div>
+          <div className="space-y-0.5">
+            {integrationTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={`w-full text-left px-3 py-1.5 rounded text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </nav>
+  </>
+);
+
+interface SettingsDialogShellProps extends SettingsNavigationProps {
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const SettingsDialogShell: React.FC<SettingsDialogShellProps> = ({
+  onClose,
+  mainTabs,
+  integrationTabs,
+  activeTab,
+  onTabChange,
+  children,
+}) =>
+  createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <h3 className="font-semibold text-sm">Settings</h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md bg-muted hover:bg-muted/80 text-foreground transition-colors"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:min-h-[420px] flex-1 min-h-0 overflow-hidden">
+          <SettingsNavigation
+            mainTabs={mainTabs}
+            integrationTabs={integrationTabs}
+            activeTab={activeTab}
+            onTabChange={onTabChange}
+          />
+          <OverlayScrollArea className="flex-1 min-h-0">
+            <div className="p-4 space-y-4">{children}</div>
+          </OverlayScrollArea>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+
+interface GeneralTabProps {
+  activeTab: SettingsTab;
+  identity: string;
+  autoCloseDelay: AutoCloseDelay;
+  gitUser?: string;
+  handleIdentitySave: (identity: string) => void;
+  handleUseGitName: () => void;
+  handleRegenerateIdentity: () => void;
+  setAutoCloseDelayState: React.Dispatch<React.SetStateAction<AutoCloseDelay>>;
+  setAutoCloseDelay: (delay: AutoCloseDelay) => void;
+}
+
+const GeneralTab: React.FC<GeneralTabProps> = ({
+  activeTab,
+  identity,
+  autoCloseDelay,
+  gitUser,
+  handleIdentitySave,
+  handleUseGitName,
+  handleRegenerateIdentity,
+  setAutoCloseDelayState,
+  setAutoCloseDelay,
+}) => (
+  <>
+    {/* === GENERAL TAB === */}
+    {activeTab === "general" && (
+      <>
+        {/* Identity */}
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Your Identity</div>
+          <div className="text-xs text-muted-foreground">
+            Used when sharing annotations with others
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              key={identity}
+              type="text"
+              defaultValue={identity}
+              onBlur={(e) => handleIdentitySave(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleIdentitySave(e.currentTarget.value);
+                  e.currentTarget.blur();
+                }
+              }}
+              className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono truncate border border-transparent focus:border-primary/50 focus:outline-none transition-colors"
+              placeholder="Enter your name..."
+            />
+            {gitUser && (
+              <button
+                onClick={handleUseGitName}
+                onMouseDown={(e) => e.preventDefault()}
+                className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+                title={`Use git identity: ${gitUser}`}
+              >
+                <GitUser className="w-5 h-5" />
+              </button>
+            )}
+            <button
+              onClick={handleRegenerateIdentity}
+              onMouseDown={(e) => e.preventDefault()}
+              className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+              title="Regenerate random identity"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Auto-close Tab */}
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Auto-close Tab</div>
+          <select
+            value={autoCloseDelay}
+            onChange={(e) => {
+              const next = AUTO_CLOSE_OPTIONS.find(
+                (option) => option.value === e.currentTarget.value,
+              )?.value;
+              if (next === undefined) return;
+              setAutoCloseDelayState(next);
+              setAutoCloseDelay(next);
+            }}
+            className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+          >
+            {AUTO_CLOSE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="text-[10px] text-muted-foreground/70">
+            {AUTO_CLOSE_OPTIONS.find((o) => o.value === autoCloseDelay)?.description}
+          </div>
+        </div>
+      </>
+    )}
+  </>
+);
+
+interface PlanDisplayTabProps {
+  activeTab: SettingsTab;
+  mode: "plan" | "review";
+  gridEnabled: boolean;
+  uiPrefs: UIPreferences;
+  handleUIPrefsChange: (updates: Partial<UIPreferences>) => void;
+}
+
+const PlanDisplayTab: React.FC<PlanDisplayTabProps> = ({
+  activeTab,
+  mode,
+  gridEnabled,
+  uiPrefs,
+  handleUIPrefsChange,
+}) => (
+  <>
+    {/* === DISPLAY TAB === */}
+    {activeTab === "display" && mode !== "review" && (
+      <AnnotationDisplayTab>
+        {/* Auto-open Sidebar */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Auto-open Sidebar</div>
+            <div className="text-xs text-muted-foreground">
+              Open sidebar with Table of Contents on load
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={uiPrefs.tocEnabled}
+            onClick={() => handleUIPrefsChange({ tocEnabled: !uiPrefs.tocEnabled })}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              uiPrefs.tocEnabled ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                uiPrefs.tocEnabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Sticky Actions */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Sticky Actions</div>
+            <div className="text-xs text-muted-foreground">
+              Keep action buttons visible while scrolling
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={uiPrefs.stickyActionsEnabled}
+            onClick={() =>
+              handleUIPrefsChange({
+                stickyActionsEnabled: !uiPrefs.stickyActionsEnabled,
+              })
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              uiPrefs.stickyActionsEnabled ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                uiPrefs.stickyActionsEnabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Grid Background */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Grid Background</div>
+            <div className="text-xs text-muted-foreground">
+              Show the plan as a floating card on a grid
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={gridEnabled}
+            onClick={() => configStore.set("gridEnabled", !gridEnabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${gridEnabled ? "bg-primary" : "bg-muted"}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${gridEnabled ? "translate-x-6" : "translate-x-1"}`}
+            />
+          </button>
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Plan Width */}
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm font-medium flex items-center gap-2">Plan Width</div>
+            <div className="text-xs text-muted-foreground">Maximum width of the plan card</div>
+          </div>
+          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
+            {PLAN_WIDTH_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => handleUIPrefsChange({ planWidth: opt.id })}
+                className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  uiPrefs.planWidth === opt.id
+                    ? "bg-background text-foreground shadow-sm font-medium"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Abstract layout preview — exaggerated proportions for visual clarity */}
+          <PlanWidthPreview planWidth={uiPrefs.planWidth} />
+        </div>
+      </AnnotationDisplayTab>
+    )}
+  </>
+);
+
+interface SavingTabProps {
+  activeTab: SettingsTab;
+  defaultNotesApp: DefaultNotesApp;
+  obsidianDefaultSaveAvailable: boolean;
+  obsidian: ObsidianSettings;
+  handleDefaultNotesAppChange: (app: DefaultNotesApp) => void;
+  setActiveTab: React.Dispatch<React.SetStateAction<SettingsTab>>;
+}
+
+const SavingTab: React.FC<SavingTabProps> = ({
+  activeTab,
+  defaultNotesApp,
+  obsidianDefaultSaveAvailable,
+  obsidian,
+  handleDefaultNotesAppChange,
+  setActiveTab,
+}) => (
+  <>
+    {/* === SAVING TAB === */}
+    {activeTab === "saving" && (
+      <>
+        {/* Default Notes App */}
+        <div className="space-y-2">
+          <div>
+            <div className="text-sm font-medium">Default Save Action</div>
+            <div className="text-xs text-muted-foreground">
+              Used for keyboard shortcut ({modKey}+S)
+            </div>
+          </div>
+          <select
+            value={defaultNotesApp}
+            onChange={(e) => {
+              const app = e.currentTarget.value;
+              if (app === "ask" || app === "download" || app === "obsidian") {
+                handleDefaultNotesAppChange(app);
+              }
+            }}
+            className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+          >
+            <option value="ask">Ask each time</option>
+            <option value="download">Download Annotations</option>
+            {obsidianDefaultSaveAvailable && <option value="obsidian">Obsidian</option>}
+          </select>
+          <div className="text-[10px] text-muted-foreground/70">
+            {defaultNotesApp === "ask"
+              ? "Opens Export dialog with Notes tab"
+              : defaultNotesApp === "download"
+                ? `${modKey}+S downloads the annotations file`
+                : `${modKey}+S saves directly to Obsidian`}
+          </div>
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Integration links */}
+        <div className="space-y-2">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+            Integrations
+          </div>
+          <button
+            onClick={() => setActiveTab("obsidian")}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-muted/50 hover:bg-muted rounded-lg text-sm transition-colors group"
+          >
+            <span className="text-foreground">Obsidian</span>
+            <span className="flex items-center gap-2">
+              <span
+                className={`text-[10px] font-medium ${obsidian.enabled ? "text-primary" : "text-muted-foreground/50"}`}
+              >
+                {obsidian.enabled ? "Enabled" : "Off"}
+              </span>
+              <svg
+                className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </button>
+        </div>
+      </>
+    )}
+  </>
+);
+
+interface LabelsTabProps {
+  activeTab: SettingsTab;
+  quickLabelsState: QuickLabel[];
+  editingTipIndex: number | null;
+  editingTipValue: string;
+  setQuickLabelsState: React.Dispatch<React.SetStateAction<QuickLabel[]>>;
+  setEditingTipIndex: React.Dispatch<React.SetStateAction<number | null>>;
+  setEditingTipValue: React.Dispatch<React.SetStateAction<string>>;
+}
+
+const LabelsTab: React.FC<LabelsTabProps> = ({
+  activeTab,
+  quickLabelsState,
+  editingTipIndex,
+  editingTipValue,
+  setQuickLabelsState,
+  setEditingTipIndex,
+  setEditingTipValue,
+}) => (
+  <>
+    {/* === LABELS TAB === */}
+    {activeTab === "labels" && (
+      <>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium flex items-center gap-2">Quick Labels</div>
+            <div className="text-xs text-muted-foreground">
+              Preset annotations for one-click feedback
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              resetQuickLabels();
+              setQuickLabelsState(DEFAULT_QUICK_LABELS);
+            }}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Reset to defaults
+          </button>
+        </div>
+
+        <style>{`
+                      @keyframes tip-slide-open {
+                        from { opacity: 0; transform: translateY(-4px); }
+                        to   { opacity: 1; transform: translateY(0); }
+                      }
+                    `}</style>
+        <div className="space-y-1.5">
+          {quickLabelsState.map((label, index) => {
+            const colors = getLabelColors(label.color);
+            const hasTip = !!label.tip;
+            const isEditingTip = editingTipIndex === index;
+            return (
+              <div
+                key={index}
+                className="rounded-lg overflow-hidden"
+                style={{ backgroundColor: colors.bg }}
+              >
+                {/* Main row */}
+                <div className="flex items-center gap-2 p-2">
+                  <span className="text-sm flex-shrink-0">{label.emoji}</span>
+                  <input
+                    type="text"
+                    value={label.text}
+                    onChange={(e) => {
+                      const updated = [...quickLabelsState];
+                      updated[index] = {
+                        ...label,
+                        text: e.target.value,
+                        id: e.target.value
+                          .toLowerCase()
+                          .replace(/\s+/g, "-")
+                          .replace(/[^a-z0-9-]/g, ""),
+                      };
+                      setQuickLabelsState(updated);
+                      saveQuickLabels(updated);
+                    }}
+                    className="flex-1 px-2 py-1 bg-background/80 rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                  {/* Tip indicator button */}
+                  <button
+                    onClick={() => {
+                      if (isEditingTip) {
+                        setEditingTipIndex(null);
+                      } else {
+                        setEditingTipIndex(index);
+                        setEditingTipValue(label.tip || "");
+                      }
+                    }}
+                    className={`relative p-1 rounded transition-all flex-shrink-0 ${
+                      hasTip
+                        ? "bg-foreground/10 text-foreground/70 hover:text-foreground border border-foreground/15"
+                        : "text-muted-foreground/30 hover:text-muted-foreground/60 border border-dashed border-muted-foreground/20 hover:border-muted-foreground/40"
+                    }`}
+                    title={hasTip ? `Tip: ${label.tip}` : "Add AI instruction tip"}
+                  >
+                    <svg
+                      className="w-3 h-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                      />
+                    </svg>
+                    {hasTip && (
+                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-foreground/50" />
+                    )}
+                  </button>
+                  <select
+                    value={label.color}
+                    onChange={(e) => {
+                      const updated = [...quickLabelsState];
+                      updated[index] = { ...label, color: e.target.value };
+                      setQuickLabelsState(updated);
+                      saveQuickLabels(updated);
+                    }}
+                    className="px-1.5 py-1 bg-background/80 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  >
+                    {Object.keys(LABEL_COLOR_MAP).map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-muted-foreground/50 font-mono w-8 text-center flex-shrink-0">
+                    {index < 10
+                      ? `${altKey}${isMac ? "" : "+"}${index === 9 ? "0" : index + 1}`
+                      : ""}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const updated = quickLabelsState.filter((_, i) => i !== index);
+                      setQuickLabelsState(updated);
+                      saveQuickLabels(updated);
+                      if (editingTipIndex === index) setEditingTipIndex(null);
+                    }}
+                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                    title="Remove label"
+                  >
+                    <svg
+                      className="w-3 h-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                {/* Tip editor — slides open below the row */}
+                {isEditingTip && (
+                  <div
+                    className="flex items-center gap-1.5 px-2 pb-2 pt-0"
+                    style={{ animation: "tip-slide-open 0.15s ease-out" }}
+                  >
+                    <svg
+                      className="w-3 h-3 text-muted-foreground/40 flex-shrink-0 ml-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17 8l4 4m0 0l-4 4m4-4H3"
+                      />
+                    </svg>
+                    <input
+                      type="text"
+                      value={editingTipValue}
+                      onChange={(e) => setEditingTipValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const updated = [...quickLabelsState];
+                          updated[index] = {
+                            ...label,
+                            tip: editingTipValue || undefined,
+                          };
+                          setQuickLabelsState(updated);
+                          saveQuickLabels(updated);
+                          setEditingTipIndex(null);
+                        }
+                        if (e.key === "Escape") setEditingTipIndex(null);
+                      }}
+                      placeholder="AI instruction tip..."
+                      className="flex-1 px-2 py-1 bg-background/60 rounded text-[10px] text-muted-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      autoFocus
+                      onFocus={(e) => {
+                        e.target.setSelectionRange(0, 0);
+                        e.target.scrollLeft = 0;
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const updated = [...quickLabelsState];
+                        updated[index] = {
+                          ...label,
+                          tip: editingTipValue || undefined,
+                        };
+                        setQuickLabelsState(updated);
+                        saveQuickLabels(updated);
+                        setEditingTipIndex(null);
+                      }}
+                      className="p-1 rounded text-muted-foreground/50 hover:text-green-500 hover:bg-green-500/10 transition-colors flex-shrink-0"
+                      title="Save tip"
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {quickLabelsState.length < 12 && (
+          <button
+            onClick={() => {
+              const newLabel: QuickLabel = {
+                id: `custom-${Date.now()}`,
+                emoji: "📌",
+                text: "New label",
+                color: "blue",
+              };
+              const updated = [...quickLabelsState, newLabel];
+              setQuickLabelsState(updated);
+              saveQuickLabels(updated);
+            }}
+            className="w-full py-1.5 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-lg hover:border-foreground/30 transition-colors"
+          >
+            + Add label
+          </button>
+        )}
+
+        <div className="text-[10px] text-muted-foreground/70">
+          Use {altKey}
+          {isMac ? "" : "+"}1 through {altKey}
+          {isMac ? "" : "+"}0 when the annotation toolbar is visible to apply a label instantly.
+        </div>
+      </>
+    )}
+  </>
+);
+
+interface FilesTabProps {
+  activeTab: SettingsTab;
+  fileBrowserSettings: FileBrowserSettings;
+  newDirPath: string;
+  handleFileBrowserChange: (updates: Partial<FileBrowserSettings>) => void;
+  setNewDirPath: React.Dispatch<React.SetStateAction<string>>;
+  addDirectory: () => void;
+}
+
+const FilesTab: React.FC<FilesTabProps> = ({
+  activeTab,
+  fileBrowserSettings,
+  newDirPath,
+  handleFileBrowserChange,
+  setNewDirPath,
+  addDirectory,
+}) => (
+  <>
+    {/* === FILES TAB === */}
+    {activeTab === "files" && (
+      <>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">File Browser</div>
+            <div className="text-xs text-muted-foreground">
+              Your project files are shown automatically. Add extra directories below.
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={fileBrowserSettings.enabled}
+            onClick={() => handleFileBrowserChange({ enabled: !fileBrowserSettings.enabled })}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              fileBrowserSettings.enabled ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                fileBrowserSettings.enabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {fileBrowserSettings.enabled && (
+          <>
+            <div className="border-t border-border" />
+
+            {/* Directory list */}
+            {fileBrowserSettings.directories.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Directories</label>
+                {fileBrowserSettings.directories.map((dir) => (
+                  <div key={dir} className="flex items-center gap-2 group">
+                    <div
+                      className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono truncate"
+                      title={dir}
+                    >
+                      {dir}
+                    </div>
+                    <button
+                      onClick={() =>
+                        handleFileBrowserChange({
+                          directories: fileBrowserSettings.directories.filter((d) => d !== dir),
+                        })
+                      }
+                      className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Remove directory"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add directory */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">Add Directory</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newDirPath}
+                  onChange={(e) => setNewDirPath(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addDirectory();
+                  }}
+                  placeholder="/path/to/directory"
+                  className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+                <button
+                  onClick={addDirectory}
+                  disabled={!newDirPath.trim()}
+                  className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
+              <div className="text-[10px] text-muted-foreground/70">
+                Add directories outside your project that contain markdown files.
+              </div>
+            </div>
+          </>
+        )}
+      </>
+    )}
+
+    {/* === HOOKS TAB === */}
+    {activeTab === "hooks" && <HooksTab />}
+  </>
+);
+
+interface ObsidianTabProps {
+  activeTab: SettingsTab;
+  obsidian: ObsidianSettings;
+  detectedVaults: string[];
+  vaultsLoading: boolean;
+  handleObsidianChange: (updates: Partial<ObsidianSettings>) => void;
+}
+
+const ObsidianTab: React.FC<ObsidianTabProps> = ({
+  activeTab,
+  obsidian,
+  detectedVaults,
+  vaultsLoading,
+  handleObsidianChange,
+}) => (
+  <>
+    {/* === OBSIDIAN TAB === */}
+    {activeTab === "obsidian" && (
+      <>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Obsidian Integration</div>
+            <div className="text-xs text-muted-foreground">
+              Auto-save approved plans to your vault
+            </div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={obsidian.enabled}
+            onClick={() => handleObsidianChange({ enabled: !obsidian.enabled })}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              obsidian.enabled ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                obsidian.enabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {obsidian.enabled && (
+          <>
+            <div className="border-t border-border" />
+
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Vault</label>
+                  {vaultsLoading ? (
+                    <div className="w-full px-3 py-2 bg-muted rounded-lg text-xs text-muted-foreground">
+                      Detecting...
+                    </div>
+                  ) : detectedVaults.length > 0 ? (
+                    <>
+                      <select
+                        value={obsidian.vaultPath}
+                        onChange={(e) => handleObsidianChange({ vaultPath: e.target.value })}
+                        className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+                      >
+                        {detectedVaults.map((vault, index) => (
+                          <option key={`${vault}-${index}`} value={vault}>
+                            {vault.split("/").pop() || vault}
+                          </option>
+                        ))}
+                        <option value={CUSTOM_PATH_SENTINEL}>Custom path...</option>
+                      </select>
+                      {obsidian.vaultPath === CUSTOM_PATH_SENTINEL && (
+                        <input
+                          type="text"
+                          value={obsidian.customPath || ""}
+                          onChange={(e) => handleObsidianChange({ customPath: e.target.value })}
+                          placeholder="/path/to/vault"
+                          className="w-full mt-2 px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <input
+                      type="text"
+                      value={obsidian.vaultPath}
+                      onChange={(e) => handleObsidianChange({ vaultPath: e.target.value })}
+                      placeholder="/path/to/vault"
+                      className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  )}
+                </div>
+
+                <div className="w-44 space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Folder</label>
+                  <input
+                    type="text"
+                    value={obsidian.folder}
+                    onChange={(e) => handleObsidianChange({ folder: e.target.value })}
+                    placeholder="plannotator"
+                    className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Filename Format</label>
+                <input
+                  type="text"
+                  value={obsidian.filenameFormat || ""}
+                  onChange={(e) =>
+                    handleObsidianChange({
+                      filenameFormat: e.target.value || undefined,
+                    })
+                  }
+                  placeholder={DEFAULT_FILENAME_FORMAT}
+                  className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+                <div className="text-[10px] text-muted-foreground/70">
+                  Variables: <code className="text-[10px]">{"{title}"}</code>{" "}
+                  <code className="text-[10px]">{"{YYYY}"}</code>{" "}
+                  <code className="text-[10px]">{"{MM}"}</code>{" "}
+                  <code className="text-[10px]">{"{DD}"}</code>{" "}
+                  <code className="text-[10px]">{"{Mon}"}</code>{" "}
+                  <code className="text-[10px]">{"{D}"}</code>{" "}
+                  <code className="text-[10px]">{"{HH}"}</code>{" "}
+                  <code className="text-[10px]">{"{h}"}</code>{" "}
+                  <code className="text-[10px]">{"{hh}"}</code>{" "}
+                  <code className="text-[10px]">{"{mm}"}</code>{" "}
+                  <code className="text-[10px]">{"{ss}"}</code>{" "}
+                  <code className="text-[10px]">{"{ampm}"}</code>
+                </div>
+                <div className="text-[10px] text-muted-foreground/70">
+                  Preview: {filenamePreview(obsidian)}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Filename Separator</label>
+                <select
+                  value={obsidian.filenameSeparator || "space"}
+                  onChange={(e) => {
+                    const separator = e.currentTarget.value;
+                    if (
+                      separator === "space" ||
+                      separator === "dash" ||
+                      separator === "underscore"
+                    ) {
+                      handleObsidianChange({ filenameSeparator: separator });
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                >
+                  <option value="space">Spaces (default)</option>
+                  <option value="dash">Dashes (-)</option>
+                  <option value="underscore">Underscores (_)</option>
+                </select>
+                <div className="text-[10px] text-muted-foreground/70">
+                  Replaces spaces in the generated filename. Useful when working with CLI tools in
+                  your vault.
+                </div>
+              </div>
+
+              <div className="text-[10px] text-muted-foreground/70">
+                Plans saved to:{" "}
+                {obsidian.vaultPath === CUSTOM_PATH_SENTINEL
+                  ? obsidian.customPath || "..."
+                  : obsidian.vaultPath || "..."}
+                /{obsidian.folder || "plannotator"}/
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">
+                  Frontmatter (auto-generated)
+                </label>
+                <pre className="px-3 py-2 bg-muted/50 rounded-lg text-[10px] font-mono text-muted-foreground overflow-x-auto">
+                  {`---
+created: ${new Date().toISOString().slice(0, 19)}Z
+source: plannotator
+tags: [plan, ...]
+---`}
+                </pre>
+              </div>
+
+              <div className="border-t border-border/30" />
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-medium">Auto-save on Plan Arrival</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    Automatically save to Obsidian when a plan loads, before you approve or deny
+                  </div>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={obsidian.autoSave}
+                  onClick={() => handleObsidianChange({ autoSave: !obsidian.autoSave })}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                    obsidian.autoSave ? "bg-primary" : "bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      obsidian.autoSave ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-medium">Vault Browser</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    Browse and annotate vault files from the sidebar
+                  </div>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={obsidian.vaultBrowserEnabled}
+                  onClick={() =>
+                    handleObsidianChange({
+                      vaultBrowserEnabled: !obsidian.vaultBrowserEnabled,
+                    })
+                  }
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                    obsidian.vaultBrowserEnabled ? "bg-primary" : "bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      obsidian.vaultBrowserEnabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </>
+    )}
+  </>
+);
+const PlanWidthPreview: React.FC<{ planWidth: UIPreferences["planWidth"] }> = ({ planWidth }) => {
+  const active = PLAN_WIDTH_OPTIONS.find((o) => o.id === planWidth) ?? PLAN_WIDTH_OPTIONS[0];
+  // Exaggerated proportions so the width difference is visually obvious in the small preview
+  const sidebarPct = 14;
+  const panelPct = 14;
+  interface CardPctMap {
+    compact: number;
+    default: number;
+    wide: number;
+  }
+  const cardPctMap: CardPctMap = { compact: 48, default: 70, wide: 94 };
+  const cardPct = cardPctMap[active.id];
+  return (
+    <div className="space-y-2">
+      <div className="rounded-lg border border-border/40 bg-muted/20 px-2 py-3 overflow-hidden">
+        {/* Simulated header bar */}
+        <div className="flex items-center justify-between mb-2 px-1">
+          <div className="h-0.5 w-8 rounded-full bg-foreground/15" />
+          <div className="flex gap-1">
+            <div className="h-1 w-1 rounded-full bg-foreground/15" />
+            <div className="h-1 w-1 rounded-full bg-foreground/15" />
+            <div className="h-1 w-1 rounded-full bg-foreground/15" />
+          </div>
+        </div>
+        <div className="border-t border-foreground/5 mb-2" />
+        {/* Three-column layout */}
+        <div className="flex gap-1 items-stretch" style={{ minHeight: 64 }}>
+          {/* Sidebar */}
+          <div
+            className="flex-shrink-0 space-y-1 pt-0.5 opacity-30"
+            style={{ width: `${sidebarPct}%` }}
+          >
+            <div className="h-0.5 w-full rounded-full bg-foreground" />
+            <div className="h-0.5 w-3/4 rounded-full bg-foreground" />
+            <div className="h-0.5 w-1/2 rounded-full bg-foreground" />
+            <div className="h-0.5 w-2/3 rounded-full bg-foreground" />
+            <div className="h-0.5 w-1/2 rounded-full bg-foreground" />
+          </div>
+          {/* Plan card — width animates */}
+          <div className="flex-1 flex justify-center min-w-0">
+            <div
+              className="rounded border border-border/60 bg-card/50 p-1.5 space-y-1 transition-all duration-300 ease-out"
+              style={{ width: `${cardPct}%`, minWidth: 0 }}
+            >
+              {/* Heading */}
+              <div className="h-1 w-2/5 rounded-full bg-foreground/25" />
+              {/* Prose lines */}
+              <div className="space-y-[2px]">
+                <div className="h-[2px] w-full rounded-full bg-foreground/10" />
+                <div className="h-[2px] w-11/12 rounded-full bg-foreground/10" />
+                <div className="h-[2px] w-4/5 rounded-full bg-foreground/10" />
+              </div>
+              {/* Code block */}
+              <div className="rounded bg-muted/60 p-1 space-y-[2px]">
+                <div className="h-[2px] w-full rounded-full bg-primary/20" />
+                <div className="h-[2px] w-3/4 rounded-full bg-primary/20" />
+                <div className="h-[2px] w-5/6 rounded-full bg-primary/20" />
+              </div>
+              {/* More prose */}
+              <div className="space-y-[2px]">
+                <div className="h-[2px] w-full rounded-full bg-foreground/10" />
+                <div className="h-[2px] w-3/4 rounded-full bg-foreground/10" />
+              </div>
+            </div>
+          </div>
+          {/* Annotation panel */}
+          <div
+            className="flex-shrink-0 space-y-1 pt-0.5 opacity-20"
+            style={{ width: `${panelPct}%` }}
+          >
+            <div className="rounded border border-foreground/20 p-0.5 space-y-[2px]">
+              <div className="h-[2px] w-full rounded-full bg-foreground" />
+              <div className="h-[2px] w-2/3 rounded-full bg-foreground" />
+            </div>
+            <div className="rounded border border-foreground/20 p-0.5 space-y-[2px]">
+              <div className="h-[2px] w-full rounded-full bg-foreground" />
+              <div className="h-[2px] w-1/2 rounded-full bg-foreground" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="text-[10px] text-muted-foreground/70 leading-snug">
+        {active.px}px — {active.hint}
+      </div>
+    </div>
+  );
+};
+
+function filenamePreview(obsidian: ObsidianSettings): string {
+  const fmt = obsidian.filenameFormat?.trim() || DEFAULT_FILENAME_FORMAT;
+  const now = new Date();
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const h24 = now.getHours();
+  const h12 = h24 % 12 || 12;
+  const vars: FilenameVars = {
+    title: "My Plan Title",
+    YYYY: String(now.getFullYear()),
+    MM: String(now.getMonth() + 1).padStart(2, "0"),
+    DD: String(now.getDate()).padStart(2, "0"),
+    Mon: months[now.getMonth()],
+    D: String(now.getDate()),
+    HH: String(h24).padStart(2, "0"),
+    h: String(h12),
+    hh: String(h12).padStart(2, "0"),
+    mm: String(now.getMinutes()).padStart(2, "0"),
+    ss: String(now.getSeconds()).padStart(2, "0"),
+    ampm: h24 >= 12 ? "pm" : "am",
+  };
+  let preview = fmt.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m) + ".md";
+  if (obsidian.filenameSeparator === "dash") preview = preview.replace(/ /g, "-");
+  else if (obsidian.filenameSeparator === "underscore") preview = preview.replace(/ /g, "_");
+  return preview;
+}
+
 const EMPTY_AI_PROVIDERS: SettingsProps["aiProviders"] = [];
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -918,7 +2141,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const piAIProviders = useMemo(() => aiProviders.filter(isPiProvider), [aiProviders]);
 
   const mainTabs = useMemo(() => {
-    const t: { id: SettingsTab; label: string }[] = [{ id: "general", label: "General" }];
+    const t: SettingsNavigationItem[] = [{ id: "general", label: "General" }];
     t.push({ id: "theme", label: "Theme" });
     if (mode === "plan") {
       t.push({ id: "display", label: "Display" });
@@ -940,11 +2163,8 @@ export const Settings: React.FC<SettingsProps> = ({
     return t;
   }, [mode, piAIProviders.length]);
 
-  // SAFETY: Obsidian is a valid SettingsTab when plan-mode integrations are available.
-  const integrationTabs: { id: SettingsTab; label: string }[] = [
-    { id: "files", label: "Files" },
-    ...(mode === "plan" ? [{ id: "obsidian" as SettingsTab, label: "Obsidian" }] : []),
-  ];
+  const integrationTabs: SettingsNavigationItem[] = [{ id: "files", label: "Files" }];
+  if (mode === "plan") integrationTabs.push({ id: "obsidian", label: "Obsidian" });
   const obsidianDefaultSaveAvailable =
     obsidian.enabled && getEffectiveVaultPath(obsidian).trim().length > 0;
 
@@ -985,11 +2205,7 @@ export const Settings: React.FC<SettingsProps> = ({
       setDefaultNotesApp("ask");
       saveDefaultNotesApp("ask");
     }
-  }, [
-    showDialog,
-    defaultNotesApp,
-    obsidianDefaultSaveAvailable,
-  ]);
+  }, [showDialog, defaultNotesApp, obsidianDefaultSaveAvailable]);
 
   // Fetch detected vaults when Obsidian is enabled
   useEffect(() => {
@@ -1039,7 +2255,6 @@ export const Settings: React.FC<SettingsProps> = ({
     setObsidian(newSettings);
     saveObsidianSettings(newSettings);
   };
-
 
   const handleUIPrefsChange = (updates: Partial<UIPreferences>) => {
     const newPrefs = { ...uiPrefs, ...updates };
@@ -1099,1136 +2314,93 @@ export const Settings: React.FC<SettingsProps> = ({
         </svg>
       </button>
 
-      {showDialog &&
-        !themePreview &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
-            onClick={() => setShowDialog(false)}
-          >
-            <div
-              className="bg-card border border-border rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-4 border-b border-border">
-                <h3 className="font-semibold text-sm">Settings</h3>
-                <button
-                  onClick={() => setShowDialog(false)}
-                  className="p-1.5 rounded-md bg-muted hover:bg-muted/80 text-foreground transition-colors"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+      {showDialog && !themePreview && (
+        <SettingsDialogShell
+          onClose={() => setShowDialog(false)}
+          mainTabs={mainTabs}
+          integrationTabs={integrationTabs}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        >
+          <GeneralTab
+            activeTab={activeTab}
+            identity={identity}
+            autoCloseDelay={autoCloseDelay}
+            gitUser={gitUser}
+            handleIdentitySave={handleIdentitySave}
+            handleUseGitName={handleUseGitName}
+            handleRegenerateIdentity={handleRegenerateIdentity}
+            setAutoCloseDelayState={setAutoCloseDelayState}
+            setAutoCloseDelay={setAutoCloseDelay}
+          />
 
-              <div className="flex flex-col md:flex-row md:min-h-[420px] flex-1 min-h-0 overflow-hidden">
-                {/* Mobile: horizontal tab bar */}
-                <nav className="md:hidden flex overflow-x-auto border-b border-border px-2 py-1.5 gap-1 flex-shrink-0">
-                  {[...mainTabs, ...integrationTabs].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`px-3 py-1.5 rounded text-xs whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                        activeTab === tab.id
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </nav>
+          {activeTab === "theme" && (
+            <ThemeTab
+              onPreview={() => {
+                setShowDialog(false);
+                setThemePreview(true);
+              }}
+            />
+          )}
+          {activeTab === "git" && mode === "review" && <GitTab />}
+          {activeTab === "display" && mode === "review" && <ReviewDisplayTab />}
 
-                {/* Desktop: sidebar */}
-                <nav className="hidden md:block w-40 border-r border-border p-2 flex-shrink-0">
-                  <div className="space-y-0.5">
-                    {mainTabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`w-full text-left px-3 py-1.5 rounded text-sm transition-colors flex items-center justify-between ${
-                          activeTab === tab.id
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                  {integrationTabs.length > 0 && (
-                    <>
-                      <div className="mx-2 my-2 border-t border-border/50" />
-                      <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-                        Integrations
-                      </div>
-                      <div className="space-y-0.5">
-                        {integrationTabs.map((tab) => (
-                          <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`w-full text-left px-3 py-1.5 rounded text-sm transition-colors ${
-                              activeTab === tab.id
-                                ? "bg-primary/10 text-primary font-medium"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                            }`}
-                          >
-                            {tab.label}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </nav>
+          <PlanDisplayTab
+            activeTab={activeTab}
+            mode={mode}
+            gridEnabled={gridEnabled}
+            uiPrefs={uiPrefs}
+            handleUIPrefsChange={handleUIPrefsChange}
+          />
 
-                {/* Content — scrollable */}
-                <OverlayScrollArea className="flex-1 min-h-0">
-                  <div className="p-4 space-y-4">
-                    {/* === GENERAL TAB === */}
-                    {activeTab === "general" && (
-                      <>
-                        {/* Identity */}
-                        <div className="space-y-2">
-                          <div className="text-sm font-medium">Your Identity</div>
-                          <div className="text-xs text-muted-foreground">
-                            Used when sharing annotations with others
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              key={identity}
-                              type="text"
-                              defaultValue={identity}
-                              onBlur={(e) => handleIdentitySave(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  handleIdentitySave(e.currentTarget.value);
-                                  e.currentTarget.blur();
-                                }
-                              }}
-                              className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono truncate border border-transparent focus:border-primary/50 focus:outline-none transition-colors"
-                              placeholder="Enter your name..."
-                            />
-                            {gitUser && (
-                              <button
-                                onClick={handleUseGitName}
-                                onMouseDown={(e) => e.preventDefault()}
-                                className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
-                                title={`Use git identity: ${gitUser}`}
-                              >
-                                <GitUser className="w-5 h-5" />
-                              </button>
-                            )}
-                            <button
-                              onClick={handleRegenerateIdentity}
-                              onMouseDown={(e) => e.preventDefault()}
-                              className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
-                              title="Regenerate random identity"
-                            >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
+          <SavingTab
+            activeTab={activeTab}
+            defaultNotesApp={defaultNotesApp}
+            obsidianDefaultSaveAvailable={obsidianDefaultSaveAvailable}
+            obsidian={obsidian}
+            handleDefaultNotesAppChange={handleDefaultNotesAppChange}
+            setActiveTab={setActiveTab}
+          />
 
-                        {/* Auto-close Tab */}
-                        <div className="space-y-2">
-                          <div className="text-sm font-medium">Auto-close Tab</div>
-                          <select
-                            value={autoCloseDelay}
-                            onChange={(e) => {
-                              // SAFETY: e.currentTarget.value is AutoCloseDelay per AUTO_CLOSE_OPTIONS
-                              const next = e.currentTarget.value as AutoCloseDelay;
-                              setAutoCloseDelayState(next);
-                              setAutoCloseDelay(next);
-                            }}
-                            className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
-                          >
-                            {AUTO_CLOSE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="text-[10px] text-muted-foreground/70">
-                            {
-                              AUTO_CLOSE_OPTIONS.find((o) => o.value === autoCloseDelay)
-                                ?.description
-                            }
-                          </div>
-                        </div>
-                      </>
-                    )}
+          <LabelsTab
+            activeTab={activeTab}
+            quickLabelsState={quickLabelsState}
+            editingTipIndex={editingTipIndex}
+            editingTipValue={editingTipValue}
+            setQuickLabelsState={setQuickLabelsState}
+            setEditingTipIndex={setEditingTipIndex}
+            setEditingTipValue={setEditingTipValue}
+          />
 
-                    {/* === THEME TAB === */}
-                    {activeTab === "theme" && (
-                      <ThemeTab
-                        onPreview={() => {
-                          setShowDialog(false);
-                          setThemePreview(true);
-                        }}
-                      />
-                    )}
+          {activeTab === "shortcuts" && <KeyboardShortcuts mode={mode} />}
+          {activeTab === "comments" && <CommentsTab />}
+          {activeTab === "ai" && (
+            <AISettingsTab
+              providers={piAIProviders}
+              selectedProviderId={aiProvider}
+              origin={origin}
+              onProviderChange={setAiProvider}
+            />
+          )}
 
-                    {/* === GIT TAB === */}
-                    {activeTab === "git" && mode === "review" && <GitTab />}
+          <FilesTab
+            activeTab={activeTab}
+            fileBrowserSettings={fileBrowserSettings}
+            newDirPath={newDirPath}
+            handleFileBrowserChange={handleFileBrowserChange}
+            setNewDirPath={setNewDirPath}
+            addDirectory={addDirectory}
+          />
 
-                    {/* === DISPLAY TAB === */}
-                    {activeTab === "display" && mode === "review" && <ReviewDisplayTab />}
-
-                    {activeTab === "display" && mode !== "review" && (
-                      <AnnotationDisplayTab>
-                        {/* Auto-open Sidebar */}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium">Auto-open Sidebar</div>
-                            <div className="text-xs text-muted-foreground">
-                              Open sidebar with Table of Contents on load
-                            </div>
-                          </div>
-                          <button
-                            role="switch"
-                            aria-checked={uiPrefs.tocEnabled}
-                            onClick={() => handleUIPrefsChange({ tocEnabled: !uiPrefs.tocEnabled })}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              uiPrefs.tocEnabled ? "bg-primary" : "bg-muted"
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                uiPrefs.tocEnabled ? "translate-x-6" : "translate-x-1"
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        <div className="border-t border-border" />
-
-                        {/* Sticky Actions */}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium">Sticky Actions</div>
-                            <div className="text-xs text-muted-foreground">
-                              Keep action buttons visible while scrolling
-                            </div>
-                          </div>
-                          <button
-                            role="switch"
-                            aria-checked={uiPrefs.stickyActionsEnabled}
-                            onClick={() =>
-                              handleUIPrefsChange({
-                                stickyActionsEnabled: !uiPrefs.stickyActionsEnabled,
-                              })
-                            }
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              uiPrefs.stickyActionsEnabled ? "bg-primary" : "bg-muted"
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                uiPrefs.stickyActionsEnabled ? "translate-x-6" : "translate-x-1"
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        <div className="border-t border-border" />
-
-                        {/* Grid Background */}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium">Grid Background</div>
-                            <div className="text-xs text-muted-foreground">
-                              Show the plan as a floating card on a grid
-                            </div>
-                          </div>
-                          <button
-                            role="switch"
-                            aria-checked={gridEnabled}
-                            onClick={() => configStore.set("gridEnabled", !gridEnabled)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${gridEnabled ? "bg-primary" : "bg-muted"}`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${gridEnabled ? "translate-x-6" : "translate-x-1"}`}
-                            />
-                          </button>
-                        </div>
-
-                        <div className="border-t border-border" />
-
-                        {/* Plan Width */}
-                        <div className="space-y-3">
-                          <div>
-                            <div className="text-sm font-medium flex items-center gap-2">
-                              Plan Width
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Maximum width of the plan card
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-                            {PLAN_WIDTH_OPTIONS.map((opt) => (
-                              <button
-                                key={opt.id}
-                                onClick={() => handleUIPrefsChange({ planWidth: opt.id })}
-                                className={`flex-1 px-3 py-1.5 text-xs rounded-md transition-colors ${
-                                  uiPrefs.planWidth === opt.id
-                                    ? "bg-background text-foreground shadow-sm font-medium"
-                                    : "text-muted-foreground hover:text-foreground"
-                                }`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Abstract layout preview — exaggerated proportions for visual clarity */}
-                          {(() => {
-                            const active =
-                              PLAN_WIDTH_OPTIONS.find((o) => o.id === uiPrefs.planWidth) ??
-                              PLAN_WIDTH_OPTIONS[0];
-                            // Exaggerated proportions so the width difference is visually obvious in the small preview
-                            const sidebarPct = 14;
-                            const panelPct = 14;
-                            interface CardPctMap {
-                              compact: number;
-                              default: number;
-                              wide: number;
-                            }
-                            const cardPctMap: CardPctMap = { compact: 48, default: 70, wide: 94 };
-                            const cardPct = cardPctMap[active.id];
-                            return (
-                              <div className="space-y-2">
-                                <div className="rounded-lg border border-border/40 bg-muted/20 px-2 py-3 overflow-hidden">
-                                  {/* Simulated header bar */}
-                                  <div className="flex items-center justify-between mb-2 px-1">
-                                    <div className="h-0.5 w-8 rounded-full bg-foreground/15" />
-                                    <div className="flex gap-1">
-                                      <div className="h-1 w-1 rounded-full bg-foreground/15" />
-                                      <div className="h-1 w-1 rounded-full bg-foreground/15" />
-                                      <div className="h-1 w-1 rounded-full bg-foreground/15" />
-                                    </div>
-                                  </div>
-                                  <div className="border-t border-foreground/5 mb-2" />
-                                  {/* Three-column layout */}
-                                  <div
-                                    className="flex gap-1 items-stretch"
-                                    style={{ minHeight: 64 }}
-                                  >
-                                    {/* Sidebar */}
-                                    <div
-                                      className="flex-shrink-0 space-y-1 pt-0.5 opacity-30"
-                                      style={{ width: `${sidebarPct}%` }}
-                                    >
-                                      <div className="h-0.5 w-full rounded-full bg-foreground" />
-                                      <div className="h-0.5 w-3/4 rounded-full bg-foreground" />
-                                      <div className="h-0.5 w-1/2 rounded-full bg-foreground" />
-                                      <div className="h-0.5 w-2/3 rounded-full bg-foreground" />
-                                      <div className="h-0.5 w-1/2 rounded-full bg-foreground" />
-                                    </div>
-                                    {/* Plan card — width animates */}
-                                    <div className="flex-1 flex justify-center min-w-0">
-                                      <div
-                                        className="rounded border border-border/60 bg-card/50 p-1.5 space-y-1 transition-all duration-300 ease-out"
-                                        style={{ width: `${cardPct}%`, minWidth: 0 }}
-                                      >
-                                        {/* Heading */}
-                                        <div className="h-1 w-2/5 rounded-full bg-foreground/25" />
-                                        {/* Prose lines */}
-                                        <div className="space-y-[2px]">
-                                          <div className="h-[2px] w-full rounded-full bg-foreground/10" />
-                                          <div className="h-[2px] w-11/12 rounded-full bg-foreground/10" />
-                                          <div className="h-[2px] w-4/5 rounded-full bg-foreground/10" />
-                                        </div>
-                                        {/* Code block */}
-                                        <div className="rounded bg-muted/60 p-1 space-y-[2px]">
-                                          <div className="h-[2px] w-full rounded-full bg-primary/20" />
-                                          <div className="h-[2px] w-3/4 rounded-full bg-primary/20" />
-                                          <div className="h-[2px] w-5/6 rounded-full bg-primary/20" />
-                                        </div>
-                                        {/* More prose */}
-                                        <div className="space-y-[2px]">
-                                          <div className="h-[2px] w-full rounded-full bg-foreground/10" />
-                                          <div className="h-[2px] w-3/4 rounded-full bg-foreground/10" />
-                                        </div>
-                                      </div>
-                                    </div>
-                                    {/* Annotation panel */}
-                                    <div
-                                      className="flex-shrink-0 space-y-1 pt-0.5 opacity-20"
-                                      style={{ width: `${panelPct}%` }}
-                                    >
-                                      <div className="rounded border border-foreground/20 p-0.5 space-y-[2px]">
-                                        <div className="h-[2px] w-full rounded-full bg-foreground" />
-                                        <div className="h-[2px] w-2/3 rounded-full bg-foreground" />
-                                      </div>
-                                      <div className="rounded border border-foreground/20 p-0.5 space-y-[2px]">
-                                        <div className="h-[2px] w-full rounded-full bg-foreground" />
-                                        <div className="h-[2px] w-1/2 rounded-full bg-foreground" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-[10px] text-muted-foreground/70 leading-snug">
-                                  {active.px}px — {active.hint}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </AnnotationDisplayTab>
-                    )}
-
-                    {/* === SAVING TAB === */}
-                    {activeTab === "saving" && (
-                      <>
-                        {/* Default Notes App */}
-                        <div className="space-y-2">
-                          <div>
-                            <div className="text-sm font-medium">Default Save Action</div>
-                            <div className="text-xs text-muted-foreground">
-                              Used for keyboard shortcut ({modKey}+S)
-                            </div>
-                          </div>
-                          <select
-                            value={defaultNotesApp}
-                            // SAFETY: e.currentTarget.value is DefaultNotesApp per select options
-                            onChange={(e) =>
-                              handleDefaultNotesAppChange(e.currentTarget.value as DefaultNotesApp)
-                            }
-                            className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
-                          >
-                            <option value="ask">Ask each time</option>
-                            <option value="download">Download Annotations</option>
-                            {obsidianDefaultSaveAvailable && (
-                              <option value="obsidian">Obsidian</option>
-                            )}
-                          </select>
-                          <div className="text-[10px] text-muted-foreground/70">
-                            {defaultNotesApp === "ask"
-                              ? "Opens Export dialog with Notes tab"
-                              : defaultNotesApp === "download"
-                                ? `${modKey}+S downloads the annotations file`
-                                : `${modKey}+S saves directly to Obsidian`}
-                          </div>
-                        </div>
-
-                        <div className="border-t border-border" />
-
-                        {/* Integration links */}
-                        <div className="space-y-2">
-                          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-                            Integrations
-                          </div>
-                          <button
-                            onClick={() => setActiveTab("obsidian")}
-                            className="w-full flex items-center justify-between px-3 py-2.5 bg-muted/50 hover:bg-muted rounded-lg text-sm transition-colors group"
-                          >
-                            <span className="text-foreground">Obsidian</span>
-                            <span className="flex items-center gap-2">
-                              <span
-                                className={`text-[10px] font-medium ${obsidian.enabled ? "text-primary" : "text-muted-foreground/50"}`}
-                              >
-                                {obsidian.enabled ? "Enabled" : "Off"}
-                              </span>
-                              <svg
-                                className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M9 5l7 7-7 7"
-                                />
-                              </svg>
-                            </span>
-                          </button>
-                        </div>
-                      </>
-                    )}
-
-                    {/* === LABELS TAB === */}
-                    {activeTab === "labels" && (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium flex items-center gap-2">
-                              Quick Labels
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Preset annotations for one-click feedback
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              resetQuickLabels();
-                              setQuickLabelsState(DEFAULT_QUICK_LABELS);
-                            }}
-                            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            Reset to defaults
-                          </button>
-                        </div>
-
-                        <style>{`
-                      @keyframes tip-slide-open {
-                        from { opacity: 0; transform: translateY(-4px); }
-                        to   { opacity: 1; transform: translateY(0); }
-                      }
-                    `}</style>
-                        <div className="space-y-1.5">
-                          {quickLabelsState.map((label, index) => {
-                            const colors = getLabelColors(label.color);
-                            const hasTip = !!label.tip;
-                            const isEditingTip = editingTipIndex === index;
-                            return (
-                              <div
-                                key={index}
-                                className="rounded-lg overflow-hidden"
-                                style={{ backgroundColor: colors.bg }}
-                              >
-                                {/* Main row */}
-                                <div className="flex items-center gap-2 p-2">
-                                  <span className="text-sm flex-shrink-0">{label.emoji}</span>
-                                  <input
-                                    type="text"
-                                    value={label.text}
-                                    onChange={(e) => {
-                                      const updated = [...quickLabelsState];
-                                      updated[index] = {
-                                        ...label,
-                                        text: e.target.value,
-                                        id: e.target.value
-                                          .toLowerCase()
-                                          .replace(/\s+/g, "-")
-                                          .replace(/[^a-z0-9-]/g, ""),
-                                      };
-                                      setQuickLabelsState(updated);
-                                      saveQuickLabels(updated);
-                                    }}
-                                    className="flex-1 px-2 py-1 bg-background/80 rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                  />
-                                  {/* Tip indicator button */}
-                                  <button
-                                    onClick={() => {
-                                      if (isEditingTip) {
-                                        setEditingTipIndex(null);
-                                      } else {
-                                        setEditingTipIndex(index);
-                                        setEditingTipValue(label.tip || "");
-                                      }
-                                    }}
-                                    className={`relative p-1 rounded transition-all flex-shrink-0 ${
-                                      hasTip
-                                        ? "bg-foreground/10 text-foreground/70 hover:text-foreground border border-foreground/15"
-                                        : "text-muted-foreground/30 hover:text-muted-foreground/60 border border-dashed border-muted-foreground/20 hover:border-muted-foreground/40"
-                                    }`}
-                                    title={hasTip ? `Tip: ${label.tip}` : "Add AI instruction tip"}
-                                  >
-                                    <svg
-                                      className="w-3 h-3"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      strokeWidth={2}
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                                      />
-                                    </svg>
-                                    {hasTip && (
-                                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-foreground/50" />
-                                    )}
-                                  </button>
-                                  <select
-                                    value={label.color}
-                                    onChange={(e) => {
-                                      const updated = [...quickLabelsState];
-                                      updated[index] = { ...label, color: e.target.value };
-                                      setQuickLabelsState(updated);
-                                      saveQuickLabels(updated);
-                                    }}
-                                    className="px-1.5 py-1 bg-background/80 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                  >
-                                    {Object.keys(LABEL_COLOR_MAP).map((c) => (
-                                      <option key={c} value={c}>
-                                        {c}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <span className="text-[10px] text-muted-foreground/50 font-mono w-8 text-center flex-shrink-0">
-                                    {index < 10
-                                      ? `${altKey}${isMac ? "" : "+"}${index === 9 ? "0" : index + 1}`
-                                      : ""}
-                                  </span>
-                                  <button
-                                    onClick={() => {
-                                      const updated = quickLabelsState.filter(
-                                        (_, i) => i !== index,
-                                      );
-                                      setQuickLabelsState(updated);
-                                      saveQuickLabels(updated);
-                                      if (editingTipIndex === index) setEditingTipIndex(null);
-                                    }}
-                                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                                    title="Remove label"
-                                  >
-                                    <svg
-                                      className="w-3 h-3"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      strokeWidth={2}
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M6 18L18 6M6 6l12 12"
-                                      />
-                                    </svg>
-                                  </button>
-                                </div>
-                                {/* Tip editor — slides open below the row */}
-                                {isEditingTip && (
-                                  <div
-                                    className="flex items-center gap-1.5 px-2 pb-2 pt-0"
-                                    style={{ animation: "tip-slide-open 0.15s ease-out" }}
-                                  >
-                                    <svg
-                                      className="w-3 h-3 text-muted-foreground/40 flex-shrink-0 ml-6"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                      strokeWidth={1.5}
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M17 8l4 4m0 0l-4 4m4-4H3"
-                                      />
-                                    </svg>
-                                    <input
-                                      type="text"
-                                      value={editingTipValue}
-                                      onChange={(e) => setEditingTipValue(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          const updated = [...quickLabelsState];
-                                          updated[index] = {
-                                            ...label,
-                                            tip: editingTipValue || undefined,
-                                          };
-                                          setQuickLabelsState(updated);
-                                          saveQuickLabels(updated);
-                                          setEditingTipIndex(null);
-                                        }
-                                        if (e.key === "Escape") setEditingTipIndex(null);
-                                      }}
-                                      placeholder="AI instruction tip..."
-                                      className="flex-1 px-2 py-1 bg-background/60 rounded text-[10px] text-muted-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                      autoFocus
-                                      onFocus={(e) => {
-                                        e.target.setSelectionRange(0, 0);
-                                        e.target.scrollLeft = 0;
-                                      }}
-                                    />
-                                    <button
-                                      onClick={() => {
-                                        const updated = [...quickLabelsState];
-                                        updated[index] = {
-                                          ...label,
-                                          tip: editingTipValue || undefined,
-                                        };
-                                        setQuickLabelsState(updated);
-                                        saveQuickLabels(updated);
-                                        setEditingTipIndex(null);
-                                      }}
-                                      className="p-1 rounded text-muted-foreground/50 hover:text-green-500 hover:bg-green-500/10 transition-colors flex-shrink-0"
-                                      title="Save tip"
-                                    >
-                                      <svg
-                                        className="w-3 h-3"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        strokeWidth={2.5}
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          d="M5 13l4 4L19 7"
-                                        />
-                                      </svg>
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {quickLabelsState.length < 12 && (
-                          <button
-                            onClick={() => {
-                              const newLabel: QuickLabel = {
-                                id: `custom-${Date.now()}`,
-                                emoji: "📌",
-                                text: "New label",
-                                color: "blue",
-                              };
-                              const updated = [...quickLabelsState, newLabel];
-                              setQuickLabelsState(updated);
-                              saveQuickLabels(updated);
-                            }}
-                            className="w-full py-1.5 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-lg hover:border-foreground/30 transition-colors"
-                          >
-                            + Add label
-                          </button>
-                        )}
-
-                        <div className="text-[10px] text-muted-foreground/70">
-                          Use {altKey}
-                          {isMac ? "" : "+"}1 through {altKey}
-                          {isMac ? "" : "+"}0 when the annotation toolbar is visible to apply a
-                          label instantly.
-                        </div>
-                      </>
-                    )}
-
-                    {/* === SHORTCUTS TAB === */}
-                    {activeTab === "shortcuts" && <KeyboardShortcuts mode={mode} />}
-
-                    {/* === COMMENTS TAB === */}
-                    {activeTab === "comments" && <CommentsTab />}
-
-                    {/* === AI TAB === */}
-                    {activeTab === "ai" && (
-                      <AISettingsTab
-                        providers={piAIProviders}
-                        selectedProviderId={aiProvider}
-                        origin={origin}
-                        onProviderChange={setAiProvider}
-                      />
-                    )}
-
-                    {/* === FILES TAB === */}
-                    {activeTab === "files" && (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium">File Browser</div>
-                            <div className="text-xs text-muted-foreground">
-                              Your project files are shown automatically. Add extra directories
-                              below.
-                            </div>
-                          </div>
-                          <button
-                            role="switch"
-                            aria-checked={fileBrowserSettings.enabled}
-                            onClick={() =>
-                              handleFileBrowserChange({ enabled: !fileBrowserSettings.enabled })
-                            }
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              fileBrowserSettings.enabled ? "bg-primary" : "bg-muted"
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                fileBrowserSettings.enabled ? "translate-x-6" : "translate-x-1"
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        {fileBrowserSettings.enabled && (
-                          <>
-                            <div className="border-t border-border" />
-
-                            {/* Directory list */}
-                            {fileBrowserSettings.directories.length > 0 && (
-                              <div className="space-y-1">
-                                <label className="text-xs text-muted-foreground">Directories</label>
-                                {fileBrowserSettings.directories.map((dir) => (
-                                  <div key={dir} className="flex items-center gap-2 group">
-                                    <div
-                                      className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono truncate"
-                                      title={dir}
-                                    >
-                                      {dir}
-                                    </div>
-                                    <button
-                                      onClick={() =>
-                                        handleFileBrowserChange({
-                                          directories: fileBrowserSettings.directories.filter(
-                                            (d) => d !== dir,
-                                          ),
-                                        })
-                                      }
-                                      className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
-                                      title="Remove directory"
-                                    >
-                                      <svg
-                                        className="w-3.5 h-3.5"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          d="M6 18L18 6M6 6l12 12"
-                                        />
-                                      </svg>
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Add directory */}
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-muted-foreground">Add Directory</label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={newDirPath}
-                                  onChange={(e) => setNewDirPath(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") addDirectory();
-                                  }}
-                                  placeholder="/path/to/directory"
-                                  className="flex-1 px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                />
-                                <button
-                                  onClick={addDirectory}
-                                  disabled={!newDirPath.trim()}
-                                  className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-                                >
-                                  Add
-                                </button>
-                              </div>
-                              <div className="text-[10px] text-muted-foreground/70">
-                                Add directories outside your project that contain markdown files.
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </>
-                    )}
-
-                    {/* === HOOKS TAB === */}
-                    {activeTab === "hooks" && <HooksTab />}
-
-                    {/* === OBSIDIAN TAB === */}
-                    {activeTab === "obsidian" && (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium">Obsidian Integration</div>
-                            <div className="text-xs text-muted-foreground">
-                              Auto-save approved plans to your vault
-                            </div>
-                          </div>
-                          <button
-                            role="switch"
-                            aria-checked={obsidian.enabled}
-                            onClick={() => handleObsidianChange({ enabled: !obsidian.enabled })}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              obsidian.enabled ? "bg-primary" : "bg-muted"
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                obsidian.enabled ? "translate-x-6" : "translate-x-1"
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        {obsidian.enabled && (
-                          <>
-                            <div className="border-t border-border" />
-
-                            <div className="space-y-3">
-                              <div className="flex gap-3">
-                                <div className="flex-1 space-y-1.5">
-                                  <label className="text-xs text-muted-foreground">Vault</label>
-                                  {vaultsLoading ? (
-                                    <div className="w-full px-3 py-2 bg-muted rounded-lg text-xs text-muted-foreground">
-                                      Detecting...
-                                    </div>
-                                  ) : detectedVaults.length > 0 ? (
-                                    <>
-                                      <select
-                                        value={obsidian.vaultPath}
-                                        onChange={(e) =>
-                                          handleObsidianChange({ vaultPath: e.target.value })
-                                        }
-                                        className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
-                                      >
-                                        {detectedVaults.map((vault, index) => (
-                                          <option key={`${vault}-${index}`} value={vault}>
-                                            {vault.split("/").pop() || vault}
-                                          </option>
-                                        ))}
-                                        <option value={CUSTOM_PATH_SENTINEL}>Custom path...</option>
-                                      </select>
-                                      {obsidian.vaultPath === CUSTOM_PATH_SENTINEL && (
-                                        <input
-                                          type="text"
-                                          value={obsidian.customPath || ""}
-                                          onChange={(e) =>
-                                            handleObsidianChange({ customPath: e.target.value })
-                                          }
-                                          placeholder="/path/to/vault"
-                                          className="w-full mt-2 px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                        />
-                                      )}
-                                    </>
-                                  ) : (
-                                    <input
-                                      type="text"
-                                      value={obsidian.vaultPath}
-                                      onChange={(e) =>
-                                        handleObsidianChange({ vaultPath: e.target.value })
-                                      }
-                                      placeholder="/path/to/vault"
-                                      className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                    />
-                                  )}
-                                </div>
-
-                                <div className="w-44 space-y-1.5">
-                                  <label className="text-xs text-muted-foreground">Folder</label>
-                                  <input
-                                    type="text"
-                                    value={obsidian.folder}
-                                    onChange={(e) =>
-                                      handleObsidianChange({ folder: e.target.value })
-                                    }
-                                    placeholder="plannotator"
-                                    className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="space-y-1.5">
-                                <label className="text-xs text-muted-foreground">
-                                  Filename Format
-                                </label>
-                                <input
-                                  type="text"
-                                  value={obsidian.filenameFormat || ""}
-                                  onChange={(e) =>
-                                    handleObsidianChange({
-                                      filenameFormat: e.target.value || undefined,
-                                    })
-                                  }
-                                  placeholder={DEFAULT_FILENAME_FORMAT}
-                                  className="w-full px-3 py-2 bg-muted rounded-lg text-xs font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                />
-                                <div className="text-[10px] text-muted-foreground/70">
-                                  Variables: <code className="text-[10px]">{"{title}"}</code>{" "}
-                                  <code className="text-[10px]">{"{YYYY}"}</code>{" "}
-                                  <code className="text-[10px]">{"{MM}"}</code>{" "}
-                                  <code className="text-[10px]">{"{DD}"}</code>{" "}
-                                  <code className="text-[10px]">{"{Mon}"}</code>{" "}
-                                  <code className="text-[10px]">{"{D}"}</code>{" "}
-                                  <code className="text-[10px]">{"{HH}"}</code>{" "}
-                                  <code className="text-[10px]">{"{h}"}</code>{" "}
-                                  <code className="text-[10px]">{"{hh}"}</code>{" "}
-                                  <code className="text-[10px]">{"{mm}"}</code>{" "}
-                                  <code className="text-[10px]">{"{ss}"}</code>{" "}
-                                  <code className="text-[10px]">{"{ampm}"}</code>
-                                </div>
-                                <div className="text-[10px] text-muted-foreground/70">
-                                  Preview:{" "}
-                                  {(() => {
-                                    const fmt =
-                                      obsidian.filenameFormat?.trim() || DEFAULT_FILENAME_FORMAT;
-                                    const now = new Date();
-                                    const months = [
-                                      "Jan",
-                                      "Feb",
-                                      "Mar",
-                                      "Apr",
-                                      "May",
-                                      "Jun",
-                                      "Jul",
-                                      "Aug",
-                                      "Sep",
-                                      "Oct",
-                                      "Nov",
-                                      "Dec",
-                                    ];
-                                    const h24 = now.getHours();
-                                    const h12 = h24 % 12 || 12;
-                                    const vars: FilenameVars = {
-                                      title: "My Plan Title",
-                                      YYYY: String(now.getFullYear()),
-                                      MM: String(now.getMonth() + 1).padStart(2, "0"),
-                                      DD: String(now.getDate()).padStart(2, "0"),
-                                      Mon: months[now.getMonth()],
-                                      D: String(now.getDate()),
-                                      HH: String(h24).padStart(2, "0"),
-                                      h: String(h12),
-                                      hh: String(h12).padStart(2, "0"),
-                                      mm: String(now.getMinutes()).padStart(2, "0"),
-                                      ss: String(now.getSeconds()).padStart(2, "0"),
-                                      ampm: h24 >= 12 ? "pm" : "am",
-                                    };
-                                    let preview =
-                                      fmt.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m) + ".md";
-                                    if (obsidian.filenameSeparator === "dash")
-                                      preview = preview.replace(/ /g, "-");
-                                    else if (obsidian.filenameSeparator === "underscore")
-                                      preview = preview.replace(/ /g, "_");
-                                    return preview;
-                                  })()}
-                                </div>
-                              </div>
-
-                              <div className="space-y-1.5">
-                                <label className="text-xs text-muted-foreground">
-                                  Filename Separator
-                                </label>
-                                <select
-                                  value={obsidian.filenameSeparator || "space"}
-                                  onChange={(e) => {
-                                    // SAFETY: e.currentTarget.value is FilenameSeparator per select options
-                                    const v = e.currentTarget.value as
-                                      | "space"
-                                      | "dash"
-                                      | "underscore";
-                                    handleObsidianChange({ filenameSeparator: v });
-                                  }}
-                                  className="w-full px-3 py-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                >
-                                  <option value="space">Spaces (default)</option>
-                                  <option value="dash">Dashes (-)</option>
-                                  <option value="underscore">Underscores (_)</option>
-                                </select>
-                                <div className="text-[10px] text-muted-foreground/70">
-                                  Replaces spaces in the generated filename. Useful when working
-                                  with CLI tools in your vault.
-                                </div>
-                              </div>
-
-                              <div className="text-[10px] text-muted-foreground/70">
-                                Plans saved to:{" "}
-                                {obsidian.vaultPath === CUSTOM_PATH_SENTINEL
-                                  ? obsidian.customPath || "..."
-                                  : obsidian.vaultPath || "..."}
-                                /{obsidian.folder || "plannotator"}/
-                              </div>
-
-                              <div className="space-y-1.5">
-                                <label className="text-xs text-muted-foreground">
-                                  Frontmatter (auto-generated)
-                                </label>
-                                <pre className="px-3 py-2 bg-muted/50 rounded-lg text-[10px] font-mono text-muted-foreground overflow-x-auto">
-                                  {`---
-created: ${new Date().toISOString().slice(0, 19)}Z
-source: plannotator
-tags: [plan, ...]
----`}
-                                </pre>
-                              </div>
-
-                              <div className="border-t border-border/30" />
-
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-xs font-medium">
-                                    Auto-save on Plan Arrival
-                                  </div>
-                                  <div className="text-[10px] text-muted-foreground">
-                                    Automatically save to Obsidian when a plan loads, before you
-                                    approve or deny
-                                  </div>
-                                </div>
-                                <button
-                                  role="switch"
-                                  aria-checked={obsidian.autoSave}
-                                  onClick={() =>
-                                    handleObsidianChange({ autoSave: !obsidian.autoSave })
-                                  }
-                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                                    obsidian.autoSave ? "bg-primary" : "bg-muted"
-                                  }`}
-                                >
-                                  <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                      obsidian.autoSave ? "translate-x-6" : "translate-x-1"
-                                    }`}
-                                  />
-                                </button>
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-xs font-medium">Vault Browser</div>
-                                  <div className="text-[10px] text-muted-foreground">
-                                    Browse and annotate vault files from the sidebar
-                                  </div>
-                                </div>
-                                <button
-                                  role="switch"
-                                  aria-checked={obsidian.vaultBrowserEnabled}
-                                  onClick={() =>
-                                    handleObsidianChange({
-                                      vaultBrowserEnabled: !obsidian.vaultBrowserEnabled,
-                                    })
-                                  }
-                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                                    obsidian.vaultBrowserEnabled ? "bg-primary" : "bg-muted"
-                                  }`}
-                                >
-                                  <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                                      obsidian.vaultBrowserEnabled
-                                        ? "translate-x-6"
-                                        : "translate-x-1"
-                                    }`}
-                                  />
-                                </button>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </>
-                    )}
-
-                  </div>
-                </OverlayScrollArea>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+          <ObsidianTab
+            activeTab={activeTab}
+            obsidian={obsidian}
+            detectedVaults={detectedVaults}
+            vaultsLoading={vaultsLoading}
+            handleObsidianChange={handleObsidianChange}
+          />
+        </SettingsDialogShell>
+      )}
 
       {themePreview &&
         createPortal(
