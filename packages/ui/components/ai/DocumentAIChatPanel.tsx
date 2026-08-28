@@ -29,53 +29,34 @@ function truncate(text: string, max = 180): string {
   return `${text.slice(0, max).trimEnd()}...`;
 }
 
+function getToolInputString(input: AIJsonObject, key: string): string | null {
+  const value = input[key];
+  if (value === undefined || value === null || value !== String(value)) return null;
+  return String(value);
+}
+
+function formatKnownToolInput(toolName: string, input: AIJsonObject): string | null {
+  if (toolName === "Bash") return getToolInputString(input, "command");
+  if (toolName === "Read" || toolName === "Write" || toolName === "Edit") {
+    return getToolInputString(input, "file_path");
+  }
+  if (toolName === "Glob") return getToolInputString(input, "pattern");
+  if (toolName === "Grep") {
+    const pattern = getToolInputString(input, "pattern");
+    if (pattern === null) return null;
+    const path = getToolInputString(input, "path");
+    return path === null ? pattern : `${pattern} in ${path}`;
+  }
+  if (toolName === "WebFetch" || toolName === "WebSearch") {
+    return getToolInputString(input, "url");
+  }
+  return null;
+}
+
 function formatToolInput(toolName: string, input: AIJsonObject): string | null {
   if (!input || Object.keys(input).length === 0) return null;
-
-  if (
-    toolName === "Bash" &&
-    input.command !== undefined &&
-    input.command !== null &&
-    input.command === String(input.command)
-  ) {
-    return input.command;
-  }
-  if (
-    (toolName === "Read" || toolName === "Write" || toolName === "Edit") &&
-    input.file_path !== undefined &&
-    input.file_path !== null &&
-    input.file_path === String(input.file_path)
-  ) {
-    return input.file_path;
-  }
-  if (
-    toolName === "Glob" &&
-    input.pattern !== undefined &&
-    input.pattern !== null &&
-    input.pattern === String(input.pattern)
-  ) {
-    return input.pattern;
-  }
-  if (
-    toolName === "Grep" &&
-    input.pattern !== undefined &&
-    input.pattern !== null &&
-    input.pattern === String(input.pattern)
-  ) {
-    const path =
-      input.path !== undefined && input.path !== null && input.path === String(input.path)
-        ? ` in ${input.path}`
-        : "";
-    return `${input.pattern}${path}`;
-  }
-  if (
-    (toolName === "WebFetch" || toolName === "WebSearch") &&
-    input.url !== undefined &&
-    input.url !== null &&
-    input.url === String(input.url)
-  ) {
-    return input.url;
-  }
+  const knownInput = formatKnownToolInput(toolName, input);
+  if (knownInput !== null) return knownInput;
 
   try {
     return truncate(JSON.stringify(input), 240);
