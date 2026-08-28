@@ -1,6 +1,7 @@
 import React from "react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import type { FileTreeNode as TreeNode } from "../utils/buildFileTree";
+import type { DiffFile } from "../types";
 
 interface FileTreeNodeProps {
   node: TreeNode;
@@ -51,61 +52,179 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
   scrollHighlightIndex,
   repoRoot,
 }) => {
-  const paddingLeft = 4 + node.depth * 8;
-
   if (node.type === "folder") {
-    if (!hasVisibleChildren(node, viewedFiles, activeFileIndex, hideViewedFiles)) {
-      return null;
-    }
-
-    const isExpanded = expandedFolders.has(node.path);
-
     return (
-      <>
-        <button
-          onClick={() => onToggleFolder(node.path)}
-          className="w-full flex items-center gap-1.5 py-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors rounded-sm"
-          style={{ paddingLeft }}
-        >
-          <svg
-            className={`w-3 h-3 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-          <span className="truncate">{node.name}</span>
-          {(node.additions > 0 || node.deletions > 0) && (
-            <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 text-[10px]">
-              {node.additions > 0 && <span className="additions">+{node.additions}</span>}
-              {node.deletions > 0 && <span className="deletions">-{node.deletions}</span>}
-            </div>
-          )}
-        </button>
-        {isExpanded &&
-          node.children?.map((child) => (
-            <FileTreeNodeItem
-              key={child.type === "file" ? child.path : `folder:${child.path}`}
-              node={child}
-              expandedFolders={expandedFolders}
-              onToggleFolder={onToggleFolder}
-              activeFileIndex={activeFileIndex}
-              onSelectFile={onSelectFile}
-              onDoubleClickFile={onDoubleClickFile}
-              viewedFiles={viewedFiles}
-              onToggleViewed={onToggleViewed}
-              hideViewedFiles={hideViewedFiles}
-              getAnnotationCount={getAnnotationCount}
-              stagedFiles={stagedFiles}
-              scrollHighlightIndex={scrollHighlightIndex}
-              repoRoot={repoRoot}
-            />
-          ))}
-      </>
+      <FolderTreeNode
+        node={node}
+        expandedFolders={expandedFolders}
+        onToggleFolder={onToggleFolder}
+        activeFileIndex={activeFileIndex}
+        onSelectFile={onSelectFile}
+        onDoubleClickFile={onDoubleClickFile}
+        viewedFiles={viewedFiles}
+        onToggleViewed={onToggleViewed}
+        hideViewedFiles={hideViewedFiles}
+        getAnnotationCount={getAnnotationCount}
+        stagedFiles={stagedFiles}
+        scrollHighlightIndex={scrollHighlightIndex}
+        repoRoot={repoRoot}
+      />
     );
   }
+
+  return (
+    <FileTreeLeaf
+      node={node}
+      activeFileIndex={activeFileIndex}
+      onSelectFile={onSelectFile}
+      onDoubleClickFile={onDoubleClickFile}
+      viewedFiles={viewedFiles}
+      onToggleViewed={onToggleViewed}
+      hideViewedFiles={hideViewedFiles}
+      getAnnotationCount={getAnnotationCount}
+      stagedFiles={stagedFiles}
+      scrollHighlightIndex={scrollHighlightIndex}
+      repoRoot={repoRoot}
+    />
+  );
+};
+
+interface FileChangeDetailsProps {
+  file: DiffFile;
+  isStaged: boolean;
+  annotationCount: number;
+}
+
+function FileChangeDetails({ file, isStaged, annotationCount }: FileChangeDetailsProps) {
+  return (
+    <div className="flex items-center gap-1.5 flex-shrink-0 text-[10px]">
+      {isStaged && (
+        <span className="text-primary font-medium" title="Staged (git add)">
+          +
+        </span>
+      )}
+      {annotationCount > 0 && <span className="text-primary font-medium">{annotationCount}</span>}
+      {file.additions > 0 && <span className="additions">+{file.additions}</span>}
+      {file.deletions > 0 && <span className="deletions">-{file.deletions}</span>}
+      <FileStatusMarker file={file} />
+    </div>
+  );
+}
+
+function FileStatusMarker({ file }: Pick<FileChangeDetailsProps, "file">) {
+  if (file.status === "added") {
+    return (
+      <span className="text-success font-semibold" title="Added file">
+        A
+      </span>
+    );
+  }
+
+  if (file.status === "deleted") {
+    return (
+      <span className="text-destructive font-semibold" title="Deleted file">
+        D
+      </span>
+    );
+  }
+
+  if (file.status === "renamed") {
+    return (
+      <span
+        className="text-[#007aff] font-semibold"
+        title={file.oldPath ? `Renamed from ${file.oldPath}` : "Renamed file"}
+      >
+        R
+      </span>
+    );
+  }
+
+  return null;
+}
+
+function FolderTreeNode({
+  node,
+  expandedFolders,
+  onToggleFolder,
+  activeFileIndex,
+  onSelectFile,
+  onDoubleClickFile,
+  viewedFiles,
+  onToggleViewed,
+  hideViewedFiles,
+  getAnnotationCount,
+  stagedFiles,
+  scrollHighlightIndex,
+  repoRoot,
+}: FileTreeNodeProps) {
+  if (!hasVisibleChildren(node, viewedFiles, activeFileIndex, hideViewedFiles)) return null;
+
+  const isExpanded = expandedFolders.has(node.path);
+  const paddingLeft = 4 + node.depth * 8;
+
+  return (
+    <>
+      <button
+        onClick={() => onToggleFolder(node.path)}
+        className="w-full flex items-center gap-1.5 py-1 px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors rounded-sm"
+        style={{ paddingLeft }}
+      >
+        <svg
+          className={`w-3 h-3 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="truncate">{node.name}</span>
+        {(node.additions > 0 || node.deletions > 0) && (
+          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0 text-[10px]">
+            {node.additions > 0 && <span className="additions">+{node.additions}</span>}
+            {node.deletions > 0 && <span className="deletions">-{node.deletions}</span>}
+          </div>
+        )}
+      </button>
+      {isExpanded &&
+        node.children?.map((child) => (
+          <FileTreeNodeItem
+            key={child.type === "file" ? child.path : `folder:${child.path}`}
+            node={child}
+            expandedFolders={expandedFolders}
+            onToggleFolder={onToggleFolder}
+            activeFileIndex={activeFileIndex}
+            onSelectFile={onSelectFile}
+            onDoubleClickFile={onDoubleClickFile}
+            viewedFiles={viewedFiles}
+            onToggleViewed={onToggleViewed}
+            hideViewedFiles={hideViewedFiles}
+            getAnnotationCount={getAnnotationCount}
+            stagedFiles={stagedFiles}
+            scrollHighlightIndex={scrollHighlightIndex}
+            repoRoot={repoRoot}
+          />
+        ))}
+    </>
+  );
+}
+
+function FileTreeLeaf({
+  node,
+  activeFileIndex,
+  onSelectFile,
+  onDoubleClickFile,
+  viewedFiles,
+  onToggleViewed,
+  hideViewedFiles,
+  getAnnotationCount,
+  stagedFiles,
+  scrollHighlightIndex,
+  repoRoot,
+}: FileTreeNodeProps) {
+  if (node.fileIndex == null || !node.file) return null;
+
+  const paddingLeft = 4 + node.depth * 8;
 
   // File node
   const isActive = node.fileIndex === activeFileIndex;
@@ -123,8 +242,8 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild>
         <button
-          onClick={() => onSelectFile(node.fileIndex!)}
-          onDoubleClick={() => onDoubleClickFile?.(node.fileIndex!)}
+          onClick={() => onSelectFile(node.fileIndex)}
+          onDoubleClick={() => onDoubleClickFile?.(node.fileIndex)}
           className={`file-tree-item w-full text-left group ${isActive ? "active" : isScrollActive ? "scroll-active" : ""} ${annotationCount > 0 ? "has-annotations" : ""} ${isStaged ? "staged" : ""}`}
           style={{ paddingLeft }}
         >
@@ -166,39 +285,11 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
             </span>
             <span className="truncate">{node.name}</span>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0 text-[10px]">
-            {isStaged && (
-              <span className="text-primary font-medium" title="Staged (git add)">
-                +
-              </span>
-            )}
-            {annotationCount > 0 && (
-              <span className="text-primary font-medium">{annotationCount}</span>
-            )}
-            {node.file!.additions > 0 && <span className="additions">+{node.file!.additions}</span>}
-            {node.file!.deletions > 0 && <span className="deletions">-{node.file!.deletions}</span>}
-            {/* Change-type marker — modified is deliberately undecorated so
-                added/deleted/renamed pop (diffshub treatment; renamed uses
-                its blue). */}
-            {node.file!.status === "added" && (
-              <span className="text-success font-semibold" title="Added file">
-                A
-              </span>
-            )}
-            {node.file!.status === "deleted" && (
-              <span className="text-destructive font-semibold" title="Deleted file">
-                D
-              </span>
-            )}
-            {node.file!.status === "renamed" && (
-              <span
-                className="text-[#007aff] font-semibold"
-                title={node.file!.oldPath ? `Renamed from ${node.file!.oldPath}` : "Renamed file"}
-              >
-                R
-              </span>
-            )}
-          </div>
+          <FileChangeDetails
+            file={node.file}
+            isStaged={isStaged}
+            annotationCount={annotationCount}
+          />
         </button>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
@@ -229,4 +320,4 @@ export const FileTreeNodeItem: React.FC<FileTreeNodeProps> = ({
       </ContextMenu.Portal>
     </ContextMenu.Root>
   );
-};
+}
