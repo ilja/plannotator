@@ -53,6 +53,86 @@ interface AttachmentsButtonProps {
   hideLabel?: boolean;
 }
 
+const AttachmentsTrigger: React.FC<{
+  buttonRef: React.RefObject<HTMLButtonElement | null>;
+  images: ImageAttachment[];
+  variant: "toolbar" | "inline";
+  hideLabel: boolean;
+  onToggle: () => void;
+  onClearAll: (event: React.MouseEvent) => void;
+}> = ({ buttonRef, images, variant, hideLabel, onToggle, onClearAll }) => (
+  <button
+    ref={buttonRef}
+    type="button"
+    onClick={onToggle}
+    aria-label="Attachments"
+    title="Attachments"
+    className="group relative flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+  >
+    {images.length > 0 ? (
+      <>
+        <div className="relative flex items-center">
+          {images.slice(0, 3).map((image, index) => (
+            <div
+              key={image.path}
+              className="relative w-5 h-5 rounded border border-background"
+              style={{ marginLeft: index > 0 ? "-6px" : 0, zIndex: 3 - index }}
+            >
+              <img
+                src={getImageSrc(image.path)}
+                alt={image.name}
+                loading="lazy"
+                className="w-5 h-5 rounded object-cover"
+              />
+            </div>
+          ))}
+          {images.length > 3 && (
+            <div
+              className="relative w-5 h-5 rounded bg-muted border border-background flex items-center justify-center text-[9px] font-medium"
+              style={{ marginLeft: "-6px", zIndex: 0 }}
+            >
+              +{images.length - 3}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onClearAll}
+          className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+        >
+          <svg
+            className="w-2 h-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </>
+    ) : (
+      <svg
+        className="w-4 h-4"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+        />
+      </svg>
+    )}
+    {(!hideLabel || images.length > 0) && (
+      <span className={variant === "inline" ? "sr-only" : ""}>
+        {images.length > 0 ? `${images.length}` : "Images"}
+      </span>
+    )}
+  </button>
+);
+
 export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
   images,
   onAdd,
@@ -219,79 +299,14 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
 
   return (
     <>
-      {/* Trigger Button */}
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="Attachments"
-        title="Attachments"
-        className="group relative flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-      >
-        {/* Show stacked thumbnails if we have images */}
-        {images.length > 0 ? (
-          <>
-            <div className="relative flex items-center">
-              {images.slice(0, 3).map((img, idx) => (
-                <div
-                  key={img.path}
-                  className="relative w-5 h-5 rounded border border-background"
-                  style={{ marginLeft: idx > 0 ? "-6px" : 0, zIndex: 3 - idx }}
-                >
-                  <img
-                    src={getImageSrc(img.path)}
-                    alt={img.name}
-                    loading="lazy"
-                    className="w-5 h-5 rounded object-cover"
-                  />
-                </div>
-              ))}
-              {images.length > 3 && (
-                <div
-                  className="relative w-5 h-5 rounded bg-muted border border-background flex items-center justify-center text-[9px] font-medium"
-                  style={{ marginLeft: "-6px", zIndex: 0 }}
-                >
-                  +{images.length - 3}
-                </div>
-              )}
-            </div>
-            {/* Clear all button on hover */}
-            <button
-              onClick={handleClearAll}
-              className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-            >
-              <svg
-                className="w-2 h-2"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={3}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </>
-        ) : (
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-            />
-          </svg>
-        )}
-        {(!hideLabel || images.length > 0) && (
-          <span className={variant === "inline" ? "sr-only" : ""}>
-            {images.length > 0 ? `${images.length}` : "Images"}
-          </span>
-        )}
-      </button>
+      <AttachmentsTrigger
+        buttonRef={buttonRef}
+        images={images}
+        variant={variant}
+        hideLabel={hideLabel}
+        onToggle={() => setIsOpen(!isOpen)}
+        onClearAll={handleClearAll}
+      />
 
       {/* Popover */}
       {isOpen &&

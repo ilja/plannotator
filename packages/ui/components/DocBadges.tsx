@@ -36,6 +36,102 @@ export interface DocBadgesProps {
   openInAppPath?: string | null;
 }
 
+type RepoInfo = NonNullable<DocBadgesProps["repoInfo"]>;
+
+const RepoBadge: React.FC<{ repoInfo: RepoInfo }> = ({ repoInfo }) => (
+  <div className="flex items-center gap-1.5">
+    <span
+      className="px-1.5 py-0.5 bg-muted/50 rounded truncate max-w-[140px]"
+      title={repoInfo.display}
+    >
+      {repoInfo.display}
+    </span>
+    {repoInfo.branch && (
+      <span
+        className="px-1.5 py-0.5 bg-muted/30 rounded max-w-[120px] flex items-center gap-1 overflow-hidden"
+        title={repoInfo.branch}
+      >
+        <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" />
+        </svg>
+        <span className="truncate">{repoInfo.branch}</span>
+      </span>
+    )}
+  </div>
+);
+
+const SourceBadge: React.FC<{ sourceInfo: string; openInButton: React.ReactNode }> = ({
+  sourceInfo,
+  openInButton,
+}) => (
+  <div className="flex items-center gap-1">
+    <span className="px-1.5 py-0.5 bg-muted/30 rounded truncate max-w-[200px]" title={sourceInfo}>
+      {/^https?:\/\//i.test(sourceInfo) ? hostnameOrFallback(sourceInfo) : sourceInfo}
+    </span>
+    {openInButton}
+  </div>
+);
+
+const LinkedDocBadge: React.FC<{
+  linkedDocInfo: LinkedDocBadgeInfo;
+  openInButton: React.ReactNode;
+}> = ({ linkedDocInfo, openInButton }) => {
+  if (linkedDocInfo.variant === "folder-file") {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={linkedDocInfo.onBack}
+          className="rounded-sm text-[9px] font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          Close
+        </button>
+        <span
+          className="truncate rounded bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground max-w-[220px]"
+          title={linkedDocInfo.filepath}
+        >
+          {linkedDocInfo.filepath.split("/").pop()}
+        </span>
+        {openInButton}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={linkedDocInfo.onBack}
+        className="px-1.5 py-0.5 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors flex items-center gap-1"
+      >
+        <svg
+          className="w-2.5 h-2.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
+          />
+        </svg>
+        {linkedDocInfo.backLabel || "plan"}
+      </button>
+      <span className="px-1.5 py-0.5 bg-primary/10 text-primary/80 rounded">
+        {linkedDocInfo.label || "Linked File"}
+      </span>
+      <span
+        className="px-1.5 py-0.5 bg-muted/50 text-muted-foreground rounded truncate max-w-[200px]"
+        title={linkedDocInfo.filepath}
+      >
+        {linkedDocInfo.filepath.split("/").pop()}
+      </span>
+      {openInButton}
+    </div>
+  );
+};
+
 export const DocBadges: React.FC<DocBadgesProps> = ({
   layout,
   repoInfo,
@@ -44,126 +140,37 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
   sourceInfo,
   openInAppPath,
 }) => {
-  const isRow = layout === "row";
+  // In row layout, there is currently no document badge content to render.
+  if (layout === "row") return null;
+
   const canOpenInApp = !!openInAppPath && !/^https?:\/\//i.test(openInAppPath);
   const openInButton = canOpenInApp ? (
     <OpenInAppButton filePath={openInAppPath} base={null} />
   ) : null;
 
-  // In row layout, there is currently no document badge content to render.
-  const anything = isRow
-    ? false
-    : repoInfo || showDemoBadge || linkedDocInfo || sourceInfo || canOpenInApp;
-  if (!anything) return null;
-
-  // Row layout: single horizontal line. Column layout: stacked rows.
-  const outerClass = isRow
-    ? "flex flex-row items-center gap-1.5 text-[9px] text-muted-foreground/70 font-mono"
-    : "flex flex-col items-start gap-1 text-[9px] text-muted-foreground/50 font-mono";
+  if (!repoInfo && !showDemoBadge && !linkedDocInfo && !sourceInfo && !canOpenInApp) return null;
 
   return (
-    <div className={outerClass}>
+    <div className="flex flex-col items-start gap-1 text-[9px] text-muted-foreground/50 font-mono">
       {/* Open-in-app normally renders inline (to the right) within the source /
           linked-doc rows below. This standalone fallback only fires when there
-          is no file row to attach to. Hidden in the sticky row and for URLs. */}
-      {!isRow && canOpenInApp && !sourceInfo && !linkedDocInfo && openInButton}
-      {/* Row layout (sticky lane) omits repo/branch to keep the bar compact —
-          they'd otherwise push the container wide enough to visually extend
-          under the action buttons. Plan-diff badge still renders below. */}
-      {repoInfo && !linkedDocInfo && !isRow && (
-        <div className="flex items-center gap-1.5">
-          <span
-            className="px-1.5 py-0.5 bg-muted/50 rounded truncate max-w-[140px]"
-            title={repoInfo.display}
-          >
-            {repoInfo.display}
-          </span>
-          {repoInfo.branch && (
-            <span
-              className="px-1.5 py-0.5 bg-muted/30 rounded max-w-[120px] flex items-center gap-1 overflow-hidden"
-              title={repoInfo.branch}
-            >
-              <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" />
-              </svg>
-              <span className="truncate">{repoInfo.branch}</span>
-            </span>
-          )}
-        </div>
+          is no file row to attach to. Hidden for URLs. */}
+      {canOpenInApp && !sourceInfo && !linkedDocInfo && openInButton}
+      {/* Repo/branch stay in the top-of-document layout. */}
+      {repoInfo && !linkedDocInfo && <RepoBadge repoInfo={repoInfo} />}
+      {sourceInfo && !linkedDocInfo && (
+        <SourceBadge sourceInfo={sourceInfo} openInButton={openInButton} />
       )}
-
-      {sourceInfo && !linkedDocInfo && !isRow && (
-        <div className="flex items-center gap-1">
-          <span
-            className="px-1.5 py-0.5 bg-muted/30 rounded truncate max-w-[200px]"
-            title={sourceInfo}
-          >
-            {/^https?:\/\//i.test(sourceInfo) ? hostnameOrFallback(sourceInfo) : sourceInfo}
-          </span>
-          {openInButton}
-        </div>
-      )}
-
       {/* Demo badge: only in column (top-of-doc) layout */}
-      {!isRow && showDemoBadge && !linkedDocInfo && (
+      {showDemoBadge && !linkedDocInfo && (
         <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-500/15 text-amber-600 dark:text-amber-400">
           Demo
         </span>
       )}
-
-      {/* Linked-doc breadcrumb: only in column layout (sticky lane is hidden in linked-doc mode) */}
-      {!isRow &&
-        linkedDocInfo &&
-        (linkedDocInfo.variant === "folder-file" ? (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={linkedDocInfo.onBack}
-              className="rounded-sm text-[9px] font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              Close
-            </button>
-            <span
-              className="truncate rounded bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground max-w-[220px]"
-              title={linkedDocInfo.filepath}
-            >
-              {linkedDocInfo.filepath.split("/").pop()}
-            </span>
-            {openInButton}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={linkedDocInfo.onBack}
-              className="px-1.5 py-0.5 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors flex items-center gap-1"
-            >
-              <svg
-                className="w-2.5 h-2.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
-                />
-              </svg>
-              {linkedDocInfo.backLabel || "plan"}
-            </button>
-            <span className="px-1.5 py-0.5 bg-primary/10 text-primary/80 rounded">
-              {linkedDocInfo.label || "Linked File"}
-            </span>
-            <span
-              className="px-1.5 py-0.5 bg-muted/50 text-muted-foreground rounded truncate max-w-[200px]"
-              title={linkedDocInfo.filepath}
-            >
-              {linkedDocInfo.filepath.split("/").pop()}
-            </span>
-            {openInButton}
-          </div>
-        ))}
+      {/* Linked-doc breadcrumb: sticky lane is hidden in linked-doc mode. */}
+      {linkedDocInfo && (
+        <LinkedDocBadge linkedDocInfo={linkedDocInfo} openInButton={openInButton} />
+      )}
     </div>
   );
 };

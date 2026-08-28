@@ -18,9 +18,27 @@ const isEditableElement = (node: EventTarget | Element | null): boolean => {
   if (!(node instanceof Element)) return false;
   if (node.matches('input, textarea, select, [role="textbox"]')) return true;
   if (node.closest('[contenteditable]:not([contenteditable="false"])')) return true;
-  // SAFETY: node is an Element checked via instanceof before this cast
-  return (node as HTMLElement).isContentEditable;
+  return node instanceof HTMLElement && node.isContentEditable;
 };
+
+const isQuickLabelShortcut = (event: KeyboardEvent): boolean =>
+  ((event.code >= "Digit1" && event.code <= "Digit9") || event.code === "Digit0") &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  event.altKey;
+
+const quickLabelIndex = (code: string): number => {
+  const digit = Number.parseInt(code.slice(5), 10);
+  return digit === 0 ? 9 : digit - 1;
+};
+
+const shouldIgnoreCommentShortcut = (event: KeyboardEvent): boolean =>
+  event.ctrlKey ||
+  event.metaKey ||
+  event.altKey ||
+  event.key === "Tab" ||
+  event.key === "Enter" ||
+  event.key.length !== 1;
 
 interface AnnotationToolbarProps {
   element: HTMLElement;
@@ -127,35 +145,31 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
   // Type-to-comment + Alt+N / bare digit quick label shortcuts
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.isComposing) return;
-      if (isEditableElement(e.target) || isEditableElement(document.activeElement)) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing) return;
+      if (isEditableElement(event.target) || isEditableElement(document.activeElement)) return;
 
       // When picker is open, let FloatingQuickLabelPicker own all keyboard input
       if (showQuickLabels) return;
 
-      if (e.key === "Escape") {
+      if (event.key === "Escape") {
         onClose();
         return;
       }
 
       // Alt+N applies quick label (picker closed)
-      const isDigit = (e.code >= "Digit1" && e.code <= "Digit9") || e.code === "Digit0";
-      if (isDigit && !e.ctrlKey && !e.metaKey && e.altKey) {
-        e.preventDefault();
-        const digit = parseInt(e.code.slice(5), 10);
-        const index = digit === 0 ? 9 : digit - 1;
+      if (isQuickLabelShortcut(event)) {
+        event.preventDefault();
+        const index = quickLabelIndex(event.code);
         if (index < quickLabels.length) {
           onQuickLabel?.(quickLabels[index]);
         }
         return;
       }
 
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Tab" || e.key === "Enter") return;
-      if (e.key.length !== 1) return;
+      if (shouldIgnoreCommentShortcut(event)) return;
 
-      onRequestComment?.(e.key);
+      onRequestComment?.(event.key);
     };
 
     window.addEventListener("keydown", handleKeyDown);
