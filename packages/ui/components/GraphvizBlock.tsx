@@ -108,6 +108,24 @@ function fitBoundsToContainer(bounds: ViewBox, containerRect: DOMRect): ViewBox 
   };
 }
 
+function getDiagramNaturalHeight(bounds: ViewBox | null): string {
+  if (!bounds) return "min(65vh, 36rem)";
+
+  const height = Math.min(
+    36 * 16,
+    Math.max(4 * 16, Math.round(bounds.height * (800 / bounds.width))),
+  );
+  return `min(65vh, ${height}px)`;
+}
+
+function shouldShowExpandedDiagramPortal(
+  showSource: boolean,
+  svg: string,
+  isExpanded: boolean,
+): boolean {
+  return !showSource && Boolean(svg) && isExpanded && globalThis.document !== undefined;
+}
+
 export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState("");
@@ -546,9 +564,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     </pre>
   );
 
-  const naturalHeight = naturalBoundsRef.current
-    ? `min(65vh, ${Math.min(36 * 16, Math.max(4 * 16, Math.round(naturalBoundsRef.current.height * (800 / naturalBoundsRef.current.width))))}px)`
-    : "min(65vh, 36rem)";
+  const naturalHeight = getDiagramNaturalHeight(naturalBoundsRef.current);
 
   const diagramBody = (
     <div
@@ -579,10 +595,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
         )}
       </div>
 
-      {!showSource &&
-        svg &&
-        isExpanded &&
-        globalThis.document !== undefined &&
+      {shouldShowExpandedDiagramPortal(showSource, svg, isExpanded) &&
         createPortal(
           <div className="fixed inset-0 z-[9999] bg-background/90 backdrop-blur-sm p-4 md:p-6">
             <div className="mx-auto flex h-full max-w-[min(96vw,110rem)] flex-col gap-3">
