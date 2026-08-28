@@ -87,7 +87,7 @@ import { useIsMobile } from "@plannotator/ui/hooks/useIsMobile";
 import { ImageAnnotator } from "@plannotator/ui/components/ImageAnnotator";
 import { deriveImageName } from "@plannotator/ui/components/AttachmentsButton";
 import { useSidebar, type SidebarTab } from "@plannotator/ui/hooks/useSidebar";
-import { useLinkedDoc, type LinkedDocSessionState } from "@plannotator/ui/hooks/useLinkedDoc";
+import { useLinkedDoc } from "@plannotator/ui/hooks/useLinkedDoc";
 import { useCodeFilePopout } from "@plannotator/ui/hooks/useCodeFilePopout";
 import { useAnnotationDraft } from "@plannotator/ui/hooks/useAnnotationDraft";
 import { useEditorAnnotations } from "@plannotator/ui/hooks/useEditorAnnotations";
@@ -159,6 +159,13 @@ import { createSourceDocumentWatch } from "./sourceDocumentWatch";
 import { dirnameBrowserPath, normalizeBrowserPath, pathIsInsideDir } from "./sourceDocumentPaths";
 import { pickRestoredSingleFileDraftToDisplay } from "./draftRestoreSelection";
 import { decodeGlobalPasteUploadResponse } from "./globalPasteUploadResponse";
+import {
+  buildMessageAnnotationCounts,
+  countMessageAnnotations,
+  createEmptyMessageAnnotationState,
+  normalizeMessageAnnotationState,
+  type MessageAnnotationState,
+} from "./messageAnnotationSession";
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -210,79 +217,6 @@ const buildSourceBackedDraftRestorePlan = (
 function getHTMLElementTarget(target: EventTarget | null): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
-
-type MessageAnnotationState = {
-  messageId: string;
-  text: string;
-  timestamp?: string;
-  linkedDocSession: LinkedDocSessionState;
-  codeAnnotations: CodeAnnotation[];
-  selectedCodeAnnotationId: string | null;
-};
-
-const countLinkedDocSessionAnnotations = (session: LinkedDocSessionState): number => {
-  let total = session.root.annotations.length + session.root.globalAttachments.length;
-  for (const doc of session.docs.values()) {
-    total += doc.annotations.length + doc.globalAttachments.length;
-  }
-  return total;
-};
-
-const countMessageAnnotations = (state: MessageAnnotationState): number =>
-  countLinkedDocSessionAnnotations(state.linkedDocSession) + state.codeAnnotations.length;
-
-const createEmptyMessageState = (message: PickerMessage): MessageAnnotationState => ({
-  messageId: message.messageId,
-  text: message.text,
-  timestamp: message.timestamp,
-  linkedDocSession: {
-    root: {
-      markdown: message.text,
-      renderAs: "markdown",
-      rawHtml: "",
-      shareHtml: "",
-      annotations: [],
-      selectedAnnotationId: null,
-      globalAttachments: [],
-    },
-    docs: new Map(),
-  },
-  codeAnnotations: [],
-  selectedCodeAnnotationId: null,
-});
-
-const normalizeMessageState = (
-  state: MessageAnnotationState,
-  message: PickerMessage,
-): MessageAnnotationState => ({
-  ...state,
-  text: message.text,
-  timestamp: message.timestamp,
-  linkedDocSession: {
-    root: {
-      ...state.linkedDocSession.root,
-      // The root document for a message is immutable and comes from the picker.
-      // Keep it as the source of truth so transient UI state cannot cache an
-      // empty markdown value for a message.
-      markdown: message.text,
-      renderAs: state.linkedDocSession.root.renderAs ?? "markdown",
-      rawHtml: state.linkedDocSession.root.rawHtml ?? "",
-      shareHtml: state.linkedDocSession.root.shareHtml ?? "",
-    },
-    docs: new Map(state.linkedDocSession.docs),
-  },
-});
-
-const buildMessageAnnotationCounts = (
-  states: Map<string, MessageAnnotationState>,
-): Map<string, number> => {
-  const counts = new Map<string, number>();
-  for (const [messageId, state] of states) {
-    const count = countMessageAnnotations(state);
-    if (count > 0) counts.set(messageId, count);
-  }
-  return counts;
-};
 
 const draftBannerMessage = (banner: {
   count: number;
@@ -989,7 +923,7 @@ const App: React.FC = () => {
     const msg = recentMessages.find((m) => m.messageId === selectedMessageId);
     if (!msg) return null;
     const snapshot = linkedDocHook.snapshotSession();
-    return normalizeMessageState(
+    return normalizeMessageAnnotationState(
       {
         messageId: msg.messageId,
         text: msg.text,
@@ -1034,7 +968,7 @@ const App: React.FC = () => {
     // persistence happens in event handlers (handleSelectMessage) instead.
     const states = getMessageStatesWithCurrent();
     return recentMessages.map((msg) => {
-      const state = states.get(msg.messageId) ?? createEmptyMessageState(msg);
+      const state = states.get(msg.messageId) ?? createEmptyMessageAnnotationState(msg);
       const linkedDocs: Map<string, LinkedDocAnnotationEntry> = new Map();
       for (const [filepath, doc] of state.linkedDocSession.docs) {
         linkedDocs.set(filepath, {
@@ -1084,8 +1018,8 @@ const App: React.FC = () => {
       if (!msg || messageId === selectedMessageId) return;
 
       const states = saveCurrentMessageState();
-      const targetState = normalizeMessageState(
-        states.get(messageId) ?? createEmptyMessageState(msg),
+      const targetState = normalizeMessageAnnotationState(
+        states.get(messageId) ?? createEmptyMessageAnnotationState(msg),
         msg,
       );
 
