@@ -160,6 +160,100 @@ function createActiveSessionContext() {
   };
 }
 
+type DecodedPlannotatorRequest = Schema.Schema.Type<typeof PlannotatorRequestMessage>;
+
+async function handleCodeReviewRequest(
+  ctx: ExtensionContext,
+  request: Extract<DecodedPlannotatorRequest, { action: "code-review" }>,
+): Promise<void> {
+  const result = await openCodeReview(ctx, {
+    cwd: request.payload?.cwd,
+    defaultBranch: request.payload?.defaultBranch,
+    diffType: request.payload?.diffType,
+    vcsType: request.payload?.vcsType,
+    useLocal: request.payload?.useLocal,
+    prUrl: request.payload?.prUrl,
+  });
+  request.respond({ status: "handled", result });
+}
+
+async function handleAnnotateRequest(
+  ctx: ExtensionContext,
+  request: Extract<DecodedPlannotatorRequest, { action: "annotate" }>,
+): Promise<void> {
+  const payload = request.payload;
+  if (!payload?.filePath) {
+    request.respond({ status: "error", error: "Missing filePath for annotate request." });
+    return;
+  }
+  const sourceConverted =
+    /\.html?$/i.test(payload.filePath) || /^https?:\/\//i.test(payload.filePath);
+  const result = await openMarkdownAnnotation(
+    ctx,
+    payload.filePath,
+    payload.markdown ?? "",
+    payload.mode ?? "annotate",
+    payload.folderPath,
+    undefined,
+    sourceConverted,
+    payload.gate,
+  );
+  request.respond({ status: "handled", result });
+}
+
+async function handleAnnotateLastRequest(
+  ctx: ExtensionContext,
+  request: Extract<DecodedPlannotatorRequest, { action: "annotate-last" }>,
+): Promise<void> {
+  const payloadText = request.payload?.markdown;
+  const lastText = payloadText?.trim() ? payloadText : getLastAssistantMessageText(ctx);
+  if (!lastText) {
+    request.respond({
+      status: "unavailable",
+      error: "No assistant message found in session.",
+    });
+    return;
+  }
+  const recent = payloadText?.trim() ? [] : getRecentAssistantMessages(ctx, 25);
+  const pickerMessages = recent.length > 1 ? recent : undefined;
+  const result = await openLastMessageAnnotation(
+    ctx,
+    lastText,
+    request.payload?.gate,
+    pickerMessages,
+  );
+  request.respond({ status: "handled", result });
+}
+
+async function handlePlannotatorRequest(
+  ctx: ExtensionContext,
+  request: DecodedPlannotatorRequest,
+): Promise<void> {
+  switch (request.action) {
+    case "code-review":
+      await handleCodeReviewRequest(ctx, request);
+      return;
+    case "annotate":
+      await handleAnnotateRequest(ctx, request);
+      return;
+    case "annotate-last":
+      await handleAnnotateLastRequest(ctx, request);
+      return;
+  }
+}
+
+function respondToRequestFailure(
+  respond: DecodedPlannotatorRequest["respond"],
+  error: Error,
+): void {
+  const message = getStartupErrorMessage(error);
+  if (/unavailable|not available/i.test(message)) {
+    respond({ status: "unavailable", error: message });
+    return;
+  }
+  respond({ status: "error", error: message });
+}
+
 export function registerPlannotatorEventListeners(pi: ExtensionAPI): void {
   const activeSessionContext = createActiveSessionContext();
 
@@ -180,71 +274,9 @@ export function registerPlannotatorEventListeners(pi: ExtensionAPI): void {
         request.respond({ status: "unavailable", error: "Plannotator context is not ready yet." });
         return;
       }
-
-      switch (request.action) {
-        case "code-review": {
-          const result = await openCodeReview(ctx, {
-            cwd: request.payload?.cwd,
-            defaultBranch: request.payload?.defaultBranch,
-            diffType: request.payload?.diffType,
-            vcsType: request.payload?.vcsType,
-            useLocal: request.payload?.useLocal,
-            prUrl: request.payload?.prUrl,
-          });
-          request.respond({ status: "handled", result });
-          return;
-        }
-        case "annotate": {
-          const payload = request.payload;
-          if (!payload?.filePath) {
-            request.respond({ status: "error", error: "Missing filePath for annotate request." });
-            return;
-          }
-          const sourceConverted =
-            /\.html?$/i.test(payload.filePath) || /^https?:\/\//i.test(payload.filePath);
-          const result = await openMarkdownAnnotation(
-            ctx,
-            payload.filePath,
-            payload.markdown ?? "",
-            payload.mode ?? "annotate",
-            payload.folderPath,
-            undefined,
-            sourceConverted,
-            payload.gate,
-          );
-          request.respond({ status: "handled", result });
-          return;
-        }
-        case "annotate-last": {
-          const payload = request.payload;
-          const usePayloadText = !!payload?.markdown?.trim();
-          const lastText = usePayloadText ? payload!.markdown! : getLastAssistantMessageText(ctx);
-          if (!lastText) {
-            request.respond({
-              status: "unavailable",
-              error: "No assistant message found in session.",
-            });
-            return;
-          }
-          const recent = usePayloadText ? [] : getRecentAssistantMessages(ctx, 25);
-          const pickerMessages = recent.length > 1 ? recent : undefined;
-          const result = await openLastMessageAnnotation(
-            ctx,
-            lastText,
-            payload?.gate,
-            pickerMessages,
-          );
-          request.respond({ status: "handled", result });
-          return;
-        }
-      }
+      await handlePlannotatorRequest(ctx, request);
     } catch (err) {
-      const message = getStartupErrorMessage(err instanceof Error ? err : new Error(String(err)));
-      if (/unavailable|not available/i.test(message)) {
-        request.respond({ status: "unavailable", error: message });
-        return;
-      }
-      request.respond({ status: "error", error: message });
+      respondToRequestFailure(request.respond, err instanceof Error ? err : new Error(String(err)));
     }
   });
 }
