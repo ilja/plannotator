@@ -464,15 +464,7 @@ function emitPlainTextWithBareUrls(
   }
 }
 
-/**
- * Scanner that walks a text string and emits React nodes for inline markdown:
- * emphasis (**bold**, *italic*, _italic_, ***both***), `code`, ~~strikethrough~~,
- * [label](url) / ![alt](src) / <autolink>, bare https:// URLs, [[wiki-links]],
- * hex color swatches (#fff / #123abc), @mentions, #issue-refs, and backslash
- * escapes. Plain-text chunks outside these patterns pass through
- * `transformPlainText` for emoji shortcodes + smart punctuation.
- */
-export const InlineMarkdown: React.FC<{
+interface InlineMarkdownProps {
   text: string;
   onOpenLinkedDoc?: (path: string) => void;
   onOpenCodeFile?: (path: string) => void;
@@ -480,622 +472,634 @@ export const InlineMarkdown: React.FC<{
   imageBaseDir?: string;
   onImageClick?: (src: string, alt: string) => void;
   githubRepo?: string;
-}> = ({
-  text,
-  onOpenLinkedDoc,
-  onOpenCodeFile,
-  onNavigateAnchor,
-  imageBaseDir,
-  onImageClick,
-  githubRepo,
-}) => {
+}
+
+interface TokenParserContext extends InlineMarkdownProps {
+  readonly previousChar: string;
+  readonly validation: CodePathValidationContextValue | null;
+  readonly nextKey: () => number;
+}
+
+interface TokenResult {
+  readonly nodes: readonly React.ReactNode[];
+  readonly consumed: number;
+  readonly previousChar: string;
+}
+
+interface ParsedMarkdownLink {
+  readonly linkText: string;
+  readonly linkUrl: string;
+  readonly consumed: number;
+}
+
+type TokenParser = (text: string, context: TokenParserContext) => TokenResult | null;
+
+function tokenResult(
+  nodes: readonly React.ReactNode[],
+  consumed: number,
+  previousChar: string,
+): TokenResult {
+  return { nodes, consumed, previousChar };
+}
+
+function matchPreviousChar(match: string, fallback: string): string {
+  return match[match.length - 1] || fallback;
+}
+
+function renderNestedMarkdown(
+  text: string,
+  context: TokenParserContext,
+  key?: React.Key,
+): React.ReactNode {
+  return (
+    <InlineMarkdown
+      key={key}
+      imageBaseDir={context.imageBaseDir}
+      onImageClick={context.onImageClick}
+      text={text}
+      onOpenLinkedDoc={context.onOpenLinkedDoc}
+      onOpenCodeFile={context.onOpenCodeFile}
+      onNavigateAnchor={context.onNavigateAnchor}
+      githubRepo={context.githubRepo}
+    />
+  );
+}
+
+function parseHtmlComment(text: string): TokenResult | null {
+  const match = text.match(/^<!--[\s\S]*?-->/);
+  return match ? tokenResult([], match[0].length, ">") : null;
+}
+
+function parseEscape(text: string): TokenResult | null {
+  const match = text.match(/^\\([\\*_`[\]~!.()\-#>+|{}&])/);
+  return match ? tokenResult([match[1]], 2, match[1]) : null;
+}
+
+function parseBareUrl(text: string, context: TokenParserContext): TokenResult | null {
+  if (/\w/.test(context.previousChar)) return null;
+  const match = text.match(/^https?:\/\/[^\s<>"']+/);
+  if (!match) return null;
+  const url = trimUrlTail(match[0]);
+  const safe = url.length > 0 ? sanitizeLinkUrl(url) : null;
+  if (!safe) return null;
+  return tokenResult(
+    [
+      <a
+        key={context.nextKey()}
+        href={safe}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 hover:text-primary/80"
+      >
+        {url}
+      </a>,
+    ],
+    url.length,
+    url[url.length - 1],
+  );
+}
+
+function parseHttpAutolink(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^<(https?:\/\/[^>]+)>/);
+  if (!match) return null;
+  const url = match[1];
+  return tokenResult(
+    [
+      <a
+        key={context.nextKey()}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 hover:text-primary/80"
+      >
+        {url}
+      </a>,
+    ],
+    match[0].length,
+    ">",
+  );
+}
+
+function parseEmailAutolink(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^<([^@>\s]+@[^>\s]+)>/);
+  if (!match) return null;
+  const email = match[1];
+  return tokenResult(
+    [
+      <a
+        key={context.nextKey()}
+        href={`mailto:${email}`}
+        className="text-primary underline underline-offset-2 hover:text-primary/80"
+      >
+        {email}
+      </a>,
+    ],
+    match[0].length,
+    ">",
+  );
+}
+
+function parseCustomAutolink(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^<([A-Za-z][A-Za-z0-9.+-]{0,31}:[^\s<>]*)>/);
+  if (!match) return null;
+  const content = match[1];
+  return tokenResult([<span key={context.nextKey()}>{`<${content}>`}</span>], match[0].length, ">");
+}
+
+function parseStrikethrough(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^~~([\s\S]+?)~~/);
+  return match
+    ? tokenResult(
+        [<del key={context.nextKey()}>{renderNestedMarkdown(match[1], context)}</del>],
+        match[0].length,
+        matchPreviousChar(match[0], context.previousChar),
+      )
+    : null;
+}
+
+function parseBoldItalic(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^\*\*\*([\s\S]+?)\*\*\*/);
+  return match
+    ? tokenResult(
+        [
+          <strong key={context.nextKey()} className="font-semibold">
+            <em>{renderNestedMarkdown(match[1], context)}</em>
+          </strong>,
+        ],
+        match[0].length,
+        matchPreviousChar(match[0], context.previousChar),
+      )
+    : null;
+}
+
+function parseBold(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^\*\*([\s\S]+?)\*\*/);
+  return match
+    ? tokenResult(
+        [
+          <strong key={context.nextKey()} className="font-semibold">
+            {renderNestedMarkdown(match[1], context)}
+          </strong>,
+        ],
+        match[0].length,
+        matchPreviousChar(match[0], context.previousChar),
+      )
+    : null;
+}
+
+function parseStarItalic(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^\*([\s\S]+?)\*/);
+  return match
+    ? tokenResult(
+        [<em key={context.nextKey()}>{renderNestedMarkdown(match[1], context)}</em>],
+        match[0].length,
+        matchPreviousChar(match[0], context.previousChar),
+      )
+    : null;
+}
+
+function parseUnderscoreItalic(text: string, context: TokenParserContext): TokenResult | null {
+  if (/\w/.test(context.previousChar)) return null;
+  const match = text.match(/^_([^_\s](?:[\s\S]*?[^_\s])?)_(?!\w)/);
+  return match
+    ? tokenResult(
+        [<em key={context.nextKey()}>{renderNestedMarkdown(match[1], context)}</em>],
+        match[0].length,
+        matchPreviousChar(match[0], context.previousChar),
+      )
+    : null;
+}
+
+function parseInlineCode(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^`([^`]+)`/);
+  if (!match) return null;
+  const codeContent = match[1];
+  const node =
+    isCodeFilePath(codeContent) && context.onOpenCodeFile ? (
+      <CodeFileLink
+        key={context.nextKey()}
+        candidate={codeContent.replace(/#.*$/, "")}
+        display={codeContent}
+        onOpenCodeFile={context.onOpenCodeFile}
+        baseDir={context.imageBaseDir}
+      />
+    ) : (
+      <code
+        key={context.nextKey()}
+        className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono"
+        style={inlineCodeTypographyStyle}
+      >
+        {codeContent}
+      </code>
+    );
+  return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
+}
+
+function parseColor(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(
+    /^(#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{4}|(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{3}))(?![0-9a-fA-F\w])/,
+  );
+  if (!match) return null;
+  const hex = match[1];
+  return tokenResult(
+    [
+      <span key={context.nextKey()} className="inline-flex items-center gap-1 align-middle">
+        <span
+          className="inline-block w-3.5 h-3.5 rounded-sm border border-black/20 dark:border-white/20 flex-shrink-0"
+          style={{ backgroundColor: hex }}
+          title={hex}
+        />
+        <code
+          className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono"
+          style={inlineCodeTypographyStyle}
+        >
+          {hex}
+        </code>
+      </span>,
+    ],
+    match[0].length,
+    matchPreviousChar(match[0], context.previousChar),
+  );
+}
+
+function parseIssue(text: string, context: TokenParserContext): TokenResult | null {
+  if (/\w/.test(context.previousChar)) return null;
+  const match = text.match(/^#(\d+)(?!\w)/);
+  if (!match) return null;
+  const num = match[1];
+  const href = context.githubRepo?.includes("/")
+    ? `https://github.com/${context.githubRepo}/issues/${num}`
+    : null;
+  const label = `#${num}`;
+  const node = href ? (
+    <a
+      key={context.nextKey()}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary font-medium hover:underline"
+    >
+      {label}
+    </a>
+  ) : (
+    <span key={context.nextKey()} className="text-primary font-medium">
+      {label}
+    </span>
+  );
+  return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
+}
+
+function parseMention(text: string, context: TokenParserContext): TokenResult | null {
+  if (/\w/.test(context.previousChar)) return null;
+  const match = text.match(/^@([a-zA-Z][a-zA-Z0-9_-]{0,38})(?!\w)/);
+  if (!match) return null;
+  const handle = match[1];
+  const href = context.githubRepo?.includes("/") ? `https://github.com/${handle}` : null;
+  const label = `@${handle}`;
+  const node = href ? (
+    <a
+      key={context.nextKey()}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary font-medium hover:underline"
+    >
+      {label}
+    </a>
+  ) : (
+    <span key={context.nextKey()} className="text-primary font-medium">
+      {label}
+    </span>
+  );
+  return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
+}
+
+function parseWikiLink(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
+  if (!match) return null;
+  const target = match[1].trim();
+  const display = match[2]?.trim() || target;
+  const targetPath = /\.(mdx?|txt|html?)$/i.test(target) ? target : `${target}.md`;
+  const node = context.onOpenLinkedDoc ? (
+    <a
+      key={context.nextKey()}
+      href={targetPath}
+      onClick={(event) => {
+        event.preventDefault();
+        context.onOpenLinkedDoc?.(targetPath);
+      }}
+      className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
+      title={`Open: ${target}`}
+    >
+      {display}
+      <svg
+        className="w-3 h-3 opacity-50 flex-shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+        />
+      </svg>
+    </a>
+  ) : (
+    <span key={context.nextKey()} className="text-primary">
+      {display}
+    </span>
+  );
+  return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
+}
+
+function parseImage(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
+  if (!match) return null;
+  const alt = match[1];
+  const src = match[2];
+  const imgSrc = /^(https?:\/\/|data:|blob:)/i.test(src)
+    ? src
+    : getImageSrc(src, context.imageBaseDir);
+  return tokenResult(
+    [
+      <img
+        key={context.nextKey()}
+        src={imgSrc}
+        alt={alt}
+        className="max-w-full rounded my-2 cursor-zoom-in"
+        loading="lazy"
+        onClick={(event) => {
+          event.stopPropagation();
+          context.onImageClick?.(imgSrc, alt);
+        }}
+      />,
+    ],
+    match[0].length,
+    matchPreviousChar(match[0], context.previousChar),
+  );
+}
+
+function findMarkdownLinkTextEnd(text: string): number | null {
+  let index = 1;
+  let depth = 1;
+  while (index < text.length && depth > 0) {
+    const character = text[index];
+    if (character === "\\" && index + 1 < text.length) {
+      index += 2;
+      continue;
+    }
+    if (character === "[") depth++;
+    else if (character === "]") depth--;
+    if (depth === 0) break;
+    index++;
+  }
+  return depth === 0 && text[index + 1] === "(" ? index : null;
+}
+
+function findMarkdownLinkDestinationEnd(text: string, textEnd: number): number | null {
+  let destinationIndex = textEnd + 2;
+  let parenthesisDepth = 1;
+  while (destinationIndex < text.length && parenthesisDepth > 0) {
+    const character = text[destinationIndex];
+    if (character === "\\" && destinationIndex + 1 < text.length) {
+      destinationIndex += 2;
+      continue;
+    }
+    if (character === "(") parenthesisDepth++;
+    else if (character === ")") {
+      parenthesisDepth--;
+      if (parenthesisDepth === 0) break;
+    } else if (character === "\n") {
+      return null;
+    }
+    destinationIndex++;
+  }
+  return parenthesisDepth === 0 ? destinationIndex : null;
+}
+
+function parseMarkdownLink(text: string): ParsedMarkdownLink | null {
+  if (text[0] !== "[") return null;
+  const textEnd = findMarkdownLinkTextEnd(text);
+  if (textEnd === null) return null;
+  const destinationEnd = findMarkdownLinkDestinationEnd(text, textEnd);
+  if (destinationEnd === null) return null;
+  const linkText = text.slice(1, textEnd);
+  const linkUrl = text.slice(textEnd + 2, destinationEnd);
+  return linkText && linkUrl ? { linkText, linkUrl, consumed: destinationEnd + 1 } : null;
+}
+
+function parseMarkdownLinkToken(text: string, context: TokenParserContext): TokenResult | null {
+  const parsed = parseMarkdownLink(text);
+  if (!parsed) return null;
+  const { linkText, linkUrl, consumed } = parsed;
+  const safeLinkUrl = sanitizeLinkUrl(linkUrl);
+  if (safeLinkUrl === null) {
+    return tokenResult([<span key={context.nextKey()}>{linkText}</span>], consumed, ")");
+  }
+  const isLocalDoc =
+    /\.(mdx?|txt|html?)(#.*)?$/i.test(linkUrl) &&
+    !linkUrl.startsWith("http://") &&
+    !linkUrl.startsWith("https://");
+  const isCodeFile = !isLocalDoc && isCodeFilePath(linkUrl);
+  const linkedDocPath = isLocalDoc ? linkUrl.replace(/#.*$/, "") : linkUrl;
+  const codeFilePath = isCodeFile ? linkUrl.replace(/#.*$/, "") : linkUrl;
+  const isInPageAnchor = safeLinkUrl.startsWith("#");
+  const node = isInPageAnchor
+    ? renderAnchorLink(linkText, safeLinkUrl, context)
+    : isLocalDoc && context.onOpenLinkedDoc
+      ? renderLocalDocLink(linkText, linkUrl, linkedDocPath, safeLinkUrl, context)
+      : isCodeFile && context.onOpenCodeFile
+        ? renderCodeFileLink(linkText, linkUrl, codeFilePath, safeLinkUrl, context)
+        : renderExternalLink(linkText, safeLinkUrl, isLocalDoc, context);
+  return tokenResult([node], consumed, ")");
+}
+
+function renderAnchorLink(
+  linkText: string,
+  href: string,
+  context: TokenParserContext,
+): React.ReactNode {
+  return (
+    <a
+      key={context.nextKey()}
+      href={href}
+      onClick={
+        context.onNavigateAnchor
+          ? (event) => {
+              event.preventDefault();
+              context.onNavigateAnchor?.(href);
+            }
+          : undefined
+      }
+      className="text-primary underline underline-offset-2 hover:text-primary/80"
+    >
+      {linkText}
+    </a>
+  );
+}
+
+function renderLocalDocLink(
+  linkText: string,
+  linkUrl: string,
+  path: string,
+  href: string,
+  context: TokenParserContext,
+): React.ReactNode {
+  return (
+    <a
+      key={context.nextKey()}
+      href={href}
+      onClick={(event) => {
+        event.preventDefault();
+        context.onOpenLinkedDoc?.(path);
+      }}
+      className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
+      title={`Open: ${linkUrl}`}
+    >
+      {linkText}
+      <svg
+        className="w-3 h-3 opacity-50 flex-shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+        />
+      </svg>
+    </a>
+  );
+}
+
+function renderCodeFileLink(
+  linkText: string,
+  linkUrl: string,
+  path: string,
+  href: string,
+  context: TokenParserContext,
+): React.ReactNode {
+  return (
+    <a
+      key={context.nextKey()}
+      href={href}
+      onClick={(event) => {
+        event.preventDefault();
+        context.onOpenCodeFile?.(path);
+      }}
+      className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
+      title={`View: ${linkUrl}`}
+    >
+      {linkText}
+      <CodeFileIcon />
+    </a>
+  );
+}
+
+function renderExternalLink(
+  linkText: string,
+  href: string,
+  isLocalDoc: boolean,
+  context: TokenParserContext,
+): React.ReactNode {
+  return (
+    <a
+      key={context.nextKey()}
+      href={href}
+      target={isLocalDoc ? undefined : "_blank"}
+      rel={isLocalDoc ? undefined : "noopener noreferrer"}
+      className="text-primary underline underline-offset-2 hover:text-primary/80"
+    >
+      {linkText}
+    </a>
+  );
+}
+
+function parseHardBreak(text: string, context: TokenParserContext): TokenResult | null {
+  const match = text.match(/ {2,}\n|\\\n/);
+  if (!match || match.index === undefined) return null;
+  const before = text.slice(0, match.index);
+  const nodes = before
+    ? [renderNestedMarkdown(before, context, context.nextKey()), <br key={context.nextKey()} />]
+    : [<br key={context.nextKey()} />];
+  return tokenResult(nodes, match.index + match[0].length, "\n");
+}
+
+function parsePlainText(text: string, context: TokenParserContext): TokenResult {
+  const nextSpecial = text.slice(1).search(/[*_`[!~\\<#@]/);
+  const plainText = nextSpecial === -1 ? text : text.slice(0, nextSpecial + 1);
+  const nodes: React.ReactNode[] = [];
+  emitPlainTextWithBareUrls(
+    plainText,
+    context.previousChar,
+    nodes,
+    context.nextKey,
+    context.onOpenCodeFile,
+    context.validation,
+    context.imageBaseDir,
+  );
+  return tokenResult(
+    nodes,
+    plainText.length,
+    plainText[plainText.length - 1] || context.previousChar,
+  );
+}
+
+const tokenParsers = [
+  parseHtmlComment,
+  parseEscape,
+  parseBareUrl,
+  parseHttpAutolink,
+  parseEmailAutolink,
+  parseCustomAutolink,
+  parseStrikethrough,
+  parseBoldItalic,
+  parseBold,
+  parseStarItalic,
+  parseUnderscoreItalic,
+  parseInlineCode,
+  parseColor,
+  parseIssue,
+  parseMention,
+  parseWikiLink,
+  parseImage,
+  parseMarkdownLinkToken,
+  parseHardBreak,
+  parsePlainText,
+] as const satisfies readonly TokenParser[];
+
+/**
+ * Scanner that walks a text string and emits React nodes for inline markdown.
+ * Token parsers are ordered from most-specific to fallback to preserve markdown precedence.
+ */
+export const InlineMarkdown: React.FC<InlineMarkdownProps> = (props) => {
   const validation = useCodePathValidation();
   const parts: React.ReactNode[] = [];
-  let remaining = text;
+  let remaining = props.text;
   let key = 0;
   let previousChar = "";
 
   while (remaining.length > 0) {
-    // HTML comments: skip entirely — they should be invisible per CommonMark.
-    // The parser doesn't recognize <!-- --> as a block-level construct, so
-    // comments inside paragraphs land here. Without this, path detection
-    // would linkify paths inside comments.
-    let match = remaining.match(/^<!--[\s\S]*?-->/);
-    if (match) {
-      remaining = remaining.slice(match[0].length);
-      previousChar = ">";
-      continue;
-    }
-
-    // Backslash escaping: \. \* \_ \` \[ \~ etc. — emit literal char, hide backslash
-    match = remaining.match(/^\\([\\*_`[\]~!.()\-#>+|{}&])/);
-    if (match) {
-      parts.push(match[1]);
-      remaining = remaining.slice(2);
-      previousChar = match[1];
-      continue;
-    }
-
-    // Bare URL autolink: https://… preceded by word boundary.
-    // Trailing sentence punctuation is trimmed so "See https://x.com."
-    // renders the period outside the link. Closing brackets are kept when
-    // they balance an earlier opener inside the URL (e.g. Wikipedia's
-    // https://…/Function_(mathematics) keeps its trailing paren).
-    if (!/\w/.test(previousChar)) {
-      const bareMatch = remaining.match(/^https?:\/\/[^\s<>"']+/);
-      if (bareMatch) {
-        const url = trimUrlTail(bareMatch[0]);
-        const safe = url.length > 0 ? sanitizeLinkUrl(url) : null;
-        if (safe) {
-          parts.push(
-            <a
-              key={key++}
-              href={safe}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary underline underline-offset-2 hover:text-primary/80"
-            >
-              {url}
-            </a>,
-          );
-          remaining = remaining.slice(url.length);
-          previousChar = url[url.length - 1];
-          continue;
-        }
-      }
-    }
-
-    // Autolinks: <https://url> or <email@domain.com>
-    match = remaining.match(/^<(https?:\/\/[^>]+)>/);
-    if (match) {
-      const url = match[1];
-      parts.push(
-        <a
-          key={key++}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline underline-offset-2 hover:text-primary/80"
-        >
-          {url}
-        </a>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = ">";
-      continue;
-    }
-    match = remaining.match(/^<([^@>\s]+@[^>\s]+)>/);
-    if (match) {
-      const email = match[1];
-      parts.push(
-        <a
-          key={key++}
-          href={`mailto:${email}`}
-          className="text-primary underline underline-offset-2 hover:text-primary/80"
-        >
-          {email}
-        </a>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = ">";
-      continue;
-    }
-
-    // Keep custom autolinks literal; their contents should not
-    // recurse into markdown parsing.
-    match = remaining.match(/^<([A-Za-z][A-Za-z0-9.+-]{0,31}:[^\s<>]*)>/);
-    if (match) {
-      const content = match[1];
-      parts.push(<span key={key++}>{`<${content}>`}</span>);
-      remaining = remaining.slice(match[0].length);
-      previousChar = ">";
-      continue;
-    }
-
-    // Strikethrough: ~~text~~
-    match = remaining.match(/^~~([\s\S]+?)~~/);
-    if (match) {
-      parts.push(
-        <del key={key++}>
-          <InlineMarkdown
-            imageBaseDir={imageBaseDir}
-            onImageClick={onImageClick}
-            text={match[1]}
-            onOpenLinkedDoc={onOpenLinkedDoc}
-            onOpenCodeFile={onOpenCodeFile}
-            onNavigateAnchor={onNavigateAnchor}
-            githubRepo={githubRepo}
-          />
-        </del>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Bold + italic: ***text***
-    match = remaining.match(/^\*\*\*([\s\S]+?)\*\*\*/);
-    if (match) {
-      parts.push(
-        <strong key={key++} className="font-semibold">
-          <em>
-            <InlineMarkdown
-              imageBaseDir={imageBaseDir}
-              onImageClick={onImageClick}
-              text={match[1]}
-              onOpenLinkedDoc={onOpenLinkedDoc}
-              onOpenCodeFile={onOpenCodeFile}
-              onNavigateAnchor={onNavigateAnchor}
-              githubRepo={githubRepo}
-            />
-          </em>
-        </strong>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Bold: **text** ([\s\S]+? allows matching across hard line breaks)
-    match = remaining.match(/^\*\*([\s\S]+?)\*\*/);
-    if (match) {
-      parts.push(
-        <strong key={key++} className="font-semibold">
-          <InlineMarkdown
-            imageBaseDir={imageBaseDir}
-            onImageClick={onImageClick}
-            text={match[1]}
-            onOpenLinkedDoc={onOpenLinkedDoc}
-            onOpenCodeFile={onOpenCodeFile}
-            onNavigateAnchor={onNavigateAnchor}
-            githubRepo={githubRepo}
-          />
-        </strong>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Italic: *text* or _text_ (avoid intraword underscores)
-    match = remaining.match(/^\*([\s\S]+?)\*/);
-    if (match) {
-      parts.push(
-        <em key={key++}>
-          <InlineMarkdown
-            imageBaseDir={imageBaseDir}
-            onImageClick={onImageClick}
-            text={match[1]}
-            onOpenLinkedDoc={onOpenLinkedDoc}
-            onOpenCodeFile={onOpenCodeFile}
-            onNavigateAnchor={onNavigateAnchor}
-            githubRepo={githubRepo}
-          />
-        </em>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    match = !/\w/.test(previousChar)
-      ? remaining.match(/^_([^_\s](?:[\s\S]*?[^_\s])?)_(?!\w)/)
-      : null;
-    if (match) {
-      parts.push(
-        <em key={key++}>
-          <InlineMarkdown
-            imageBaseDir={imageBaseDir}
-            onImageClick={onImageClick}
-            text={match[1]}
-            onOpenLinkedDoc={onOpenLinkedDoc}
-            onOpenCodeFile={onOpenCodeFile}
-            onNavigateAnchor={onNavigateAnchor}
-            githubRepo={githubRepo}
-          />
-        </em>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Inline code: `code` — when the content is a code file path, render as clickable
-    match = remaining.match(/^`([^`]+)`/);
-    if (match) {
-      const codeContent = match[1];
-      if (isCodeFilePath(codeContent) && onOpenCodeFile) {
-        const cleanPath = codeContent.replace(/#.*$/, "");
-        parts.push(
-          <CodeFileLink
-            key={key++}
-            candidate={cleanPath}
-            display={codeContent}
-            onOpenCodeFile={onOpenCodeFile}
-            baseDir={imageBaseDir}
-          />,
-        );
-      } else {
-        parts.push(
-          <code
-            key={key++}
-            className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono"
-            style={inlineCodeTypographyStyle}
-          >
-            {codeContent}
-          </code>,
-        );
-      }
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Hex color swatch — 3/4-digit forms need an a-f letter to avoid matching issue refs like #123.
-    match = remaining.match(
-      /^(#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{4}|(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{3}))(?![0-9a-fA-F\w])/,
-    );
-    if (match) {
-      const hex = match[1];
-      parts.push(
-        <span key={key++} className="inline-flex items-center gap-1 align-middle">
-          <span
-            className="inline-block w-3.5 h-3.5 rounded-sm border border-black/20 dark:border-white/20 flex-shrink-0"
-            style={{ backgroundColor: hex }}
-            title={hex}
-          />
-          <code
-            className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono"
-            style={inlineCodeTypographyStyle}
-          >
-            {hex}
-          </code>
-        </span>,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Issue / PR reference: #123 — only at word boundary, digits only.
-    // Hex-swatch branch above already consumed #fff / #123abc etc., so a bare
-    // #\d+ here is safe to treat as an issue ref.
-    if (!/\w/.test(previousChar)) {
-      match = remaining.match(/^#(\d+)(?!\w)/);
-      if (match) {
-        const num = match[1];
-        const href =
-          githubRepo && githubRepo.includes("/")
-            ? `https://github.com/${githubRepo}/issues/${num}`
-            : null;
-        const label = `#${num}`;
-        parts.push(
-          href ? (
-            <a
-              key={key++}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary font-medium hover:underline"
-            >
-              {label}
-            </a>
-          ) : (
-            <span key={key++} className="text-primary font-medium">
-              {label}
-            </span>
-          ),
-        );
-        remaining = remaining.slice(match[0].length);
-        previousChar = match[0][match[0].length - 1];
-        continue;
-      }
-    }
-
-    // @mention — only at word boundary. GitHub-style handle pattern.
-    if (!/\w/.test(previousChar)) {
-      match = remaining.match(/^@([a-zA-Z][a-zA-Z0-9_-]{0,38})(?!\w)/);
-      if (match) {
-        const handle = match[1];
-        const href = githubRepo && githubRepo.includes("/") ? `https://github.com/${handle}` : null;
-        const label = `@${handle}`;
-        parts.push(
-          href ? (
-            <a
-              key={key++}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary font-medium hover:underline"
-            >
-              {label}
-            </a>
-          ) : (
-            <span key={key++} className="text-primary font-medium">
-              {label}
-            </span>
-          ),
-        );
-        remaining = remaining.slice(match[0].length);
-        previousChar = match[0][match[0].length - 1];
-        continue;
-      }
-    }
-
-    // Wikilinks: [[filename]] or [[filename|display text]]
-    match = remaining.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
-    if (match) {
-      const target = match[1].trim();
-      const display = match[2]?.trim() || target;
-      const targetPath = /\.(mdx?|txt|html?)$/i.test(target) ? target : `${target}.md`;
-
-      if (onOpenLinkedDoc) {
-        parts.push(
-          <a
-            key={key++}
-            href={targetPath}
-            onClick={(e) => {
-              e.preventDefault();
-              onOpenLinkedDoc(targetPath);
-            }}
-            className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
-            title={`Open: ${target}`}
-          >
-            {display}
-            <svg
-              className="w-3 h-3 opacity-50 flex-shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
-              />
-            </svg>
-          </a>,
-        );
-      } else {
-        parts.push(
-          <span key={key++} className="text-primary">
-            {display}
-          </span>,
-        );
-      }
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Images: ![alt](path)
-    match = remaining.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
-    if (match) {
-      const alt = match[1];
-      const src = match[2];
-      const imgSrc = /^(https?:\/\/|data:|blob:)/i.test(src) ? src : getImageSrc(src, imageBaseDir);
-      parts.push(
-        <img
-          key={key++}
-          src={imgSrc}
-          alt={alt}
-          className="max-w-full rounded my-2 cursor-zoom-in"
-          loading="lazy"
-          onClick={(e) => {
-            e.stopPropagation();
-            onImageClick?.(imgSrc, alt);
-          }}
-        />,
-      );
-      remaining = remaining.slice(match[0].length);
-      previousChar = match[0][match[0].length - 1] || previousChar;
-      continue;
-    }
-
-    // Links: [text](url) — url may contain balanced parens (e.g. Wikipedia
-    // /Function_(mathematics)). Plain `[^)]+` would truncate at the first
-    // inner close-paren, so we scan the destination manually tracking depth.
-    const linkParsed = (() => {
-      if (remaining[0] !== "[") return null;
-      let i = 1;
-      let depth = 1;
-      while (i < remaining.length && depth > 0) {
-        const ch = remaining[i];
-        if (ch === "\\" && i + 1 < remaining.length) {
-          i += 2;
-          continue;
-        }
-        if (ch === "[") depth++;
-        else if (ch === "]") depth--;
-        if (depth === 0) break;
-        i++;
-      }
-      if (depth !== 0 || remaining[i + 1] !== "(") return null;
-      const textEnd = i;
-      let j = i + 2;
-      let parenDepth = 1;
-      while (j < remaining.length && parenDepth > 0) {
-        const ch = remaining[j];
-        if (ch === "\\" && j + 1 < remaining.length) {
-          j += 2;
-          continue;
-        }
-        if (ch === "(") parenDepth++;
-        else if (ch === ")") {
-          parenDepth--;
-          if (parenDepth === 0) break;
-        } else if (ch === "\n") return null;
-        j++;
-      }
-      if (parenDepth !== 0) return null;
-      const linkText = remaining.slice(1, textEnd);
-      const linkUrl = remaining.slice(i + 2, j);
-      if (!linkText || !linkUrl) return null;
-      return { linkText, linkUrl, consumed: j + 1 };
-    })();
-    if (linkParsed) {
-      const { linkText, linkUrl, consumed } = linkParsed;
-      const safeLinkUrl = sanitizeLinkUrl(linkUrl);
-
-      // Dangerous protocol stripped — render as plain text, not a dead link
-      if (safeLinkUrl === null) {
-        parts.push(<span key={key++}>{linkText}</span>);
-        remaining = remaining.slice(consumed);
-        previousChar = ")";
-        continue;
-      }
-
-      // Local doc: .md / .mdx / .txt / .html / .htm, optionally with #fragment.
-      // Fragment is stripped before handing to onOpenLinkedDoc (overlay has
-      // no anchor-scroll support today).
-      const isLocalDoc =
-        /\.(mdx?|txt|html?)(#.*)?$/i.test(linkUrl) &&
-        !linkUrl.startsWith("http://") &&
-        !linkUrl.startsWith("https://");
-      const isCodeFile = !isLocalDoc && isCodeFilePath(linkUrl);
-      const linkedDocPath = isLocalDoc ? linkUrl.replace(/#.*$/, "") : linkUrl;
-      const codeFilePath = isCodeFile ? linkUrl.replace(/#.*$/, "") : linkUrl;
-      const isInPageAnchor = safeLinkUrl.startsWith("#");
-
-      if (isInPageAnchor) {
-        parts.push(
-          <a
-            key={key++}
-            href={safeLinkUrl}
-            onClick={
-              onNavigateAnchor
-                ? (e) => {
-                    e.preventDefault();
-                    onNavigateAnchor(safeLinkUrl);
-                  }
-                : undefined
-            }
-            className="text-primary underline underline-offset-2 hover:text-primary/80"
-          >
-            {linkText}
-          </a>,
-        );
-      } else if (isLocalDoc && onOpenLinkedDoc) {
-        parts.push(
-          <a
-            key={key++}
-            href={safeLinkUrl}
-            onClick={(e) => {
-              e.preventDefault();
-              onOpenLinkedDoc(linkedDocPath);
-            }}
-            className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
-            title={`Open: ${linkUrl}`}
-          >
-            {linkText}
-            <svg
-              className="w-3 h-3 opacity-50 flex-shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
-              />
-            </svg>
-          </a>,
-        );
-      } else if (isCodeFile && onOpenCodeFile) {
-        parts.push(
-          <a
-            key={key++}
-            href={safeLinkUrl}
-            onClick={(e) => {
-              e.preventDefault();
-              onOpenCodeFile(codeFilePath);
-            }}
-            className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-1 cursor-pointer"
-            title={`View: ${linkUrl}`}
-          >
-            {linkText}
-            <CodeFileIcon />
-          </a>,
-        );
-      } else if (isLocalDoc) {
-        // No handler — render as plain link (e.g., in shared/portal views)
-        parts.push(
-          <a
-            key={key++}
-            href={safeLinkUrl}
-            className="text-primary underline underline-offset-2 hover:text-primary/80"
-          >
-            {linkText}
-          </a>,
-        );
-      } else {
-        parts.push(
-          <a
-            key={key++}
-            href={safeLinkUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-2 hover:text-primary/80"
-          >
-            {linkText}
-          </a>,
-        );
-      }
-      remaining = remaining.slice(consumed);
-      previousChar = ")";
-      continue;
-    }
-
-    // Hard line break: two+ trailing spaces + newline, or backslash + newline
-    match = remaining.match(/ {2,}\n|\\\n/);
-    if (match && match.index !== undefined) {
-      const before = remaining.slice(0, match.index);
-      if (before) {
-        parts.push(
-          <InlineMarkdown
-            key={key++}
-            text={before}
-            onOpenLinkedDoc={onOpenLinkedDoc}
-            onOpenCodeFile={onOpenCodeFile}
-            onNavigateAnchor={onNavigateAnchor}
-            githubRepo={githubRepo}
-            imageBaseDir={imageBaseDir}
-            onImageClick={onImageClick}
-          />,
-        );
-      }
-      parts.push(<br key={key++} />);
-      remaining = remaining.slice(match.index + match[0].length);
-      previousChar = "\n";
-      continue;
-    }
-
-    // Find next special character or consume one regular character.
-    // `h` is intentionally NOT in this class — plain-text chunks may contain
-    // `h` mid-word (e.g. ":heart:", "hello"), and splitting on it breaks
-    // multi-char patterns like emoji shortcodes. Bare URLs are instead
-    // detected inline via emitPlainTextWithBareUrls() below.
-    const nextSpecial = remaining.slice(1).search(/[*_`[!~\\<#@]/);
-    const plainText = nextSpecial === -1 ? remaining : remaining.slice(0, nextSpecial + 1);
-    emitPlainTextWithBareUrls(
-      plainText,
+    const context: TokenParserContext = {
+      ...props,
       previousChar,
-      parts,
-      () => key++,
-      onOpenCodeFile,
       validation,
-      imageBaseDir,
-    );
-    previousChar = plainText[plainText.length - 1] || previousChar;
-    if (nextSpecial === -1) {
+      nextKey: () => key++,
+    };
+    for (const parser of tokenParsers) {
+      const token = parser(remaining, context);
+      if (!token) continue;
+      parts.push(...token.nodes);
+      remaining = remaining.slice(token.consumed);
+      previousChar = token.previousChar;
       break;
     }
-    remaining = remaining.slice(nextSpecial + 1);
   }
 
   return <>{parts}</>;
