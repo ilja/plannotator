@@ -73,7 +73,11 @@ import { DEMO_DIFF } from "./demoData";
 import { exportReviewFeedback } from "./utils/exportFeedback";
 import { buildReviewFeedbackAnnotations } from "./utils/reviewFeedbackAnnotations";
 import { parseDiffToFiles } from "./utils/diffParser";
-import { decodeDiffSwitchResponse, loadInitialDiffResponse } from "./utils/initial-diff-response";
+import {
+  decodeDiffSwitchResponse,
+  loadInitialDiffResponse,
+  type InitialDiffResponse,
+} from "./utils/initial-diff-response";
 import { loadReviewAICapabilitiesState } from "./utils/ai-capabilities-response";
 import { readPRActionResponse } from "./utils/pr-action-response";
 import {
@@ -993,6 +997,43 @@ const ReviewApp: React.FC = () => {
     closeSidebar: reviewSidebar.close,
   });
 
+  const initializeInitialPRSession = (data: InitialDiffResponse): void => {
+    updatePRSession({
+      ...(data.prMetadata && { prMetadata: data.prMetadata }),
+      ...(data.prStackInfo !== undefined && { prStackInfo: data.prStackInfo }),
+      ...(data.prStackTree !== undefined && { prStackTree: data.prStackTree }),
+      ...(data.prDiffScope && { prDiffScope: data.prDiffScope }),
+      ...(data.prDiffScopeOptions && { prDiffScopeOptions: data.prDiffScopeOptions }),
+      ...(data.prMetadata && {
+        prPatchIncomplete: data.prPatchIncomplete === true,
+        prPatchUpgradeAvailable: data.prPatchUpgradeAvailable === true,
+      }),
+    });
+  };
+
+  const initializeInitialGitContext = (data: InitialDiffResponse): void => {
+    if (!data.gitContext) return;
+    setGitContext(data.gitContext);
+    const initial =
+      data.base || data.gitContext.defaultBranch || data.gitContext.compareTarget?.fallback || null;
+    setSelectedBase(initial);
+    setCommittedBase(initial);
+  };
+
+  const scheduleDiffTypeSetup = (data: InitialDiffResponse): void => {
+    if (
+      data.diffType &&
+      data.mode !== "workspace" &&
+      !data.prMetadata &&
+      data.gitContext &&
+      data.gitContext.vcsType !== "p4" &&
+      data.gitContext.vcsType !== "jj" &&
+      needsDiffTypeSetup()
+    ) {
+      setDiffTypeSetupPending(true);
+    }
+  };
+
   // Load diff content - try API first, fall back to demo
   useEffect(() => {
     const fallbackToDemo = () => {
@@ -1039,33 +1080,11 @@ const ReviewApp: React.FC = () => {
         setWorkspaceDiffOptions(data.mode === "workspace" ? (data.diffOptions ?? []) : null);
         if (data.origin) setOrigin(data.origin);
         if (data.diffType) setDiffType(data.diffType);
-        if (data.gitContext) {
-          setGitContext(data.gitContext);
-          // Prefer the server's active base (survives page refresh / reconnect)
-          // over the detected default, so the picker rehydrates to what the
-          // server is actually using.
-          const initial =
-            data.base ||
-            data.gitContext.defaultBranch ||
-            data.gitContext.compareTarget?.fallback ||
-            null;
-          setSelectedBase(initial);
-          setCommittedBase(initial);
-        }
+        initializeInitialGitContext(data);
         if (data.agentCwd !== undefined) setAgentCwd(data.agentCwd);
         if (data.sharingEnabled !== undefined) setSharingEnabled(data.sharingEnabled);
         if (data.repoInfo) setRepoInfo(data.repoInfo);
-        updatePRSession({
-          ...(data.prMetadata && { prMetadata: data.prMetadata }),
-          ...(data.prStackInfo !== undefined && { prStackInfo: data.prStackInfo }),
-          ...(data.prStackTree !== undefined && { prStackTree: data.prStackTree }),
-          ...(data.prDiffScope && { prDiffScope: data.prDiffScope }),
-          ...(data.prDiffScopeOptions && { prDiffScopeOptions: data.prDiffScopeOptions }),
-          ...(data.prMetadata && {
-            prPatchIncomplete: data.prPatchIncomplete === true,
-            prPatchUpgradeAvailable: data.prPatchUpgradeAvailable === true,
-          }),
-        });
+        initializeInitialPRSession(data);
         if (data.platformUser) setPlatformUser(data.platformUser);
         // Initialize viewed files from GitHub's state (set before draft restore so draft takes precedence)
         if (data.viewedFiles && data.viewedFiles.length > 0) {
@@ -1074,17 +1093,7 @@ const ReviewApp: React.FC = () => {
         if (data.error) setDiffError(data.error);
         setSemanticDiffAvailable(data.semanticDiff?.available === true);
         // Mark diff type setup as pending on first run (local mode only)
-        if (
-          data.diffType &&
-          data.mode !== "workspace" &&
-          !data.prMetadata &&
-          data.gitContext &&
-          data.gitContext.vcsType !== "p4" &&
-          data.gitContext.vcsType !== "jj" &&
-          needsDiffTypeSetup()
-        ) {
-          setDiffTypeSetupPending(true);
-        }
+        scheduleDiffTypeSetup(data);
       })
       .catch(fallbackToDemo)
       .finally(() => setIsLoading(false));
