@@ -280,6 +280,261 @@ function projectFileAnnotations(
     }));
 }
 
+function lineAnnotationSignature(annotation: CodeAnnotation): string {
+  return JSON.stringify([
+    annotation.id,
+    annotation.lineEnd,
+    annotation.side,
+    annotation.type,
+    annotation.text ?? "",
+    annotation.suggestedCode ?? "",
+    annotation.originalCode ?? "",
+    annotation.conventionalLabel ?? "",
+    (annotation.decorations ?? []).join(","),
+    annotation.severity ?? "",
+    annotation.reasoning ?? "",
+    annotation.author ?? "",
+    annotation.reviewProfileLabel ?? "",
+    annotation.source ?? "",
+    annotation.createdAt ?? 0,
+  ]);
+}
+
+function fileAnnotationSignature(annotation: CodeAnnotation): string {
+  return JSON.stringify([
+    "F",
+    annotation.id,
+    annotation.text ?? "",
+    annotation.source ?? "",
+    annotation.author ?? "",
+    annotation.reviewProfileLabel ?? "",
+    annotation.conventionalLabel ?? "",
+    (annotation.decorations ?? []).join(","),
+    annotation.createdAt ?? 0,
+    annotation.reasoning ?? "",
+  ]);
+}
+
+function annotationSignaturesByFilePath(
+  annotations: CodeAnnotation[],
+  prUrl: string | undefined,
+  prDiffScope: string | undefined,
+): Map<string, string> {
+  const signatures = new Map<string, string>();
+  for (const annotation of annotations) {
+    const scope = annotation.scope ?? "line";
+    if (scope !== "line" && scope !== "file") continue;
+    if (!annotationMatchesPrScope(annotation, prUrl, prDiffScope)) continue;
+    const signature =
+      scope === "file" ? fileAnnotationSignature(annotation) : lineAnnotationSignature(annotation);
+    signatures.set(
+      annotation.filePath,
+      `${signatures.get(annotation.filePath) ?? ""}${signature}\n`,
+    );
+  }
+  return signatures;
+}
+
+const TYPEABLE_ELEMENT_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+
+function isKeyboardEventFromTypeableElement(event: KeyboardEvent): boolean {
+  // composedPath()[0] pierces shadow DOM: window-level event.target retargets
+  // to the shadow HOST (e.g. <diffs-container>), which would hide a typeable
+  // element living inside a shadow root from this guard.
+  const element = event.composedPath?.()[0] ?? event.target;
+  return (
+    element instanceof HTMLElement &&
+    (TYPEABLE_ELEMENT_TAGS.has(element.tagName) || element.isContentEditable)
+  );
+}
+
+function hasKeyboardShortcutModifier(event: KeyboardEvent): boolean {
+  return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+}
+
+function collapsedItemToRestore(
+  orderedItemIds: string[],
+  currentItemId: string | null,
+  isItemCollapsed: (itemId: string) => boolean,
+): string | undefined {
+  const collapsedItemIds = orderedItemIds.filter(isItemCollapsed);
+  if (collapsedItemIds.length === 0) return undefined;
+  const currentIndex = currentItemId ? orderedItemIds.indexOf(currentItemId) : -1;
+  return (
+    [...collapsedItemIds]
+      .reverse()
+      .find((itemId) => orderedItemIds.indexOf(itemId) <= currentIndex) ?? collapsedItemIds[0]
+  );
+}
+
+interface CurrentFileKeyboardShortcutOptions {
+  event: KeyboardEvent;
+  currentItemId: string | null;
+  currentFilePath: string | null;
+  orderedItemIds: string[];
+  isItemCollapsed: (itemId: string) => boolean;
+  toggleItemCollapsed: (itemId: string) => void;
+  scrollToItem: (itemId: string) => void;
+  onAddFileCommentForFile?: (filePath: string, text: string) => void;
+  fileCommentButtonRefs: React.RefObject<Map<string, HTMLElement>>;
+  setFileCommentAnchor: React.Dispatch<
+    React.SetStateAction<{ el: HTMLElement; filePath: string } | null>
+  >;
+  handleToggleViewedAndCollapse: (filePath: string, itemId: string) => void;
+  canStageFiles: boolean;
+  onStage?: (filePath: string) => void;
+}
+
+function handleCurrentFileKeyboardShortcut({
+  event,
+  currentItemId,
+  currentFilePath,
+  orderedItemIds,
+  isItemCollapsed,
+  toggleItemCollapsed,
+  scrollToItem,
+  onAddFileCommentForFile,
+  fileCommentButtonRefs,
+  setFileCommentAnchor,
+  handleToggleViewedAndCollapse,
+  canStageFiles,
+  onStage,
+}: CurrentFileKeyboardShortcutOptions): boolean {
+  if (event.key === "x" && currentItemId) {
+    event.preventDefault();
+    toggleItemCollapsed(currentItemId);
+    return true;
+  }
+
+  if (event.key === "z") {
+    const itemId = collapsedItemToRestore(orderedItemIds, currentItemId, isItemCollapsed);
+    if (itemId == null) return true;
+    event.preventDefault();
+    toggleItemCollapsed(itemId);
+    scrollToItem(itemId);
+    return true;
+  }
+
+  if (event.key === "c" && currentFilePath && onAddFileCommentForFile) {
+    event.preventDefault();
+    const button = fileCommentButtonRefs.current.get(currentFilePath);
+    if (button?.isConnected) {
+      setFileCommentAnchor({ el: button, filePath: currentFilePath });
+    }
+    return true;
+  }
+
+  if (event.key === "v" && currentFilePath && currentItemId) {
+    event.preventDefault();
+    handleToggleViewedAndCollapse(currentFilePath, currentItemId);
+    return true;
+  }
+
+  if (event.key === "a" && currentFilePath && canStageFiles) {
+    event.preventDefault();
+    onStage?.(currentFilePath);
+    return true;
+  }
+
+  return false;
+}
+
+function handleAdjacentFileKeyboardShortcut(
+  event: KeyboardEvent,
+  currentItemId: string | null,
+  orderedItemIds: string[],
+  scrollToItem: (itemId: string) => void,
+): void {
+  if (event.key !== "[" && event.key !== "]") return;
+  event.preventDefault();
+
+  const currentIndex = currentItemId ? orderedItemIds.indexOf(currentItemId) : -1;
+  const targetIndex =
+    event.key === "]"
+      ? currentIndex < orderedItemIds.length - 1
+        ? currentIndex + 1
+        : orderedItemIds.length - 1
+      : currentIndex > 0
+        ? currentIndex - 1
+        : 0;
+  scrollToItem(orderedItemIds[targetIndex]);
+}
+
+interface AllFilesCodeViewOverlayControlsProps {
+  itemCount: number;
+  allCollapsed: boolean;
+  onToggleAllCollapsed: () => void;
+  fileCommentAnchor: { el: HTMLElement; filePath: string } | null;
+  prUrl: string | undefined;
+  prDiffScope: string | undefined;
+  onAddFileCommentForFile?: (filePath: string, text: string) => void;
+  setFileCommentAnchor: React.Dispatch<
+    React.SetStateAction<{ el: HTMLElement; filePath: string } | null>
+  >;
+}
+
+function AllFilesCodeViewOverlayControls({
+  itemCount,
+  allCollapsed,
+  onToggleAllCollapsed,
+  fileCommentAnchor,
+  prUrl,
+  prDiffScope,
+  onAddFileCommentForFile,
+  setFileCommentAnchor,
+}: AllFilesCodeViewOverlayControlsProps): React.ReactNode {
+  return (
+    <>
+      {itemCount > 0 && (
+        <button
+          type="button"
+          onClick={onToggleAllCollapsed}
+          className="absolute bottom-0 left-0 z-30 flex items-center justify-center h-[var(--panel-header-h)] w-[var(--panel-header-h)] border-r border-t border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title={allCollapsed ? "Expand all files" : "Collapse all files"}
+          aria-label={allCollapsed ? "Expand all files" : "Collapse all files"}
+        >
+          <svg
+            className="w-3.5 h-3.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {allCollapsed ? (
+              <>
+                <path d="M7 9l5-5 5 5" />
+                <path d="M7 15l5 5 5-5" />
+              </>
+            ) : (
+              <>
+                <path d="M7 4l5 5 5-5" />
+                <path d="M7 20l5-5 5 5" />
+              </>
+            )}
+          </svg>
+        </button>
+      )}
+
+      {fileCommentAnchor && onAddFileCommentForFile && (
+        <CommentPopover
+          key={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${fileCommentAnchor.filePath}`}
+          anchorEl={fileCommentAnchor.el}
+          contextText={fileCommentAnchor.filePath.split("/").pop() || fileCommentAnchor.filePath}
+          isGlobal={false}
+          draftKey={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${fileCommentAnchor.filePath}`}
+          onSubmit={(text) => {
+            onAddFileCommentForFile(fileCommentAnchor.filePath, text);
+            setFileCommentAnchor(null);
+          }}
+          onClose={() => setFileCommentAnchor(null)}
+        />
+      )}
+    </>
+  );
+}
+
 function buildItemIdentity(
   files: DiffFile[],
   visualOrder: number[],
@@ -1274,52 +1529,8 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // need to know whether a file's gutter annotations changed, so a stable
     // string built from the fields that affect rendering is sufficient and far
     // cheaper than deep-equality of the projected objects.
-    const signatures = (list: CodeAnnotation[]) => {
-      const map = new Map<string, string>();
-      for (const a of list) {
-        const scope = a.scope ?? "line";
-        if (scope !== "line" && scope !== "file") continue;
-        if (!annotationMatchesPrScope(a, prUrl, prDiffScope)) continue;
-        // File comments carry different render-affecting fields than line notes
-        // (no line/side/suggestion; they DO surface source + profile badges).
-        const sig =
-          scope === "file"
-            ? JSON.stringify([
-                "F",
-                a.id,
-                a.text ?? "",
-                a.source ?? "",
-                a.author ?? "",
-                a.reviewProfileLabel ?? "",
-                a.conventionalLabel ?? "",
-                (a.decorations ?? []).join(","),
-                a.createdAt ?? 0,
-                a.reasoning ?? "",
-              ])
-            : JSON.stringify([
-                a.id,
-                a.lineEnd,
-                a.side,
-                a.type,
-                a.text ?? "",
-                a.suggestedCode ?? "",
-                a.originalCode ?? "",
-                a.conventionalLabel ?? "",
-                (a.decorations ?? []).join(","),
-                a.severity ?? "",
-                a.reasoning ?? "",
-                a.author ?? "",
-                a.reviewProfileLabel ?? "",
-                a.source ?? "",
-                a.createdAt ?? 0,
-              ]);
-        map.set(a.filePath, `${map.get(a.filePath) ?? ""}${sig}\n`);
-      }
-      return map;
-    };
-
-    const nextSig = signatures(annotations);
-    const prevSig = signatures(prev);
+    const nextSig = annotationSignaturesByFilePath(annotations, prUrl, prDiffScope);
+    const prevSig = annotationSignaturesByFilePath(prev, prUrl, prDiffScope);
     const changedPaths = new Set<string>();
     nextSig.forEach((sig, path) => {
       if (prevSig.get(path) !== sig) changedPaths.add(path);
@@ -1693,20 +1904,9 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
   useEffect(() => {
     if (!isActive) return;
-    const handler = (e: KeyboardEvent) => {
-      // composedPath()[0] pierces shadow DOM: window-level e.target retargets
-      // to the shadow HOST (e.g. <diffs-container>), which would hide a
-      // typeable element living inside a shadow root from this guard.
-      const el = e.composedPath?.()[0] ?? e.target;
-      if (
-        el instanceof HTMLElement &&
-        (el.tagName === "INPUT" ||
-          el.tagName === "TEXTAREA" ||
-          el.tagName === "SELECT" ||
-          el.isContentEditable)
-      )
-        return;
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const handler = (event: KeyboardEvent) => {
+      if (isKeyboardEventFromTypeableElement(event)) return;
+      if (hasKeyboardShortcutModifier(event)) return;
       if (orderedItemIds.length === 0) return;
 
       // The item the user is currently reading (active-file tracking).
@@ -1715,68 +1915,26 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
         : null;
       const currentPath = currentId ? (itemIdToFilePath.get(currentId) ?? null) : null;
 
-      // x — collapse/expand the current file.
-      if (e.key === "x" && currentId) {
-        e.preventDefault();
-        toggleItemCollapsed(currentId);
+      if (
+        handleCurrentFileKeyboardShortcut({
+          event,
+          currentItemId: currentId,
+          currentFilePath: currentPath,
+          orderedItemIds,
+          isItemCollapsed,
+          toggleItemCollapsed,
+          scrollToItem,
+          onAddFileCommentForFile,
+          fileCommentButtonRefs,
+          setFileCommentAnchor,
+          handleToggleViewedAndCollapse,
+          canStageFiles,
+          onStage,
+        })
+      )
         return;
-      }
 
-      // z — re-expand + scroll to a collapsed file. Legacy used a collapse
-      // history stack; we approximate with the nearest collapsed item AT or
-      // BEFORE the current position in visual order (the file you most likely
-      // just collapsed), falling back to the nearest one after it.
-      if (e.key === "z") {
-        const collapsedIds = orderedItemIds.filter((id) => isItemCollapsed(id));
-        if (collapsedIds.length === 0) return;
-        e.preventDefault();
-        const currentIdx = currentId ? orderedItemIds.indexOf(currentId) : -1;
-        const target =
-          [...collapsedIds].reverse().find((id) => orderedItemIds.indexOf(id) <= currentIdx) ??
-          collapsedIds[0];
-        toggleItemCollapsed(target);
-        scrollToItem(target);
-        return;
-      }
-
-      // c — open the file-scoped comment popover for the current file. The
-      // anchor element comes from the eager fileCommentButtonRef registration;
-      // isConnected guards against an element whose header was recycled out of
-      // the rendered window between registration and keypress.
-      if (e.key === "c" && currentPath && onAddFileCommentForFile) {
-        e.preventDefault();
-        const btn = fileCommentButtonRefs.current.get(currentPath);
-        if (btn?.isConnected) setFileCommentAnchor({ el: btn, filePath: currentPath });
-        return;
-      }
-
-      // v — toggle viewed (and collapse on mark-viewed) for the current file.
-      if (e.key === "v" && currentPath && currentId) {
-        e.preventDefault();
-        handleToggleViewedAndCollapse(currentPath, currentId);
-        return;
-      }
-
-      // a — stage/unstage the current file.
-      if (e.key === "a" && currentPath && canStageFiles) {
-        e.preventDefault();
-        onStage?.(currentPath);
-        return;
-      }
-
-      if (e.key !== "[" && e.key !== "]") return;
-      e.preventDefault();
-
-      const currentIdx = currentId ? orderedItemIds.indexOf(currentId) : -1;
-      let targetIdx: number;
-      if (e.key === "]") {
-        targetIdx =
-          currentIdx < orderedItemIds.length - 1 ? currentIdx + 1 : orderedItemIds.length - 1;
-      } else {
-        targetIdx = currentIdx > 0 ? currentIdx - 1 : 0;
-      }
-
-      scrollToItem(orderedItemIds[targetIdx]);
+      handleAdjacentFileKeyboardShortcut(event, currentId, orderedItemIds, scrollToItem);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -2003,40 +2161,6 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
   return (
     <div className="relative h-full">
-      {/* Floating collapse/expand-all toggle, pinned to the panel's bottom-left
-          corner over the scrolling diff list. Only exists in all-files mode
-          (this component renders only there). */}
-      {identity.items.length > 0 && (
-        <button
-          type="button"
-          onClick={handleToggleAllCollapsed}
-          className="absolute bottom-0 left-0 z-30 flex items-center justify-center h-[var(--panel-header-h)] w-[var(--panel-header-h)] border-r border-t border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title={allCollapsed ? "Expand all files" : "Collapse all files"}
-          aria-label={allCollapsed ? "Expand all files" : "Collapse all files"}
-        >
-          <svg
-            className="w-3.5 h-3.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {allCollapsed ? (
-              <>
-                <path d="M7 9l5-5 5 5" />
-                <path d="M7 15l5 5 5-5" />
-              </>
-            ) : (
-              <>
-                <path d="M7 4l5 5 5-5" />
-                <path d="M7 20l5-5 5 5" />
-              </>
-            )}
-          </svg>
-        </button>
-      )}
       <CodeView<DiffAnnotationMetadata>
         // Remount on diff switch so uncontrolled `initialItems` re-seeds from
         // the freshly computed identity. Without this, switching diff
@@ -2071,20 +2195,18 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
         onEditAnnotation={onEditAnnotation}
       />
 
-      {fileCommentAnchor && onAddFileCommentForFile && (
-        <CommentPopover
-          key={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${fileCommentAnchor.filePath}`}
-          anchorEl={fileCommentAnchor.el}
-          contextText={fileCommentAnchor.filePath.split("/").pop() || fileCommentAnchor.filePath}
-          isGlobal={false}
-          draftKey={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${fileCommentAnchor.filePath}`}
-          onSubmit={(text) => {
-            onAddFileCommentForFile(fileCommentAnchor.filePath, text);
-            setFileCommentAnchor(null);
-          }}
-          onClose={() => setFileCommentAnchor(null)}
-        />
-      )}
+      {/* Floating collapse/expand-all toggle and file-comment popover stay
+          over the scrolling surface so virtualization cannot recycle either. */}
+      <AllFilesCodeViewOverlayControls
+        itemCount={identity.items.length}
+        allCollapsed={allCollapsed}
+        onToggleAllCollapsed={handleToggleAllCollapsed}
+        fileCommentAnchor={fileCommentAnchor}
+        prUrl={prUrl}
+        prDiffScope={prDiffScope}
+        onAddFileCommentForFile={onAddFileCommentForFile}
+        setFileCommentAnchor={setFileCommentAnchor}
+      />
     </div>
   );
 };
