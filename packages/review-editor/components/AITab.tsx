@@ -53,6 +53,10 @@ function getQuestionScope(q: AIChatEntry["question"]): "general" | "file" | "lin
   return "line";
 }
 
+function ignorePermissionResponse(_requestId: string, _allow: boolean) {}
+
+function ignorePendingAIContextRemoval() {}
+
 export const AITab: React.FC<AITabProps> = ({
   messages,
   isCreatingSession,
@@ -172,38 +176,20 @@ export const AITab: React.FC<AITabProps> = ({
   // Empty state
   if (messages.length === 0 && !isCreatingSession) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground px-4 py-12 text-center">
-          <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
-            <SparklesIcon className="w-5 h-5" />
-          </div>
-          <p className="text-xs">
-            Hover a line and click the sparkle to attach it, or ask a question below.
-          </p>
-        </div>
-        <AIConfigBar
-          providers={aiProviders}
-          selectedProviderId={aiConfig?.providerId ?? null}
-          selectedModel={aiConfig?.model ?? null}
-          onProviderChange={(providerId) => onAIConfigChange?.({ providerId })}
-          onModelChange={(model) => onAIConfigChange?.({ model })}
-          selectedReasoningEffort={aiConfig?.reasoningEffort ?? null}
-          onReasoningEffortChange={(effort) => onAIConfigChange?.({ reasoningEffort: effort })}
-          hasSession={hasAISession}
-        />
-        {onAskChat && (
-          <AIChatComposer
-            value={generalInput}
-            pendingContext={pendingAIContext}
-            focusToken={aiComposerFocusToken}
-            onChange={setGeneralInput}
-            onSubmit={handleChatSubmit}
-            onRemoveContext={onRemovePendingAIContext ?? (() => {})}
-            disabled={isStreaming}
-            isStreaming={isStreaming}
-          />
-        )}
-      </div>
+      <EmptyAITabState
+        aiProviders={aiProviders}
+        aiConfig={aiConfig}
+        onAIConfigChange={onAIConfigChange}
+        hasAISession={hasAISession}
+        onAskChat={onAskChat}
+        generalInput={generalInput}
+        pendingAIContext={pendingAIContext}
+        aiComposerFocusToken={aiComposerFocusToken}
+        onGeneralInputChange={setGeneralInput}
+        onSubmit={handleChatSubmit}
+        onRemovePendingAIContext={onRemovePendingAIContext}
+        isStreaming={isStreaming}
+      />
     );
   }
 
@@ -218,94 +204,240 @@ export const AITab: React.FC<AITabProps> = ({
           )}
 
           {/* File-grouped questions */}
-          {fileGroups.map(({ filePath, messages: fileMessages }) => {
-            const isExpanded = expandedFiles.has(filePath);
-            const basename = filePath.split("/").pop() || filePath;
-
-            return (
-              <div key={filePath} className="mb-1">
-                <button
-                  data-file-group={filePath}
-                  className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs hover:bg-muted transition-colors ${highlightFilePath === filePath ? "ai-file-group-highlight" : ""}`}
-                  onClick={() => toggleFile(filePath)}
-                >
-                  <svg
-                    className={`w-3 h-3 text-muted-foreground/50 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                  <span className="truncate text-foreground font-medium">{basename}</span>
-                  <CountBadge
-                    count={fileMessages.length}
-                    className="ml-auto flex-shrink-0 text-muted-foreground/50"
-                  />
-                </button>
-
-                {isExpanded && (
-                  <div className="ml-3 border-l border-border/30 pl-2 space-y-2 mt-1">
-                    {fileMessages.map(({ question, response }) => (
-                      <QAPair
-                        key={question.id}
-                        question={question}
-                        response={response}
-                        onScrollToLines={onScrollToLines}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <FileQuestionGroups
+            fileGroups={fileGroups}
+            expandedFiles={expandedFiles}
+            highlightFilePath={highlightFilePath}
+            onToggleFile={toggleFile}
+            onScrollToLines={onScrollToLines}
+          />
 
           {/* Pending permission requests */}
-          {permissionRequests
-            .filter((p) => !p.decided)
-            .map((perm) => (
-              <div key={perm.requestId} className="mb-2">
-                <PermissionCard
-                  requestId={perm.requestId}
-                  toolName={perm.toolName}
-                  toolInput={perm.toolInput}
-                  title={perm.title}
-                  displayName={perm.displayName}
-                  description={perm.description}
-                  onRespond={onRespondToPermission ?? (() => {})}
-                />
-              </div>
-            ))}
+          <PendingPermissionRequests
+            permissionRequests={permissionRequests}
+            onRespondToPermission={onRespondToPermission}
+          />
 
           {/* General questions */}
-          {generalMessages.length > 0 && (
-            <div className="mb-3 mt-2">
-              {fileGroups.length > 0 && (
-                <div className="flex items-center gap-2 px-2 mb-1.5">
-                  <div className="flex-1 border-t border-border/40" />
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                    General
-                  </span>
-                  <div className="flex-1 border-t border-border/40" />
-                </div>
-              )}
-              <div className="space-y-2">
-                {generalMessages.map(({ question, response }) => (
-                  <QAPair
-                    key={question.id}
-                    question={question}
-                    response={response}
-                    onScrollToLines={onScrollToLines}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          <GeneralQuestions
+            messages={generalMessages}
+            hasFileGroups={fileGroups.length > 0}
+            onScrollToLines={onScrollToLines}
+          />
         </div>
       </OverlayScrollArea>
 
       {/* Config bar */}
+      <AIControls
+        aiProviders={aiProviders}
+        aiConfig={aiConfig}
+        onAIConfigChange={onAIConfigChange}
+        hasAISession={hasAISession}
+        onAskChat={onAskChat}
+        generalInput={generalInput}
+        pendingAIContext={pendingAIContext}
+        aiComposerFocusToken={aiComposerFocusToken}
+        onGeneralInputChange={setGeneralInput}
+        onSubmit={handleChatSubmit}
+        onRemovePendingAIContext={onRemovePendingAIContext}
+        isStreaming={isStreaming}
+      />
+    </div>
+  );
+};
+
+function EmptyAITabState(props: AIControlsProps) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground px-4 py-12 text-center">
+        <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+          <SparklesIcon className="w-5 h-5" />
+        </div>
+        <p className="text-xs">
+          Hover a line and click the sparkle to attach it, or ask a question below.
+        </p>
+      </div>
+      <AIControls {...props} />
+    </div>
+  );
+}
+
+interface FileQuestionGroupsProps {
+  fileGroups: FileGroup[];
+  expandedFiles: Set<string>;
+  highlightFilePath: string | null;
+  onToggleFile: (filePath: string) => void;
+  onScrollToLines: AITabProps["onScrollToLines"];
+}
+
+function FileQuestionGroups({
+  fileGroups,
+  expandedFiles,
+  highlightFilePath,
+  onToggleFile,
+  onScrollToLines,
+}: FileQuestionGroupsProps) {
+  return fileGroups.map(({ filePath, messages }) => (
+    <FileQuestionGroup
+      key={filePath}
+      filePath={filePath}
+      messages={messages}
+      isExpanded={expandedFiles.has(filePath)}
+      isHighlighted={highlightFilePath === filePath}
+      onToggleFile={onToggleFile}
+      onScrollToLines={onScrollToLines}
+    />
+  ));
+}
+
+interface FileQuestionGroupProps {
+  filePath: string;
+  messages: AIChatEntry[];
+  isExpanded: boolean;
+  isHighlighted: boolean;
+  onToggleFile: (filePath: string) => void;
+  onScrollToLines: AITabProps["onScrollToLines"];
+}
+
+function FileQuestionGroup({
+  filePath,
+  messages,
+  isExpanded,
+  isHighlighted,
+  onToggleFile,
+  onScrollToLines,
+}: FileQuestionGroupProps) {
+  const basename = filePath.split("/").pop() || filePath;
+
+  return (
+    <div className="mb-1">
+      <button
+        data-file-group={filePath}
+        className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs hover:bg-muted transition-colors ${isHighlighted ? "ai-file-group-highlight" : ""}`}
+        onClick={() => onToggleFile(filePath)}
+      >
+        <svg
+          className={`w-3 h-3 text-muted-foreground/50 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="truncate text-foreground font-medium">{basename}</span>
+        <CountBadge
+          count={messages.length}
+          className="ml-auto flex-shrink-0 text-muted-foreground/50"
+        />
+      </button>
+      {isExpanded && (
+        <div className="ml-3 border-l border-border/30 pl-2 space-y-2 mt-1">
+          {messages.map(({ question, response }) => (
+            <QAPair
+              key={question.id}
+              question={question}
+              response={response}
+              onScrollToLines={onScrollToLines}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PendingPermissionRequestsProps {
+  permissionRequests: PendingPermission[];
+  onRespondToPermission: AITabProps["onRespondToPermission"];
+}
+
+function PendingPermissionRequests({
+  permissionRequests,
+  onRespondToPermission,
+}: PendingPermissionRequestsProps) {
+  return permissionRequests
+    .filter((request) => !request.decided)
+    .map((request) => (
+      <div key={request.requestId} className="mb-2">
+        <PermissionCard
+          requestId={request.requestId}
+          toolName={request.toolName}
+          toolInput={request.toolInput}
+          title={request.title}
+          displayName={request.displayName}
+          description={request.description}
+          onRespond={onRespondToPermission ?? ignorePermissionResponse}
+        />
+      </div>
+    ));
+}
+
+interface GeneralQuestionsProps {
+  messages: AIChatEntry[];
+  hasFileGroups: boolean;
+  onScrollToLines: AITabProps["onScrollToLines"];
+}
+
+function GeneralQuestions({ messages, hasFileGroups, onScrollToLines }: GeneralQuestionsProps) {
+  if (messages.length === 0) return null;
+
+  return (
+    <div className="mb-3 mt-2">
+      {hasFileGroups && (
+        <div className="flex items-center gap-2 px-2 mb-1.5">
+          <div className="flex-1 border-t border-border/40" />
+          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+            General
+          </span>
+          <div className="flex-1 border-t border-border/40" />
+        </div>
+      )}
+      <div className="space-y-2">
+        {messages.map(({ question, response }) => (
+          <QAPair
+            key={question.id}
+            question={question}
+            response={response}
+            onScrollToLines={onScrollToLines}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface AIControlsProps {
+  aiProviders: AIProviderOption[];
+  aiConfig: AITabProps["aiConfig"];
+  onAIConfigChange: AITabProps["onAIConfigChange"];
+  hasAISession: boolean;
+  onAskChat: AITabProps["onAskChat"];
+  generalInput: string;
+  pendingAIContext: PendingAIContext | null;
+  aiComposerFocusToken: number;
+  onGeneralInputChange: (value: string) => void;
+  onSubmit: () => void;
+  onRemovePendingAIContext: AITabProps["onRemovePendingAIContext"];
+  isStreaming: boolean;
+}
+
+function AIControls({
+  aiProviders,
+  aiConfig,
+  onAIConfigChange,
+  hasAISession,
+  onAskChat,
+  generalInput,
+  pendingAIContext,
+  aiComposerFocusToken,
+  onGeneralInputChange,
+  onSubmit,
+  onRemovePendingAIContext,
+  isStreaming,
+}: AIControlsProps) {
+  return (
+    <>
       <AIConfigBar
         providers={aiProviders}
         selectedProviderId={aiConfig?.providerId ?? null}
@@ -316,23 +448,21 @@ export const AITab: React.FC<AITabProps> = ({
         onReasoningEffortChange={(effort) => onAIConfigChange?.({ reasoningEffort: effort })}
         hasSession={hasAISession}
       />
-
-      {/* General question input */}
       {onAskChat && (
         <AIChatComposer
           value={generalInput}
           pendingContext={pendingAIContext}
           focusToken={aiComposerFocusToken}
-          onChange={setGeneralInput}
-          onSubmit={handleChatSubmit}
-          onRemoveContext={onRemovePendingAIContext ?? (() => {})}
+          onChange={onGeneralInputChange}
+          onSubmit={onSubmit}
+          onRemoveContext={onRemovePendingAIContext ?? ignorePendingAIContextRemoval}
           disabled={isStreaming}
           isStreaming={isStreaming}
         />
       )}
-    </div>
+    </>
   );
-};
+}
 
 /** Single Q&A pair — memoized to avoid re-parsing markdown on sibling updates */
 const QAPair = memo<{
