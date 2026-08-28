@@ -69,6 +69,170 @@ interface AppHeaderProps {
   obsidianConfigured: boolean;
 }
 
+type AppHeaderCallbackActionsProps = Pick<
+  AppHeaderProps,
+  | "isApiMode"
+  | "isSharedSession"
+  | "isSubmitting"
+  | "callbackShareUrlReady"
+  | "callbackConfig"
+  | "onCallbackFeedback"
+  | "onCallbackApprove"
+>;
+
+function AppHeaderCallbackActions({
+  isApiMode,
+  isSharedSession,
+  isSubmitting,
+  callbackShareUrlReady,
+  callbackConfig,
+  onCallbackFeedback,
+  onCallbackApprove,
+}: AppHeaderCallbackActionsProps) {
+  if (!callbackConfig || isApiMode || !isSharedSession) return null;
+  return (
+    <>
+      <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
+      <FeedbackButton
+        onClick={onCallbackFeedback}
+        disabled={isSubmitting || !callbackShareUrlReady}
+        isLoading={isSubmitting}
+        title="Send feedback to bot"
+      />
+      <ApproveButton
+        onClick={onCallbackApprove}
+        disabled={isSubmitting || !callbackShareUrlReady}
+        isLoading={isSubmitting}
+        title="Approve design and notify bot"
+      />
+    </>
+  );
+}
+
+type AppHeaderAnnotateActionsProps = Pick<
+  AppHeaderProps,
+  | "isApiMode"
+  | "annotateMode"
+  | "gate"
+  | "isSubmitting"
+  | "isExiting"
+  | "hasAnyAnnotations"
+  | "linkedDocIsActive"
+  | "onAnnotateExit"
+  | "onAnnotateFeedback"
+  | "onAnnotateApprove"
+>;
+
+function AppHeaderAnnotateActions({
+  isApiMode,
+  annotateMode,
+  gate,
+  isSubmitting,
+  isExiting,
+  hasAnyAnnotations,
+  linkedDocIsActive,
+  onAnnotateExit,
+  onAnnotateFeedback,
+  onAnnotateApprove,
+}: AppHeaderAnnotateActionsProps) {
+  if (!isApiMode || (linkedDocIsActive && !annotateMode)) return null;
+  return (
+    <>
+      {annotateMode && (
+        <>
+          <ExitButton
+            onClick={onAnnotateExit}
+            disabled={isSubmitting || isExiting}
+            isLoading={isExiting}
+          />
+          {hasAnyAnnotations && (
+            <FeedbackButton
+              onClick={onAnnotateFeedback}
+              disabled={isSubmitting || isExiting}
+              isLoading={isSubmitting}
+              label="Send Feedback"
+              title="Send Feedback"
+            />
+          )}
+          {gate && (
+            <ApproveButton
+              onClick={onAnnotateApprove}
+              disabled={isSubmitting || isExiting}
+              isLoading={isSubmitting}
+              title="Approve — no changes requested"
+            />
+          )}
+        </>
+      )}
+      <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
+    </>
+  );
+}
+
+type AppHeaderPanelControlsProps = Pick<
+  AppHeaderProps,
+  | "isPanelOpen"
+  | "aiAvailable"
+  | "isAIChatOpen"
+  | "aiHasMessages"
+  | "onAnnotationPanelToggle"
+  | "onAIChatToggle"
+>;
+
+function AppHeaderPanelControls({
+  isPanelOpen,
+  aiAvailable,
+  isAIChatOpen,
+  aiHasMessages,
+  onAnnotationPanelToggle,
+  onAIChatToggle,
+}: AppHeaderPanelControlsProps) {
+  return (
+    <>
+      <button
+        onClick={onAnnotationPanelToggle}
+        className={`p-1.5 rounded-md text-xs font-medium transition-all ${
+          isPanelOpen
+            ? "bg-primary/15 text-primary"
+            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+        }`}
+        title={isPanelOpen ? "Hide annotations" : "Show annotations"}
+      >
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+          />
+        </svg>
+      </button>
+      {aiAvailable && (
+        <button
+          onClick={onAIChatToggle}
+          className={`relative p-1.5 rounded-md text-xs font-medium transition-all ${
+            isAIChatOpen
+              ? "bg-primary/15 text-primary"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+          title={isAIChatOpen ? "Hide AI chat" : "Show AI chat"}
+          aria-label={isAIChatOpen ? "Hide AI chat" : "Show AI chat"}
+        >
+          <SparklesIcon className="w-4 h-4" />
+          {aiHasMessages && !isAIChatOpen && (
+            <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-primary" />
+          )}
+        </button>
+      )}
+    </>
+  );
+}
+
 export const AppHeader = React.memo<AppHeaderProps>(
   ({
     htmlSurface,
@@ -113,151 +277,85 @@ export const AppHeader = React.memo<AppHeaderProps>(
     appVersion,
     agentInstructionsEnabled,
     obsidianConfigured,
-  }) => {
-    return (
-      <header
-        data-app-header="true"
-        className="h-12 flex items-center justify-between px-2 md:px-4 border-b border-border/50 bg-card/50 backdrop-blur-xl sticky top-0 z-[50]"
-      >
-        <div className="flex items-center gap-2">
-          <AppHeaderLogo />
-          {htmlSurface && onToggleHtmlTools && (
-            <button
-              type="button"
-              onClick={onToggleHtmlTools}
-              className="ml-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded cursor-pointer"
-              title={htmlToolsHidden ? "Show annotation tools" : "Hide annotation tools"}
-            >
-              {htmlToolsHidden ? "Show tools" : "Hide tools"}
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1 md:gap-2">
-          {/* Bot callback buttons — only shown when ?cb=&ct= params are present */}
-          {callbackConfig && !isApiMode && isSharedSession && (
-            <>
-              <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
-              <FeedbackButton
-                onClick={onCallbackFeedback}
-                disabled={isSubmitting || !callbackShareUrlReady}
-                isLoading={isSubmitting}
-                title="Send feedback to bot"
-              />
-              <ApproveButton
-                onClick={onCallbackApprove}
-                disabled={isSubmitting || !callbackShareUrlReady}
-                isLoading={isSubmitting}
-                title="Approve design and notify bot"
-              />
-            </>
-          )}
-
-          {isApiMode && (!linkedDocIsActive || annotateMode) && (
-            <>
-              {annotateMode && (
-                <>
-                  <ExitButton
-                    onClick={onAnnotateExit}
-                    disabled={isSubmitting || isExiting}
-                    isLoading={isExiting}
-                  />
-                  {hasAnyAnnotations && (
-                    <FeedbackButton
-                      onClick={onAnnotateFeedback}
-                      disabled={isSubmitting || isExiting}
-                      isLoading={isSubmitting}
-                      label="Send Feedback"
-                      title="Send Feedback"
-                    />
-                  )}
-                  {gate && (
-                    <ApproveButton
-                      onClick={onAnnotateApprove}
-                      disabled={isSubmitting || isExiting}
-                      isLoading={isSubmitting}
-                      title="Approve — no changes requested"
-                    />
-                  )}
-                </>
-              )}
-              <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
-            </>
-          )}
-
-          {/* Annotations panel toggle */}
+  }) => (
+    <header
+      data-app-header="true"
+      className="h-12 flex items-center justify-between px-2 md:px-4 border-b border-border/50 bg-card/50 backdrop-blur-xl sticky top-0 z-[50]"
+    >
+      <div className="flex items-center gap-2">
+        <AppHeaderLogo />
+        {htmlSurface && onToggleHtmlTools && (
           <button
-            onClick={onAnnotationPanelToggle}
-            className={`p-1.5 rounded-md text-xs font-medium transition-all ${
-              isPanelOpen
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-            title={isPanelOpen ? "Hide annotations" : "Show annotations"}
+            type="button"
+            onClick={onToggleHtmlTools}
+            className="ml-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded cursor-pointer"
+            title={htmlToolsHidden ? "Show annotation tools" : "Hide annotation tools"}
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-              />
-            </svg>
+            {htmlToolsHidden ? "Show tools" : "Hide tools"}
           </button>
-          {aiAvailable && (
-            <button
-              onClick={onAIChatToggle}
-              className={`relative p-1.5 rounded-md text-xs font-medium transition-all ${
-                isAIChatOpen
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              }`}
-              title={isAIChatOpen ? "Hide AI chat" : "Show AI chat"}
-              aria-label={isAIChatOpen ? "Hide AI chat" : "Show AI chat"}
-            >
-              <SparklesIcon className="w-4 h-4" />
-              {aiHasMessages && !isAIChatOpen && (
-                <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-primary" />
-              )}
-            </button>
-          )}
+        )}
+      </div>
 
-          {/* Settings dialog (controlled, button hidden — opened from PlanHeaderMenu) */}
-          <div className="hidden">
-            <Settings
-              onIdentityChange={onIdentityChange}
-              origin={origin}
-              onUIPreferencesChange={onUIPreferencesChange}
-              externalOpen={mobileSettingsOpen}
-              onExternalClose={onCloseSettings}
-              gitUser={gitUser}
-            />
-          </div>
+      <div className="flex items-center gap-1 md:gap-2">
+        <AppHeaderCallbackActions
+          isApiMode={isApiMode}
+          isSharedSession={isSharedSession}
+          isSubmitting={isSubmitting}
+          callbackShareUrlReady={callbackShareUrlReady}
+          callbackConfig={callbackConfig}
+          onCallbackFeedback={onCallbackFeedback}
+          onCallbackApprove={onCallbackApprove}
+        />
+        <AppHeaderAnnotateActions
+          isApiMode={isApiMode}
+          annotateMode={annotateMode}
+          gate={gate}
+          isSubmitting={isSubmitting}
+          isExiting={isExiting}
+          hasAnyAnnotations={hasAnyAnnotations}
+          linkedDocIsActive={linkedDocIsActive}
+          onAnnotateExit={onAnnotateExit}
+          onAnnotateFeedback={onAnnotateFeedback}
+          onAnnotateApprove={onAnnotateApprove}
+        />
+        <AppHeaderPanelControls
+          isPanelOpen={isPanelOpen}
+          aiAvailable={aiAvailable}
+          isAIChatOpen={isAIChatOpen}
+          aiHasMessages={aiHasMessages}
+          onAnnotationPanelToggle={onAnnotationPanelToggle}
+          onAIChatToggle={onAIChatToggle}
+        />
 
-          <PlanHeaderMenu
-            appVersion={appVersion}
-            onOpenSettings={onOpenSettings}
-            onOpenExport={onOpenExport}
-            onCopyAgentInstructions={onCopyAgentInstructions}
-            onDownloadAnnotations={onDownloadAnnotations}
-            onPrint={onPrint}
-            onCopyShareLink={onCopyShareLink}
-            onOpenImport={onOpenImport}
-            onSaveToObsidian={onSaveToObsidian}
-            sharingEnabled={canShareCurrentSession}
-            isApiMode={isApiMode}
-            agentInstructionsEnabled={agentInstructionsEnabled}
-            obsidianConfigured={obsidianConfigured}
+        <div className="hidden">
+          <Settings
+            onIdentityChange={onIdentityChange}
+            origin={origin}
+            onUIPreferencesChange={onUIPreferencesChange}
+            externalOpen={mobileSettingsOpen}
+            onExternalClose={onCloseSettings}
+            gitUser={gitUser}
           />
         </div>
-      </header>
-    );
-  },
+
+        <PlanHeaderMenu
+          appVersion={appVersion}
+          onOpenSettings={onOpenSettings}
+          onOpenExport={onOpenExport}
+          onCopyAgentInstructions={onCopyAgentInstructions}
+          onDownloadAnnotations={onDownloadAnnotations}
+          onPrint={onPrint}
+          onCopyShareLink={onCopyShareLink}
+          onOpenImport={onOpenImport}
+          onSaveToObsidian={onSaveToObsidian}
+          sharingEnabled={canShareCurrentSession}
+          isApiMode={isApiMode}
+          agentInstructionsEnabled={agentInstructionsEnabled}
+          obsidianConfigured={obsidianConfigured}
+        />
+      </div>
+    </header>
+  ),
 );
 
 const AppHeaderLogo = () => (
