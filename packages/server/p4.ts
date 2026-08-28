@@ -328,6 +328,63 @@ async function batchResolveDepotPaths(
   return result;
 }
 
+function collectOpenedDepotPaths(output: string): [string[], string[]] {
+  const diffDepotPaths: string[] = [];
+  const addedDepotPaths: string[] = [];
+
+  for (const line of output.trim().split("\n")) {
+    if (!line) continue;
+    // Skip binary files — type in parentheses, e.g. "(binary)", "(binary+l)"
+    const typeMatch = line.match(/\((\S+)\)\s*(by\s|$)/);
+    if (typeMatch && typeMatch[1].startsWith("binary")) continue;
+    const depotPath = line.split("#")[0];
+    if (!depotPath) continue;
+    if (line.includes(" - add ")) {
+      addedDepotPaths.push(depotPath);
+    } else {
+      diffDepotPaths.push(depotPath);
+    }
+  }
+
+  return [diffDepotPaths, addedDepotPaths];
+}
+
+async function getExistingFilesPatch(
+  depotPaths: string[],
+  normalizedRoot: string,
+  cwd?: string,
+): Promise<string> {
+  if (depotPaths.length === 0) return "";
+
+  const diffResult = await runP4(["diff", "-du", ...depotPaths], { cwd });
+  if (diffResult.exitCode !== 0 && !diffResult.stdout.trim()) return "";
+  return convertP4DiffToGitFormat(diffResult.stdout, normalizedRoot);
+}
+
+async function getAddedFilesPatch(
+  depotPaths: string[],
+  normalizedRoot: string,
+  cwd?: string,
+): Promise<string> {
+  if (depotPaths.length === 0) return "";
+
+  const resolved = await batchResolveDepotPaths(depotPaths, normalizedRoot, cwd);
+  const patches: string[] = [];
+  for (const depotPath of depotPaths) {
+    const mapping = resolved.get(depotPath);
+    if (!mapping) continue;
+    const newFilePatch = await getNewFileDiff(mapping.localPath, mapping.relativePath);
+    if (newFilePatch) patches.push(newFilePatch);
+  }
+  return patches.join("\n");
+}
+
+function getOpenedArgs(changelist: string): string[] {
+  return changelist === "default"
+    ? ["opened", "-c", "default"]
+    : ["opened", "-c", changelist];
+}
+
 export async function runP4Diff(diffType: DiffType, cwd?: string): Promise<DiffResult> {
   const workspace = await detectP4Workspace(cwd);
   if (!workspace) {
@@ -343,54 +400,20 @@ export async function runP4Diff(diffType: DiffType, cwd?: string): Promise<DiffR
     const label =
       parsed.changelist === "default" ? "Default changelist" : `Changelist ${parsed.changelist}`;
 
-    const openedArgs =
-      parsed.changelist === "default"
-        ? ["opened", "-c", "default"]
-        : ["opened", "-c", parsed.changelist];
-    const openedResult = await runP4(openedArgs, { cwd });
+    const openedResult = await runP4(getOpenedArgs(parsed.changelist), { cwd });
 
     if (openedResult.exitCode !== 0 || !openedResult.stdout.trim()) {
       return { patch: "", label, error: openedResult.stderr || undefined };
     }
 
-    const diffDepotPaths: string[] = [];
-    const addedDepotPaths: string[] = [];
-
-    for (const line of openedResult.stdout.trim().split("\n")) {
-      if (!line) continue;
-      // Skip binary files — type in parentheses, e.g. "(binary)", "(binary+l)"
-      const typeMatch = line.match(/\((\S+)\)\s*(by\s|$)/);
-      if (typeMatch && typeMatch[1].startsWith("binary")) continue;
-      const depotPath = line.split("#")[0];
-      if (!depotPath) continue;
-      if (line.includes(" - add ")) {
-        addedDepotPaths.push(depotPath);
-      } else {
-        diffDepotPaths.push(depotPath);
-      }
-    }
-
-    let patch = "";
-
-    if (diffDepotPaths.length > 0) {
-      const diffResult = await runP4(["diff", "-du", ...diffDepotPaths], { cwd });
-      if (diffResult.exitCode === 0 || diffResult.stdout.trim()) {
-        patch = convertP4DiffToGitFormat(diffResult.stdout, workspace.normalizedRoot);
-      }
-    }
-
-    // Handle newly added files (p4 add) — they don't appear in p4 diff
-    if (addedDepotPaths.length > 0) {
-      const resolved = await batchResolveDepotPaths(addedDepotPaths, workspace.normalizedRoot, cwd);
-      for (const depotPath of addedDepotPaths) {
-        const mapping = resolved.get(depotPath);
-        if (!mapping) continue;
-        const newFilePatch = await getNewFileDiff(mapping.localPath, mapping.relativePath);
-        if (newFilePatch) {
-          patch += (patch ? "\n" : "") + newFilePatch;
-        }
-      }
-    }
+    const [diffDepotPaths, addedDepotPaths] = collectOpenedDepotPaths(openedResult.stdout);
+    const existingFilesPatch = await getExistingFilesPatch(
+      diffDepotPaths,
+      workspace.normalizedRoot,
+      cwd,
+    );
+    const addedFilesPatch = await getAddedFilesPatch(addedDepotPaths, workspace.normalizedRoot, cwd);
+    const patch = [existingFilesPatch, addedFilesPatch].filter(Boolean).join("\n");
 
     return { patch, label };
   } catch (error) {
