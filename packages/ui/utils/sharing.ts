@@ -77,6 +77,7 @@ const SharePayloadSchema = Schema.Struct({
   r: Schema.optional(Schema.Literal("html")),
 });
 export type SharePayload = Schema.Schema.Type<typeof SharePayloadSchema>;
+type ShareableChoiceValidationEvidence = NonNullable<SharePayload["cv"]>[number];
 
 const LegacyShareDataSchema = Schema.Struct({
   a: Schema.Array(ShareableAnnotationSchema),
@@ -188,64 +189,149 @@ export function fromShareable(
   choiceOptionLabels?: SharePayload["co"] | null,
 ): Annotation[] {
   return data.map((item, index) => {
-    const type = item[0];
-
-    // Handle global comments specially: ['G', text, author, images?]
-    if (type === "G") {
-      const annotation: Annotation = {
-        id: `shared-${index}-${Date.now()}`,
-        blockId: "",
-        startOffset: 0,
-        endOffset: 0,
-        type: AnnotationType.GLOBAL_COMMENT,
-        text: item[1] || undefined,
-        originalText: "",
-        createdA: Date.now() + index,
-        author: item[2] || undefined,
-        images: parseShareableImages(item[3]),
-      };
-      if (sources?.[index]) annotation.source = sources[index];
-      return annotation;
-    }
-
-    const originalText = item[1];
-    // Historical replacement/insertion tuples map to retained comment semantics.
-    const annotationType = type === "D" ? AnnotationType.DELETION : AnnotationType.COMMENT;
-    const text = type === "D" ? undefined : item[2];
-    const author = type === "D" ? item[2] : item[3];
-    const rawImages = type === "D" ? item[3] : item[4];
-    const isQuickLabel = type === "C" && item[5] === 1;
-    const choiceOptionLabel = type === "C" ? (choiceOptionLabels?.[index] ?? undefined) : undefined;
-    const choiceAnnotationId =
-      choiceOptionLabel !== undefined
-        ? `ann-choice-shared-${index}-${Date.now()}`
-        : `shared-${index}-${Date.now()}`;
-
-    const annotation: Annotation = {
-      id: choiceAnnotationId,
-      blockId: "", // Will be populated during highlight restoration
-      startOffset: 0,
-      endOffset: 0,
-      type: annotationType,
-      text: text || undefined,
-      originalText,
-      createdA: Date.now() + index, // Preserve order
-      author: author || undefined,
-      images: parseShareableImages(rawImages),
-      // startMeta/endMeta will be set by web-highlighter
-    };
-    if (isQuickLabel) annotation.isQuickLabel = true;
-    if (choiceOptionLabel !== undefined) annotation.choiceOptionLabel = choiceOptionLabel;
+    const source = sources?.[index];
     const diffContext = diffContexts?.[index];
-    if (diffContext && isDiffContext(diffContext)) {
-      annotation.diffContext = diffContext;
+    const evidence = choiceValidationEvidence?.[index];
+    const choiceOptionLabel = choiceOptionLabels?.[index];
+    if (item[0] === "G") {
+      return restoreGlobalAnnotation(item[1], item[2], item[3], index, source);
     }
-    if (sources?.[index]) annotation.source = sources[index];
-    if (choiceValidationEvidence?.[index]) {
-      annotation.choiceValidationEvidence = choiceValidationEvidence[index];
+    if (item[0] === "D") {
+      return restoreDeletionAnnotation(
+        item[1],
+        item[2],
+        item[3],
+        index,
+        diffContext,
+        source,
+        evidence,
+      );
     }
-    return annotation;
+    return restoreCommentAnnotation(
+      item[0],
+      item[1],
+      item[2],
+      item[3],
+      item[4],
+      item[5] === 1,
+      index,
+      diffContext,
+      source,
+      evidence,
+      choiceOptionLabel,
+    );
   });
+}
+
+function restoreGlobalAnnotation(
+  text: string,
+  author: string | null,
+  images: readonly ShareableImage[] | null | undefined,
+  index: number,
+  source: string | null | undefined,
+): Annotation {
+  const annotation: Annotation = {
+    id: `shared-${index}-${Date.now()}`,
+    blockId: "",
+    startOffset: 0,
+    endOffset: 0,
+    type: AnnotationType.GLOBAL_COMMENT,
+    text: text || undefined,
+    originalText: "",
+    createdA: Date.now() + index,
+    author: author || undefined,
+    images: parseShareableImages(images),
+  };
+  if (source) annotation.source = source;
+  return annotation;
+}
+
+function restoreDeletionAnnotation(
+  originalText: string,
+  author: string | null,
+  images: readonly ShareableImage[] | null | undefined,
+  index: number,
+  diffContext: string | null | undefined,
+  source: string | null | undefined,
+  choiceValidationEvidence: ShareableChoiceValidationEvidence | undefined,
+): Annotation {
+  const annotation: Annotation = {
+    id: createSharedAnnotationId(index, undefined),
+    blockId: "",
+    startOffset: 0,
+    endOffset: 0,
+    type: AnnotationType.DELETION,
+    originalText,
+    createdA: Date.now() + index,
+    author: author || undefined,
+    images: parseShareableImages(images),
+  };
+  restoreAnnotationMetadata(
+    annotation,
+    false,
+    undefined,
+    diffContext,
+    source,
+    choiceValidationEvidence,
+  );
+  return annotation;
+}
+
+function restoreCommentAnnotation(
+  type: "C" | "R" | "I",
+  originalText: string,
+  text: string,
+  author: string | null,
+  images: readonly ShareableImage[] | null | undefined,
+  isQuickLabel: boolean,
+  index: number,
+  diffContext: string | null | undefined,
+  source: string | null | undefined,
+  choiceValidationEvidence: ShareableChoiceValidationEvidence | undefined,
+  choiceOptionLabel: string | null | undefined,
+): Annotation {
+  const selectedChoiceOption = type === "C" ? (choiceOptionLabel ?? undefined) : undefined;
+  const annotation: Annotation = {
+    id: createSharedAnnotationId(index, selectedChoiceOption),
+    blockId: "",
+    startOffset: 0,
+    endOffset: 0,
+    type: AnnotationType.COMMENT,
+    text: text || undefined,
+    originalText,
+    createdA: Date.now() + index,
+    author: author || undefined,
+    images: parseShareableImages(images),
+  };
+  restoreAnnotationMetadata(
+    annotation,
+    type === "C" && isQuickLabel,
+    selectedChoiceOption,
+    diffContext,
+    source,
+    choiceValidationEvidence,
+  );
+  return annotation;
+}
+
+function createSharedAnnotationId(index: number, choiceOptionLabel: string | undefined): string {
+  const prefix = choiceOptionLabel === undefined ? "shared" : "ann-choice-shared";
+  return `${prefix}-${index}-${Date.now()}`;
+}
+
+function restoreAnnotationMetadata(
+  annotation: Annotation,
+  isQuickLabel: boolean,
+  choiceOptionLabel: string | undefined,
+  diffContext: string | null | undefined,
+  source: string | null | undefined,
+  choiceValidationEvidence: ShareableChoiceValidationEvidence | undefined,
+): void {
+  if (isQuickLabel) annotation.isQuickLabel = true;
+  if (choiceOptionLabel !== undefined) annotation.choiceOptionLabel = choiceOptionLabel;
+  if (diffContext && isDiffContext(diffContext)) annotation.diffContext = diffContext;
+  if (source) annotation.source = source;
+  if (choiceValidationEvidence) annotation.choiceValidationEvidence = choiceValidationEvidence;
 }
 
 function buildDiffContextArray(annotations: readonly Annotation[]): SharePayload["d"] | null {

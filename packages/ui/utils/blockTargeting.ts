@@ -46,141 +46,121 @@ export function resolvePinpointTarget(
   container: HTMLElement,
   mousePos?: { clientX: number; clientY: number },
 ): PinpointTarget | null {
-  // Skip toolbar, buttons, existing annotations
-  if (target.closest(SKIP_SELECTORS)) return null;
-  if (!container.contains(target)) return null;
+  if (target.closest(SKIP_SELECTORS) || !container.contains(target)) return null;
 
-  // Group detection: cursor is in the gap/gutter of a list group wrapper
-  // SAFETY: closest with data-pinpoint-group returns HTMLElement — cast to HTMLElement
-  const groupEl = target.closest("[data-pinpoint-group]") as HTMLElement | null;
-  if (groupEl && container.contains(groupEl) && !target.closest("[data-block-id]")) {
-    const groupType = groupEl.getAttribute("data-pinpoint-group");
-    const label =
-      groupType === "list" ? "list" : groupType === "blockquote" ? "blockquote group" : "group";
-    return { element: groupEl, blockId: "", label, isCodeBlock: false };
+  const groupTarget = resolveGroupTarget(target, container);
+  if (groupTarget) return groupTarget;
+
+  const blockEl = closestHTMLElement(target, "[data-block-id]");
+  const blockId = blockEl?.getAttribute("data-block-id");
+  if (!blockEl || blockId === null || !container.contains(blockEl) || blockEl.tagName === "HR") {
+    return null;
   }
 
-  // Find the parent block
-  // SAFETY: closest with data-block-id returns HTMLElement — cast to HTMLElement
-  const blockEl = target.closest("[data-block-id]") as HTMLElement | null;
-  if (!blockEl || !container.contains(blockEl)) return null;
+  const resolvedTarget =
+    resolveCodeBlockTarget(target, blockEl, blockId) ??
+    resolveTableEdgeTarget(blockEl, blockId, mousePos) ??
+    resolveInlineTarget(target, blockId) ??
+    resolveTableCellTarget(target, blockEl, blockId) ??
+    resolveListItemTarget(blockEl, blockId);
 
-  const blockId = blockEl.getAttribute("data-block-id")!;
-
-  // Skip hr (no text content)
-  if (blockEl.tagName === "HR") return null;
-
-  // Code block detection: pre > code.hljs
-  const codeEl = blockEl.querySelector("pre > code.hljs");
-  if (codeEl && (target === codeEl || codeEl.contains(target) || target.closest("pre"))) {
-    return {
+  return (
+    resolvedTarget ?? {
       element: blockEl,
       blockId,
-      label: getCodeBlockLabel(blockEl),
-      isCodeBlock: true,
-    };
+      label: getBlockLabel(blockEl),
+      isCodeBlock: false,
+    }
+  );
+}
+
+function closestHTMLElement(element: HTMLElement, selector: string): HTMLElement | null {
+  const closest = element.closest(selector);
+  return closest instanceof HTMLElement ? closest : null;
+}
+
+function resolveGroupTarget(target: HTMLElement, container: HTMLElement): PinpointTarget | null {
+  const groupEl = closestHTMLElement(target, "[data-pinpoint-group]");
+  if (!groupEl || !container.contains(groupEl) || target.closest("[data-block-id]")) return null;
+
+  const groupType = groupEl.getAttribute("data-pinpoint-group");
+  const label =
+    groupType === "list" ? "list" : groupType === "blockquote" ? "blockquote group" : "group";
+  return { element: groupEl, blockId: "", label, isCodeBlock: false };
+}
+
+function resolveCodeBlockTarget(
+  target: HTMLElement,
+  blockEl: HTMLElement,
+  blockId: string,
+): PinpointTarget | null {
+  const codeEl = blockEl.querySelector("pre > code.hljs");
+  if (!codeEl || !(target === codeEl || codeEl.contains(target) || target.closest("pre"))) {
+    return null;
   }
 
-  // Table edge-zone detection: edges target whole table or row
+  return { element: blockEl, blockId, label: getCodeBlockLabel(blockEl), isCodeBlock: true };
+}
+
+function resolveTableEdgeTarget(
+  blockEl: HTMLElement,
+  blockId: string,
+  mousePos: { clientX: number; clientY: number } | undefined,
+): PinpointTarget | null {
   const tableEl = blockEl.querySelector("table");
-  if (tableEl && mousePos) {
-    const tableRect = tableEl.getBoundingClientRect();
-    const nearLeft = mousePos.clientX - tableRect.left < TABLE_EDGE_ZONE;
-    const nearRight = tableRect.right - mousePos.clientX < TABLE_EDGE_ZONE;
-    const nearTop = mousePos.clientY - tableRect.top < TABLE_EDGE_ZONE;
-    const nearBottom = tableRect.bottom - mousePos.clientY < TABLE_EDGE_ZONE;
+  if (!tableEl || !mousePos) return null;
 
-    // Top/bottom edge → whole table
-    if (nearTop || nearBottom) {
-      return { element: blockEl, blockId, label: "table", isCodeBlock: false };
-    }
+  const tableRect = tableEl.getBoundingClientRect();
+  const nearHorizontalEdge =
+    mousePos.clientX - tableRect.left < TABLE_EDGE_ZONE ||
+    tableRect.right - mousePos.clientX < TABLE_EDGE_ZONE;
+  const nearVerticalEdge =
+    mousePos.clientY - tableRect.top < TABLE_EDGE_ZONE ||
+    tableRect.bottom - mousePos.clientY < TABLE_EDGE_ZONE;
+  if (nearVerticalEdge) return { element: blockEl, blockId, label: "table", isCodeBlock: false };
+  if (!nearHorizontalEdge) return null;
 
-    // Left/right edge → the row at this Y position
-    if (nearLeft || nearRight) {
-      const row = findRowAtY(tableEl, mousePos.clientY);
-      if (row) {
-        return { element: row, blockId, label: getRowLabel(row), isCodeBlock: false };
-      }
-      return { element: blockEl, blockId, label: "table", isCodeBlock: false };
-    }
-  }
+  const row = findRowAtY(tableEl, mousePos.clientY);
+  return row
+    ? { element: row, blockId, label: getRowLabel(row), isCodeBlock: false }
+    : { element: blockEl, blockId, label: "table", isCodeBlock: false };
+}
 
-  // Inline code (not inside a code block) — target the <code> element
+function resolveInlineTarget(target: HTMLElement, blockId: string): PinpointTarget | null {
   if (target.tagName === "CODE" && !target.classList.contains("hljs")) {
     const text = target.textContent?.trim() || "";
-    if (text) {
-      return {
-        element: target,
-        blockId,
-        label: `code: \`${truncate(text, 30)}\``,
-        isCodeBlock: false,
-      };
-    }
-  }
-
-  // Inline elements: strong, em, a
-  if (INLINE_TARGETS.has(target.tagName)) {
-    const text = target.textContent?.trim() || "";
-    if (text) {
-      return {
-        element: target,
-        blockId,
-        label: getInlineLabel(target, text),
-        isCodeBlock: false,
-      };
-    }
-  }
-
-  // Table cells (only reached when cursor is deep inside, not near edge)
-  if (CELL_TARGETS.has(target.tagName)) {
+    if (!text) return null;
     return {
       element: target,
       blockId,
-      label: "table cell",
+      label: `code: \`${truncate(text, 30)}\``,
       isCodeBlock: false,
     };
   }
-  // Check if inside a table cell
-  // SAFETY: closest with td/th returns HTMLElement — cast to HTMLElement
-  const cell = target.closest("td, th") as HTMLElement | null;
-  if (cell && blockEl.contains(cell)) {
-    return {
-      element: cell,
-      blockId,
-      label: "table cell",
-      isCodeBlock: false,
-    };
-  }
+  if (!INLINE_TARGETS.has(target.tagName)) return null;
+  const text = target.textContent?.trim() || "";
+  if (!text) return null;
+  return { element: target, blockId, label: getInlineLabel(target, text), isCodeBlock: false };
+}
 
-  // List item — target the content span (second child), not the bullet
-  if (blockEl.querySelector(".select-none")) {
-    // This is a list item with a bullet. Find the content span.
-    // SAFETY: blockEl children[1] is HTMLElement for list item content — cast to HTMLElement
-    const contentSpan = blockEl.children[1] as HTMLElement | undefined;
-    if (contentSpan && (contentSpan === target || contentSpan.contains(target))) {
-      return {
-        element: contentSpan,
-        blockId,
-        label: getListItemLabel(contentSpan),
-        isCodeBlock: false,
-      };
-    }
-    // Clicked on the bullet area — still target the content span
-    if (contentSpan) {
-      return {
-        element: contentSpan,
-        blockId,
-        label: getListItemLabel(contentSpan),
-        isCodeBlock: false,
-      };
-    }
-  }
+function resolveTableCellTarget(
+  target: HTMLElement,
+  blockEl: HTMLElement,
+  blockId: string,
+): PinpointTarget | null {
+  const cell = CELL_TARGETS.has(target.tagName) ? target : closestHTMLElement(target, "td, th");
+  if (!cell || !blockEl.contains(cell)) return null;
+  return { element: cell, blockId, label: "table cell", isCodeBlock: false };
+}
 
-  // Fall back to the full block
+function resolveListItemTarget(blockEl: HTMLElement, blockId: string): PinpointTarget | null {
+  if (!blockEl.querySelector(".select-none")) return null;
+  const contentSpan = blockEl.children.item(1);
+  if (!(contentSpan instanceof HTMLElement)) return null;
   return {
-    element: blockEl,
+    element: contentSpan,
     blockId,
-    label: getBlockLabel(blockEl),
+    label: getListItemLabel(contentSpan),
     isCodeBlock: false,
   };
 }

@@ -126,348 +126,399 @@ const HTML_BLOCK_OPEN_RE = /^<\/?([a-zA-Z][a-zA-Z0-9]*)(?:\s|>|\/|$)/;
  * For a production app, we would use a robust AST walker (remark),
  * but for this demo, we want predictable text-anchoring.
  */
+interface MarkdownParserState {
+  blocks: Block[];
+  buffer: string[];
+  currentId: number;
+  currentType: Block["type"];
+  currentLevel: number;
+  bufferStartLine: number;
+  lastLineWasBlank: boolean;
+}
+
+interface MarkdownLine {
+  value: string;
+  trimmed: string;
+  index: number;
+  sourceLine: number;
+  previousLineWasBlank: boolean;
+}
+
+interface ListItemCheckbox {
+  content: string;
+  checked: boolean | undefined;
+}
+
+const BLOCKQUOTE_MARKER_RE = /^(?:(?:\*|-|\d+\.)\s|#|```|>)/;
+const ALERT_KINDS: readonly NonNullable<Block["alertKind"]>[] = [
+  "note",
+  "tip",
+  "warning",
+  "caution",
+  "important",
+];
+
+/** Split markdown into annotation blocks while retaining source-line boundaries. */
 export const parseMarkdownToBlocks = (markdown: string): Block[] => {
   const { content: cleanMarkdown, contentStartLine } = extractFrontmatter(markdown);
   const lines = cleanMarkdown.split("\n");
-  const blocks: Block[] = [];
-  let currentId = 0;
-
-  let buffer: string[] = [];
-  let currentType: Block["type"] = "paragraph";
-  let currentLevel = 0;
-  let bufferStartLine = contentStartLine;
-  let lastLineWasBlank = false;
-
-  const flush = () => {
-    if (buffer.length > 0) {
-      const content = buffer.join("\n");
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: currentType,
-        content: content,
-        level: currentLevel,
-        order: currentId,
-        startLine: bufferStartLine,
-      });
-      buffer = [];
-    }
+  const state: MarkdownParserState = {
+    blocks: [],
+    buffer: [],
+    currentId: 0,
+    currentType: "paragraph",
+    currentLevel: 0,
+    bufferStartLine: contentStartLine,
+    lastLineWasBlank: false,
   };
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    const currentLineNum = i + contentStartLine;
-    const prevLineWasBlank = lastLineWasBlank;
-    lastLineWasBlank = false;
-
-    // Headings
-    if (trimmed.startsWith("#")) {
-      flush();
-      const level = trimmed.match(/^#+/)?.[0].length || 1;
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: "heading",
-        content: trimmed.replace(/^#+\s*/, ""),
-        level,
-        order: currentId,
-        startLine: currentLineNum,
-      });
-      continue;
-    }
-
-    // Horizontal Rule
-    if (trimmed === "---" || trimmed === "***") {
-      flush();
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: "hr",
-        content: "",
-        order: currentId,
-        startLine: currentLineNum,
-      });
-      continue;
-    }
-
-    // List Items (Simple detection)
-    const listMatch = trimmed.match(/^(\*|-|(\d+)\.)\s/);
-    if (listMatch) {
-      flush(); // Treat each list item as a separate block for easier annotation
-      // Calculate indentation level from leading whitespace
-      const leadingWhitespace = line.match(/^(\s*)/)?.[1] || "";
-      // Count spaces (2 spaces = 1 level) or tabs (1 tab = 1 level)
-      const spaceCount = leadingWhitespace.replace(/\t/g, "  ").length;
-      const listLevel = Math.floor(spaceCount / 2);
-
-      // Distinguish numeric markers (\d+.) from bullet markers (* / -)
-      const ordered = listMatch[2] !== undefined;
-      const orderedStart = ordered ? parseInt(listMatch[2]!, 10) : undefined;
-
-      // Remove list marker
-      let content = trimmed.slice(listMatch[0].length);
-
-      // Check for checkbox syntax: [ ] or [x] or [X]
-      let checked: boolean | undefined = undefined;
-      const checkboxMatch = content.match(/^\[([ xX])\]\s*/);
-      if (checkboxMatch) {
-        checked = checkboxMatch[1].toLowerCase() === "x";
-        content = content.replace(/^\[([ xX])\]\s*/, "");
-      }
-
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: "list-item",
-        content,
-        level: listLevel,
-        checked,
-        ordered: ordered || undefined,
-        orderedStart,
-        order: currentId,
-        startLine: currentLineNum,
-      });
-      continue;
-    }
-
-    // Blockquotes — consecutive `>` lines merge into one block so wrapped
-    // paragraph quotes render as a single continuous quote box. A blank line
-    // breaks the blockquote so the next `>` starts a fresh one.
-    //
-    // Exception: if the stripped content starts with a block-level marker
-    // (list item, heading, code fence, nested blockquote) we do NOT merge.
-    // Our flat block model can't render a list-inside-a-quote as an actual
-    // nested list, so merging would flatten the markers into run-on inline
-    // text. Leaving them as separate blockquote blocks preserves each line's
-    // visual identity (a stacked-box layout) — imperfect but legible. A
-    // proper recursive blockquote parser is tracked as a follow-up.
-    if (trimmed.startsWith(">")) {
-      flush();
-      const stripped = trimmed.replace(/^>\s*/, "");
-      // List markers require trailing whitespace to avoid matching inline
-      // text like "-hyphen" or "1.5 seconds"; headings, code fences, and
-      // nested blockquote markers don't require it (``` can be followed
-      // directly by a language tag, # can start a dense heading).
-      const blockMarkerRe = /^(?:(?:\*|-|\d+\.)\s|#|```|>)/;
-      const hasBlockMarker = blockMarkerRe.test(stripped);
-      const prevBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
-      // Don't merge into a previous blockquote whose content itself starts
-      // with a block marker — otherwise a `> some text` line following a
-      // `> 1. item` line would get glued onto the list-item block.
-      const prevIsMarkerQuote =
-        prevBlock?.type === "blockquote" && blockMarkerRe.test(prevBlock.content);
-      // Alerts own their body: once a blockquote is tagged as an alert,
-      // subsequent `>` lines always merge into it (until a blank line).
-      // Without this, `> [!NOTE]\n> - item` splits the list item off into
-      // a separate plain quote, losing the callout.
-      const prevIsAlert = prevBlock?.type === "blockquote" && !!prevBlock.alertKind;
-      const shouldMergeIntoAlert = prevIsAlert && !prevLineWasBlank;
-      const shouldMergeNormal =
-        !hasBlockMarker &&
-        !prevIsMarkerQuote &&
-        !prevLineWasBlank &&
-        prevBlock?.type === "blockquote";
-      if (shouldMergeIntoAlert || shouldMergeNormal) {
-        prevBlock!.content = prevBlock!.content ? prevBlock!.content + "\n" + stripped : stripped;
-      } else {
-        // GitHub alert marker: a blockquote whose first line is [!KIND].
-        // We strip the marker from content and tag the block; rendering decides the style.
-        const alertMatch = stripped.match(/^\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/i);
-        const alertKind = alertMatch?.[1]?.toLowerCase();
-        const normalizedAlertKind =
-          alertKind === "note" ||
-          alertKind === "tip" ||
-          alertKind === "warning" ||
-          alertKind === "caution" ||
-          alertKind === "important"
-            ? alertKind
-            : undefined;
-        blocks.push({
-          id: `block-${currentId++}`,
-          type: "blockquote",
-          content: alertMatch ? "" : stripped,
-          alertKind: normalizedAlertKind,
-          order: currentId,
-          startLine: currentLineNum,
-        });
-      }
-      continue;
-    }
-
-    // Code blocks (naive)
-    if (trimmed.startsWith("```")) {
-      flush();
-      const codeStartLine = currentLineNum;
-      // Count backticks in opening fence to support nested fences (e.g. ```` wrapping ```)
-      const fenceLen = trimmed.match(/^`+/)?.[0].length ?? 3;
-      const closingFence = new RegExp("^\\s*`{" + fenceLen + ",}");
-      // Extract language from fence (e.g., ```rust → "rust")
-      const language = trimmed.slice(fenceLen).trim() || undefined;
-      // Fast forward until end of code block
-      let codeContent = [];
-      i++; // Skip start fence
-      while (i < lines.length && !closingFence.test(lines[i])) {
-        codeContent.push(lines[i]);
-        i++;
-      }
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: "code",
-        content: codeContent.join("\n"),
-        language,
-        order: currentId,
-        startLine: codeStartLine,
-      });
-      continue;
-    }
-
-    // Tables (lines starting with |)
-    if (trimmed.startsWith("|")) {
-      flush();
-      const tableStartLine = currentLineNum;
-      const tableLines: string[] = [line];
-
-      // Collect all consecutive table lines
-      while (i + 1 < lines.length) {
-        const nextLine = lines[i + 1].trim();
-        // Continue if line starts with | (table row or separator)
-        if (nextLine.startsWith("|")) {
-          i++;
-          tableLines.push(lines[i]);
-        } else {
-          break;
-        }
-      }
-
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: "table",
-        content: tableLines.join("\n"),
-        order: currentId,
-        startLine: tableStartLine,
-      });
-      continue;
-    }
-
-    // Raw HTML blocks. A line starting with a known block-level HTML tag
-    // opens an HTML block. For opening tags we accumulate until the matching
-    // close tag is balanced (so `<details>…blank line…</details>` renders as
-    // one unit, matching GitHub's flavored behavior rather than strict
-    // CommonMark §4.6 Type 6 blank-line termination). For a line that starts
-    // with a close tag, we fall back to blank-line termination. Content is
-    // sanitized at render time, not here.
-    // Directive container: `:::kind` opens, `:::` closes. Inline kind is
-    // restricted to simple identifiers (letters, digits, hyphens). Body is
-    // accumulated verbatim and rendered with inline markdown.
-    const directiveOpen = trimmed.match(/^:::\s*([a-zA-Z][a-zA-Z0-9-]*)\s*$/);
-    if (directiveOpen) {
-      flush();
-      const directiveStartLine = currentLineNum;
-      const kind = directiveOpen[1].toLowerCase();
-      const bodyLines: string[] = [];
-      while (i + 1 < lines.length) {
-        i++;
-        if (lines[i].trim() === ":::") break;
-        bodyLines.push(lines[i]);
-      }
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: "directive",
-        content: bodyLines.join("\n"),
-        directiveKind: kind,
-        order: currentId,
-        startLine: directiveStartLine,
-      });
-      continue;
-    }
-
-    const htmlTagMatch = trimmed.match(HTML_BLOCK_OPEN_RE);
-    if (htmlTagMatch && HTML_BLOCK_TAGS.has(htmlTagMatch[1].toLowerCase())) {
-      flush();
-      const htmlStartLine = currentLineNum;
-      const tagName = htmlTagMatch[1].toLowerCase();
-      const isCloseTag = trimmed.startsWith("</");
-      const htmlLines: string[] = [line];
-
-      if (isCloseTag) {
-        while (i + 1 < lines.length && lines[i + 1].trim() !== "") {
-          i++;
-          htmlLines.push(lines[i]);
-        }
-      } else {
-        const openRe = new RegExp(`<${tagName}(?:\\s|>|/|$)`, "gi");
-        const closeRe = new RegExp(`</${tagName}\\s*>`, "gi");
-        let depth = (line.match(openRe) || []).length - (line.match(closeRe) || []).length;
-        while (depth > 0 && i + 1 < lines.length) {
-          i++;
-          htmlLines.push(lines[i]);
-          depth += (lines[i].match(openRe) || []).length;
-          depth -= (lines[i].match(closeRe) || []).length;
-        }
-      }
-
-      blocks.push({
-        id: `block-${currentId++}`,
-        type: "html",
-        content: htmlLines.join("\n"),
-        order: currentId,
-        startLine: htmlStartLine,
-      });
-      continue;
-    }
-
-    // Empty lines separate paragraphs
-    if (trimmed === "") {
-      const candidateStartIndex = bufferStartLine - contentStartLine;
-      const choice =
-        buffer.length > 0 ? parseChoiceQuestion(lines.slice(candidateStartIndex).join("\n")) : null;
-
-      if (choice) {
-        blocks.push({
-          id: `block-${currentId++}`,
-          type: "choice-question",
-          content: choice.question,
-          choiceOptions: choice.options,
-          recommendedChoiceLabel: choice.recommendedLabel,
-          sourceText: choice.sourceText,
-          sourceLineCount: choice.sourceLineCount,
-          order: currentId,
-          startLine: bufferStartLine,
-        });
-        buffer = [];
-        currentType = "paragraph";
-        lastLineWasBlank = false;
-        i = candidateStartIndex + choice.sourceLineCount - 1;
-        continue;
-      }
-
-      flush();
-      currentType = "paragraph";
-      lastLineWasBlank = true;
-      continue;
-    }
-    // List continuation: indented line after a list item merges into it.
-    // Tight (no blank line): 1+ whitespace, joined with \n (same paragraph).
-    // Loose (after blank line): 2+ spaces, joined with \n\n (new paragraph within the item).
-    if (
-      buffer.length === 0 &&
-      blocks.length > 0 &&
-      blocks[blocks.length - 1].type === "list-item" &&
-      (prevLineWasBlank ? /^\s{2,}/ : /^\s+/).test(line)
-    ) {
-      const sep = prevLineWasBlank ? "\n\n" : "\n";
-      blocks[blocks.length - 1].content += sep + trimmed;
-      continue;
-    }
-
-    // Accumulate paragraph text
-    if (buffer.length === 0) {
-      bufferStartLine = currentLineNum;
-    }
-    buffer.push(line);
+  for (let index = 0; index < lines.length; index += 1) {
+    const parsedLine = createMarkdownLine(lines[index], index, contentStartLine, state);
+    const consumedIndex = parseMarkdownLine(state, lines, parsedLine, contentStartLine);
+    if (consumedIndex !== null) index = consumedIndex;
   }
 
-  flush(); // Final flush
-
-  return blocks;
+  flushMarkdownBuffer(state);
+  return state.blocks;
 };
+
+function createMarkdownLine(
+  value: string,
+  index: number,
+  contentStartLine: number,
+  state: MarkdownParserState,
+): MarkdownLine {
+  const previousLineWasBlank = state.lastLineWasBlank;
+  state.lastLineWasBlank = false;
+  return {
+    value,
+    trimmed: value.trim(),
+    index,
+    sourceLine: index + contentStartLine,
+    previousLineWasBlank,
+  };
+}
+
+function parseMarkdownLine(
+  state: MarkdownParserState,
+  lines: readonly string[],
+  line: MarkdownLine,
+  contentStartLine: number,
+): number | null {
+  if (parseHeadingBlock(state, line) || parseHorizontalRuleBlock(state, line)) return line.index;
+  if (parseListItemBlock(state, line) || parseBlockquoteBlock(state, line)) return line.index;
+
+  const codeBlockEnd = parseCodeBlock(state, lines, line);
+  if (codeBlockEnd !== null) return codeBlockEnd;
+  const tableBlockEnd = parseTableBlock(state, lines, line);
+  if (tableBlockEnd !== null) return tableBlockEnd;
+  const directiveBlockEnd = parseDirectiveBlock(state, lines, line);
+  if (directiveBlockEnd !== null) return directiveBlockEnd;
+  const htmlBlockEnd = parseHtmlBlock(state, lines, line);
+  if (htmlBlockEnd !== null) return htmlBlockEnd;
+
+  const blankOrContinuationEnd = parseBlankOrListContinuation(state, lines, line, contentStartLine);
+  if (blankOrContinuationEnd !== null) return blankOrContinuationEnd;
+
+  if (state.buffer.length === 0) state.bufferStartLine = line.sourceLine;
+  state.buffer.push(line.value);
+  return null;
+}
+
+function appendBlock(state: MarkdownParserState, block: Omit<Block, "id" | "order">): Block {
+  const currentId = state.currentId;
+  state.currentId += 1;
+  const createdBlock = { ...block, id: `block-${currentId}`, order: state.currentId };
+  state.blocks.push(createdBlock);
+  return createdBlock;
+}
+
+function flushMarkdownBuffer(state: MarkdownParserState): void {
+  if (state.buffer.length === 0) return;
+  appendBlock(state, {
+    type: state.currentType,
+    content: state.buffer.join("\n"),
+    level: state.currentLevel,
+    startLine: state.bufferStartLine,
+  });
+  state.buffer = [];
+}
+
+function parseHeadingBlock(state: MarkdownParserState, line: MarkdownLine): boolean {
+  if (!line.trimmed.startsWith("#")) return false;
+  flushMarkdownBuffer(state);
+  const marker = line.trimmed.match(/^#+/);
+  appendBlock(state, {
+    type: "heading",
+    content: line.trimmed.replace(/^#+\s*/, ""),
+    level: marker ? marker[0].length : 1,
+    startLine: line.sourceLine,
+  });
+  return true;
+}
+
+function parseHorizontalRuleBlock(state: MarkdownParserState, line: MarkdownLine): boolean {
+  if (line.trimmed !== "---" && line.trimmed !== "***") return false;
+  flushMarkdownBuffer(state);
+  appendBlock(state, { type: "hr", content: "", startLine: line.sourceLine });
+  return true;
+}
+
+function parseListItemBlock(state: MarkdownParserState, line: MarkdownLine): boolean {
+  const listMatch = line.trimmed.match(/^(\*|-|(\d+)\.)\s/);
+  if (!listMatch) return false;
+
+  flushMarkdownBuffer(state);
+  const leadingWhitespace = line.value.match(/^(\s*)/);
+  const indentation = leadingWhitespace ? leadingWhitespace[1] : "";
+  const listLevel = Math.floor(indentation.replace(/\t/g, "  ").length / 2);
+  const orderedStartText = listMatch[2];
+  const orderedStart =
+    orderedStartText === undefined ? undefined : Number.parseInt(orderedStartText, 10);
+  const checkbox = parseListItemCheckbox(line.trimmed.slice(listMatch[0].length));
+
+  appendBlock(state, {
+    type: "list-item",
+    content: checkbox.content,
+    level: listLevel,
+    checked: checkbox.checked,
+    ordered: orderedStart === undefined ? undefined : true,
+    orderedStart,
+    startLine: line.sourceLine,
+  });
+  return true;
+}
+
+function parseListItemCheckbox(content: string): ListItemCheckbox {
+  const checkboxMatch = content.match(/^\[([ xX])\]\s*/);
+  if (!checkboxMatch) return { content, checked: undefined };
+  return {
+    content: content.replace(/^\[([ xX])\]\s*/, ""),
+    checked: checkboxMatch[1]?.toLowerCase() === "x",
+  };
+}
+
+function parseBlockquoteBlock(state: MarkdownParserState, line: MarkdownLine): boolean {
+  if (!line.trimmed.startsWith(">")) return false;
+  flushMarkdownBuffer(state);
+  const stripped = line.trimmed.replace(/^>\s*/, "");
+  const previousBlock = state.blocks.at(-1);
+  if (shouldMergeBlockquote(previousBlock, stripped, line.previousLineWasBlank)) {
+    if (previousBlock) {
+      previousBlock.content = previousBlock.content
+        ? `${previousBlock.content}\n${stripped}`
+        : stripped;
+    }
+    return true;
+  }
+
+  const alertKind = parseAlertKind(stripped);
+  appendBlock(state, {
+    type: "blockquote",
+    content: alertKind === undefined ? stripped : "",
+    alertKind,
+    startLine: line.sourceLine,
+  });
+  return true;
+}
+
+function shouldMergeBlockquote(
+  previousBlock: Block | undefined,
+  stripped: string,
+  previousLineWasBlank: boolean,
+): boolean {
+  if (previousLineWasBlank || previousBlock?.type !== "blockquote") return false;
+  if (previousBlock.alertKind) return true;
+  return !BLOCKQUOTE_MARKER_RE.test(stripped) && !BLOCKQUOTE_MARKER_RE.test(previousBlock.content);
+}
+
+function parseAlertKind(stripped: string): Block["alertKind"] {
+  const alertMatch = stripped.match(/^\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/i);
+  const candidate = alertMatch?.[1]?.toLowerCase();
+  return ALERT_KINDS.find((kind) => kind === candidate);
+}
+
+function parseCodeBlock(
+  state: MarkdownParserState,
+  lines: readonly string[],
+  line: MarkdownLine,
+): number | null {
+  if (!line.trimmed.startsWith("```")) return null;
+  flushMarkdownBuffer(state);
+  const openingFence = line.trimmed.match(/^`+/);
+  const fenceLength = openingFence ? openingFence[0].length : 3;
+  const closingFence = new RegExp("^\\s*`{" + fenceLength + ",}");
+  const codeLines: string[] = [];
+  let index = line.index + 1;
+  while (index < lines.length && !closingFence.test(lines[index])) {
+    codeLines.push(lines[index]);
+    index += 1;
+  }
+
+  appendBlock(state, {
+    type: "code",
+    content: codeLines.join("\n"),
+    language: line.trimmed.slice(fenceLength).trim() || undefined,
+    startLine: line.sourceLine,
+  });
+  return index;
+}
+
+function parseTableBlock(
+  state: MarkdownParserState,
+  lines: readonly string[],
+  line: MarkdownLine,
+): number | null {
+  if (!line.trimmed.startsWith("|")) return null;
+  flushMarkdownBuffer(state);
+  const tableLines = [line.value];
+  let index = line.index;
+  while (index + 1 < lines.length && lines[index + 1].trim().startsWith("|")) {
+    index += 1;
+    tableLines.push(lines[index]);
+  }
+
+  appendBlock(state, {
+    type: "table",
+    content: tableLines.join("\n"),
+    startLine: line.sourceLine,
+  });
+  return index;
+}
+
+function parseDirectiveBlock(
+  state: MarkdownParserState,
+  lines: readonly string[],
+  line: MarkdownLine,
+): number | null {
+  const directiveOpen = line.trimmed.match(/^:::\s*([a-zA-Z][a-zA-Z0-9-]*)\s*$/);
+  const kind = directiveOpen?.[1];
+  if (!kind) return null;
+
+  flushMarkdownBuffer(state);
+  const bodyLines: string[] = [];
+  let index = line.index;
+  while (index + 1 < lines.length) {
+    index += 1;
+    if (lines[index].trim() === ":::") break;
+    bodyLines.push(lines[index]);
+  }
+  appendBlock(state, {
+    type: "directive",
+    content: bodyLines.join("\n"),
+    directiveKind: kind.toLowerCase(),
+    startLine: line.sourceLine,
+  });
+  return index;
+}
+
+function parseHtmlBlock(
+  state: MarkdownParserState,
+  lines: readonly string[],
+  line: MarkdownLine,
+): number | null {
+  const htmlTagMatch = line.trimmed.match(HTML_BLOCK_OPEN_RE);
+  const tagName = htmlTagMatch?.[1]?.toLowerCase();
+  if (!tagName || !HTML_BLOCK_TAGS.has(tagName)) return null;
+
+  flushMarkdownBuffer(state);
+  const htmlLines = [line.value];
+  const endIndex = line.trimmed.startsWith("</")
+    ? collectClosingHtmlBlock(lines, line.index, htmlLines)
+    : collectBalancedHtmlBlock(lines, line.index, line.value, tagName, htmlLines);
+  appendBlock(state, {
+    type: "html",
+    content: htmlLines.join("\n"),
+    startLine: line.sourceLine,
+  });
+  return endIndex;
+}
+
+function collectClosingHtmlBlock(
+  lines: readonly string[],
+  startIndex: number,
+  htmlLines: string[],
+): number {
+  let index = startIndex;
+  while (index + 1 < lines.length && lines[index + 1].trim() !== "") {
+    index += 1;
+    htmlLines.push(lines[index]);
+  }
+  return index;
+}
+
+function collectBalancedHtmlBlock(
+  lines: readonly string[],
+  startIndex: number,
+  firstLine: string,
+  tagName: string,
+  htmlLines: string[],
+): number {
+  const openRe = new RegExp(`<${tagName}(?:\\s|>|/|$)`, "gi");
+  const closeRe = new RegExp(`</${tagName}\\s*>`, "gi");
+  let depth = countHtmlTags(firstLine, openRe) - countHtmlTags(firstLine, closeRe);
+  let index = startIndex;
+  while (depth > 0 && index + 1 < lines.length) {
+    index += 1;
+    const nextLine = lines[index];
+    htmlLines.push(nextLine);
+    depth += countHtmlTags(nextLine, openRe) - countHtmlTags(nextLine, closeRe);
+  }
+  return index;
+}
+
+function countHtmlTags(line: string, matcher: RegExp): number {
+  return (line.match(matcher) || []).length;
+}
+
+function parseBlankOrListContinuation(
+  state: MarkdownParserState,
+  lines: readonly string[],
+  line: MarkdownLine,
+  contentStartLine: number,
+): number | null {
+  if (line.trimmed === "") return parseBlankLine(state, lines, line, contentStartLine);
+  const previousBlock = state.blocks.at(-1);
+  const continuationPattern = line.previousLineWasBlank ? /^\s{2,}/ : /^\s+/;
+  if (!previousBlock || state.buffer.length > 0 || previousBlock.type !== "list-item") return null;
+  if (!continuationPattern.test(line.value)) return null;
+
+  previousBlock.content += `${line.previousLineWasBlank ? "\n\n" : "\n"}${line.trimmed}`;
+  return line.index;
+}
+
+function parseBlankLine(
+  state: MarkdownParserState,
+  lines: readonly string[],
+  line: MarkdownLine,
+  contentStartLine: number,
+): number {
+  const candidateStartIndex = state.bufferStartLine - contentStartLine;
+  const choice =
+    state.buffer.length > 0
+      ? parseChoiceQuestion(lines.slice(candidateStartIndex).join("\n"))
+      : null;
+  if (choice) {
+    appendBlock(state, {
+      type: "choice-question",
+      content: choice.question,
+      choiceOptions: choice.options,
+      recommendedChoiceLabel: choice.recommendedLabel,
+      sourceText: choice.sourceText,
+      sourceLineCount: choice.sourceLineCount,
+      startLine: state.bufferStartLine,
+    });
+    state.buffer = [];
+    state.currentType = "paragraph";
+    state.lastLineWasBlank = false;
+    return candidateStartIndex + choice.sourceLineCount - 1;
+  }
+
+  flushMarkdownBuffer(state);
+  state.currentType = "paragraph";
+  state.lastLineWasBlank = true;
+  return line.index;
+}
 
 /**
  * Compute the display index for each list item in a contiguous list group.
