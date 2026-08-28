@@ -3898,16 +3898,13 @@ const App: React.FC = () => {
           <WorkspaceBanners
             linkedDocumentError={linkedDocHook.error}
             onDismissLinkedDocumentError={linkedDocHook.dismissError}
-            conflictedFileName={
-              activeSourceBackedDocument?.diskConflict
-                ? activeSourceBackedDocument.basename
-                : undefined
+            hasDiskConflict={Boolean(activeSourceBackedDocument?.diskConflict)}
+            conflictedFileName={activeSourceBackedDocument?.basename ?? ""}
+            hasMissingSourceFile={
+              activeSourceBackedDocument?.missingOnDisk === true &&
+              !activeSourceBackedDocument.diskConflict
             }
-            missingFileName={
-              activeSourceBackedDocument?.missingOnDisk && !activeSourceBackedDocument.diskConflict
-                ? activeSourceBackedDocument.basename
-                : undefined
-            }
+            missingFileName={activeSourceBackedDocument?.basename ?? ""}
             isEditingMarkdown={isEditingMarkdown}
             canOverwriteDiskConflict={canOverwriteDiskConflict}
             isSavingSourceFile={activeSaveStatus === "saving"}

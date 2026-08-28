@@ -1,8 +1,10 @@
 type WorkspaceBannersProps = {
   linkedDocumentError: string | null;
   onDismissLinkedDocumentError: () => void;
-  conflictedFileName?: string;
-  missingFileName?: string;
+  hasDiskConflict: boolean;
+  conflictedFileName: string;
+  hasMissingSourceFile: boolean;
+  missingFileName: string;
   isEditingMarkdown: boolean;
   canOverwriteDiskConflict: boolean;
   isSavingSourceFile: boolean;
@@ -15,7 +17,9 @@ type WorkspaceBannersProps = {
 export function WorkspaceBanners({
   linkedDocumentError,
   onDismissLinkedDocumentError,
+  hasDiskConflict,
   conflictedFileName,
+  hasMissingSourceFile,
   missingFileName,
   isEditingMarkdown,
   canOverwriteDiskConflict,
@@ -39,7 +43,7 @@ export function WorkspaceBanners({
         </div>
       )}
 
-      {conflictedFileName && (
+      {hasDiskConflict && (
         <div className="bg-warning/10 border-b border-warning/25 px-4 py-2 flex items-center gap-3 flex-shrink-0">
           <span className="min-w-0 flex-1 text-xs text-warning-foreground">
             {conflictedFileName} changed on disk{isEditingMarkdown ? " while you were editing" : ""}.
@@ -63,7 +67,7 @@ export function WorkspaceBanners({
         </div>
       )}
 
-      {missingFileName && (
+      {hasMissingSourceFile && (
         <div className="bg-warning/10 border-b border-warning/25 px-4 py-2 flex items-center gap-3 flex-shrink-0">
           <span className="min-w-0 flex-1 text-xs text-warning-foreground">
             {missingFileName} no longer exists on disk. Save to recreate it.
