@@ -222,173 +222,163 @@ function docJson(
   return Response.json(applyDocOptions(data, options, sourceSnapshot));
 }
 
-/** Serve a linked markdown document. Resolves absolute, relative, or bare filename paths. */
-export async function handleDoc(req: Request, options: HandleDocOptions = {}): Promise<Response> {
-  const url = new URL(req.url);
-  const requestedPath = url.searchParams.get("path");
-  if (!requestedPath) {
-    return Response.json({ error: "Missing path parameter" }, { status: 400 });
-  }
+interface DocumentResolutionContext {
+  requestedPath: string;
+  allowedRoots: string[];
+  resolvedBase: string | null;
+  convert: boolean;
+  options: HandleDocOptions;
+}
 
-  const allowedRoots = getAllowedRootPaths(options);
-  // Side-channel: kick off a code-file walk for the project root so that any
-  // /api/doc/exists POST issued by the rendered linked-doc lands on warm cache.
-  for (const root of allowedRoots) {
-    void warmFileListCache(root, "code");
-  }
-
-  // If a base directory is provided, try resolving relative to it first
-  // (used by annotate mode to resolve paths relative to the source file).
-  const base = url.searchParams.get("base");
-  const resolvedBase = getTrustedBaseDir(base, allowedRoots);
-  // HTML renders raw by default; `?convert=1` (set by the frontend when the session's
-  // --markdown preference is on) forces Turndown conversion instead.
-  const convert = url.searchParams.get("convert") === "1";
+async function resolveBaseRelativeDocument(
+  context: DocumentResolutionContext,
+): Promise<Response | undefined> {
+  const { requestedPath, allowedRoots, resolvedBase, convert, options } = context;
   if (
-    resolvedBase &&
-    !isAbsoluteUserPath(requestedPath) &&
-    /\.(mdx?|txt|html?)$/i.test(requestedPath)
+    !resolvedBase ||
+    isAbsoluteUserPath(requestedPath) ||
+    !/\.(mdx?|txt|html?)$/i.test(requestedPath)
   ) {
-    const fromBase = resolveUserPath(requestedPath, resolvedBase);
-    if (!isWithinAllowedRoots(fromBase, allowedRoots)) {
-      return Response.json(
-        { error: "Access denied: path is outside project root" },
-        { status: 403 },
-      );
-    }
-    try {
-      const file = Bun.file(fromBase);
-      if (await file.exists()) {
-        const snapshot = readSourceFileSnapshot(fromBase);
-        const raw = snapshot.text;
-        const isHtml = /\.html?$/i.test(requestedPath);
-        if (isHtml && !convert) {
-          return docJson({ rawHtml: raw, renderAs: "html", filepath: fromBase }, options);
-        }
-        const markdown = isHtml ? htmlToMarkdown(raw) : raw;
-        return docJson(
-          { markdown, filepath: fromBase, isConverted: isHtml, renderAs: "markdown" },
-          options,
-          isHtml ? undefined : snapshot,
-        );
-      }
-    } catch {
-      /* fall through to standard resolution */
-    }
+    return undefined;
   }
 
-  // HTML files: resolve directly (not via resolveMarkdownFile which only handles .md/.mdx)
-  const projectRoot = allowedRoots[0];
-  if (/\.html?$/i.test(requestedPath)) {
-    const resolvedHtml = resolveUserPath(requestedPath, resolvedBase || projectRoot);
-    if (!isWithinAllowedRoots(resolvedHtml, allowedRoots)) {
-      return Response.json(
-        { error: "Access denied: path is outside project root" },
-        { status: 403 },
+  const fromBase = resolveUserPath(requestedPath, resolvedBase);
+  if (!isWithinAllowedRoots(fromBase, allowedRoots)) {
+    return Response.json({ error: "Access denied: path is outside project root" }, { status: 403 });
+  }
+  try {
+    const file = Bun.file(fromBase);
+    if (await file.exists()) {
+      const snapshot = readSourceFileSnapshot(fromBase);
+      const raw = snapshot.text;
+      const isHtml = /\.html?$/i.test(requestedPath);
+      if (isHtml && !convert) {
+        return docJson({ rawHtml: raw, renderAs: "html", filepath: fromBase }, options);
+      }
+      const markdown = isHtml ? htmlToMarkdown(raw) : raw;
+      return docJson(
+        { markdown, filepath: fromBase, isConverted: isHtml, renderAs: "markdown" },
+        options,
+        isHtml ? undefined : snapshot,
       );
     }
-    try {
-      const file = Bun.file(resolvedHtml);
-      if (await file.exists()) {
-        const html = await file.text();
-        if (!convert) {
-          return docJson({ rawHtml: html, renderAs: "html", filepath: resolvedHtml }, options);
-        }
-        const markdown = htmlToMarkdown(html);
-        return docJson(
-          { markdown, filepath: resolvedHtml, isConverted: true, renderAs: "markdown" },
-          options,
-        );
+  } catch {
+    /* fall through to standard resolution */
+  }
+  return undefined;
+}
+
+async function resolveHtmlDocument(context: DocumentResolutionContext): Promise<Response> {
+  const { requestedPath, allowedRoots, resolvedBase, convert, options } = context;
+  const projectRoot = allowedRoots[0];
+  const resolvedHtml = resolveUserPath(requestedPath, resolvedBase || projectRoot);
+  if (!isWithinAllowedRoots(resolvedHtml, allowedRoots)) {
+    return Response.json({ error: "Access denied: path is outside project root" }, { status: 403 });
+  }
+  try {
+    const file = Bun.file(resolvedHtml);
+    if (await file.exists()) {
+      const html = await file.text();
+      if (!convert) {
+        return docJson({ rawHtml: html, renderAs: "html", filepath: resolvedHtml }, options);
       }
+      const markdown = htmlToMarkdown(html);
+      return docJson(
+        { markdown, filepath: resolvedHtml, isConverted: true, renderAs: "markdown" },
+        options,
+      );
+    }
+  } catch {
+    /* fall through */
+  }
+  return Response.json({ error: `File not found: ${requestedPath}` }, { status: 404 });
+}
+
+async function resolveCodeDocument(context: DocumentResolutionContext): Promise<Response> {
+  const { requestedPath, allowedRoots, resolvedBase } = context;
+  const parsed = parseCodePath(requestedPath);
+  const cleanPath = parsed.filePath;
+  const projectRoot = allowedRoots[0];
+  const literalPath = resolveUserPath(cleanPath, resolvedBase || projectRoot);
+  const literalAllowed = isWithinAllowedRoots(literalPath, allowedRoots);
+
+  let resolvedCode: string | null = null;
+  if (literalAllowed) {
+    try {
+      const file = Bun.file(literalPath);
+      if (await file.exists()) resolvedCode = literalPath;
     } catch {
       /* fall through */
     }
-    return Response.json({ error: `File not found: ${requestedPath}` }, { status: 404 });
   }
 
-  // Code files: try literal resolve first; on miss, fall back to the smart
-  // resolver which walks the project for case-insensitive / suffix matches.
-  if (isCodeFilePath(requestedPath)) {
-    const parsed = parseCodePath(requestedPath);
-    const cleanPath = parsed.filePath;
-    const literalPath = resolveUserPath(cleanPath, resolvedBase || projectRoot);
-    const literalAllowed = isWithinAllowedRoots(literalPath, allowedRoots);
-
-    let resolvedCode: string | null = null;
-    if (literalAllowed) {
-      try {
-        const file = Bun.file(literalPath);
-        if (await file.exists()) resolvedCode = literalPath;
-      } catch {
-        /* fall through */
-      }
+  if (!resolvedCode) {
+    if (
+      isAbsoluteUserPath(cleanPath) &&
+      !isWithinAllowedRoots(resolveUserPath(cleanPath), allowedRoots)
+    ) {
+      return Response.json(
+        { error: "Access denied: path is outside project root" },
+        { status: 403 },
+      );
     }
-
-    if (!resolvedCode) {
-      if (
-        isAbsoluteUserPath(cleanPath) &&
-        !isWithinAllowedRoots(resolveUserPath(cleanPath), allowedRoots)
-      ) {
-        return Response.json(
-          { error: "Access denied: path is outside project root" },
-          { status: 403 },
-        );
-      }
-      const result = await resolveCodeFileFromAllowedRoots(cleanPath, allowedRoots, resolvedBase);
-      if (result.kind === "found") {
-        resolvedCode = result.path;
-      } else if (result.kind === "ambiguous") {
-        const relative = result.matches.map((m) => relativizeToAllowedRoots(m, allowedRoots));
-        return Response.json(
-          { error: `Ambiguous path '${requestedPath}'`, matches: relative },
-          { status: 400 },
-        );
-      } else if (result.kind === "unavailable") {
-        return Response.json(
-          { error: `Cannot scan project: ${requestedPath}`, reason: "unavailable" },
-          { status: 503 },
-        );
-      } else {
-        return Response.json({ error: `File not found: ${requestedPath}` }, { status: 404 });
-      }
-      if (!isWithinAllowedRoots(resolvedCode, allowedRoots)) {
-        return Response.json(
-          { error: "Access denied: path is outside project root" },
-          { status: 403 },
-        );
-      }
-    }
-
-    try {
-      const file = Bun.file(resolvedCode);
-      if (file.size > 2 * 1024 * 1024) {
-        return Response.json({ error: "File too large (max 2MB)" }, { status: 413 });
-      }
-      const contents = await file.text();
-      const displayName = resolvedCode.split("/").pop() || resolvedCode;
-      let prerenderedHTML: string | undefined;
-      try {
-        const result = await preloadFile({
-          file: { name: displayName, contents },
-          options: { disableFileHeader: true },
-        });
-        prerenderedHTML = result.prerenderedHTML;
-      } catch {
-        // Fall back to client-side rendering
-      }
-      return Response.json({
-        codeFile: true,
-        contents,
-        filepath: resolvedCode,
-        prerenderedHTML,
-        line: parsed.line,
-        lineEnd: parsed.lineEnd,
-      });
-    } catch {
+    const result = await resolveCodeFileFromAllowedRoots(cleanPath, allowedRoots, resolvedBase);
+    if (result.kind === "found") {
+      resolvedCode = result.path;
+    } else if (result.kind === "ambiguous") {
+      const relative = result.matches.map((m) => relativizeToAllowedRoots(m, allowedRoots));
+      return Response.json(
+        { error: `Ambiguous path '${requestedPath}'`, matches: relative },
+        { status: 400 },
+      );
+    } else if (result.kind === "unavailable") {
+      return Response.json(
+        { error: `Cannot scan project: ${requestedPath}`, reason: "unavailable" },
+        { status: 503 },
+      );
+    } else {
       return Response.json({ error: `File not found: ${requestedPath}` }, { status: 404 });
     }
+    if (!isWithinAllowedRoots(resolvedCode, allowedRoots)) {
+      return Response.json(
+        { error: "Access denied: path is outside project root" },
+        { status: 403 },
+      );
+    }
   }
 
+  try {
+    const file = Bun.file(resolvedCode);
+    if (file.size > 2 * 1024 * 1024) {
+      return Response.json({ error: "File too large (max 2MB)" }, { status: 413 });
+    }
+    const contents = await file.text();
+    const displayName = resolvedCode.split("/").pop() || resolvedCode;
+    let prerenderedHTML: string | undefined;
+    try {
+      const result = await preloadFile({
+        file: { name: displayName, contents },
+        options: { disableFileHeader: true },
+      });
+      prerenderedHTML = result.prerenderedHTML;
+    } catch {
+      // Fall back to client-side rendering
+    }
+    return Response.json({
+      codeFile: true,
+      contents,
+      filepath: resolvedCode,
+      prerenderedHTML,
+      line: parsed.line,
+      lineEnd: parsed.lineEnd,
+    });
+  } catch {
+    return Response.json({ error: `File not found: ${requestedPath}` }, { status: 404 });
+  }
+}
+
+function resolveMarkdownDocument(context: DocumentResolutionContext): Response {
+  const { requestedPath, allowedRoots, options } = context;
   if (
     isAbsoluteUserPath(requestedPath) &&
     !isWithinAllowedRoots(resolveUserPath(requestedPath), allowedRoots)
@@ -428,6 +418,53 @@ export async function handleDoc(req: Request, options: HandleDocOptions = {}): P
   } catch {
     return Response.json({ error: "Failed to read file" }, { status: 500 });
   }
+}
+
+/** Serve a linked markdown document. Resolves absolute, relative, or bare filename paths. */
+export async function handleDoc(req: Request, options: HandleDocOptions = {}): Promise<Response> {
+  const url = new URL(req.url);
+  const requestedPath = url.searchParams.get("path");
+  if (!requestedPath) {
+    return Response.json({ error: "Missing path parameter" }, { status: 400 });
+  }
+
+  const allowedRoots = getAllowedRootPaths(options);
+  // Side-channel: kick off a code-file walk for the project root so that any
+  // /api/doc/exists POST issued by the rendered linked-doc lands on warm cache.
+  for (const root of allowedRoots) {
+    void warmFileListCache(root, "code");
+  }
+
+  // If a base directory is provided, try resolving relative to it first
+  // (used by annotate mode to resolve paths relative to the source file).
+  const base = url.searchParams.get("base");
+  const resolvedBase = getTrustedBaseDir(base, allowedRoots);
+  // HTML renders raw by default; `?convert=1` (set by the frontend when the session's
+  // --markdown preference is on) forces Turndown conversion instead.
+  const convert = url.searchParams.get("convert") === "1";
+  const context: DocumentResolutionContext = {
+    requestedPath,
+    allowedRoots,
+    resolvedBase,
+    convert,
+    options,
+  };
+
+  const baseRelativeResponse = await resolveBaseRelativeDocument(context);
+  if (baseRelativeResponse) return baseRelativeResponse;
+
+  // HTML files: resolve directly (not via resolveMarkdownFile which only handles .md/.mdx)
+  if (/\.html?$/i.test(requestedPath)) {
+    return resolveHtmlDocument(context);
+  }
+
+  // Code files: try literal resolve first; on miss, fall back to the smart
+  // resolver which walks the project for case-insensitive / suffix matches.
+  if (isCodeFilePath(requestedPath)) {
+    return resolveCodeDocument(context);
+  }
+
+  return resolveMarkdownDocument(context);
 }
 
 /**
