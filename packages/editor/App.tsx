@@ -184,6 +184,29 @@ type EditorFeedbackRequest = {
   feedbackScope?: "messages";
 };
 
+type PlanResponse = ReturnType<typeof parsePlanResponse>;
+
+type SourceBackedDraftRestorePlan = {
+  savedFileChangeCandidates: SourceBackedSavedFileChangeDraftData[];
+  editedDocuments: SourceBackedDocumentDraftData[];
+};
+
+const buildSourceBackedDraftRestorePlan = (
+  editedDocuments: SourceBackedDocumentDraftData[],
+  savedFileChanges: SourceBackedSavedFileChangeDraftData[],
+): SourceBackedDraftRestorePlan => {
+  const candidates = new Map<string, SourceBackedSavedFileChangeDraftData>();
+  for (const change of savedFileChanges) candidates.set(change.key, change);
+  for (const document of editedDocuments) {
+    if (document.savedChange) candidates.set(document.savedChange.key, document.savedChange);
+  }
+
+  return {
+    savedFileChangeCandidates: [...candidates.values()],
+    editedDocuments,
+  };
+};
+
 function getHTMLElementTarget(target: EventTarget | null): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
@@ -1929,14 +1952,13 @@ const App: React.FC = () => {
     if (restoredCode.length > 0) setCodeAnnotations(restoredCode);
     if (restoredGlobal.length > 0) setGlobalAttachments(restoredGlobal);
 
-    const nestedSavedFileChanges = editedDocuments
-      .map((doc) => doc.savedChange)
-      .filter((change): change is SourceBackedSavedFileChangeDraftData => !!change);
-    const savedChangeCandidates = new Map<string, SourceBackedSavedFileChangeDraftData>();
-    for (const change of [...savedFileChanges, ...nestedSavedFileChanges]) {
-      savedChangeCandidates.set(change.key, change);
-    }
-    const validatedSaved = await validateDraftSavedFileChanges([...savedChangeCandidates.values()]);
+    const sourceBackedRestorePlan = buildSourceBackedDraftRestorePlan(
+      editedDocuments,
+      savedFileChanges,
+    );
+    const validatedSaved = await validateDraftSavedFileChanges(
+      sourceBackedRestorePlan.savedFileChangeCandidates,
+    );
     const validSavedChangeByKey = new Map(
       validatedSaved.kept.map((change) => [change.key, change]),
     );
@@ -1944,91 +1966,71 @@ const App: React.FC = () => {
     const cleanSavedFileChanges = validatedSaved.kept.filter(
       (change) => !editedDocumentKeys.has(change.key),
     );
-    const editedDocumentsForRestore: SourceBackedDocumentDraftData[] = editedDocuments.map((doc) =>
+    const editedDocumentsForRestore: SourceBackedDocumentDraftData[] =
+      sourceBackedRestorePlan.editedDocuments.map((doc) =>
       doc.savedChange
         ? { ...doc, savedChange: validSavedChangeByKey.get(doc.savedChange.key) }
         : doc,
-    );
+      );
 
-    if (cleanSavedFileChanges.length > 0) {
-      sourceBackedDocuments.restoreSourceBackedSavedFileChanges(cleanSavedFileChanges);
-      if (window.innerWidth >= 768) {
-        setRightSidebarTab("annotations");
-        setIsPanelOpen(true);
+    const restoreSourceBackedDrafts = (): boolean => {
+      if (cleanSavedFileChanges.length > 0) {
+        sourceBackedDocuments.restoreSourceBackedSavedFileChanges(cleanSavedFileChanges);
+        if (window.innerWidth >= 768) {
+          setRightSidebarTab("annotations");
+          setIsPanelOpen(true);
+        }
       }
-    }
-
-    if (editedDocumentsForRestore.length > 0) {
+      if (editedDocumentsForRestore.length === 0) return false;
       if (isEditingMarkdown) {
         toast("Draft file edits were not restored", {
           description: "You already have edits in this session — those take precedence.",
           duration: 5000,
         });
-      } else {
-        const restoredDocumentKeys =
-          sourceBackedDocuments.restoreSourceBackedDraftDocuments(editedDocumentsForRestore);
-        if (restoredDocumentKeys.length < editedDocumentsForRestore.length) {
-          toast("Some draft file edits were not restored", {
-            description: "You already have edits in this session — those take precedence.",
-            duration: 5000,
-          });
-        }
-        const restoredSingleFileDraft = pickRestoredSingleFileDraftToDisplay(
-          editedDocumentsForRestore,
-          restoredDocumentKeys,
-          activeSourceDocumentKeyRef.current,
+        return false;
+      }
+
+      const restoredDocumentKeys =
+        sourceBackedDocuments.restoreSourceBackedDraftDocuments(editedDocumentsForRestore);
+      if (restoredDocumentKeys.length < editedDocumentsForRestore.length) {
+        toast("Some draft file edits were not restored", {
+          description: "You already have edits in this session — those take precedence.",
+          duration: 5000,
+        });
+      }
+      const restoredSingleFileDraft = pickRestoredSingleFileDraftToDisplay(
+        editedDocumentsForRestore,
+        restoredDocumentKeys,
+        activeSourceDocumentKeyRef.current,
+      );
+      const nextActiveSourceDocumentKey =
+        restoredSingleFileDraft?.key ?? activeSourceDocumentKeyRef.current;
+      if (restoredSingleFileDraft) setActiveSourceDocumentKey(restoredSingleFileDraft.key);
+
+      const activeRestoredDocument = nextActiveSourceDocumentKey
+        ? sourceBackedDocuments.getSourceBackedDocument(nextActiveSourceDocumentKey)
+        : null;
+      const isRestoredActiveDocument =
+        activeRestoredDocument?.sourceSave?.enabled &&
+        restoredDocumentKeys.includes(activeRestoredDocument.key);
+      if (!isRestoredActiveDocument || !activeRestoredDocument) return false;
+
+      const remapped = applyEditedDocument(activeRestoredDocument.currentText, restored);
+      repaintHighlights(remapped);
+      if (activeRestoredDocument.currentText !== activeRestoredDocument.diskBaseline) {
+        setEditStats(
+          computeEditStats(activeRestoredDocument.diskBaseline, activeRestoredDocument.currentText),
         );
-        const nextActiveSourceDocumentKey =
-          restoredSingleFileDraft?.key ?? activeSourceDocumentKeyRef.current;
-        if (restoredSingleFileDraft) {
-          setActiveSourceDocumentKey(restoredSingleFileDraft.key);
-          const restoredDocument = sourceBackedDocuments.getSourceBackedDocument(
-            restoredSingleFileDraft.key,
-          );
-          if (restoredDocument?.sourceSave?.enabled) {
-            const remapped = applyEditedDocument(restoredDocument.currentText, restored);
-            repaintHighlights(remapped);
-            if (restoredDocument.currentText !== restoredDocument.diskBaseline) {
-              setEditStats(
-                computeEditStats(restoredDocument.diskBaseline, restoredDocument.currentText),
-              );
-              if (window.innerWidth >= 768) {
-                setRightSidebarTab("annotations");
-                setIsPanelOpen(true);
-              }
-            }
-            scheduleDraftSave();
-            return;
-          }
-        }
-        const activeRestoredDocument = nextActiveSourceDocumentKey
-          ? sourceBackedDocuments.getSourceBackedDocument(nextActiveSourceDocumentKey)
-          : null;
-        const activeDraft =
-          activeRestoredDocument?.sourceSave?.enabled &&
-          restoredDocumentKeys.includes(activeRestoredDocument.key)
-            ? editedDocumentsForRestore.find((doc) => doc.key === activeRestoredDocument.key)
-            : undefined;
-        if (activeDraft && activeRestoredDocument) {
-          const remapped = applyEditedDocument(activeRestoredDocument.currentText, restored);
-          repaintHighlights(remapped);
-          if (activeRestoredDocument.currentText !== activeRestoredDocument.diskBaseline) {
-            setEditStats(
-              computeEditStats(
-                activeRestoredDocument.diskBaseline,
-                activeRestoredDocument.currentText,
-              ),
-            );
-            if (window.innerWidth >= 768) {
-              setRightSidebarTab("annotations");
-              setIsPanelOpen(true);
-            }
-          }
-          scheduleDraftSave();
-          return;
+        if (window.innerWidth >= 768) {
+          setRightSidebarTab("annotations");
+          setIsPanelOpen(true);
         }
       }
-    }
+      scheduleDraftSave();
+      return true;
+    };
+
+    if (restoreSourceBackedDrafts()) return;
 
     // CRLF normalize is insurance against a hand-edited draft file — a \r
     // here would fabricate a whole-document diff against the LF baseline.
@@ -2505,6 +2507,94 @@ const App: React.FC = () => {
   // Alt/Option key: hold to temporarily switch, double-tap to toggle
   useInputMethodSwitch(inputMethod, handleInputMethodChange);
 
+  const initializePlanDocument = (data: PlanResponse) => {
+      // Initialize config store with server-provided values (config file > cookie > default)
+      configStore.init(data.serverConfig ? { ...data.serverConfig } : undefined);
+      // Session-level force-markdown preference (--markdown); threaded into folder/linked
+      // /api/doc requests so on-demand HTML files convert too.
+      setConvertHtml(data.convertHtml ?? false);
+      setAISessionEnabled(true);
+      // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
+      setGitUser(data.serverConfig?.gitUser);
+      if (data.renderAs === "html" && data.rawHtml) {
+        setRenderAs("html");
+        setRawHtml(data.rawHtml);
+        setShareHtml(data.shareHtml ?? "");
+        setMarkdown("");
+        return;
+      }
+      if (data.mode === "annotate-folder") {
+        // Folder annotation mode: clear demo content, let user pick a file
+        setMarkdown("");
+        return;
+      }
+      if (data.plan === null || data.plan === undefined) return;
+
+      // CM6 joins lines with \n; CRLF input would make an untouched edit round-trip
+      // fabricate a whole-document diff. Normalize once.
+      const normalizedPlan = data.plan.replace(/\r\n?/g, "\n");
+      setMarkdown(normalizedPlan);
+      originalMarkdownRef.current = normalizedPlan;
+      if (data.mode === "annotate" && data.sourceSave?.enabled) {
+        const key = sourceBackedDocumentKey(data.sourceSave, `file:${data.sourceSave.path}`);
+        sourceBackedDocuments.openSourceBackedDocument({
+          key,
+          text: normalizedPlan,
+          sourceSave: data.sourceSave,
+        });
+        setActiveSourceDocumentKey(key);
+      }
+  };
+
+  const initializeAnnotateSession = (data: PlanResponse) => {
+      const isAnnotateSession =
+        data.mode === "annotate" ||
+        data.mode === "annotate-last" ||
+        data.mode === "annotate-folder";
+      if (!isAnnotateSession) return;
+
+      setAnnotateMode(true);
+      setGate(data.gate ?? false);
+      if (data.mode === "annotate-folder") sidebar.open("files");
+      setAnnotateSource(
+        data.mode === "annotate-last"
+          ? "message"
+          : data.mode === "annotate-folder"
+            ? "folder"
+            : "file",
+      );
+  };
+
+  const initializeRecentMessages = (data: PlanResponse) => {
+    messageStateCacheRef.current = new Map();
+    setCachedMessageAnnotationCounts(new Map());
+    if (data.mode === "annotate-last" && data.recentMessages && data.recentMessages.length > 0) {
+      setRecentMessages(data.recentMessages);
+      setSelectedMessageId(data.recentMessages[0].messageId);
+      return;
+    }
+    setRecentMessages([]);
+    setSelectedMessageId(null);
+  };
+
+  const initializeSourceSession = (data: PlanResponse) => {
+    setSourceInfo(data.sourceInfo ?? undefined);
+    setSourceConverted(!!data.sourceConverted);
+    if (data.filePath) {
+      setImageBaseDir(
+        data.mode === "annotate-folder" ? data.filePath : data.filePath.replace(/\/[^/]+$/, ""),
+      );
+      if (data.mode === "annotate") setSourceFilePath(data.filePath);
+    }
+    if (data.sharingEnabled !== undefined) setSharingEnabled(data.sharingEnabled);
+    if (data.shareBaseUrl) setShareBaseUrl(data.shareBaseUrl);
+    if (data.pasteApiUrl) setPasteApiUrl(data.pasteApiUrl);
+    if (data.repoInfo) setRepoInfo(data.repoInfo);
+    if (data.projectRoot) setProjectRoot(data.projectRoot);
+    setAgentTerminalCapability(data.agentTerminal ?? null);
+    if (data.origin) setOrigin(data.origin);
+  };
+
   // Check if we're in API mode (served from Bun hook server)
   // Skip if we loaded from a shared URL
   useEffect(() => {
@@ -2517,107 +2607,11 @@ const App: React.FC = () => {
         return res.json().then((body) => parsePlanResponse(body));
       })
       .then((data) => {
-        // Initialize config store with server-provided values (config file > cookie > default)
-        configStore.init(data.serverConfig ? { ...data.serverConfig } : undefined);
-        // Session-level force-markdown preference (--markdown); threaded into folder/linked
-        // /api/doc requests so on-demand HTML files convert too.
-        setConvertHtml(data.convertHtml ?? false);
-        setAISessionEnabled(true);
-        // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
-        setGitUser(data.serverConfig?.gitUser);
-        if (data.renderAs === "html" && data.rawHtml) {
-          setRenderAs("html");
-          setRawHtml(data.rawHtml);
-          setShareHtml(data.shareHtml ?? "");
-          setMarkdown("");
-        } else if (data.mode === "annotate-folder") {
-          // Folder annotation mode: clear demo content, let user pick a file
-          setMarkdown("");
-        } else if (data.plan !== null && data.plan !== undefined) {
-          // CM6 joins lines with \n; CRLF input would make an untouched
-          // edit round-trip fabricate a whole-document diff. Normalize once.
-          const normalizedPlan = data.plan.replace(/\r\n?/g, "\n");
-          setMarkdown(normalizedPlan);
-          originalMarkdownRef.current = normalizedPlan;
-          if (data.mode === "annotate" && data.sourceSave?.enabled) {
-            const key = sourceBackedDocumentKey(data.sourceSave, `file:${data.sourceSave.path}`);
-            sourceBackedDocuments.openSourceBackedDocument({
-              key,
-              text: normalizedPlan,
-              sourceSave: data.sourceSave,
-            });
-            setActiveSourceDocumentKey(key);
-          }
-        }
+        initializePlanDocument(data);
         setIsApiMode(true);
-        if (
-          data.mode === "annotate" ||
-          data.mode === "annotate-last" ||
-          data.mode === "annotate-folder"
-        ) {
-          setAnnotateMode(true);
-          setGate(data.gate ?? false);
-        }
-        if (data.mode === "annotate-folder") {
-          sidebar.open("files");
-        }
-        if (
-          data.mode === "annotate" ||
-          data.mode === "annotate-last" ||
-          data.mode === "annotate-folder"
-        ) {
-          setAnnotateSource(
-            data.mode === "annotate-last"
-              ? "message"
-              : data.mode === "annotate-folder"
-                ? "folder"
-                : "file",
-          );
-        }
-        if (
-          data.mode === "annotate-last" &&
-          data.recentMessages &&
-          data.recentMessages.length > 0
-        ) {
-          messageStateCacheRef.current = new Map();
-          setCachedMessageAnnotationCounts(new Map());
-          setRecentMessages(data.recentMessages);
-          setSelectedMessageId(data.recentMessages[0].messageId);
-        } else {
-          messageStateCacheRef.current = new Map();
-          setCachedMessageAnnotationCounts(new Map());
-          setRecentMessages([]);
-          setSelectedMessageId(null);
-        }
-        setSourceInfo(data.sourceInfo ?? undefined);
-        setSourceConverted(!!data.sourceConverted);
-        if (data.filePath) {
-          setImageBaseDir(
-            data.mode === "annotate-folder" ? data.filePath : data.filePath.replace(/\/[^/]+$/, ""),
-          );
-          if (data.mode === "annotate") {
-            setSourceFilePath(data.filePath);
-          }
-        }
-        if (data.sharingEnabled !== undefined) {
-          setSharingEnabled(data.sharingEnabled);
-        }
-        if (data.shareBaseUrl) {
-          setShareBaseUrl(data.shareBaseUrl);
-        }
-        if (data.pasteApiUrl) {
-          setPasteApiUrl(data.pasteApiUrl);
-        }
-        if (data.repoInfo) {
-          setRepoInfo(data.repoInfo);
-        }
-        if (data.projectRoot) {
-          setProjectRoot(data.projectRoot);
-        }
-        setAgentTerminalCapability(data.agentTerminal ?? null);
-        if (data.origin) {
-          setOrigin(data.origin);
-        }
+        initializeAnnotateSession(data);
+        initializeRecentMessages(data);
+        initializeSourceSession(data);
       })
       .catch(() => {
         // Not in API mode - use default content
@@ -3020,47 +3014,36 @@ const App: React.FC = () => {
     void continuation?.();
   }, []);
 
-  // Global keyboard shortcuts (Cmd/Ctrl+Enter to submit)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle Cmd/Ctrl+Enter
-      if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
+  const hasOpenSubmitShortcutModal = () =>
+    showExport ||
+    showImport ||
+    showFeedbackPrompt ||
+    showSourceFileEditWarning ||
+    showExitWarning ||
+    pendingPasteImage !== null;
 
-      const target = getHTMLElementTarget(e.target);
+  const isSubmitShortcutBlocked = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return true;
+
+      const target = getHTMLElementTarget(event.target);
       const tag = target?.tagName;
       const isTextField =
         tag === "INPUT" || tag === "TEXTAREA" || Boolean(target?.isContentEditable);
 
       // Let active confirmation dialogs own Cmd/Ctrl+Enter and Escape.
-      if (document.querySelector('[data-plannotator-confirm-dialog="true"]')) return;
-
-      // Don't intercept if any modal is open
-      if (
-        showExport ||
-        showImport ||
-        showFeedbackPrompt ||
-        showSourceFileEditWarning ||
-        showExitWarning ||
-        pendingPasteImage
-      )
-        return;
-
-      // Don't intercept if already submitted, submitting, or exiting
-      if (submitted || isSubmitting || isExiting) return;
-
-      // Don't intercept in demo/share mode (no API)
-      if (!isApiMode) return;
-
-      // While the markdown editor is open, submit shortcuts belong to editing,
-      // not the review session.
-      if (isEditingMarkdown) return;
-
+      if (document.querySelector('[data-plannotator-confirm-dialog="true"]')) return true;
+      if (hasOpenSubmitShortcutModal()) return true;
+      if (submitted || isSubmitting || isExiting || !isApiMode || isEditingMarkdown) return true;
       // Folder files are the active review target; normal linked docs are side
       // references and should not submit the root plan.
-      if (linkedDocHook.isActive && annotateSource !== "folder") return;
+      if (linkedDocHook.isActive && annotateSource !== "folder") return true;
+      return isTextField;
+  };
 
-      // Don't intercept if typing in an input/textarea.
-      if (isTextField) return;
+  // Global keyboard shortcuts (Cmd/Ctrl+Enter to submit)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isSubmitShortcutBlocked(e)) return;
 
       e.preventDefault();
 
@@ -3082,26 +3065,10 @@ const App: React.FC = () => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    showExport,
-    showImport,
-    showFeedbackPrompt,
-    showSourceFileEditWarning,
-    showExitWarning,
-    pendingPasteImage,
-    submitted,
-    isSubmitting,
-    isExiting,
-    isApiMode,
-    isEditingMarkdown,
-    linkedDocHook.isActive,
-    annotations.length,
-    codeAnnotations.length,
-    externalAnnotations.length,
     annotateMode,
     gate,
     hasFeedbackToSend,
-    isAgentTerminalReady,
-    annotateSource,
+    isSubmitShortcutBlocked,
     maybeConfirmUnsavedSourceFileEdits,
   ]);
 
@@ -3603,76 +3570,94 @@ const App: React.FC = () => {
           return true;
         }
 
-        if (outcome.type === "save-conflict") {
+        const applySaveConflict = (
+          result: Extract<SourceBackedDocumentLifecycleOutcome, { type: "save-conflict" }>,
+        ): boolean => {
           if (activeSourceDocumentKeyRef.current === activeDocument.key) {
             setEditorDirty(true);
             setEditorDiffersFromBaseline(true);
-            setEditStats(computeEditStats(outcome.record.diskBaseline, outcome.record.currentText));
+            setEditStats(computeEditStats(result.record.diskBaseline, result.record.currentText));
           }
           scheduleDraftSave();
           toast.error("File changed on disk", {
             description: "Choose whether to overwrite disk or reload the file.",
           });
           return true;
-        }
+        };
 
-        if (outcome.type === "save-disk-update-applied") {
+        const applyDiskUpdate = (
+          result: Extract<
+            SourceBackedDocumentLifecycleOutcome,
+            { type: "save-disk-update-applied" }
+          >,
+        ): boolean => {
           if (activeSourceDocumentKeyRef.current === activeDocument.key) {
-            const remapped = applyEditedDocument(outcome.record.currentText);
+            const remapped = applyEditedDocument(result.record.currentText);
             repaintHighlights(remapped);
-            editSessionBaseRef.current = outcome.record.currentText;
+            editSessionBaseRef.current = result.record.currentText;
             setEditorDirty(false);
             setEditorDiffersFromBaseline(false);
             setEditStats(null);
           }
           scheduleDraftSave();
           toast("File updated from disk", {
-            description: `${outcome.record.basename} changed outside Plannotator, so it was reloaded instead of saved.`,
+            description: `${result.record.basename} changed outside Plannotator, so it was reloaded instead of saved.`,
           });
           return true;
-        }
+        };
 
-        if (outcome.type === "save-error") {
-          if (outcome.reason === "conflict-snapshot-unavailable") {
+        const applySaveError = (
+          result: Extract<SourceBackedDocumentLifecycleOutcome, { type: "save-error" }>,
+        ): boolean => {
+          if (result.reason === "conflict-snapshot-unavailable") {
             toast.error("File changed on disk", {
               description: "Plannotator could not load the latest disk version. Try saving again.",
             });
             return true;
           }
-          toast.error(outcome.message);
+          toast.error(result.message);
           return true;
-        }
+        };
 
-        if (outcome.type !== "save-succeeded") return true;
-        const normalizedEdited = edited.replace(/\r\n?/g, "\n");
-        editedMarkdownRef.current = null;
-        if (activeSourceDocumentKeyRef.current === activeDocument.key) {
-          const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
-          const normalizedLive = live?.replace(/\r\n?/g, "\n");
-          editSessionBaseRef.current = normalizedEdited;
-          const currentText =
-            normalizedLive ??
-            sourceBackedDocuments.getSourceBackedDocument(activeDocument.key)?.currentText ??
-            normalizedEdited;
-          if (currentText === normalizedEdited) {
-            setEditorDirty(false);
-            setEditorDiffersFromBaseline(false);
-            setEditStats(null);
-          } else {
-            sourceBackedDocuments.updateSourceBackedDocumentText(activeDocument.key, currentText, {
-              forceNotify: true,
-            });
-            setEditorDirty(true);
-            setEditorDiffersFromBaseline(true);
-            setEditStats(computeEditStats(normalizedEdited, currentText));
+        const applySaveSuccess = (
+          result: Extract<SourceBackedDocumentLifecycleOutcome, { type: "save-succeeded" }>,
+        ): boolean => {
+          const normalizedEdited = edited.replace(/\r\n?/g, "\n");
+          editedMarkdownRef.current = null;
+          if (activeSourceDocumentKeyRef.current === activeDocument.key) {
+            const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
+            const normalizedLive = live?.replace(/\r\n?/g, "\n");
+            editSessionBaseRef.current = normalizedEdited;
+            const currentText =
+              normalizedLive ??
+              sourceBackedDocuments.getSourceBackedDocument(activeDocument.key)?.currentText ??
+              normalizedEdited;
+            if (currentText === normalizedEdited) {
+              setEditorDirty(false);
+              setEditorDiffersFromBaseline(false);
+              setEditStats(null);
+            } else {
+              sourceBackedDocuments.updateSourceBackedDocumentText(activeDocument.key, currentText, {
+                forceNotify: true,
+              });
+              setEditorDirty(true);
+              setEditorDiffersFromBaseline(true);
+              setEditStats(computeEditStats(normalizedEdited, currentText));
+            }
           }
-        }
-        if (savedChangedFromOpen && window.innerWidth >= 768) {
-          setRightSidebarTab("annotations");
-          setIsPanelOpen(true);
-        }
-        scheduleDraftSave();
-        toast.success(`Saved ${outcome.record.basename}`);
+          if (savedChangedFromOpen && window.innerWidth >= 768) {
+            setRightSidebarTab("annotations");
+            setIsPanelOpen(true);
+          }
+          scheduleDraftSave();
+          toast.success(`Saved ${result.record.basename}`);
+          return true;
+        };
+
+        if (outcome.type === "save-conflict") return applySaveConflict(outcome);
+        if (outcome.type === "save-disk-update-applied") return applyDiskUpdate(outcome);
+        if (outcome.type === "save-error") return applySaveError(outcome);
+        if (outcome.type === "save-succeeded") return applySaveSuccess(outcome);
         return true;
       } catch {
         toast.error("Save failed");
@@ -3732,6 +3717,21 @@ const App: React.FC = () => {
 
   // Cmd/Ctrl+S keyboard shortcut — while editing, save the active source file;
   // otherwise keep the existing default notes/export behavior.
+  const saveCurrentAnnotations = () => {
+    const defaultApp = getDefaultNotesApp();
+    const obsOk = isObsidianConfigured();
+    if (defaultApp === "download") {
+      handleDownloadAnnotations();
+      return;
+    }
+    if (defaultApp === "obsidian" && obsOk) {
+      handleQuickSaveToNotes();
+      return;
+    }
+    setInitialExportTab("notes");
+    setShowExport(true);
+  };
+
   useEffect(() => {
     const handleSaveShortcut = (e: KeyboardEvent) => {
       if (e.key !== "s" || !(e.metaKey || e.ctrlKey)) return;
@@ -3758,16 +3758,7 @@ const App: React.FC = () => {
 
       e.preventDefault();
 
-      const defaultApp = getDefaultNotesApp();
-      const obsOk = isObsidianConfigured();
-      if (defaultApp === "download") {
-        handleDownloadAnnotations();
-      } else if (defaultApp === "obsidian" && obsOk) {
-        handleQuickSaveToNotes();
-      } else {
-        setInitialExportTab("notes");
-        setShowExport(true);
-      }
+      saveCurrentAnnotations();
     };
 
     window.addEventListener("keydown", handleSaveShortcut);
@@ -3783,8 +3774,7 @@ const App: React.FC = () => {
     isEditingMarkdown,
     activeSourceBackedDocument,
     handleSaveEditedSourceFile,
-    displayedMarkdown,
-    annotationsOutput,
+    saveCurrentAnnotations,
   ]);
 
   // Cmd/Ctrl+P keyboard shortcut — print document
