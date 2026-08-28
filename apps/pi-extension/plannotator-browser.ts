@@ -545,7 +545,7 @@ export async function startCodeReviewBrowserSession(
     gitContext: review.gitContext,
     initialBase: review.initialBase,
     prMetadata: review.prMetadata,
-    prPatchIncomplete: review.prPatchIncomplete,
+    prPatchIncomplete: review.prPatchIncomplete ?? false,
     workspace: review.workspace,
     agentCwd: review.agentCwd,
     worktreePool: review.worktreePool,
