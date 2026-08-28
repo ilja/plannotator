@@ -229,6 +229,17 @@ interface DiffViewerProps {
   onCodeNavRequest?: (request: import("@plannotator/shared/code-nav").CodeNavRequest) => void;
 }
 
+function getFileCommentPopoverValues(
+  filePath: string,
+  prUrl: string | undefined,
+  prDiffScope: string | undefined,
+) {
+  return {
+    contextText: filePath.split("/").pop() || filePath,
+    draftKey: `file:${prUrl ?? ""}:${prDiffScope ?? ""}:${filePath}`,
+  };
+}
+
 export const DiffViewer: React.FC<DiffViewerProps> = ({
   patch,
   filePath,
@@ -274,6 +285,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   onAttachAIContext,
   onCodeNavRequest,
 }) => {
+  const fileCommentPopoverValues = getFileCommentPopoverValues(filePath, prUrl, prDiffScope);
   const pierreTheme = usePierreTheme({ fontFamily, fontSize });
   // Worker-pool highlighting: keep the pool's theme pair in step with the UI
   // theme. (No mount gating here — the single-file panel renders one diff;
@@ -835,9 +847,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         {fileCommentAnchor && (
           <CommentPopover
             anchorEl={fileCommentAnchor}
-            contextText={filePath.split("/").pop() || filePath}
+            contextText={fileCommentPopoverValues.contextText}
             isGlobal={false}
-            draftKey={`file:${prUrl ?? ""}:${prDiffScope ?? ""}:${filePath}`}
+            draftKey={fileCommentPopoverValues.draftKey}
             onSubmit={(text) => {
               onAddFileComment(text);
               setFileCommentAnchor(null);
