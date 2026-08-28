@@ -626,7 +626,7 @@ export function handleObsidianDocRequest(res: Res, url: URL): void {
     const files: string[] = [];
     walkMarkdownFiles(resolvedVault, resolvedVault, files, /\.mdx?$/i);
     const matches = files.filter(
-      (f) => f.split("/").pop()!.toLowerCase() === filePath.toLowerCase(),
+      (f) => f.split("/").pop()?.toLowerCase() === filePath.toLowerCase(),
     );
     if (matches.length === 1) {
       resolvedFile = resolvePath(resolvedVault, matches[0]);
