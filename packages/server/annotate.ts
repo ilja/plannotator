@@ -142,6 +142,10 @@ export interface AnnotateServerResult {
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 500;
 
+type InitialSourceState =
+  | { readonly eligible: false; readonly path: null }
+  | { readonly eligible: true; readonly path: string };
+
 /**
  * Start the Annotate server
  *
@@ -181,12 +185,32 @@ export async function startAnnotateServer(
   const configuredPort = getServerPort();
   const wslFlag = await isWSL();
   const gitUser = detectGitUser();
-  const draftSource =
-    mode === "annotate-folder" && folderPath
-      ? `folder:${resolvePath(folderPath)}`
-      : renderHtml && rawHtml
-        ? rawHtml
-        : markdown;
+
+  function resolveDraftSource(): string {
+    if (mode === "annotate-folder" && folderPath) {
+      return `folder:${resolvePath(folderPath)}`;
+    }
+
+    return renderHtml && rawHtml ? rawHtml : markdown;
+  }
+
+  function getInitialSourceState(): InitialSourceState {
+    const eligible =
+      mode === "annotate" &&
+      !sourceConverted &&
+      !(renderHtml && rawHtml) &&
+      !/^https?:\/\//i.test(filePath);
+
+    if (!eligible) return { eligible: false, path: null };
+
+    const sourceSave = createSourceSaveCapability("single-file", filePath);
+    return {
+      eligible: true,
+      path: sourceSave.enabled ? sourceSave.path : resolveUserPath(filePath),
+    };
+  }
+
+  const draftSource = resolveDraftSource();
   const draftKey = contentHash(draftSource);
   const externalAnnotations = createExternalAnnotationHandler("plan");
   const aiRuntime = await createAIRuntime();
@@ -237,21 +261,13 @@ export async function startAnnotateServer(
     return false;
   }
 
-  const singleFileSourceSaveEligible =
-    mode === "annotate" &&
-    !sourceConverted &&
-    !(renderHtml && rawHtml) &&
-    !/^https?:\/\//i.test(filePath);
-  const initialSingleFileSourceSave = singleFileSourceSaveEligible
-    ? createSourceSaveCapability("single-file", filePath)
-    : null;
-  const initialSingleFileSourcePath = singleFileSourceSaveEligible
-    ? initialSingleFileSourceSave?.enabled
-      ? initialSingleFileSourceSave.path
-      : resolveUserPath(filePath)
-    : null;
+  const initialSourceState = getInitialSourceState();
+  const singleFileSourceSaveEligible = initialSourceState.eligible;
+  const initialSingleFileSourcePath = initialSourceState.path;
   const openedSourceFilePaths = new Set<string>();
-  if (initialSingleFileSourcePath) openedSourceFilePaths.add(initialSingleFileSourcePath);
+  if (initialSourceState.eligible) {
+    openedSourceFilePaths.add(initialSourceState.path);
+  }
   const getPrimarySource = () => {
     if (mode === "annotate-last") {
       return { plan: markdown, sourceSave: disabledSourceSave("message-mode") };
