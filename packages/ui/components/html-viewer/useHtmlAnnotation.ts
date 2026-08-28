@@ -143,114 +143,131 @@ export function useHtmlAnnotation({
     [iframeRef, getOrCreateAnchor],
   );
 
+  const handleHtmlSelection = useCallback(
+    (text: string, rect: { top: number; left: number; width: number; height: number }) => {
+      pendingTextRef.current = text;
+      const anchor = positionAnchor(rect);
+      if (!anchor) return;
+
+      const currentMode = modeRef.current;
+      if (currentMode === "redline") {
+        const id = nextHtmlAnnId();
+        postToIframe(iframeRef.current, {
+          type: `${PREFIX}create-mark`,
+          id,
+          annotationType: "deletion",
+        });
+        onAddRef.current?.({
+          id,
+          blockId: "",
+          startOffset: 0,
+          endOffset: 0,
+          type: AnnotationType.DELETION,
+          originalText: text,
+          author: getIdentity(),
+          createdA: Date.now(),
+        });
+        pendingTextRef.current = "";
+        return;
+      }
+      if (currentMode === "comment") {
+        // Let the popover textarea receive subsequent typing instead of the iframe.
+        iframeRef.current?.blur();
+        setCommentPopover({ anchorEl: anchor, contextText: text, selectedText: text });
+        return;
+      }
+      if (currentMode === "quickLabel") {
+        setQuickLabelPicker({
+          anchorEl: anchor,
+          cursorHint: { x: parseFloat(anchor.style.left), y: parseFloat(anchor.style.top) },
+        });
+        return;
+      }
+      setToolbarState({ element: anchor, source: null, selectionText: text });
+    },
+    [iframeRef, positionAnchor],
+  );
+
+  const handleHtmlSelectionClear = useCallback(() => {
+    setToolbarState(null);
+    // Keep text while a comment or quick label is still being composed.
+    if (!commentPopoverRef.current && !quickLabelPickerRef.current) {
+      pendingTextRef.current = "";
+    }
+  }, []);
+
+  const handleHtmlSelectionRect = useCallback(
+    (rect: { top: number; left: number; width: number; height: number }) => {
+      const iframe = iframeRef.current;
+      const anchor = anchorRef.current;
+      if (!iframe || !anchor) return;
+      // The iframe scrolled, so its selection anchor needs the updated viewport position.
+      const iframeRect = iframe.getBoundingClientRect();
+      anchor.style.top = `${iframeRect.top + rect.top}px`;
+      anchor.style.left = `${iframeRect.left + rect.left + rect.width / 2}px`;
+      window.dispatchEvent(new Event("scroll"));
+    },
+    [iframeRef],
+  );
+
+  const handleHtmlTypedKey = useCallback(
+    (key: string) => {
+      // Type-to-comment is available only while the markup toolbar is visible.
+      if (!toolbarStateRef.current) return;
+      const text = pendingTextRef.current;
+      if (!key || !text) return;
+      const anchor = anchorRef.current ?? getOrCreateAnchor();
+      // Let the comment popover receive the rest of the user's typing.
+      iframeRef.current?.blur();
+      setToolbarState(null);
+      setCommentPopover({
+        anchorEl: anchor,
+        contextText: text,
+        selectedText: text,
+        initialText: key,
+      });
+    },
+    [getOrCreateAnchor, iframeRef],
+  );
+
+  const handleHtmlBridgeMessage = useCallback(
+    (message: HtmlBridgeMessage) => {
+      switch (message.type) {
+        case `${PREFIX}selection`:
+          handleHtmlSelection(message.text, message.rect);
+          return;
+        case `${PREFIX}selection-clear`:
+          handleHtmlSelectionClear();
+          return;
+        case `${PREFIX}selection-rect`:
+          handleHtmlSelectionRect(message.rect);
+          return;
+        case `${PREFIX}keytype`:
+          handleHtmlTypedKey(message.key);
+          return;
+        case `${PREFIX}mark-click`:
+          onSelectRef.current?.(message.id);
+          return;
+        case `${PREFIX}resize`:
+          onResize?.(message.height);
+          return;
+      }
+    },
+    [
+      handleHtmlSelection,
+      handleHtmlSelectionClear,
+      handleHtmlSelectionRect,
+      handleHtmlTypedKey,
+      onResize,
+    ],
+  );
+
   useEffect(() => {
     function handler(event: MessageEvent) {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const message = decodeHtmlBridgeMessage(event.data);
       if (!message) return;
-
-      switch (message.type) {
-        case `${PREFIX}selection`: {
-          pendingTextRef.current = message.text;
-          const anchor = positionAnchor(message.rect);
-          if (!anchor) return;
-
-          const currentMode = modeRef.current;
-          if (currentMode === "redline") {
-            const id = nextHtmlAnnId();
-            postToIframe(iframeRef.current, {
-              type: `${PREFIX}create-mark`,
-              id,
-              annotationType: "deletion",
-            });
-            onAddRef.current?.({
-              id,
-              blockId: "",
-              startOffset: 0,
-              endOffset: 0,
-              type: AnnotationType.DELETION,
-              originalText: message.text,
-              author: getIdentity(),
-              createdA: Date.now(),
-            });
-            pendingTextRef.current = "";
-          } else if (currentMode === "comment") {
-            // Release iframe focus so the popover's textarea autofocus lands in the
-            // parent (otherwise the iframe keeps focus and swallows further keys).
-            iframeRef.current?.blur();
-            setCommentPopover({
-              anchorEl: anchor,
-              contextText: message.text,
-              selectedText: message.text,
-            });
-          } else if (currentMode === "quickLabel") {
-            setQuickLabelPicker({
-              anchorEl: anchor,
-              cursorHint: { x: parseFloat(anchor.style.left), y: parseFloat(anchor.style.top) },
-            });
-          } else {
-            setToolbarState({
-              element: anchor,
-              source: null,
-              selectionText: message.text,
-            });
-          }
-          return;
-        }
-
-        case `${PREFIX}selection-clear`:
-          setToolbarState(null);
-          // Keep the captured text alive while a comment/quick-label is open: the user
-          // is composing, and the selection collapsing or scrolling out of view must
-          // not drop the annotation on submit. It's overwritten on the next selection.
-          if (!commentPopoverRef.current && !quickLabelPickerRef.current) {
-            pendingTextRef.current = "";
-          }
-          return;
-
-        case `${PREFIX}selection-rect`: {
-          // The iframe content scrolled — move the anchor to the selection's new
-          // position and nudge the toolbar/popover (which listen to window scroll) to
-          // recompute, so they stay attached to the selection.
-          const iframe = iframeRef.current;
-          const anchor = anchorRef.current;
-          if (!iframe || !anchor) return;
-          const iframeRect = iframe.getBoundingClientRect();
-          anchor.style.top = `${iframeRect.top + message.rect.top}px`;
-          anchor.style.left = `${iframeRect.left + message.rect.left + message.rect.width / 2}px`;
-          window.dispatchEvent(new Event("scroll"));
-          return;
-        }
-
-        case `${PREFIX}keytype`: {
-          // Type-to-comment: only when the markup toolbar is showing (matches the
-          // markdown path, where AnnotationToolbar owns this keydown). Open a comment
-          // pre-filled with the typed char.
-          if (!toolbarStateRef.current) return;
-          const text = pendingTextRef.current;
-          if (!message.key || !text) return;
-          const anchor = anchorRef.current ?? getOrCreateAnchor();
-          // Release iframe focus so the popover textarea can take it (and the rest of
-          // the typing) — otherwise the iframe keeps focus and the bridge eats keys.
-          iframeRef.current?.blur();
-          setToolbarState(null);
-          setCommentPopover({
-            anchorEl: anchor,
-            contextText: text,
-            selectedText: text,
-            initialText: message.key,
-          });
-          return;
-        }
-
-        case `${PREFIX}mark-click`:
-          onSelectRef.current?.(message.id);
-          return;
-
-        case `${PREFIX}resize`:
-          onResize?.(message.height);
-          return;
-      }
+      handleHtmlBridgeMessage(message);
     }
 
     window.addEventListener("message", handler);
@@ -261,7 +278,7 @@ export function useHtmlAnnotation({
         anchorRef.current = null;
       }
     };
-  }, [iframeRef, positionAnchor, onResize, getOrCreateAnchor]);
+  }, [iframeRef, handleHtmlBridgeMessage]);
 
   useEffect(() => {
     if (selectedAnnotationId) {
