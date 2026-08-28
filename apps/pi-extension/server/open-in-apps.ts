@@ -148,6 +148,58 @@ function spawnDetached(
   }
 }
 
+type OpenInResult = Promise<{ ok: true } | { ok: false; error: string }>;
+
+function unavailableApp(app: OpenInApp): OpenInResult {
+  return Promise.resolve({
+    ok: false,
+    error: `${app.label} is not available on this platform.`,
+  });
+}
+
+function openWithDefaultApp(absPath: string, platform: OpenInPlatform): OpenInResult {
+  if (platform === "mac") return run("open", [absPath], "Default app");
+  if (platform === "win") {
+    return run("cmd", ["/c", "start", "", basename(absPath)], "Default app", {
+      cwd: dirname(absPath),
+    });
+  }
+  return run("xdg-open", [absPath], "Default app");
+}
+
+function revealFile(absPath: string, platform: OpenInPlatform): OpenInResult {
+  if (platform === "mac") return run("open", ["-R", absPath], "Finder");
+  if (platform === "win") return spawnDetached("explorer", [`/select,${absPath}`]);
+  return run("xdg-open", [dirname(absPath)], "File manager");
+}
+
+function openTerminal(absPath: string, app: OpenInApp, platform: OpenInPlatform): OpenInResult {
+  const dir = dirname(absPath);
+  if (platform === "mac") {
+    return app.mac?.appName
+      ? run("open", ["-a", app.mac.appName, dir], app.label)
+      : unavailableApp(app);
+  }
+  if (platform === "win") {
+    return app.win?.bin
+      ? run("cmd", ["/c", "start", "", app.win.bin], app.label, { cwd: dir })
+      : unavailableApp(app);
+  }
+  return app.linux?.bin ? run(app.linux.bin, [dir], app.label) : unavailableApp(app);
+}
+
+function openEditor(absPath: string, app: OpenInApp, platform: OpenInPlatform): OpenInResult {
+  if (platform === "mac") {
+    return app.mac?.appName
+      ? run("open", ["-a", app.mac.appName, absPath], app.label)
+      : unavailableApp(app);
+  }
+  if (platform === "win") {
+    return app.win?.bin ? run(app.win.bin, [absPath], app.label) : unavailableApp(app);
+  }
+  return app.linux?.bin ? run(app.linux.bin, [absPath], app.label) : unavailableApp(app);
+}
+
 /**
  * Launch `absPath` in the app identified by `appId` (defaults / unknown ->
  * the OS default handler). Mirrors the Bun-side launch semantics exactly.
@@ -160,72 +212,9 @@ export function openFileInApp(
   const app = appId ? getOpenInApp(appId) : undefined;
 
   // Unknown or undefined appId -> OS default handler on the file.
-  if (!app) {
-    if (platform === "mac") return run("open", [absPath], "Default app");
-    if (platform === "win")
-      return run("cmd", ["/c", "start", "", basename(absPath)], "Default app", {
-        cwd: dirname(absPath),
-      });
-    return run("xdg-open", [absPath], "Default app");
-  }
+  if (!app) return openWithDefaultApp(absPath, platform);
 
-  if (app.kind === "file-manager") {
-    // Reveal the file in the OS file manager.
-    if (platform === "mac") return run("open", ["-R", absPath], "Finder");
-    // explorer.exe exits non-zero even on success; launch fire-and-forget so
-    // a successful reveal doesn't report failure.
-    if (platform === "win") return spawnDetached("explorer", [`/select,${absPath}`]);
-    return run("xdg-open", [dirname(absPath)], "File manager");
-  }
-
-  if (app.kind === "terminal") {
-    // Terminals open the file's parent directory.
-    const dir = dirname(absPath);
-    if (platform === "mac") {
-      if (!app.mac?.appName)
-        return Promise.resolve({
-          ok: false,
-          error: `${app.label} is not available on this platform.`,
-        });
-      return run("open", ["-a", app.mac.appName, dir], app.label);
-    }
-    if (platform === "win") {
-      if (!app.win?.bin)
-        return Promise.resolve({
-          ok: false,
-          error: `${app.label} is not available on this platform.`,
-        });
-      // Open a new console window for the terminal. The directory is passed
-      // via cwd (NOT a cmd argument) so a repo-controlled path never reaches
-      // cmd's parser; `start` inherits that cwd. bin is a trusted catalog value.
-      return run("cmd", ["/c", "start", "", app.win.bin], app.label, { cwd: dir });
-    }
-    if (!app.linux?.bin)
-      return Promise.resolve({
-        ok: false,
-        error: `${app.label} is not available on this platform.`,
-      });
-    return run(app.linux.bin, [dir], app.label);
-  }
-
-  // editor -> open the file itself.
-  if (platform === "mac") {
-    if (!app.mac?.appName)
-      return Promise.resolve({
-        ok: false,
-        error: `${app.label} is not available on this platform.`,
-      });
-    return run("open", ["-a", app.mac.appName, absPath], app.label);
-  }
-  if (platform === "win") {
-    if (!app.win?.bin)
-      return Promise.resolve({
-        ok: false,
-        error: `${app.label} is not available on this platform.`,
-      });
-    return run(app.win.bin, [absPath], app.label);
-  }
-  if (!app.linux?.bin)
-    return Promise.resolve({ ok: false, error: `${app.label} is not available on this platform.` });
-  return run(app.linux.bin, [absPath], app.label);
+  if (app.kind === "file-manager") return revealFile(absPath, platform);
+  if (app.kind === "terminal") return openTerminal(absPath, app, platform);
+  return openEditor(absPath, app, platform);
 }

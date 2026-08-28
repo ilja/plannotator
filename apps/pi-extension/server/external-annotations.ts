@@ -36,154 +36,152 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
   const subscribers = new Set<ServerResponse>();
   const transform = mode === "plan" ? transformPlanInput : transformReviewInput;
 
-  // Wire store mutations → SSE broadcast
-  store.onMutation((event: ExternalAnnotationEvent<StorableAnnotation>) => {
+  function broadcastMutation(event: ExternalAnnotationEvent<StorableAnnotation>): void {
     const data = serializeSSEEvent(event);
     for (const res of subscribers) {
       try {
         res.write(data);
       } catch {
-        // Response closed — clean up
         subscribers.delete(res);
       }
     }
-  });
+  }
+
+  function addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
+    const parsed = transform(body);
+    if ("error" in parsed) return { error: parsed.error };
+    const created = store.add(parsed.annotations);
+    return { ids: created.map((annotation: StorableAnnotation) => annotation.id) };
+  }
+
+  function handleStreamRequest(res: ServerResponse): void {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    res.setTimeout(0);
+    res.write(
+      serializeSSEEvent({
+        type: "snapshot",
+        annotations: store.getAll(),
+      }),
+    );
+    subscribers.add(res);
+
+    const heartbeatTimer = setInterval(() => {
+      try {
+        res.write(HEARTBEAT_COMMENT);
+      } catch {
+        clearInterval(heartbeatTimer);
+        subscribers.delete(res);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
+    res.on("close", () => {
+      clearInterval(heartbeatTimer);
+      subscribers.delete(res);
+    });
+  }
+
+  function handleSnapshotRequest(res: ServerResponse, url: URL): void {
+    const since = url.searchParams.get("since");
+    if (since !== null) {
+      const sinceVersion = parseInt(since, 10);
+      if (!isNaN(sinceVersion) && sinceVersion === store.version) {
+        res.writeHead(304);
+        res.end();
+        return;
+      }
+    }
+    json(res, {
+      annotations: store.getAll(),
+      version: store.version,
+    });
+  }
+
+  async function handleAddRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      const result = addAnnotations(await parseBody(req));
+      if ("error" in result) {
+        json(res, { error: result.error }, 400);
+        return;
+      }
+      json(res, result, 201);
+    } catch {
+      json(res, { error: "Invalid JSON" }, 400);
+    }
+  }
+
+  async function handlePatchRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<void> {
+    const id = url.searchParams.get("id");
+    if (!id) {
+      json(res, { error: "Missing ?id parameter" }, 400);
+      return;
+    }
+    try {
+      const patch = decodeExternalAnnotationPatch(mode, await toWebRequest(req).json());
+      if (!patch) {
+        json(res, { error: "Invalid JSON" }, 400);
+        return;
+      }
+      const updated = store.update(id, patch);
+      if (!updated) {
+        json(res, { error: "Not found" }, 404);
+        return;
+      }
+      json(res, { annotation: updated });
+    } catch {
+      json(res, { error: "Invalid JSON" }, 400);
+    }
+  }
+
+  function handleDeleteRequest(res: ServerResponse, url: URL): void {
+    const id = url.searchParams.get("id");
+    if (id) {
+      store.remove(id);
+      json(res, { ok: true });
+      return;
+    }
+    const source = url.searchParams.get("source");
+    if (source) {
+      json(res, { ok: true, removed: store.clearBySource(source) });
+      return;
+    }
+    json(res, { ok: true, removed: store.clearAll() });
+  }
+
+  store.onMutation(broadcastMutation);
 
   return {
     /** Push annotations directly into the store (bypasses HTTP, reuses same validation). */
-    addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
-      const parsed = transform(body);
-      if ("error" in parsed) return { error: parsed.error };
-      const created = store.add(parsed.annotations);
-      return { ids: created.map((a: { id: string }) => a.id) };
-    },
+    addAnnotations,
 
     async handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
-      // --- SSE stream ---
       if (url.pathname === STREAM && req.method === "GET") {
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        });
-
-        // Disable idle timeout for SSE connections
-        res.setTimeout(0);
-
-        // Send current state as snapshot
-        const snapshot: ExternalAnnotationEvent<StorableAnnotation> = {
-          type: "snapshot",
-          annotations: store.getAll(),
-        };
-        res.write(serializeSSEEvent(snapshot));
-
-        subscribers.add(res);
-
-        // Heartbeat to keep connection alive
-        const heartbeatTimer = setInterval(() => {
-          try {
-            res.write(HEARTBEAT_COMMENT);
-          } catch {
-            clearInterval(heartbeatTimer);
-            subscribers.delete(res);
-          }
-        }, HEARTBEAT_INTERVAL_MS);
-
-        // Clean up on disconnect
-        res.on("close", () => {
-          clearInterval(heartbeatTimer);
-          subscribers.delete(res);
-        });
-
-        // Don't end the response — SSE stays open
+        handleStreamRequest(res);
         return true;
       }
-
-      // --- GET snapshot (polling fallback) ---
       if (url.pathname === BASE && req.method === "GET") {
-        const since = url.searchParams.get("since");
-        if (since !== null) {
-          const sinceVersion = parseInt(since, 10);
-          if (!isNaN(sinceVersion) && sinceVersion === store.version) {
-            res.writeHead(304);
-            res.end();
-            return true;
-          }
-        }
-        json(res, {
-          annotations: store.getAll(),
-          version: store.version,
-        });
+        handleSnapshotRequest(res, url);
         return true;
       }
-
-      // --- POST (add single or batch) ---
       if (url.pathname === BASE && req.method === "POST") {
-        try {
-          const body = await parseBody(req);
-          const parsed = transform(body);
-
-          if ("error" in parsed) {
-            json(res, { error: parsed.error }, 400);
-            return true;
-          }
-
-          const created = store.add(parsed.annotations);
-          json(res, { ids: created.map((a: StorableAnnotation) => a.id) }, 201);
-        } catch {
-          json(res, { error: "Invalid JSON" }, 400);
-        }
+        await handleAddRequest(req, res);
         return true;
       }
-
-      // --- PATCH (update fields on a single annotation) ---
       if (url.pathname === BASE && req.method === "PATCH") {
-        const id = url.searchParams.get("id");
-        if (!id) {
-          json(res, { error: "Missing ?id parameter" }, 400);
-          return true;
-        }
-        try {
-          const patch = decodeExternalAnnotationPatch(mode, await toWebRequest(req).json());
-          if (!patch) {
-            json(res, { error: "Invalid JSON" }, 400);
-            return true;
-          }
-          const updated = store.update(id, patch);
-          if (!updated) {
-            json(res, { error: "Not found" }, 404);
-            return true;
-          }
-          json(res, { annotation: updated });
-        } catch {
-          json(res, { error: "Invalid JSON" }, 400);
-        }
+        await handlePatchRequest(req, res, url);
         return true;
       }
-
-      // --- DELETE (by id, by source, or clear all) ---
       if (url.pathname === BASE && req.method === "DELETE") {
-        const id = url.searchParams.get("id");
-        const source = url.searchParams.get("source");
-
-        if (id) {
-          store.remove(id);
-          json(res, { ok: true });
-          return true;
-        }
-
-        if (source) {
-          const count = store.clearBySource(source);
-          json(res, { ok: true, removed: count });
-          return true;
-        }
-
-        const count = store.clearAll();
-        json(res, { ok: true, removed: count });
+        handleDeleteRequest(res, url);
         return true;
       }
-
-      // Not handled — pass through
       return false;
     },
   };
