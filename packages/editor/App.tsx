@@ -1809,7 +1809,7 @@ const App: React.FC = () => {
   const handleDiscardEdits = useCallback(
     (sourceKey?: string) => {
       const targetKey = sourceKey ?? activeSourceBackedDocument?.key;
-      const targetIsActive = !!targetKey && activeSourceDocumentKey === targetKey;
+      const targetIsActive = activeSourceDocumentKey === targetKey;
       const targetRecord = targetKey
         ? sourceBackedDocuments.getSourceBackedDocument(targetKey)
         : null;
