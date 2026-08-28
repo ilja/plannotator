@@ -243,7 +243,9 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   // Partiality is INFORMATION (GitHub withheld content) and is always
   // reported; whether a local recompute can be OFFERED is a separate
   // capability, gated on the pool below (layerUpgradeAvailable).
-  let layerPatchIncomplete = (options.prPatchIncomplete ?? false) && isPRMode;
+  const getInitialLayerPatchIncomplete = (): boolean =>
+    (options.prPatchIncomplete ?? false) && isPRMode;
+  let layerPatchIncomplete = getInitialLayerPatchIncomplete();
   const layerUpgradeAvailable = !!options.worktreePool;
   let prListCache: PRListItem[] | null = null;
   let prListCacheTime = 0;
@@ -251,13 +253,15 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     string,
     { metadata: PRMetadata; rawPatch: string; patchIncomplete?: boolean }
   >();
-  if (isPRMode && prMetadata) {
+  const seedPRSwitchCache = () => {
+    if (!isPRMode || !prMetadata) return;
     prSwitchCache.set(prMetadata.url, {
       metadata: prMetadata,
       rawPatch: options.rawPatch,
       patchIncomplete: layerPatchIncomplete,
     });
-  }
+  };
+  seedPRSwitchCache();
   const prStackTreeCache = new Map<string, PRStackTree | null>();
   // Tracks the base branch the user picked from the UI. Agent review prompts
   // read this (not gitContext.defaultBranch) so they analyze the same diff
@@ -375,11 +379,13 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   // arrives before the user interacts, quietly upgrade currentBase from the
   // local fallback (e.g. "main") to the upstream ref (e.g. "origin/main").
   // Non-blocking — the server is already listening by the time this resolves.
-  if (gitContext && !options.initialBase && !isPRMode) {
+  const detectRemoteCompareTarget = () => {
+    if (!gitContext || options.initialBase || isPRMode) return;
     detectRemoteDefaultCompareTarget(gitContext.cwd, sessionVcsType).then((remote) => {
       if (remote && !baseEverSwitched) currentBase = remote;
     });
-  }
+  };
+  detectRemoteCompareTarget();
 
   // Agent jobs — background process manager (late-binds serverUrl via getter)
   let serverUrl = "";
@@ -494,34 +500,52 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
 
   // Detect repo info (cached for this session)
   // In PR mode, derive from metadata instead of local git
-  let repoInfo =
-    isPRMode && prMetadata
-      ? {
-          display: getDisplayRepo(prMetadata),
-          branch: `PR #${prMetadata.number}`,
-        }
-      : workspace
-        ? { display: basename(workspace.root), branch: "Workspace" }
-        : await getRepoInfo();
-  if (gitContext?.repository?.displayFallback) {
-    repoInfo = {
-      ...repoInfo,
-      display: repoInfo?.display || gitContext.repository.displayFallback,
-    };
-  }
+  const getInitialRepoInfo = async () => {
+    let initialRepoInfo =
+      isPRMode && prMetadata
+        ? {
+            display: getDisplayRepo(prMetadata),
+            branch: `PR #${prMetadata.number}`,
+          }
+        : workspace
+          ? { display: basename(workspace.root), branch: "Workspace" }
+          : await getRepoInfo();
+    if (gitContext?.repository?.displayFallback) {
+      initialRepoInfo = {
+        ...initialRepoInfo,
+        display: initialRepoInfo?.display || gitContext.repository.displayFallback,
+      };
+    }
+    return initialRepoInfo;
+  };
+  let repoInfo = await getInitialRepoInfo();
 
+  const getInitialPRSession = async () => {
+    const initialPRRef = isPRMode && prMetadata ? prRefFromMetadata(prMetadata) : null;
+    const initialPlatformUser = initialPRRef ? await getPRUser(initialPRRef) : null;
+    const initialPRStackInfo = prMetadata ? getPRStackInfo(prMetadata) : null;
+    const initialPRDiffScopeOptions = prMetadata
+      ? getPRDiffScopeOptions(prMetadata, !!(options.worktreePool || options.agentCwd))
+      : [];
+    return {
+      initialPRRef,
+      initialPlatformUser,
+      initialPRStackInfo,
+      initialPRDiffScopeOptions,
+    };
+  };
+  const initialPRSession = await getInitialPRSession();
   // Fetch the current GitHub user for own-pull-request detection.
-  let prRef = isPRMode && prMetadata ? prRefFromMetadata(prMetadata) : null;
-  const platformUser = prRef ? await getPRUser(prRef) : null;
-  let prStackInfo = prMetadata ? getPRStackInfo(prMetadata) : null;
-  let prDiffScopeOptions = prMetadata
-    ? getPRDiffScopeOptions(prMetadata, !!(options.worktreePool || options.agentCwd))
-    : [];
+  let prRef = initialPRSession.initialPRRef;
+  const platformUser = initialPRSession.initialPlatformUser;
+  let prStackInfo = initialPRSession.initialPRStackInfo;
+  let prDiffScopeOptions = initialPRSession.initialPRDiffScopeOptions;
 
   // Fetch full stack tree (best-effort — always try in PR mode so root PRs
   // that target the default branch can still discover descendant PRs)
   let prStackTree: PRStackTree | null = null;
-  if (prRef && prMetadata) {
+  const loadInitialPRStack = async () => {
+    if (!prRef || !prMetadata) return;
     try {
       prStackTree = await fetchPRStack(prRef, prMetadata);
     } catch {
@@ -536,11 +560,13 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         !!(options.worktreePool || options.agentCwd),
       );
     }
-  }
+  };
+  await loadInitialPRStack();
 
   // Fetch GitHub viewed file state (non-blocking — errors are silently ignored)
   let initialViewedFiles: string[] = [];
-  if (isPRMode && prRef) {
+  const loadInitialViewedFiles = async () => {
+    if (!isPRMode || !prRef) return;
     try {
       const viewedMap = await fetchPRViewedFiles(prRef);
       initialViewedFiles = Object.entries(viewedMap)
@@ -549,7 +575,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     } catch {
       // Non-fatal: viewed state is best-effort
     }
-  }
+  };
+  await loadInitialViewedFiles();
 
   // Decision promise
   let resolveDecision: (result: {
