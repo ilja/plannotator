@@ -46,6 +46,249 @@ function classifyNode(node: PRStackNode): NodeAction {
 
 const HIDE_MERGED_KEY = "plannotator-stack-hide-merged";
 
+interface StackLabelModel {
+  tree: PRStackTree;
+  prNodes: PRStackNode[];
+  parentNode: PRStackNode | null;
+  fullStackTarget: string;
+  scopeTarget: string;
+  showToggle: boolean;
+  mergedCount: number;
+  layerOption?: PRDiffScopeOption;
+  fullStackOption?: PRDiffScopeOption;
+}
+
+function createStackLabelModel(
+  metadata: PRMetadata,
+  stackInfo: PRStackInfo | null,
+  stackTree: PRStackTree | null,
+  scope: PRDiffScope,
+  scopeOptions: PRDiffScopeOption[],
+): StackLabelModel {
+  const tree =
+    stackTree ?? (stackInfo ? buildMinimalStackTree(metadata, stackInfo) : { nodes: [] });
+  const currentIndex = tree.nodes.findIndex((node) => node.isCurrent);
+  const parentNode = currentIndex > 0 ? tree.nodes[currentIndex - 1] : null;
+  const rootNode = tree.nodes[0];
+  const mergedNodes = tree.nodes.filter(
+    (node) => !node.isDefaultBranch && !node.isCurrent && node.state === "merged",
+  );
+  const hasStateInfo = tree.nodes.some((node) => !node.isDefaultBranch && node.state !== undefined);
+  const fullStackTarget = rootNode?.isDefaultBranch
+    ? rootNode.branch
+    : (stackInfo?.defaultBranch ?? "main");
+  const layerTarget = parentNode ? shortNodeLabel(parentNode) : (stackInfo?.baseBranch ?? "base");
+
+  return {
+    tree,
+    prNodes: tree.nodes.filter((node) => !node.isDefaultBranch),
+    parentNode,
+    fullStackTarget,
+    scopeTarget: scope === "full-stack" ? fullStackTarget : layerTarget,
+    showToggle: hasStateInfo && mergedNodes.length > 0,
+    mergedCount: mergedNodes.length,
+    layerOption: scopeOptions.find((option) => option.id === "layer"),
+    fullStackOption: scopeOptions.find((option) => option.id === "full-stack"),
+  };
+}
+
+function isMergedStackNode(node: PRStackNode): boolean {
+  return !node.isCurrent && !node.isDefaultBranch && node.state === "merged";
+}
+
+function getStackNodeTooltip(
+  node: PRStackNode,
+  fullStackOption?: PRDiffScopeOption,
+): string | undefined {
+  const action = classifyNode(node);
+  if (action.kind === "full-stack") {
+    return fullStackOption?.enabled
+      ? "Switch to full-stack diff"
+      : "Full-stack diff requires local checkout";
+  }
+  return action.kind === "navigate" && action.url ? `Review ${shortNodeLabel(node)}` : undefined;
+}
+
+function isStackNodeDisabled(
+  node: PRStackNode,
+  action: NodeAction,
+  isSwitchingScope: boolean,
+  fullStackOption: PRDiffScopeOption | undefined,
+  onNavigatePR: ((url: string) => void) | undefined,
+): boolean {
+  if (isMergedStackNode(node) || action.kind === "current") return true;
+  if (action.kind === "full-stack") return !fullStackOption?.enabled || isSwitchingScope;
+  return !action.url || isSwitchingScope || !onNavigatePR;
+}
+
+function getStackNodeIndicatorClass(node: PRStackNode, merged: boolean): string {
+  if (node.isCurrent) return "bg-annotation-comment";
+  if (node.isDefaultBranch) return "bg-muted-foreground/30";
+  return merged ? "bg-muted-foreground/20" : "bg-muted-foreground/40";
+}
+
+function getStackNodeClass(node: PRStackNode, merged: boolean, disabled: boolean): string {
+  if (node.isCurrent) return "text-annotation-comment font-medium cursor-default";
+  if (merged) return "text-muted-foreground/40 cursor-default";
+  if (disabled) return "text-muted-foreground/40 cursor-not-allowed";
+  return classifyNode(node).kind === "navigate"
+    ? "text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer"
+    : "text-muted-foreground hover:text-annotation-comment hover:bg-muted/30 cursor-pointer";
+}
+
+const StackTreeNodeItem: React.FC<{
+  node: PRStackNode;
+  depth: number;
+  isLast: boolean;
+  isSwitchingScope: boolean;
+  fullStackOption?: PRDiffScopeOption;
+  onSelectFullStack: () => void;
+  onNavigatePR?: (url: string) => void;
+}> = ({
+  node,
+  depth,
+  isLast,
+  isSwitchingScope,
+  fullStackOption,
+  onSelectFullStack,
+  onNavigatePR,
+}) => {
+  const merged = isMergedStackNode(node);
+  const action = classifyNode(node);
+  const disabled = isStackNodeDisabled(
+    node,
+    action,
+    isSwitchingScope,
+    fullStackOption,
+    onNavigatePR,
+  );
+
+  function handleClick() {
+    if (action.kind === "full-stack") onSelectFullStack();
+    if (action.kind === "navigate" && action.url && onNavigatePR) onNavigatePR(action.url);
+  }
+
+  return (
+    <div className="flex items-start" style={{ paddingLeft: `${depth * 2}px` }}>
+      <div className="flex items-center flex-shrink-0 mt-[5px]">
+        {depth > 0 && (
+          <span className="text-[10px] text-border/70 font-mono leading-none mr-0.5">
+            {isLast ? "└─" : "├─"}
+          </span>
+        )}
+        <span
+          className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${getStackNodeIndicatorClass(node, merged)}`}
+        />
+      </div>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={handleClick}
+        title={getStackNodeTooltip(node, fullStackOption)}
+        className={`flex items-center gap-1.5 min-w-0 text-xs leading-6 ml-1.5 rounded px-1 -mx-0.5 transition-colors ${getStackNodeClass(node, merged, disabled)}`}
+      >
+        <span className={`truncate ${merged ? "line-through" : ""}`}>{nodeLabel(node)}</span>
+        {node.isCurrent && (
+          <span className="text-[9px] text-annotation-comment/60 whitespace-nowrap">reviewing</span>
+        )}
+        {merged && (
+          <span className="text-[9px] text-muted-foreground/40 whitespace-nowrap border border-muted-foreground/20 rounded px-0.5 leading-tight">
+            merged
+          </span>
+        )}
+        {action.kind === "navigate" && node.url && !disabled && (
+          <svg
+            className="w-2.5 h-2.5 flex-shrink-0 opacity-40"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+};
+
+const StackScopeOption: React.FC<{
+  option: PRDiffScopeOption;
+  optionScope: PRDiffScope;
+  scope: PRDiffScope;
+  title: string;
+  description: string;
+  isSwitchingScope: boolean;
+  onSelect: (scope: PRDiffScope) => void;
+}> = ({ option, optionScope, scope, title, description, isSwitchingScope, onSelect }) => (
+  <button
+    type="button"
+    disabled={!option.enabled || isSwitchingScope}
+    onClick={() => onSelect(optionScope)}
+    title={!option.enabled && optionScope === "full-stack" ? "Requires local checkout" : undefined}
+    className={`w-full flex items-start gap-2 rounded px-2 py-1.5 text-left transition-colors ${
+      scope === optionScope
+        ? "bg-muted text-foreground"
+        : option.enabled
+          ? "text-foreground/80 hover:bg-muted/70"
+          : "text-muted-foreground/40 cursor-not-allowed"
+    }`}
+  >
+    <span className="mt-0.5 w-3 flex-shrink-0 text-xs">{scope === optionScope ? "◉" : "○"}</span>
+    <span className="min-w-0">
+      <span className="block text-xs font-medium truncate">{title}</span>
+      <span className="block text-[11px] leading-snug text-muted-foreground">{description}</span>
+    </span>
+  </button>
+);
+
+const StackScopeSelector: React.FC<{
+  scope: PRDiffScope;
+  model: StackLabelModel;
+  stackInfo: PRStackInfo | null;
+  isSwitchingScope: boolean;
+  onSelect: (scope: PRDiffScope) => void;
+}> = ({ scope, model, stackInfo, isSwitchingScope, onSelect }) => {
+  if (!model.layerOption && !model.fullStackOption) return null;
+
+  const layerTitle = model.parentNode
+    ? nodeLabel(model.parentNode)
+    : (stackInfo?.baseBranch ?? "base");
+
+  return (
+    <>
+      <div className="border-t border-border/50" />
+      <div className="px-3 py-2">
+        <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+          Comparing against
+        </div>
+        {model.layerOption && (
+          <StackScopeOption
+            option={model.layerOption}
+            optionScope="layer"
+            scope={scope}
+            title={layerTitle}
+            description="Only changes in this PR"
+            isSwitchingScope={isSwitchingScope}
+            onSelect={onSelect}
+          />
+        )}
+        {model.fullStackOption && (
+          <StackScopeOption
+            option={model.fullStackOption}
+            optionScope="full-stack"
+            scope={scope}
+            title={model.fullStackTarget}
+            description={`All changes from ${model.fullStackTarget} to here`}
+            isSwitchingScope={isSwitchingScope}
+            onSelect={onSelect}
+          />
+        )}
+      </div>
+    </>
+  );
+};
+
 export function StackedPRLabel({
   metadata,
   prNumberLabel,
@@ -66,44 +309,17 @@ export function StackedPRLabel({
     setItem(HIDE_MERGED_KEY, String(next));
   }
 
-  const hasStack = !!(
-    stackInfo ||
-    (stackTree && stackTree.nodes.filter((n) => !n.isDefaultBranch).length > 1)
+  const hasStack = Boolean(
+    stackInfo || (stackTree && stackTree.nodes.filter((node) => !node.isDefaultBranch).length > 1),
   );
 
   if (!hasStack) return null;
 
-  const tree =
-    stackTree ?? (stackInfo ? buildMinimalStackTree(metadata, stackInfo) : { nodes: [] });
-  const prNodes = tree.nodes.filter((n) => !n.isDefaultBranch);
-  const currentIndex = tree.nodes.findIndex((n) => n.isCurrent);
-  const parentNode = currentIndex > 0 ? tree.nodes[currentIndex - 1] : null;
-  const rootNode = tree.nodes[0];
-
-  const hasStateInfo = tree.nodes.some((n) => !n.isDefaultBranch && n.state !== undefined);
-  const mergedCount = tree.nodes.filter(
-    (n) => !n.isDefaultBranch && !n.isCurrent && n.state === "merged",
-  ).length;
-  const showToggle = hasStateInfo && mergedCount > 0;
-
+  const model = createStackLabelModel(metadata, stackInfo, stackTree, scope, scopeOptions);
   const visibleNodes =
-    hideMerged && showToggle
-      ? tree.nodes.filter((n) => n.isCurrent || n.isDefaultBranch || n.state !== "merged")
-      : tree.nodes;
-
-  function isMergedNode(node: PRStackNode): boolean {
-    return !node.isCurrent && !node.isDefaultBranch && node.state === "merged";
-  }
-
-  const layerTarget = parentNode ? shortNodeLabel(parentNode) : (stackInfo?.baseBranch ?? "base");
-  const fullStackTarget = rootNode?.isDefaultBranch
-    ? rootNode.branch
-    : (stackInfo?.defaultBranch ?? "main");
-  const scopeTarget = scope === "full-stack" ? fullStackTarget : layerTarget;
-  const hasScopeOptions = scopeOptions.length > 0;
-
-  const layerOption = scopeOptions.find((o) => o.id === "layer");
-  const fullStackOption = scopeOptions.find((o) => o.id === "full-stack");
+    hideMerged && model.showToggle
+      ? model.tree.nodes.filter((node) => !isMergedStackNode(node))
+      : model.tree.nodes;
 
   function handleSelect(nextScope: PRDiffScope) {
     if (nextScope === scope) {
@@ -114,45 +330,9 @@ export function StackedPRLabel({
     setOpen(false);
   }
 
-  function isNodeDisabled(node: PRStackNode): boolean {
-    if (isMergedNode(node)) return true;
-    const action = classifyNode(node);
-    if (action.kind === "current") return true;
-    if (action.kind === "full-stack") return !fullStackOption?.enabled || isSwitchingScope;
-    if (action.kind === "navigate") return !action.url || isSwitchingScope || !onNavigatePR;
-    return false;
-  }
-
-  function nodeTooltip(node: PRStackNode): string | undefined {
-    const action = classifyNode(node);
-    switch (action.kind) {
-      case "current":
-        return undefined;
-      case "full-stack":
-        return fullStackOption?.enabled
-          ? "Switch to full-stack diff"
-          : "Full-stack diff requires local checkout";
-      case "navigate":
-        return action.url ? `Review ${shortNodeLabel(node)}` : undefined;
-    }
-  }
-
-  function handleNodeClick(node: PRStackNode) {
-    const action = classifyNode(node);
-    switch (action.kind) {
-      case "current":
-        setOpen(false);
-        return;
-      case "full-stack":
-        handleSelect("full-stack");
-        return;
-      case "navigate":
-        if (action.url && onNavigatePR) {
-          onNavigatePR(action.url);
-          setOpen(false);
-        }
-        return;
-    }
+  function handleNavigatePR(url: string) {
+    onNavigatePR?.(url);
+    setOpen(false);
   }
 
   return (
@@ -161,7 +341,7 @@ export function StackedPRLabel({
         <button
           type="button"
           disabled={isSwitchingScope}
-          title={`Stack: comparing vs ${scopeTarget}`}
+          title={`Stack: comparing vs ${model.scopeTarget}`}
           className="text-[10px] text-annotation-comment/70 hover:text-annotation-comment inline-flex items-center gap-1 whitespace-nowrap transition-colors rounded px-1.5 py-0.5 hover:bg-muted/20 disabled:opacity-60 disabled:cursor-wait"
         >
           <svg
@@ -177,7 +357,7 @@ export function StackedPRLabel({
             <polyline points="30,220 250,350 470,220" />
             <polyline points="30,280 250,410 470,280" />
           </svg>
-          <span>vs {scopeTarget}</span>
+          <span>vs {model.scopeTarget}</span>
           <svg
             className={`w-2.5 h-2.5 flex-shrink-0 opacity-40 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
             fill="none"
@@ -200,14 +380,14 @@ export function StackedPRLabel({
           <div className="px-3 pt-3 pb-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-medium text-muted-foreground">
-                Stack ({prNodes.length} {prNodes.length === 1 ? "PR" : "PRs"})
-                {hideMerged && showToggle && (
+                Stack ({model.prNodes.length} {model.prNodes.length === 1 ? "PR" : "PRs"})
+                {hideMerged && model.showToggle && (
                   <span className="ml-1 text-[10px] text-muted-foreground/50">
-                    · {mergedCount} merged hidden
+                    · {model.mergedCount} merged hidden
                   </span>
                 )}
               </span>
-              {showToggle && (
+              {model.showToggle && (
                 <button
                   type="button"
                   onClick={toggleHideMerged}
@@ -223,153 +403,28 @@ export function StackedPRLabel({
               )}
             </div>
             <div>
-              {visibleNodes.map((node, i) => {
-                const depth = node.isDefaultBranch ? 0 : i;
-                const isLast = i === visibleNodes.length - 1;
-                const disabled = isNodeDisabled(node);
-                const merged = isMergedNode(node);
-                const action = classifyNode(node);
-                const tooltip = nodeTooltip(node);
-
-                return (
-                  <div
-                    key={node.branch}
-                    className="flex items-start"
-                    style={{ paddingLeft: `${depth * 2}px` }}
-                  >
-                    <div className="flex items-center flex-shrink-0 mt-[5px]">
-                      {depth > 0 && (
-                        <span className="text-[10px] text-border/70 font-mono leading-none mr-0.5">
-                          {isLast ? "└─" : "├─"}
-                        </span>
-                      )}
-                      <span
-                        className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                          node.isCurrent
-                            ? "bg-annotation-comment"
-                            : node.isDefaultBranch
-                              ? "bg-muted-foreground/30"
-                              : merged
-                                ? "bg-muted-foreground/20"
-                                : "bg-muted-foreground/40"
-                        }`}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => handleNodeClick(node)}
-                      title={tooltip}
-                      className={`flex items-center gap-1.5 min-w-0 text-xs leading-6 ml-1.5 rounded px-1 -mx-0.5 transition-colors ${
-                        node.isCurrent
-                          ? "text-annotation-comment font-medium cursor-default"
-                          : merged
-                            ? "text-muted-foreground/40 cursor-default"
-                            : disabled
-                              ? "text-muted-foreground/40 cursor-not-allowed"
-                              : action.kind === "navigate"
-                                ? "text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer"
-                                : "text-muted-foreground hover:text-annotation-comment hover:bg-muted/30 cursor-pointer"
-                      }`}
-                    >
-                      <span className={`truncate ${merged ? "line-through" : ""}`}>
-                        {nodeLabel(node)}
-                      </span>
-                      {node.isCurrent && (
-                        <span className="text-[9px] text-annotation-comment/60 whitespace-nowrap">
-                          reviewing
-                        </span>
-                      )}
-                      {merged && (
-                        <span className="text-[9px] text-muted-foreground/40 whitespace-nowrap border border-muted-foreground/20 rounded px-0.5 leading-tight">
-                          merged
-                        </span>
-                      )}
-                      {action.kind === "navigate" && node.url && !disabled && (
-                        <svg
-                          className="w-2.5 h-2.5 flex-shrink-0 opacity-40"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M13 7l5 5m0 0l-5 5m5-5H6"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
+              {visibleNodes.map((node, index) => (
+                <StackTreeNodeItem
+                  key={node.branch}
+                  node={node}
+                  depth={node.isDefaultBranch ? 0 : index}
+                  isLast={index === visibleNodes.length - 1}
+                  isSwitchingScope={isSwitchingScope}
+                  fullStackOption={model.fullStackOption}
+                  onSelectFullStack={() => handleSelect("full-stack")}
+                  onNavigatePR={onNavigatePR ? handleNavigatePR : undefined}
+                />
+              ))}
             </div>
           </div>
 
-          {hasScopeOptions && (
-            <>
-              <div className="border-t border-border/50" />
-
-              {/* Section 2: Scope Selector */}
-              <div className="px-3 py-2">
-                <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
-                  Comparing against
-                </div>
-                {layerOption && (
-                  <button
-                    type="button"
-                    disabled={!layerOption.enabled || isSwitchingScope}
-                    onClick={() => handleSelect("layer")}
-                    className={`w-full flex items-start gap-2 rounded px-2 py-1.5 text-left transition-colors ${
-                      scope === "layer"
-                        ? "bg-muted text-foreground"
-                        : layerOption.enabled
-                          ? "text-foreground/80 hover:bg-muted/70"
-                          : "text-muted-foreground/40 cursor-not-allowed"
-                    }`}
-                  >
-                    <span className="mt-0.5 w-3 flex-shrink-0 text-xs">
-                      {scope === "layer" ? "◉" : "○"}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-xs font-medium truncate">
-                        {parentNode ? nodeLabel(parentNode) : (stackInfo?.baseBranch ?? "base")}
-                      </span>
-                      <span className="block text-[11px] leading-snug text-muted-foreground">
-                        Only changes in this PR
-                      </span>
-                    </span>
-                  </button>
-                )}
-                {fullStackOption && (
-                  <button
-                    type="button"
-                    disabled={!fullStackOption.enabled || isSwitchingScope}
-                    onClick={() => handleSelect("full-stack")}
-                    title={!fullStackOption.enabled ? "Requires local checkout" : undefined}
-                    className={`w-full flex items-start gap-2 rounded px-2 py-1.5 text-left transition-colors ${
-                      scope === "full-stack"
-                        ? "bg-muted text-foreground"
-                        : fullStackOption.enabled
-                          ? "text-foreground/80 hover:bg-muted/70"
-                          : "text-muted-foreground/40 cursor-not-allowed"
-                    }`}
-                  >
-                    <span className="mt-0.5 w-3 flex-shrink-0 text-xs">
-                      {scope === "full-stack" ? "◉" : "○"}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-xs font-medium">{fullStackTarget}</span>
-                      <span className="block text-[11px] leading-snug text-muted-foreground">
-                        All changes from {fullStackTarget} to here
-                      </span>
-                    </span>
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+          <StackScopeSelector
+            scope={scope}
+            model={model}
+            stackInfo={stackInfo}
+            isSwitchingScope={isSwitchingScope}
+            onSelect={handleSelect}
+          />
 
           <div className="border-t border-border/50" />
 
