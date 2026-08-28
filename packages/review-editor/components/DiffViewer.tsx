@@ -66,6 +66,41 @@ interface PierreDiffContentProps {
   onTokenLeave?: (props: DiffTokenEventBaseProps, event: PointerEvent) => void;
 }
 
+function hasSamePierreTheme(previous: PierreTheme, next: PierreTheme) {
+  return (
+    previous.type === next.type &&
+    previous.css === next.css &&
+    previous.syntaxTheme.dark === next.syntaxTheme.dark &&
+    previous.syntaxTheme.light === next.syntaxTheme.light
+  );
+}
+
+function arePierreDiffContentPropsEqual(
+  previous: PierreDiffContentProps,
+  next: PierreDiffContentProps,
+) {
+  return (
+    previous.filePath === next.filePath &&
+    previous.fileDiff === next.fileDiff &&
+    hasSamePierreTheme(previous.pierreTheme, next.pierreTheme) &&
+    previous.diffStyle === next.diffStyle &&
+    previous.diffOverflow === next.diffOverflow &&
+    previous.diffIndicators === next.diffIndicators &&
+    previous.lineDiffType === next.lineDiffType &&
+    previous.disableLineNumbers === next.disableLineNumbers &&
+    previous.disableBackground === next.disableBackground &&
+    previous.expandUnchanged === next.expandUnchanged &&
+    previous.mergedAnnotations === next.mergedAnnotations &&
+    previous.pendingSelection === next.pendingSelection &&
+    previous.onLineSelectionEnd === next.onLineSelectionEnd &&
+    previous.renderGutterUtility === next.renderGutterUtility &&
+    previous.renderAnnotation === next.renderAnnotation &&
+    previous.onTokenClick === next.onTokenClick &&
+    previous.onTokenEnter === next.onTokenEnter &&
+    previous.onTokenLeave === next.onTokenLeave
+  );
+}
+
 const PierreDiffContent = React.memo(
   ({
     filePath,
@@ -125,28 +160,7 @@ const PierreDiffContent = React.memo(
       />
     );
   },
-  (prev, next) =>
-    prev.filePath === next.filePath &&
-    prev.fileDiff === next.fileDiff &&
-    prev.pierreTheme.type === next.pierreTheme.type &&
-    prev.pierreTheme.css === next.pierreTheme.css &&
-    prev.pierreTheme.syntaxTheme.dark === next.pierreTheme.syntaxTheme.dark &&
-    prev.pierreTheme.syntaxTheme.light === next.pierreTheme.syntaxTheme.light &&
-    prev.diffStyle === next.diffStyle &&
-    prev.diffOverflow === next.diffOverflow &&
-    prev.diffIndicators === next.diffIndicators &&
-    prev.lineDiffType === next.lineDiffType &&
-    prev.disableLineNumbers === next.disableLineNumbers &&
-    prev.disableBackground === next.disableBackground &&
-    prev.expandUnchanged === next.expandUnchanged &&
-    prev.mergedAnnotations === next.mergedAnnotations &&
-    prev.pendingSelection === next.pendingSelection &&
-    prev.onLineSelectionEnd === next.onLineSelectionEnd &&
-    prev.renderGutterUtility === next.renderGutterUtility &&
-    prev.renderAnnotation === next.renderAnnotation &&
-    prev.onTokenClick === next.onTokenClick &&
-    prev.onTokenEnter === next.onTokenEnter &&
-    prev.onTokenLeave === next.onTokenLeave,
+  arePierreDiffContentPropsEqual,
 );
 
 interface DiffViewerProps {
