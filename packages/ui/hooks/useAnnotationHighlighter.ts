@@ -69,6 +69,89 @@ export interface UseAnnotationHighlighterReturn {
   applyAnnotations: (annotations: Annotation[]) => void;
 }
 
+interface RangeTextNode {
+  node: Text;
+  start: number;
+  end: number;
+}
+
+function addAnnotationTypeClass(highlighter: Highlighter, annotation: Annotation): void {
+  if (annotation.type === AnnotationType.DELETION) {
+    highlighter.addClass("deletion", annotation.id);
+  } else if (annotation.type === AnnotationType.COMMENT) {
+    highlighter.addClass("comment", annotation.id);
+  }
+}
+
+function getNextTextNode(walker: TreeWalker): Text | null {
+  const node = walker.nextNode();
+  return node instanceof Text ? node : null;
+}
+
+function findRangeTextNodes(range: Range): RangeTextNode[] {
+  const commonAncestor = range.commonAncestorContainer;
+  const root =
+    commonAncestor.nodeType === Node.TEXT_NODE
+      ? (commonAncestor.parentNode ?? commonAncestor)
+      : commonAncestor;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const textNodes: RangeTextNode[] = [];
+  let node: Text | null;
+  let inRange = false;
+
+  while ((node = getNextTextNode(walker))) {
+    if (node === range.startContainer) {
+      inRange = true;
+      const start = range.startOffset;
+      const end = node === range.endContainer ? range.endOffset : node.length;
+      if (end > start) textNodes.push({ node, start, end });
+      if (node === range.endContainer) break;
+      continue;
+    }
+
+    if (node === range.endContainer) {
+      if (inRange && range.endOffset > 0) {
+        textNodes.push({ node, start: 0, end: range.endOffset });
+      }
+      break;
+    }
+
+    if (inRange && node.length > 0) {
+      textNodes.push({ node, start: 0, end: node.length });
+    }
+  }
+
+  return textNodes;
+}
+
+interface AnnotationTextNodeWrapOptions {
+  textNode: RangeTextNode;
+  annotation: Annotation;
+  onSelectAnnotationRef: RefObject<((id: string | null) => void) | undefined>;
+}
+
+function wrapAnnotationTextNode({
+  textNode,
+  annotation,
+  onSelectAnnotationRef,
+}: AnnotationTextNodeWrapOptions): void {
+  const nodeRange = document.createRange();
+  nodeRange.setStart(textNode.node, textNode.start);
+  nodeRange.setEnd(textNode.node, textNode.end);
+
+  const mark = document.createElement("mark");
+  mark.className = "annotation-highlight";
+  mark.dataset.bindId = annotation.id;
+  if (annotation.type === AnnotationType.DELETION) {
+    mark.classList.add("deletion");
+  } else if (annotation.type === AnnotationType.COMMENT) {
+    mark.classList.add("comment");
+  }
+
+  nodeRange.surroundContents(mark);
+  mark.addEventListener("click", () => onSelectAnnotationRef.current?.(annotation.id));
+}
+
 export function useAnnotationHighlighter({
   containerRef,
   annotations,
@@ -375,11 +458,7 @@ export function useAnnotationHighlighter({
             highlighter.fromStore(ann.startMeta, ann.endMeta, ann.originalText, ann.id);
             const restoredDoms = highlighter.getDoms(ann.id);
             if (restoredDoms && restoredDoms.length > 0) {
-              if (ann.type === AnnotationType.DELETION) {
-                highlighter.addClass("deletion", ann.id);
-              } else if (ann.type === AnnotationType.COMMENT) {
-                highlighter.addClass("comment", ann.id);
-              }
+              addAnnotationTypeClass(highlighter, ann);
               return;
             }
           } catch {}
@@ -394,71 +473,19 @@ export function useAnnotationHighlighter({
         }
 
         try {
-          const textNodes: { node: Text; start: number; end: number }[] = [];
-          const walker = document.createTreeWalker(
-            range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-              ? range.commonAncestorContainer.parentNode!
-              : range.commonAncestorContainer,
-            NodeFilter.SHOW_TEXT,
-            null,
-          );
-
-          let node: Text | null;
-          let inRange = false;
-
-          // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
-          while ((node = walker.nextNode() as Text | null)) {
-            if (node === range.startContainer) {
-              inRange = true;
-              const start = range.startOffset;
-              const end = node === range.endContainer ? range.endOffset : node.length;
-              if (end > start) {
-                textNodes.push({ node, start, end });
-              }
-              if (node === range.endContainer) break;
-              continue;
-            }
-
-            if (node === range.endContainer) {
-              if (inRange) {
-                const end = range.endOffset;
-                if (end > 0) {
-                  textNodes.push({ node, start: 0, end });
-                }
-              }
-              break;
-            }
-
-            if (inRange && node.length > 0) {
-              textNodes.push({ node, start: 0, end: node.length });
-            }
-          }
+          const textNodes = findRangeTextNodes(range);
 
           if (textNodes.length === 0) {
             console.warn(`No text nodes found for annotation ${ann.id}`);
             return;
           }
 
-          textNodes.reverse().forEach(({ node, start, end }) => {
+          textNodes.reverse().forEach((textNode) => {
             try {
-              const nodeRange = document.createRange();
-              nodeRange.setStart(node, start);
-              nodeRange.setEnd(node, end);
-
-              const mark = document.createElement("mark");
-              mark.className = "annotation-highlight";
-              mark.dataset.bindId = ann.id;
-
-              if (ann.type === AnnotationType.DELETION) {
-                mark.classList.add("deletion");
-              } else if (ann.type === AnnotationType.COMMENT) {
-                mark.classList.add("comment");
-              }
-
-              nodeRange.surroundContents(mark);
-
-              mark.addEventListener("click", () => {
-                onSelectAnnotationRef.current?.(ann.id);
+              wrapAnnotationTextNode({
+                textNode,
+                annotation: ann,
+                onSelectAnnotationRef,
               });
             } catch (e) {
               console.warn(`Failed to wrap text node for annotation ${ann.id}:`, e);

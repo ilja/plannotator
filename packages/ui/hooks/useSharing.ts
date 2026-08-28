@@ -113,6 +113,131 @@ const reconcileSharedChoiceAnnotations = (
   return reconcileChoiceAnnotations(annotations, questions).retained;
 };
 
+interface SharedPayloadSetters {
+  setMarkdown: (markdown: string) => void;
+  setAnnotations: React.Dispatch<React.SetStateAction<Annotation[]>>;
+  setGlobalAttachments: React.Dispatch<React.SetStateAction<ImageAttachment[]>>;
+  setSharedGlobalAttachments: React.Dispatch<React.SetStateAction<ImageAttachment[] | null>>;
+  setPendingSharedAnnotations: React.Dispatch<React.SetStateAction<Annotation[] | null>>;
+  setIsSharedSession: React.Dispatch<React.SetStateAction<boolean>>;
+  setRawHtml?: (html: string) => void;
+  setShareHtml?: (html: string) => void;
+  setRenderAs?: (renderAs: "markdown" | "html") => void;
+}
+
+function decodePasteOrigin(params: URLSearchParams): string | undefined {
+  const encodedPaste = params.get("paste");
+  return encodedPaste ? atob(encodedPaste.replace(/-/g, "+").replace(/_/g, "/")) : undefined;
+}
+
+function applySharedPayload(payload: SharePayload, setters: SharedPayloadSetters): void {
+  const {
+    setMarkdown,
+    setAnnotations,
+    setGlobalAttachments,
+    setSharedGlobalAttachments,
+    setPendingSharedAnnotations,
+    setIsSharedSession,
+    setRawHtml,
+    setShareHtml,
+    setRenderAs,
+  } = setters;
+
+  if (payload.h && payload.r === "html") {
+    setRawHtml?.(payload.h);
+    setShareHtml?.(payload.h);
+    setRenderAs?.("html");
+    setMarkdown("");
+  } else {
+    setMarkdown(payload.p);
+    setRenderAs?.("markdown");
+    setRawHtml?.("");
+    setShareHtml?.("");
+  }
+
+  const restoredAnnotations = reconcileSharedChoiceAnnotations(
+    fromShareable(payload.a, payload.d, payload.s, payload.cv, payload.co),
+    payload.p ?? "",
+  );
+  setAnnotations(restoredAnnotations);
+
+  const parsedGlobalAttachments = parseShareableImages(payload.g) ?? [];
+  setGlobalAttachments(parsedGlobalAttachments);
+  setSharedGlobalAttachments(parsedGlobalAttachments.length ? parsedGlobalAttachments : null);
+  setPendingSharedAnnotations(restoredAnnotations);
+  setIsSharedSession(true);
+}
+
+function getSharePlanTitle(payload: SharePayload): string {
+  if (payload.p) {
+    const titleLine = payload.p
+      .trim()
+      .split("\n")
+      .find((line) => line.startsWith("#"));
+    if (titleLine) return titleLine.replace(/^#+\s*/, "").trim();
+  }
+
+  if (payload.h) {
+    const titleMatch = payload.h.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (titleMatch) return titleMatch[1].trim();
+  }
+
+  return "Unknown Plan";
+}
+
+function getNewAnnotations(
+  existingAnnotations: Annotation[],
+  importedAnnotations: Annotation[],
+): Annotation[] {
+  return importedAnnotations.filter(
+    (imported) =>
+      !existingAnnotations.some(
+        (existing) =>
+          existing.originalText === imported.originalText &&
+          existing.type === imported.type &&
+          existing.text === imported.text,
+      ),
+  );
+}
+
+function importFailure(error: string): ImportResult {
+  return { success: false, count: 0, planTitle: "", error };
+}
+
+interface ImportedPayloadResult {
+  payload?: SharePayload;
+  error?: ImportResult;
+}
+
+async function loadImportedPayload(
+  url: string,
+  pasteApiUrl?: string,
+): Promise<ImportedPayloadResult> {
+  const shortMatch = url.match(/\/p\/([A-Za-z0-9]{6,16})(?:#(.*))?(?:\?|$)/);
+  if (shortMatch) {
+    const fragmentParams = new URLSearchParams(shortMatch[2] ?? "");
+    const payload = await loadFromPasteId(
+      shortMatch[1],
+      decodePasteOrigin(fragmentParams) ?? pasteApiUrl,
+      fragmentParams.get("key") ?? undefined,
+    );
+    return payload
+      ? { payload }
+      : { error: importFailure("Failed to load from short URL — paste may have expired") };
+  }
+
+  const hashIndex = url.indexOf("#");
+  if (hashIndex === -1) {
+    return { error: importFailure("Invalid share URL: no hash fragment or short link found") };
+  }
+
+  const hash = url.slice(hashIndex + 1);
+  if (!hash) return { error: importFailure("Invalid share URL: empty hash") };
+
+  const payload = decodeSharePayload(await decompress(hash));
+  return payload ? { payload } : { error: importFailure("Invalid share URL: malformed payload") };
+}
+
 export function useSharing(
   markdown: string,
   annotations: Annotation[],
@@ -158,47 +283,24 @@ export function useSharing(
       const pathMatch = window.location.pathname.match(/^\/p\/([A-Za-z0-9]{6,16})$/);
       if (pathMatch) {
         const pasteId = pathMatch[1];
-
-        // Extract key and optional paste origin from fragment: #key=<k>&paste=<base64url>
-        const fragment = window.location.hash.slice(1);
-        const params = new URLSearchParams(fragment);
-        const encryptionKey = params.get("key") ?? undefined;
-        const pasteFromFragment = params.get("paste")
-          ? atob(params.get("paste")!.replace(/-/g, "+").replace(/_/g, "/"))
-          : undefined;
-
+        const params = new URLSearchParams(window.location.hash.slice(1));
         const payload = await loadFromPasteId(
           pasteId,
-          pasteFromFragment ?? pasteApiUrl,
-          encryptionKey,
+          decodePasteOrigin(params) ?? pasteApiUrl,
+          params.get("key") ?? undefined,
         );
         if (payload) {
-          if (payload.h && payload.r === "html") {
-            setRawHtml?.(payload.h);
-            setShareHtml?.(payload.h);
-            setRenderAs?.("html");
-            setMarkdown("");
-          } else {
-            setMarkdown(payload.p);
-            setRenderAs?.("markdown");
-            setRawHtml?.("");
-            setShareHtml?.("");
-          }
-
-          const restoredAnnotations = reconcileSharedChoiceAnnotations(
-            fromShareable(payload.a, payload.d, payload.s, payload.cv, payload.co),
-            payload.p ?? "",
-          );
-          setAnnotations(restoredAnnotations);
-
-          const parsedGlobalAttachments = parseShareableImages(payload.g) ?? [];
-          setGlobalAttachments(parsedGlobalAttachments);
-          setSharedGlobalAttachments(
-            parsedGlobalAttachments.length ? parsedGlobalAttachments : null,
-          );
-
-          setPendingSharedAnnotations(restoredAnnotations);
-          setIsSharedSession(true);
+          applySharedPayload(payload, {
+            setMarkdown,
+            setAnnotations,
+            setGlobalAttachments,
+            setSharedGlobalAttachments,
+            setPendingSharedAnnotations,
+            setIsSharedSession,
+            setRawHtml,
+            setShareHtml,
+            setRenderAs,
+          });
           setShortShareUrl(window.location.href);
           onSharedLoad?.();
 
@@ -225,35 +327,17 @@ export function useSharing(
       const payload = await parseShareHash();
 
       if (payload) {
-        if (payload.h && payload.r === "html") {
-          setRawHtml?.(payload.h);
-          setShareHtml?.(payload.h);
-          setRenderAs?.("html");
-          setMarkdown("");
-        } else {
-          setMarkdown(payload.p);
-          setRenderAs?.("markdown");
-          setRawHtml?.("");
-          setShareHtml?.("");
-        }
-
-        // Convert shareable annotations to full annotations
-        const restoredAnnotations = reconcileSharedChoiceAnnotations(
-          fromShareable(payload.a, payload.d, payload.s, payload.cv, payload.co),
-          payload.p ?? "",
-        );
-        setAnnotations(restoredAnnotations);
-
-        const parsedGlobalAttachments = parseShareableImages(payload.g) ?? [];
-        setGlobalAttachments(parsedGlobalAttachments);
-        setSharedGlobalAttachments(parsedGlobalAttachments.length ? parsedGlobalAttachments : null);
-
-        // Store for later application to DOM
-        setPendingSharedAnnotations(restoredAnnotations);
-
-        setIsSharedSession(true);
-
-        // Notify parent that we loaded from a share
+        applySharedPayload(payload, {
+          setMarkdown,
+          setAnnotations,
+          setGlobalAttachments,
+          setSharedGlobalAttachments,
+          setPendingSharedAnnotations,
+          setIsSharedSession,
+          setRawHtml,
+          setShareHtml,
+          setRenderAs,
+        });
         onSharedLoad?.();
 
         // Clear the hash from URL to prevent re-loading on refresh
@@ -395,76 +479,12 @@ export function useSharing(
   const importFromShareUrl = useCallback(
     async (url: string): Promise<ImportResult> => {
       try {
-        let payload: SharePayload | undefined;
+        const loaded = await loadImportedPayload(url, pasteApiUrl);
+        if (loaded.error) return loaded.error;
+        if (!loaded.payload) return importFailure("Invalid share URL: malformed payload");
 
-        // Check for short URL pattern: /p/<id> with optional #key=<key> fragment
-        const shortMatch = url.match(/\/p\/([A-Za-z0-9]{6,16})(?:#(.*))?(?:\?|$)/);
-        if (shortMatch) {
-          const pasteId = shortMatch[1];
-          const fragParams = new URLSearchParams(shortMatch[2] ?? "");
-          const encryptionKey = fragParams.get("key") ?? undefined;
-          const pasteFromFragment = fragParams.get("paste")
-            ? atob(fragParams.get("paste")!.replace(/-/g, "+").replace(/_/g, "/"))
-            : undefined;
-          const loaded = await loadFromPasteId(
-            pasteId,
-            pasteFromFragment ?? pasteApiUrl,
-            encryptionKey,
-          );
-          if (!loaded) {
-            return {
-              success: false,
-              count: 0,
-              planTitle: "",
-              error: "Failed to load from short URL — paste may have expired",
-            };
-          }
-          payload = loaded;
-        } else {
-          // Fall back to hash-based URL
-          const hashIndex = url.indexOf("#");
-          if (hashIndex === -1) {
-            return {
-              success: false,
-              count: 0,
-              planTitle: "",
-              error: "Invalid share URL: no hash fragment or short link found",
-            };
-          }
-          const hash = url.slice(hashIndex + 1);
-          if (!hash) {
-            return {
-              success: false,
-              count: 0,
-              planTitle: "",
-              error: "Invalid share URL: empty hash",
-            };
-          }
-
-          const decodedPayload = decodeSharePayload(await decompress(hash));
-          if (!decodedPayload) {
-            return {
-              success: false,
-              count: 0,
-              planTitle: "",
-              error: "Invalid share URL: malformed payload",
-            };
-          }
-          payload = decodedPayload;
-        }
-
-        // Extract plan title from embedded plan text (or HTML <title>)
-        let planTitle = "Unknown Plan";
-        if (payload.p) {
-          const titleLine = payload.p
-            .trim()
-            .split("\n")
-            .find((l) => l.startsWith("#"));
-          if (titleLine) planTitle = titleLine.replace(/^#+\s*/, "").trim();
-        } else if (payload.h) {
-          const titleMatch = payload.h.match(/<title[^>]*>([^<]+)<\/title>/i);
-          if (titleMatch) planTitle = titleMatch[1].trim();
-        }
+        const payload = loaded.payload;
+        const planTitle = getSharePlanTitle(payload);
 
         // Convert to full annotations
         const importedAnnotations = reconcileSharedChoiceAnnotations(
@@ -483,28 +503,12 @@ export function useSharing(
 
         // Estimate count from current closure (may be slightly stale, but
         // the actual merge below uses the latest state via functional updater)
-        const estimatedNew = importedAnnotations.filter(
-          (imp) =>
-            !annotations.some(
-              (existing) =>
-                existing.originalText === imp.originalText &&
-                existing.type === imp.type &&
-                existing.text === imp.text,
-            ),
-        );
+        const estimatedNew = getNewAnnotations(annotations, importedAnnotations);
 
         if (estimatedNew.length > 0) {
           // Merge using functional updater to avoid stale closure
           setAnnotations((prev) => {
-            const newAnnotations = importedAnnotations.filter(
-              (imp) =>
-                !prev.some(
-                  (existing) =>
-                    existing.originalText === imp.originalText &&
-                    existing.type === imp.type &&
-                    existing.text === imp.text,
-                ),
-            );
+            const newAnnotations = getNewAnnotations(prev, importedAnnotations);
             if (newAnnotations.length === 0) return prev;
             const merged = [...prev, ...newAnnotations];
             // SAFETY: cast is safe — pending is expected shape

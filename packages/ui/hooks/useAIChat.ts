@@ -98,6 +98,143 @@ function createAbortError(message: string): Error {
   return err;
 }
 
+interface ResponseUpdate {
+  messages: AIChatEntry[];
+  questionId: string;
+  updateResponse: (response: AIResponse) => AIResponse;
+}
+
+function updateResponseForQuestion({
+  messages,
+  questionId,
+  updateResponse,
+}: ResponseUpdate): AIChatEntry[] {
+  return messages.map((message) =>
+    message.question.id === questionId
+      ? { ...message, response: updateResponse(message.response) }
+      : message,
+  );
+}
+
+type StreamMessageUpdater = (updater: (messages: AIChatEntry[]) => AIChatEntry[]) => void;
+type PermissionUpdater = (
+  updater: (permissions: PendingPermission[]) => PendingPermission[],
+) => void;
+
+interface StreamMessageHandlers {
+  questionId: string;
+  updateMessages: StreamMessageUpdater;
+  updatePermissions: PermissionUpdater;
+  setError: (error: string) => void;
+}
+
+function handleAIChatStreamMessage(
+  message: ReturnType<typeof decodeAIChatStreamMessage>,
+  { questionId, updateMessages, updatePermissions, setError }: StreamMessageHandlers,
+): void {
+  if (!message) return;
+
+  if (message.type === "text_delta") {
+    updateMessages((messages) =>
+      updateResponseForQuestion({
+        messages,
+        questionId,
+        updateResponse: (response) => ({
+          ...response,
+          text: response.text + message.delta,
+        }),
+      }),
+    );
+    return;
+  }
+
+  if (message.type === "text") {
+    updateMessages((messages) =>
+      updateResponseForQuestion({
+        messages,
+        questionId,
+        updateResponse: (response) =>
+          response.text ? response : { ...response, text: message.text },
+      }),
+    );
+    return;
+  }
+
+  if (message.type === "permission_request") {
+    updatePermissions((permissions) => [
+      ...permissions,
+      {
+        requestId: message.requestId,
+        toolName: message.toolName,
+        toolInput: message.toolInput,
+        title: message.title,
+        displayName: message.displayName,
+        description: message.description,
+        toolUseId: message.toolUseId,
+      },
+    ]);
+    return;
+  }
+
+  if (message.type === "error") {
+    updateMessages((messages) =>
+      updateResponseForQuestion({
+        messages,
+        questionId,
+        updateResponse: (response) => ({
+          ...response,
+          error: message.error,
+          isStreaming: false,
+        }),
+      }),
+    );
+    setError(message.error);
+    return;
+  }
+
+  if (message.type === "result") {
+    updateMessages((messages) =>
+      updateResponseForQuestion({
+        messages,
+        questionId,
+        updateResponse: (response) => ({
+          ...response,
+          text: response.text || message.result || "",
+          isStreaming: false,
+        }),
+      }),
+    );
+  }
+}
+
+async function processAIChatStream(
+  response: Response,
+  handlers: StreamMessageHandlers,
+): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error(`HTTP ${response.status}`);
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ") || line.slice(6) === "[DONE]") continue;
+      try {
+        handleAIChatStreamMessage(decodeAIChatStreamMessage(JSON.parse(line.slice(6))), handlers);
+      } catch {
+        // Ignore malformed SSE lines.
+      }
+    }
+  }
+}
+
 export function useAIChat({
   context,
   providerId,
@@ -240,102 +377,32 @@ export function useAIChat({
           throw new Error(error ?? `HTTP ${res.status}`);
         }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          const lines = buffer.split("\n");
-          buffer = lines.pop()!;
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6);
-            if (data === "[DONE]") continue;
-
-            try {
-              const msg = decodeAIChatStreamMessage(JSON.parse(data));
-              if (!msg) continue;
-
-              if (msg.type === "text_delta") {
-                updateMessages((prev) =>
-                  prev.map((m) =>
-                    m.question.id === questionId
-                      ? { ...m, response: { ...m.response, text: m.response.text + msg.delta } }
-                      : m,
-                  ),
-                );
-              } else if (msg.type === "text") {
-                updateMessages((prev) =>
-                  prev.map((m) =>
-                    m.question.id === questionId && !m.response.text
-                      ? { ...m, response: { ...m.response, text: msg.text } }
-                      : m,
-                  ),
-                );
-              } else if (msg.type === "permission_request") {
-                updatePermissions((prev) => [
-                  ...prev,
-                  {
-                    requestId: msg.requestId,
-                    toolName: msg.toolName,
-                    toolInput: msg.toolInput,
-                    title: msg.title,
-                    displayName: msg.displayName,
-                    description: msg.description,
-                    toolUseId: msg.toolUseId,
-                  },
-                ]);
-              } else if (msg.type === "error") {
-                updateMessages((prev) =>
-                  prev.map((m) =>
-                    m.question.id === questionId
-                      ? { ...m, response: { ...m.response, error: msg.error, isStreaming: false } }
-                      : m,
-                  ),
-                );
-                setError(msg.error);
-              } else if (msg.type === "result") {
-                updateMessages((prev) =>
-                  prev.map((m) => {
-                    if (m.question.id !== questionId) return m;
-                    const resultText = msg.result ?? "";
-                    return {
-                      ...m,
-                      response: {
-                        ...m.response,
-                        text: m.response.text || resultText,
-                        isStreaming: false,
-                      },
-                    };
-                  }),
-                );
-              }
-            } catch {
-              // Ignore malformed SSE lines.
-            }
-          }
-        }
+        await processAIChatStream(res, {
+          questionId,
+          updateMessages,
+          updatePermissions,
+          setError,
+        });
 
         updateMessages((prev) =>
-          prev.map((m) =>
-            m.question.id === questionId && m.response.isStreaming
-              ? { ...m, response: { ...m.response, isStreaming: false } }
-              : m,
-          ),
+          updateResponseForQuestion({
+            messages: prev,
+            questionId,
+            updateResponse: (response) =>
+              response.isStreaming ? { ...response, isStreaming: false } : response,
+          }),
         );
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           updateMessages((prev) =>
-            prev.map((m) =>
-              m.question.id === questionId
-                ? { ...m, response: { ...m.response, isStreaming: false } }
-                : m,
-            ),
+            updateResponseForQuestion({
+              messages: prev,
+              questionId,
+              updateResponse: (response) => ({
+                ...response,
+                isStreaming: false,
+              }),
+            }),
           );
           return;
         }
@@ -343,11 +410,15 @@ export function useAIChat({
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         updateMessages((prev) =>
-          prev.map((m) =>
-            m.question.id === questionId
-              ? { ...m, response: { ...m.response, error: message, isStreaming: false } }
-              : m,
-          ),
+          updateResponseForQuestion({
+            messages: prev,
+            questionId,
+            updateResponse: (response) => ({
+              ...response,
+              error: message,
+              isStreaming: false,
+            }),
+          }),
         );
       } finally {
         if (abortRef.current === controller) {
