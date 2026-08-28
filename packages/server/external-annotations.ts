@@ -74,6 +74,124 @@ export function createExternalAnnotationHandler(
     }
   });
 
+  const handleStream = (disableIdleTimeout?: () => void): Response => {
+    disableIdleTimeout?.();
+
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let ctrl: ReadableStreamDefaultController;
+
+    const stream = new ReadableStream({
+      start(controller) {
+        ctrl = controller;
+
+        // Send current state as snapshot
+        const snapshot: ExternalAnnotationEvent<StorableAnnotation> = {
+          type: "snapshot",
+          annotations: store.getAll(),
+        };
+        controller.enqueue(encoder.encode(serializeSSEEvent(snapshot)));
+
+        subscribers.add(controller);
+
+        // Heartbeat to keep connection alive
+        heartbeatTimer = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(HEARTBEAT_COMMENT));
+          } catch {
+            // Stream closed
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
+            subscribers.delete(controller);
+          }
+        }, HEARTBEAT_INTERVAL_MS);
+      },
+      cancel() {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        subscribers.delete(ctrl);
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  };
+
+  const handleSnapshot = (url: URL): Response => {
+    const since = url.searchParams.get("since");
+    if (since !== null) {
+      const sinceVersion = parseInt(since, 10);
+      if (!isNaN(sinceVersion) && sinceVersion === store.version) {
+        return new Response(null, { status: 304 });
+      }
+    }
+    return Response.json({
+      annotations: store.getAll(),
+      version: store.version,
+    });
+  };
+
+  const handleCreate = async (req: Request): Promise<Response> => {
+    try {
+      const body = Option.getOrUndefined(
+        Schema.decodeUnknownOption(ParsedRequestBodySchema)(await req.json()),
+      );
+      if (!body) {
+        return Response.json({ error: "Invalid JSON" }, { status: 400 });
+      }
+      const parsed = transform(body);
+
+      if ("error" in parsed) {
+        return Response.json({ error: parsed.error }, { status: 400 });
+      }
+
+      const created = store.add(parsed.annotations);
+      return Response.json({ ids: created.map((a) => a.id) }, { status: 201 });
+    } catch {
+      return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+  };
+
+  const handleUpdate = async (req: Request, url: URL): Promise<Response> => {
+    const id = url.searchParams.get("id");
+    if (!id) {
+      return Response.json({ error: "Missing ?id parameter" }, { status: 400 });
+    }
+    try {
+      const patch = decodeExternalAnnotationPatch(mode, await req.json());
+      if (!patch) {
+        return Response.json({ error: "Invalid JSON" }, { status: 400 });
+      }
+      const updated = store.update(id, patch);
+      if (!updated) {
+        return Response.json({ error: "Not found" }, { status: 404 });
+      }
+      return Response.json({ annotation: updated });
+    } catch {
+      return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+  };
+
+  const handleDelete = (url: URL): Response => {
+    const id = url.searchParams.get("id");
+    const source = url.searchParams.get("source");
+
+    if (id) {
+      store.remove(id);
+      return Response.json({ ok: true });
+    }
+
+    if (source) {
+      const count = store.clearBySource(source);
+      return Response.json({ ok: true, removed: count });
+    }
+
+    const count = store.clearAll();
+    return Response.json({ ok: true, removed: count });
+  };
+
   return {
     addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
       const parsed = transform(body);
@@ -89,125 +207,27 @@ export function createExternalAnnotationHandler(
     ): Promise<Response | null> {
       // --- SSE stream ---
       if (url.pathname === STREAM && req.method === "GET") {
-        options?.disableIdleTimeout?.();
-
-        let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-        let ctrl: ReadableStreamDefaultController;
-
-        const stream = new ReadableStream({
-          start(controller) {
-            ctrl = controller;
-
-            // Send current state as snapshot
-            const snapshot: ExternalAnnotationEvent<StorableAnnotation> = {
-              type: "snapshot",
-              annotations: store.getAll(),
-            };
-            controller.enqueue(encoder.encode(serializeSSEEvent(snapshot)));
-
-            subscribers.add(controller);
-
-            // Heartbeat to keep connection alive
-            heartbeatTimer = setInterval(() => {
-              try {
-                controller.enqueue(encoder.encode(HEARTBEAT_COMMENT));
-              } catch {
-                // Stream closed
-                if (heartbeatTimer) clearInterval(heartbeatTimer);
-                subscribers.delete(controller);
-              }
-            }, HEARTBEAT_INTERVAL_MS);
-          },
-          cancel() {
-            if (heartbeatTimer) clearInterval(heartbeatTimer);
-            subscribers.delete(ctrl);
-          },
-        });
-
-        return new Response(stream, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive",
-          },
-        });
+        return handleStream(options?.disableIdleTimeout);
       }
 
       // --- GET snapshot (polling fallback) ---
       if (url.pathname === BASE && req.method === "GET") {
-        const since = url.searchParams.get("since");
-        if (since !== null) {
-          const sinceVersion = parseInt(since, 10);
-          if (!isNaN(sinceVersion) && sinceVersion === store.version) {
-            return new Response(null, { status: 304 });
-          }
-        }
-        return Response.json({
-          annotations: store.getAll(),
-          version: store.version,
-        });
+        return handleSnapshot(url);
       }
 
       // --- POST (add single or batch) ---
       if (url.pathname === BASE && req.method === "POST") {
-        try {
-          const body = Option.getOrUndefined(
-            Schema.decodeUnknownOption(ParsedRequestBodySchema)(await req.json()),
-          );
-          if (!body) {
-            return Response.json({ error: "Invalid JSON" }, { status: 400 });
-          }
-          const parsed = transform(body);
-
-          if ("error" in parsed) {
-            return Response.json({ error: parsed.error }, { status: 400 });
-          }
-
-          const created = store.add(parsed.annotations);
-          return Response.json({ ids: created.map((a) => a.id) }, { status: 201 });
-        } catch {
-          return Response.json({ error: "Invalid JSON" }, { status: 400 });
-        }
+        return handleCreate(req);
       }
 
       // --- PATCH (update fields on a single annotation) ---
       if (url.pathname === BASE && req.method === "PATCH") {
-        const id = url.searchParams.get("id");
-        if (!id) {
-          return Response.json({ error: "Missing ?id parameter" }, { status: 400 });
-        }
-        try {
-          const patch = decodeExternalAnnotationPatch(mode, await req.json());
-          if (!patch) {
-            return Response.json({ error: "Invalid JSON" }, { status: 400 });
-          }
-          const updated = store.update(id, patch);
-          if (!updated) {
-            return Response.json({ error: "Not found" }, { status: 404 });
-          }
-          return Response.json({ annotation: updated });
-        } catch {
-          return Response.json({ error: "Invalid JSON" }, { status: 400 });
-        }
+        return handleUpdate(req, url);
       }
 
       // --- DELETE (by id, by source, or clear all) ---
       if (url.pathname === BASE && req.method === "DELETE") {
-        const id = url.searchParams.get("id");
-        const source = url.searchParams.get("source");
-
-        if (id) {
-          store.remove(id);
-          return Response.json({ ok: true });
-        }
-
-        if (source) {
-          const count = store.clearBySource(source);
-          return Response.json({ ok: true, removed: count });
-        }
-
-        const count = store.clearAll();
-        return Response.json({ ok: true, removed: count });
+        return handleDelete(url);
       }
 
       // Not handled — pass through
