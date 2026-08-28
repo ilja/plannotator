@@ -92,6 +92,12 @@ export interface SourceBackedDocumentSaveCommand {
   overwriteDiskConflict?: boolean;
 }
 
+interface SourceBackedDocumentSavePlan {
+  sourceSave: EnabledSourceSaveCapability;
+  savedChangeBaseText?: string;
+  savedChangeBaseHash?: string;
+}
+
 export interface SourceBackedDocumentDiskSnapshotInput {
   key: string;
   text: string;
@@ -217,6 +223,20 @@ function cleanOrDirty(record: SourceBackedDocumentRecord): SourceBackedDocumentS
   return recordIsDirty(record) ? "dirty" : "clean";
 }
 
+function createSourceBackedDocumentSavePlan(
+  record: SourceBackedDocumentRecord & { sourceSave: EnabledSourceSaveCapability },
+  command: SourceBackedDocumentSaveCommand,
+): SourceBackedDocumentSavePlan {
+  if (command.overwriteDiskConflict && record.diskConflict) {
+    return {
+      sourceSave: record.diskConflict.sourceSave,
+      savedChangeBaseText: record.diskConflict.text,
+      savedChangeBaseHash: record.diskConflict.sourceSave.hash,
+    };
+  }
+  return { sourceSave: record.sourceSave };
+}
+
 function cloneRecord(record: SourceBackedDocumentRecord): SourceBackedDocumentRecord {
   return {
     ...record,
@@ -329,6 +349,33 @@ async function validateSourceBackedSavedFileChanges(
   }
 
   return { valid, dropped, unverified };
+}
+
+async function readSourceBackedDocumentSnapshot(
+  readSourceDocument: SourceBackedDocumentLifecycleAdapters["readSourceDocument"],
+  path: string,
+): Promise<SourceDocumentSnapshotResult> {
+  try {
+    return await readSourceDocument(path);
+  } catch {
+    return { status: "unavailable" };
+  }
+}
+
+function getSourceBackedDocumentObservationIgnoreReason(
+  record: SourceBackedDocumentRecord | undefined,
+  expectedDiskHash: string | undefined,
+  expectedSequence: number,
+  currentSequence: number | undefined,
+):
+  | Extract<SourceBackedDocumentLifecycleOutcome, { type: "disk-observation-ignored" }>["reason"]
+  | null {
+  if (currentSequence !== expectedSequence) return "stale-sequence";
+  if (!record) return "record-missing";
+  if (record.saveStatus === "saving") return "saving";
+  return canApplySourceBackedDocumentDiskSnapshot(record, expectedDiskHash)
+    ? null
+    : "known-disk-hash-changed";
 }
 
 export function markSourceBackedDocumentSaved(
@@ -850,40 +897,23 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
         const expectedDiskHash = getSourceBackedDocumentKnownDiskHash(startRecord);
         const sequence = (reconcileSequenceRef.current.get(document.key) ?? 0) + 1;
         reconcileSequenceRef.current.set(document.key, sequence);
-        let snapshotResult: SourceDocumentSnapshotResult;
-        try {
-          snapshotResult = await readSourceDocument(document.sourceSave.path);
-        } catch {
-          snapshotResult = { status: "unavailable" };
-        }
-
-        if (reconcileSequenceRef.current.get(document.key) !== sequence) {
-          outcomes.push({
-            type: "disk-observation-ignored",
-            key: document.key,
-            reason: "stale-sequence",
-          });
-          continue;
-        }
+        const snapshotResult = await readSourceBackedDocumentSnapshot(
+          readSourceDocument,
+          document.sourceSave.path,
+        );
 
         const currentRecord = docsRef.current.get(document.key);
-        if (!currentRecord) {
+        const ignoreReason = getSourceBackedDocumentObservationIgnoreReason(
+          currentRecord,
+          expectedDiskHash,
+          sequence,
+          reconcileSequenceRef.current.get(document.key),
+        );
+        if (ignoreReason) {
           outcomes.push({
             type: "disk-observation-ignored",
             key: document.key,
-            reason: "record-missing",
-          });
-          continue;
-        }
-        if (currentRecord.saveStatus === "saving") {
-          outcomes.push({ type: "disk-observation-ignored", key: document.key, reason: "saving" });
-          continue;
-        }
-        if (!canApplySourceBackedDocumentDiskSnapshot(currentRecord, expectedDiskHash)) {
-          outcomes.push({
-            type: "disk-observation-ignored",
-            key: document.key,
-            reason: "known-disk-hash-changed",
+            reason: ignoreReason,
           });
           continue;
         }
@@ -958,16 +988,7 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
 
       const normalizedText = normalizeDocumentText(input.text);
       record.currentText = normalizedText;
-      const baseSourceSave =
-        input.overwriteDiskConflict && record.diskConflict
-          ? record.diskConflict.sourceSave
-          : record.sourceSave;
-      const savedChangeBaseText = input.overwriteDiskConflict
-        ? record.diskConflict?.text
-        : undefined;
-      const savedChangeBaseHash = input.overwriteDiskConflict
-        ? record.diskConflict?.sourceSave.hash
-        : undefined;
+      const savePlan = createSourceBackedDocumentSavePlan(record, input);
       record.saveStatus = "saving";
       record.error = undefined;
       bump();
@@ -975,11 +996,11 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
       let saveResult: SourceDocumentSaveResult;
       try {
         saveResult = await saveSourceDocumentAdapter({
-          path: baseSourceSave.scope === "folder-file" ? baseSourceSave.path : undefined,
+          path: savePlan.sourceSave.scope === "folder-file" ? savePlan.sourceSave.path : undefined,
           text: normalizedText,
-          baseHash: baseSourceSave.hash,
-          baseMtimeMs: baseSourceSave.mtimeMs,
-          baseEol: baseSourceSave.eol,
+          baseHash: savePlan.sourceSave.hash,
+          baseMtimeMs: savePlan.sourceSave.mtimeMs,
+          baseEol: savePlan.sourceSave.eol,
           allowMissingBase: true,
         });
       } catch {
@@ -990,9 +1011,9 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
         markSourceBackedDocumentSaved(record, {
           key: input.key,
           text: normalizedText,
-          sourceSave: { ...baseSourceSave, ...saveResult.sourceSave },
-          savedChangeBaseText,
-          savedChangeBaseHash,
+          sourceSave: { ...savePlan.sourceSave, ...saveResult.sourceSave },
+          savedChangeBaseText: savePlan.savedChangeBaseText,
+          savedChangeBaseHash: savePlan.savedChangeBaseHash,
         });
         bump();
         return { type: "save-succeeded", record: cloneRecord(record) };
@@ -1001,7 +1022,7 @@ export function useSourceBackedDocuments(options: SourceBackedDocumentLifecycleO
       if (saveResult.status === "conflict") {
         const previousText = record.currentText;
         const conflictSourceSave: EnabledSourceSaveCapability = {
-          ...baseSourceSave,
+          ...savePlan.sourceSave,
           hash: saveResult.snapshot.hash,
           mtimeMs: saveResult.snapshot.mtimeMs,
           size: saveResult.snapshot.size,
