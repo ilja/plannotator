@@ -73,7 +73,7 @@ import {
   needsLookAndFeelAnnouncement,
 } from "@plannotator/ui/utils/lookAndFeelAnnouncement";
 import { buildDefaultPrompt, useAIChat } from "@plannotator/ui/hooks/useAIChat";
-import { getUIPreferences, type PlanWidth } from "@plannotator/ui/utils/uiPreferences";
+import { getUIPreferences } from "@plannotator/ui/utils/uiPreferences";
 import { getEditorMode, saveEditorMode } from "@plannotator/ui/utils/editorMode";
 import { getInputMethod, saveInputMethod } from "@plannotator/ui/utils/inputMethod";
 import { useInputMethodSwitch } from "@plannotator/ui/hooks/useInputMethodSwitch";
@@ -166,6 +166,19 @@ import {
   normalizeMessageAnnotationState,
   type MessageAnnotationState,
 } from "./messageAnnotationSession";
+import {
+  buildAnnotationFeedbackHeading,
+  buildCompletionSubtitle,
+  buildCompletionTitle,
+  buildDraftBannerMessage,
+  buildFeedbackLossDescription,
+  getActionsLabelMode,
+  getBackLabel,
+  getPlanMaxWidth,
+  getViewerContentKey,
+  type AnnotateSource,
+  type SubmissionStatus,
+} from "./appPresentation";
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -217,26 +230,6 @@ const buildSourceBackedDraftRestorePlan = (
 function getHTMLElementTarget(target: EventTarget | null): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
-
-const draftBannerMessage = (banner: {
-  count: number;
-  timeAgo: string;
-  hasEdits: boolean;
-}): string => {
-  const parts = [
-    banner.count > 0 ? `${banner.count} annotation${banner.count !== 1 ? "s" : ""}` : "",
-    banner.hasEdits ? "unsent direct edits" : "",
-  ].filter(Boolean);
-  return `Found ${parts.join(" and ")} from ${banner.timeAgo}. Would you like to restore them?`;
-};
-
-const feedbackLossDescription = (annotationCount: number, hasDirectEdits: boolean): string => {
-  const parts = [
-    annotationCount > 0 ? `${annotationCount} annotation${annotationCount !== 1 ? "s" : ""}` : "",
-    hasDirectEdits ? "direct edits" : "",
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" and ") : "feedback";
-};
 
 type SourceFileEditWarningAction = "send-feedback" | "approve" | "close";
 
@@ -387,7 +380,7 @@ const App: React.FC = () => {
   const [globalAttachments, setGlobalAttachments] = useState<ImageAttachment[]>([]);
   const [annotateMode, setAnnotateMode] = useState(false);
   const [gate, setGate] = useState(false);
-  const [annotateSource, setAnnotateSource] = useState<"file" | "message" | "folder" | null>(null);
+  const [annotateSource, setAnnotateSource] = useState<AnnotateSource>(null);
   const [recentMessages, setRecentMessages] = useState<PickerMessage[]>([]);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const messageStateCacheRef = useRef<Map<string, MessageAnnotationState>>(new Map());
@@ -413,7 +406,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-  const [submitted, setSubmitted] = useState<"approved" | "denied" | "exited" | null>(null);
+  const [submitted, setSubmitted] = useState<SubmissionStatus>(null);
   const [pendingPasteImage, setPendingPasteImage] = useState<{
     file: File;
     blobUrl: string;
@@ -1211,24 +1204,19 @@ const App: React.FC = () => {
   }, [allAnnotationCounts, openSidebarTab, sidebar, hasFileAnnotations]);
 
   // Context-aware back label for linked doc navigation
-  const backLabel =
-    annotateSource === "folder"
-      ? "file list"
-      : annotateSource === "file"
-        ? "file"
-        : annotateSource === "message"
-          ? "message"
-          : "document";
+  const backLabel = getBackLabel(annotateSource);
 
   // Viewer identity must change when the rendered document changes: web-highlighter
   // mutates the Viewer DOM, so reconciling new content against the old subtree throws
   // removeChild errors — a changed key remounts it cleanly instead. StickyHeaderLane
   // observes a node inside Viewer, so it re-anchors off the same token.
-  const viewerContentKey = linkedDocHook.isActive
-    ? `doc:${linkedDocHook.filepath}`
-    : annotateSource === "message" && selectedMessageId
-      ? `msg:${selectedMessageId}`
-      : `plan:${editGeneration}`;
+  const viewerContentKey = getViewerContentKey(
+    linkedDocHook.isActive,
+    linkedDocHook.filepath,
+    annotateSource,
+    selectedMessageId,
+    editGeneration,
+  );
 
   // Track active section for TOC highlighting
   const headingCount = useMemo(() => blocks.filter((b) => b.type === "heading").length, [blocks]);
@@ -1351,13 +1339,7 @@ const App: React.FC = () => {
           blocks,
           allAnnotations,
           globalAttachments,
-          annotateSource === "message"
-            ? "Message Feedback"
-            : annotateSource === "folder"
-              ? "Folder Feedback"
-              : annotateSource === "file"
-                ? "File Feedback"
-                : "Document Feedback",
+          buildAnnotationFeedbackHeading(annotateSource),
           annotateSource ?? "file",
           { sourceConverted: activeConverted },
         )
@@ -1495,11 +1477,9 @@ const App: React.FC = () => {
 
     const el = planAreaRef.current;
     if (!el) return;
-    const bucket = (w: number): ActionsLabelMode =>
-      w >= 800 ? "full" : w >= 680 ? "short" : "icon";
-    setActionsLabelMode(bucket(el.getBoundingClientRect().width));
+    setActionsLabelMode(getActionsLabelMode(el.getBoundingClientRect().width));
     const ro = new ResizeObserver(([entry]) => {
-      const next = bucket(entry.contentRect.width);
+      const next = getActionsLabelMode(entry.contentRect.width);
       setActionsLabelMode((prev) => (prev === next ? prev : next));
     });
     ro.observe(el);
@@ -2196,7 +2176,7 @@ const App: React.FC = () => {
     (isEditingMarkdown ? editorDiffersFromBaseline : editedMarkdownRef.current !== null);
   const hasSavedFileChanges = savedFileChanges.length > 0;
   const hasFeedbackContent = hasAnyAnnotations || hasDirectEdits || hasSavedFileChanges;
-  const feedbackLoss = feedbackLossDescription(feedbackAnnotationCount, hasDirectEdits);
+  const feedbackLoss = buildFeedbackLossDescription(feedbackAnnotationCount, hasDirectEdits);
   const hasUnsentFeedback = feedbackAnnotationCount > 0 || hasDirectEdits;
   const hasOnlySavedFileChanges = hasSavedFileChanges && !hasUnsentFeedback;
   const savedFileChangesLabel =
@@ -3814,13 +3794,7 @@ const App: React.FC = () => {
     [],
   );
 
-  const planMaxWidth = useMemo(() => {
-    const widths = { compact: 832, default: 1040, wide: 1280 } as const satisfies Record<
-      PlanWidth,
-      number
-    >;
-    return widths[uiPrefs.planWidth];
-  }, [uiPrefs.planWidth]);
+  const planMaxWidth = useMemo(() => getPlanMaxWidth(uiPrefs.planWidth), [uiPrefs.planWidth]);
   const annotateReaderMaxWidth = canUseWideMode && wideModeType === "wide" ? null : planMaxWidth;
   const _selectedAIProvider =
     aiProviders.find((provider) => provider.id === aiConfig.providerId) ?? null;
@@ -4102,7 +4076,15 @@ const App: React.FC = () => {
                   onClose={dismissDraft}
                   onConfirm={handleRestoreDraft}
                   title="Draft Recovered"
-                  message={draftBanner ? draftBannerMessage(draftBanner) : ""}
+                  message={
+                    draftBanner
+                      ? buildDraftBannerMessage(
+                          draftBanner.count,
+                          draftBanner.timeAgo,
+                          draftBanner.hasEdits,
+                        )
+                      : ""
+                  }
                   confirmText="Restore"
                   cancelText="Dismiss"
                   showCancel
@@ -4725,20 +4707,8 @@ const App: React.FC = () => {
           {/* Completion overlay - shown after approve/deny */}
           <CompletionOverlay
             submitted={submitted}
-            title={
-              submitted === "exited"
-                ? "Session Closed"
-                : submitted === "approved"
-                  ? "Approved"
-                  : "Feedback Sent"
-            }
-            subtitle={
-              submitted === "exited"
-                ? "Annotation session closed without feedback."
-                : submitted === "approved"
-                  ? `${agentName} will proceed.`
-                  : `${agentName} will address your feedback on the ${annotateSource === "message" ? "message" : annotateSource === "folder" ? "files" : "file"}.`
-            }
+            title={buildCompletionTitle(submitted)}
+            subtitle={buildCompletionSubtitle(submitted, agentName, annotateSource)}
             agentLabel={agentName}
           />
 
