@@ -498,9 +498,11 @@ function createAnnotateRouteHandlers(
       return true;
     },
     (_req, res, url) => {
-      if (url.pathname !== "/api/image") return false;
-      handleImageRequest(res, url);
-      return true;
+      if (url.pathname === "/api/image") {
+        handleImageRequest(res, url);
+        return true;
+      }
+      return false;
     },
     (_req, res, url) => htmlAssets.handle(res, url),
     async (req, res, url) => {
@@ -617,9 +619,11 @@ function createAnnotateRouteHandlers(
       return true;
     },
     (_req, res, url) => {
-      if (url.pathname !== "/api/obsidian/vaults") return false;
-      handleObsidianVaultsRequest(res);
-      return true;
+      if (url.pathname === "/api/obsidian/vaults") {
+        handleObsidianVaultsRequest(res);
+        return true;
+      }
+      return false;
     },
     (_req, res, url) => {
       if (url.pathname !== "/api/reference/obsidian/files" || _req.method !== "GET") return false;
@@ -642,9 +646,11 @@ function createAnnotateRouteHandlers(
       return true;
     },
     (_req, res, url) => {
-      if (url.pathname !== "/favicon.svg") return false;
-      handleFavicon(res);
-      return true;
+      if (url.pathname === "/favicon.svg") {
+        handleFavicon(res);
+        return true;
+      }
+      return false;
     },
     (req, res, url) => {
       if (url.pathname !== "/api/exit" || req.method !== "POST") return false;
