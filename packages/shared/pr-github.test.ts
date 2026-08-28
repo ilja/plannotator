@@ -36,43 +36,62 @@ interface GithubRuntimeResult {
   readonly calls: string[];
 }
 
-function githubRuntime(opts: {
-  prDiff: { stdout?: string; stderr?: string; exitCode: number };
-  files?: { stdout?: string; stderr?: string; exitCode: number };
-  view?: { stdout?: string; stderr?: string; exitCode: number };
-}): GithubRuntimeResult {
+interface GithubRuntimeOptions {
+  readonly prDiff: { stdout?: string; stderr?: string; exitCode: number };
+  readonly files?: { stdout?: string; stderr?: string; exitCode: number };
+  readonly view?: { stdout?: string; stderr?: string; exitCode: number };
+}
+
+function githubPullRequestCommandResult(args: string[], opts: GithubRuntimeOptions) {
+  if (args[0] === "pr" && args[1] === "diff") {
+    return {
+      stdout: opts.prDiff.stdout ?? "",
+      stderr: opts.prDiff.stderr ?? "",
+      exitCode: opts.prDiff.exitCode,
+    };
+  }
+  if (args[0] === "pr" && args[1] === "view") {
+    return {
+      stdout: opts.view?.stdout ?? VIEW_JSON,
+      stderr: opts.view?.stderr ?? "",
+      exitCode: opts.view?.exitCode ?? 0,
+    };
+  }
+  return null;
+}
+
+function githubApiCommandResult(args: string[], opts: GithubRuntimeOptions) {
+  if (args[0] !== "api") return null;
+  if (args[1]?.includes("/compare/")) {
+    return { stdout: `${"c".repeat(40)}\n`, stderr: "", exitCode: 0 };
+  }
+  if (args[1]?.includes("/pulls/123/files")) {
+    return {
+      stdout: opts.files?.stdout ?? "",
+      stderr: opts.files?.stderr ?? "",
+      exitCode: opts.files?.exitCode ?? 1,
+    };
+  }
+  return null;
+}
+
+function githubRuntimeCommandResult(args: string[], opts: GithubRuntimeOptions) {
+  const prResult = githubPullRequestCommandResult(args, opts);
+  if (prResult) return prResult;
+  if (args[0] === "repo" && args[1] === "view") {
+    return { stdout: "main\n", stderr: "", exitCode: 0 };
+  }
+  const apiResult = githubApiCommandResult(args, opts);
+  if (apiResult) return apiResult;
+  return { stdout: "", stderr: `unexpected command: ${args.join(" ")}`, exitCode: 1 };
+}
+
+function githubRuntime(opts: GithubRuntimeOptions): GithubRuntimeResult {
   const calls: string[] = [];
   const runtime: PRRuntime = {
     async runCommand(command, args) {
       calls.push([command, ...args].join(" "));
-      if (args[0] === "pr" && args[1] === "diff") {
-        return {
-          stdout: opts.prDiff.stdout ?? "",
-          stderr: opts.prDiff.stderr ?? "",
-          exitCode: opts.prDiff.exitCode,
-        };
-      }
-      if (args[0] === "pr" && args[1] === "view") {
-        return {
-          stdout: opts.view?.stdout ?? VIEW_JSON,
-          stderr: opts.view?.stderr ?? "",
-          exitCode: opts.view?.exitCode ?? 0,
-        };
-      }
-      if (args[0] === "repo" && args[1] === "view") {
-        return { stdout: "main\n", stderr: "", exitCode: 0 };
-      }
-      if (args[0] === "api" && args[1]?.includes("/compare/")) {
-        return { stdout: `${"c".repeat(40)}\n`, stderr: "", exitCode: 0 };
-      }
-      if (args[0] === "api" && args[1]?.includes("/pulls/123/files")) {
-        return {
-          stdout: opts.files?.stdout ?? "",
-          stderr: opts.files?.stderr ?? "",
-          exitCode: opts.files?.exitCode ?? 1,
-        };
-      }
-      return { stdout: "", stderr: `unexpected command: ${args.join(" ")}`, exitCode: 1 };
+      return githubRuntimeCommandResult(args, opts);
     },
   };
   return { runtime, calls };

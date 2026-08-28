@@ -310,6 +310,69 @@ function entryMissingContent(f: GitHubFileEntry): boolean {
   return !f.patch && f.status !== "renamed" && f.status !== "copied" && f.status !== "unchanged";
 }
 
+interface GhPatchResult {
+  readonly rawPatch: string;
+  readonly patchIncomplete: boolean;
+}
+
+async function fetchGhPatch(
+  runtime: PRRuntime,
+  ref: GhPRRef,
+  diffResult: CommandResult,
+  expectedFiles: number | undefined,
+): Promise<GhPatchResult> {
+  if (diffResult.exitCode === 0) {
+    return { rawPatch: diffResult.stdout, patchIncomplete: false };
+  }
+
+  const filesResult = await runtime.runCommand(
+    "gh",
+    hostnameArgs(ref.host, [
+      "api",
+      `repos/${ref.owner}/${ref.repo}/pulls/${ref.number}/files?per_page=100`,
+      "--paginate",
+    ]),
+  );
+  if (filesResult.exitCode !== 0) {
+    const diffErr = diffResult.stderr.trim() || `exit code ${diffResult.exitCode}`;
+    const filesErr = filesResult.stderr.trim() || `exit code ${filesResult.exitCode}`;
+    throw new Error(`Failed to fetch PR diff (pr diff: ${diffErr}; files API: ${filesErr}).`);
+  }
+
+  const parsedFiles = parsePaginatedArray(filesResult.stdout, decodeGitHubFileEntryForPagination);
+  const fileEntries = parsedFiles.items;
+  let patchIncomplete = false;
+  if (parsedFiles.rejected > 0) {
+    console.error(
+      `Warning: GitHub files API returned ${parsedFiles.rejected} malformed file entr${parsedFiles.rejected === 1 ? "y" : "ies"}; the review is missing the remainder.`,
+    );
+    patchIncomplete = true;
+  }
+
+  const rawPatch = reconstructGhPatch(fileEntries);
+  if (!rawPatch.trim()) {
+    throw new Error(
+      "PR diff is empty — it may be too large to fetch via the GitHub API. Review it on the GitHub web UI.",
+    );
+  }
+
+  if (expectedFiles !== undefined && fileEntries.length < expectedFiles) {
+    console.error(
+      `Warning: PR reports ${expectedFiles} changed files but the GitHub files API returned ${fileEntries.length} (the API caps at 3000). The review is missing the remainder.`,
+    );
+    patchIncomplete = true;
+  }
+  const missingContent = fileEntries.filter(entryMissingContent).length;
+  if (missingContent > 0) {
+    console.error(
+      `Warning: GitHub omitted diff content for ${missingContent} file(s) (PR too large). They appear in the review without hunks; the full diff can be recomputed locally once the checkout is ready.`,
+    );
+    patchIncomplete = true;
+  }
+
+  return { rawPatch, patchIncomplete };
+}
+
 export async function fetchGhPR(
   runtime: PRRuntime,
   ref: GhPRRef,
@@ -354,57 +417,10 @@ export async function fetchGhPR(
   // perfect fidelity. GitHub refuses to render it for very large PRs (406 /
   // "diff exceeded the maximum number of lines"); in that case fetch the same
   // diff file-by-file from the paginated files API and stitch it back together.
-  let rawPatch: string;
-  let patchIncomplete = false;
-  if (diffResult.exitCode === 0) {
-    rawPatch = diffResult.stdout;
-  } else {
-    const filesResult = await runtime.runCommand(
-      "gh",
-      hostnameArgs(ref.host, [
-        "api",
-        `repos/${ref.owner}/${ref.repo}/pulls/${ref.number}/files?per_page=100`,
-        "--paginate",
-      ]),
-    );
-    if (filesResult.exitCode !== 0) {
-      const diffErr = diffResult.stderr.trim() || `exit code ${diffResult.exitCode}`;
-      const filesErr = filesResult.stderr.trim() || `exit code ${filesResult.exitCode}`;
-      throw new Error(`Failed to fetch PR diff (pr diff: ${diffErr}; files API: ${filesErr}).`);
-    }
-    const parsedFiles = parsePaginatedArray(filesResult.stdout, decodeGitHubFileEntryForPagination);
-    const fileEntries = parsedFiles.items;
-    if (parsedFiles.rejected > 0) {
-      console.error(
-        `Warning: GitHub files API returned ${parsedFiles.rejected} malformed file entr${parsedFiles.rejected === 1 ? "y" : "ies"}; the review is missing the remainder.`,
-      );
-      patchIncomplete = true;
-    }
-    rawPatch = reconstructGhPatch(fileEntries);
-    if (!rawPatch.trim()) {
-      throw new Error(
-        "PR diff is empty — it may be too large to fetch via the GitHub API. Review it on the GitHub web UI.",
-      );
-    }
-    // The files API silently caps at 3000 files — never present a truncated
-    // review as complete.
-    const expectedFiles = Option.getOrUndefined(
-      Schema.decodeUnknownOption(Schema.Natural)(raw.changedFiles),
-    );
-    if (expectedFiles !== undefined && fileEntries.length < expectedFiles) {
-      console.error(
-        `Warning: PR reports ${expectedFiles} changed files but the GitHub files API returned ${fileEntries.length} (the API caps at 3000). The review is missing the remainder.`,
-      );
-      patchIncomplete = true;
-    }
-    const missingContent = fileEntries.filter(entryMissingContent).length;
-    if (missingContent > 0) {
-      console.error(
-        `Warning: GitHub omitted diff content for ${missingContent} file(s) (PR too large). They appear in the review without hunks; the full diff can be recomputed locally once the checkout is ready.`,
-      );
-      patchIncomplete = true;
-    }
-  }
+  const expectedFiles = Option.getOrUndefined(
+    Schema.decodeUnknownOption(Schema.Natural)(raw.changedFiles),
+  );
+  const patch = await fetchGhPatch(runtime, ref, diffResult, expectedFiles);
 
   // Fetch the merge-base SHA — the common ancestor commit GitHub uses to compute the PR diff.
   // baseSha (baseRefOid) is the tip of the base branch, which may have moved since the branch point.
@@ -447,7 +463,11 @@ export async function fetchGhPR(
     url: raw.url,
   };
 
-  return { metadata, rawPatch, ...(patchIncomplete && { patchIncomplete }) };
+  return {
+    metadata,
+    rawPatch: patch.rawPatch,
+    ...(patch.patchIncomplete && { patchIncomplete: true }),
+  };
 }
 
 // --- PR Context ---
