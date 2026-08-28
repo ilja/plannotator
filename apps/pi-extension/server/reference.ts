@@ -246,6 +246,229 @@ function includeWorkspaceFile(relativePath: string, _change: WorkspaceFileChange
   return FILE_BROWSER_EXTENSIONS.test(relativePath) && !isFileBrowserExcludedPath(relativePath);
 }
 
+function serveTrustedBaseDocument(
+  res: Res,
+  requestedPath: string,
+  resolvedBase: string | null,
+  allowedRoots: string[],
+  convert: boolean,
+  options: HandleDocOptions,
+): boolean {
+  if (
+    !resolvedBase ||
+    isAbsoluteUserPath(requestedPath) ||
+    !/\.(mdx?|txt|html?)$/i.test(requestedPath)
+  ) {
+    return false;
+  }
+  const fromBase = resolveUserPath(requestedPath, resolvedBase);
+  if (!isWithinAllowedRoots(fromBase, allowedRoots)) {
+    json(res, { error: "Access denied: path is outside project root" }, 403);
+    return true;
+  }
+  try {
+    if (!existsSync(fromBase)) return false;
+    const snapshot = readSourceFileSnapshot(fromBase);
+    const raw = snapshot.text;
+    const isHtml = /\.html?$/i.test(requestedPath);
+    if (isHtml && !convert) {
+      jsonDoc(res, { rawHtml: raw, renderAs: "html", filepath: fromBase }, options);
+      return true;
+    }
+    const markdown = isHtml ? htmlToMarkdown(raw) : raw;
+    jsonDoc(
+      res,
+      { markdown, filepath: fromBase, isConverted: isHtml, renderAs: "markdown" },
+      options,
+      undefined,
+      isHtml ? undefined : snapshot,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function serveHtmlDocument(
+  res: Res,
+  requestedPath: string,
+  resolvedBase: string | null,
+  projectRoot: string,
+  allowedRoots: string[],
+  convert: boolean,
+  options: HandleDocOptions,
+): boolean {
+  if (!/\.html?$/i.test(requestedPath)) return false;
+  const resolvedHtml = resolveUserPath(requestedPath, resolvedBase || projectRoot);
+  if (!isWithinAllowedRoots(resolvedHtml, allowedRoots)) {
+    json(res, { error: "Access denied: path is outside project root" }, 403);
+    return true;
+  }
+  try {
+    if (existsSync(resolvedHtml)) {
+      const html = readFileSync(resolvedHtml, "utf-8");
+      if (!convert) {
+        jsonDoc(res, { rawHtml: html, renderAs: "html", filepath: resolvedHtml }, options);
+        return true;
+      }
+      jsonDoc(
+        res,
+        {
+          markdown: htmlToMarkdown(html),
+          filepath: resolvedHtml,
+          isConverted: true,
+          renderAs: "markdown",
+        },
+        options,
+      );
+      return true;
+    }
+  } catch {
+    // Fall through to the not-found response.
+  }
+  json(res, { error: `File not found: ${requestedPath}` }, 404);
+  return true;
+}
+
+type CodeDocumentResolution = RouteResolveResult | { kind: "access_denied" };
+
+async function resolveCodeDocument(
+  requestedPath: string,
+  allowedRoots: string[],
+  resolvedBase: string | null,
+): Promise<CodeDocumentResolution> {
+  const parsed = parseCodePath(requestedPath);
+  const cleanPath = parsed.filePath;
+  const literalPath = resolveUserPath(cleanPath, resolvedBase || allowedRoots[0]);
+  if (isWithinAllowedRoots(literalPath, allowedRoots) && existsSync(literalPath)) {
+    return { kind: "found", path: literalPath };
+  }
+  if (
+    isAbsoluteUserPath(cleanPath) &&
+    !isWithinAllowedRoots(resolveUserPath(cleanPath), allowedRoots)
+  ) {
+    return { kind: "access_denied" };
+  }
+  return resolveCodeFileFromAllowedRoots(cleanPath, allowedRoots, resolvedBase);
+}
+
+async function serveResolvedCodeDocument(
+  res: Res,
+  requestedPath: string,
+  parsed: ReturnType<typeof parseCodePath>,
+  resolvedCode: string,
+): Promise<void> {
+  try {
+    const stat = statSync(resolvedCode);
+    if (stat.size > 2 * 1024 * 1024) {
+      json(res, { error: "File too large (max 2MB)" }, 413);
+      return;
+    }
+    const contents = readFileSync(resolvedCode, "utf-8");
+    const displayName = resolvedCode.split("/").pop() || resolvedCode;
+    let prerenderedHTML: string | undefined;
+    try {
+      const result = await preloadFile({
+        file: { name: displayName, contents },
+        options: { disableFileHeader: true },
+      });
+      prerenderedHTML = result.prerenderedHTML;
+    } catch {
+      // Fall back to client-side rendering.
+    }
+    json(res, {
+      codeFile: true,
+      contents,
+      filepath: resolvedCode,
+      prerenderedHTML,
+      line: parsed.line,
+      lineEnd: parsed.lineEnd,
+    });
+  } catch {
+    json(res, { error: `File not found: ${requestedPath}` }, 404);
+  }
+}
+
+async function serveCodeDocument(
+  res: Res,
+  requestedPath: string,
+  allowedRoots: string[],
+  resolvedBase: string | null,
+): Promise<boolean> {
+  if (!isCodeFilePath(requestedPath)) return false;
+  const parsed = parseCodePath(requestedPath);
+  const result = await resolveCodeDocument(requestedPath, allowedRoots, resolvedBase);
+  if (result.kind === "access_denied") {
+    json(res, { error: "Access denied: path is outside project root" }, 403);
+    return true;
+  }
+  if (result.kind === "ambiguous") {
+    json(
+      res,
+      {
+        error: `Ambiguous path '${requestedPath}'`,
+        matches: result.matches.map((match) => relativizeToAllowedRoots(match, allowedRoots)),
+      },
+      400,
+    );
+    return true;
+  }
+  if (result.kind === "unavailable") {
+    json(res, { error: `Cannot scan project: ${requestedPath}`, reason: "unavailable" }, 503);
+    return true;
+  }
+  if (result.kind === "not_found") {
+    json(res, { error: `File not found: ${requestedPath}` }, 404);
+    return true;
+  }
+  if (!isWithinAllowedRoots(result.path, allowedRoots)) {
+    json(res, { error: "Access denied: path is outside project root" }, 403);
+    return true;
+  }
+  await serveResolvedCodeDocument(res, requestedPath, parsed, result.path);
+  return true;
+}
+
+function serveMarkdownResolution(
+  res: Res,
+  requestedPath: string,
+  result: RouteResolveResult,
+  allowedRoots: string[],
+  options: HandleDocOptions,
+): void {
+  if (result.kind === "ambiguous") {
+    json(
+      res,
+      {
+        error: `Ambiguous filename '${result.input}': found ${result.matches.length} matches`,
+        matches: result.matches.map((match) => relativizeToAllowedRoots(match, allowedRoots)),
+      },
+      400,
+    );
+    return;
+  }
+  if (result.kind === "unavailable") {
+    json(res, { error: `Cannot scan project: ${result.input}`, reason: "unavailable" }, 503);
+    return;
+  }
+  if (result.kind === "not_found") {
+    json(res, { error: `File not found: ${result.input}` }, 404);
+    return;
+  }
+  try {
+    const snapshot = readSourceFileSnapshot(result.path);
+    jsonDoc(
+      res,
+      { markdown: snapshot.text, filepath: result.path, renderAs: "markdown" },
+      options,
+      undefined,
+      snapshot,
+    );
+  } catch {
+    json(res, { error: "Failed to read file" }, 500);
+  }
+}
+
 /** Serve a linked markdown document. Uses shared resolveMarkdownFile for parity with Bun server. */
 export async function handleDocRequest(
   res: Res,
@@ -268,148 +491,18 @@ export async function handleDocRequest(
   const base = url.searchParams.get("base");
   const resolvedBase = getTrustedBaseDir(base, allowedRoots);
   const convert = url.searchParams.get("convert") === "1";
-  if (
-    resolvedBase &&
-    !isAbsoluteUserPath(requestedPath) &&
-    /\.(mdx?|txt|html?)$/i.test(requestedPath)
-  ) {
-    const fromBase = resolveUserPath(requestedPath, resolvedBase);
-    if (!isWithinAllowedRoots(fromBase, allowedRoots)) {
-      json(res, { error: "Access denied: path is outside project root" }, 403);
-      return;
-    }
-    try {
-      if (existsSync(fromBase)) {
-        const snapshot = readSourceFileSnapshot(fromBase);
-        const raw = snapshot.text;
-        const isHtml = /\.html?$/i.test(requestedPath);
-        if (isHtml && !convert) {
-          jsonDoc(res, { rawHtml: raw, renderAs: "html", filepath: fromBase }, options);
-          return;
-        }
-        const markdown = isHtml ? htmlToMarkdown(raw) : raw;
-        jsonDoc(
-          res,
-          { markdown, filepath: fromBase, isConverted: isHtml, renderAs: "markdown" },
-          options,
-          undefined,
-          isHtml ? undefined : snapshot,
-        );
-        return;
-      }
-    } catch {
-      /* fall through to standard resolution */
-    }
-  }
+  if (serveTrustedBaseDocument(res, requestedPath, resolvedBase, allowedRoots, convert, options))
+    return;
 
   // HTML files: resolve directly (not via resolveMarkdownFile which only handles .md/.mdx)
   const projectRoot = allowedRoots[0];
-  if (/\.html?$/i.test(requestedPath)) {
-    const resolvedHtml = resolveUserPath(requestedPath, resolvedBase || projectRoot);
-    if (!isWithinAllowedRoots(resolvedHtml, allowedRoots)) {
-      json(res, { error: "Access denied: path is outside project root" }, 403);
-      return;
-    }
-    try {
-      if (existsSync(resolvedHtml)) {
-        const html = readFileSync(resolvedHtml, "utf-8");
-        if (!convert) {
-          jsonDoc(res, { rawHtml: html, renderAs: "html", filepath: resolvedHtml }, options);
-          return;
-        }
-        jsonDoc(
-          res,
-          {
-            markdown: htmlToMarkdown(html),
-            filepath: resolvedHtml,
-            isConverted: true,
-            renderAs: "markdown",
-          },
-          options,
-        );
-        return;
-      }
-    } catch {
-      /* fall through to 404 */
-    }
-    json(res, { error: `File not found: ${requestedPath}` }, 404);
+  if (
+    serveHtmlDocument(res, requestedPath, resolvedBase, projectRoot, allowedRoots, convert, options)
+  )
     return;
-  }
 
   // Code files: try literal resolve first; on miss, fall back to smart resolver.
-  if (isCodeFilePath(requestedPath)) {
-    const parsed = parseCodePath(requestedPath);
-    const cleanPath = parsed.filePath;
-    const literalPath = resolveUserPath(cleanPath, resolvedBase || projectRoot);
-    const literalAllowed = isWithinAllowedRoots(literalPath, allowedRoots);
-
-    let resolvedCode: string | null = null;
-    if (literalAllowed && existsSync(literalPath)) {
-      resolvedCode = literalPath;
-    }
-
-    if (!resolvedCode) {
-      if (
-        isAbsoluteUserPath(cleanPath) &&
-        !isWithinAllowedRoots(resolveUserPath(cleanPath), allowedRoots)
-      ) {
-        json(res, { error: "Access denied: path is outside project root" }, 403);
-        return;
-      }
-      const result = await resolveCodeFileFromAllowedRoots(cleanPath, allowedRoots, resolvedBase);
-      if (result.kind === "found") {
-        resolvedCode = result.path;
-      } else if (result.kind === "ambiguous") {
-        const relative = result.matches.map((m: string) =>
-          relativizeToAllowedRoots(m, allowedRoots),
-        );
-        json(res, { error: `Ambiguous path '${requestedPath}'`, matches: relative }, 400);
-        return;
-      } else if (result.kind === "unavailable") {
-        json(res, { error: `Cannot scan project: ${requestedPath}`, reason: "unavailable" }, 503);
-        return;
-      } else {
-        json(res, { error: `File not found: ${requestedPath}` }, 404);
-        return;
-      }
-      if (!isWithinAllowedRoots(resolvedCode, allowedRoots)) {
-        json(res, { error: "Access denied: path is outside project root" }, 403);
-        return;
-      }
-    }
-
-    try {
-      const stat = statSync(resolvedCode);
-      if (stat.size > 2 * 1024 * 1024) {
-        json(res, { error: "File too large (max 2MB)" }, 413);
-        return;
-      }
-      const contents = readFileSync(resolvedCode, "utf-8");
-      const displayName = resolvedCode.split("/").pop() || resolvedCode;
-      let prerenderedHTML: string | undefined;
-      try {
-        const result = await preloadFile({
-          file: { name: displayName, contents },
-          options: { disableFileHeader: true },
-        });
-        prerenderedHTML = result.prerenderedHTML;
-      } catch {
-        // Fall back to client-side rendering
-      }
-      json(res, {
-        codeFile: true,
-        contents,
-        filepath: resolvedCode,
-        prerenderedHTML,
-        line: parsed.line,
-        lineEnd: parsed.lineEnd,
-      });
-      return;
-    } catch {
-      json(res, { error: `File not found: ${requestedPath}` }, 404);
-      return;
-    }
-  }
+  if (await serveCodeDocument(res, requestedPath, allowedRoots, resolvedBase)) return;
 
   if (
     isAbsoluteUserPath(requestedPath) &&
@@ -419,41 +512,7 @@ export async function handleDocRequest(
     return;
   }
   const result = resolveMarkdownFileFromAllowedRoots(requestedPath, allowedRoots);
-
-  if (result.kind === "ambiguous") {
-    json(
-      res,
-      {
-        error: `Ambiguous filename '${result.input}': found ${result.matches.length} matches`,
-        matches: result.matches.map((m: string) => relativizeToAllowedRoots(m, allowedRoots)),
-      },
-      400,
-    );
-    return;
-  }
-
-  if (result.kind === "unavailable") {
-    json(res, { error: `Cannot scan project: ${result.input}`, reason: "unavailable" }, 503);
-    return;
-  }
-
-  if (result.kind === "not_found") {
-    json(res, { error: `File not found: ${result.input}` }, 404);
-    return;
-  }
-
-  try {
-    const snapshot = readSourceFileSnapshot(result.path);
-    jsonDoc(
-      res,
-      { markdown: snapshot.text, filepath: result.path, renderAs: "markdown" },
-      options,
-      undefined,
-      snapshot,
-    );
-  } catch {
-    json(res, { error: "Failed to read file" }, 500);
-  }
+  serveMarkdownResolution(res, requestedPath, result, allowedRoots, options);
 }
 
 /**
