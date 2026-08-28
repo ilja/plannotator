@@ -500,6 +500,40 @@ export function parseWorktreeDiffType(diffType: string): { path: string; subType
   return { path: rest, subType: "uncommitted" };
 }
 
+interface DiffExecutionContext {
+  readonly cwd: string | undefined;
+  readonly effectiveDiffType: string;
+}
+
+function resolveDiffExecutionContext(
+  diffType: DiffType,
+  externalCwd: string | undefined,
+): DiffExecutionContext | null {
+  if (!diffType.startsWith("worktree:")) {
+    return { cwd: externalCwd, effectiveDiffType: diffType };
+  }
+
+  const parsed = parseWorktreeDiffType(diffType);
+  if (!parsed) return null;
+  return { cwd: parsed.path, effectiveDiffType: parsed.subType };
+}
+
+function gitDiffFailureResult(
+  raw: string,
+  cwd: string | undefined,
+  diffType: DiffType,
+): DiffResult {
+  // Git dumps its entire --help output on some failures; keep only the
+  // first meaningful line so the UI doesn't vomit a wall of text.
+  const firstLine = raw.split("\n").find((line) => line.trim().length > 0) ?? raw;
+  const message = firstLine.length > 200 ? `${firstLine.slice(0, 200)}…` : firstLine;
+  return {
+    patch: "",
+    label: cwd ? "Worktree error" : `Error: ${diffType}`,
+    error: message,
+  };
+}
+
 export async function runGitDiff(
   runtime: ReviewGitRuntime,
   diffType: DiffType,
@@ -507,24 +541,17 @@ export async function runGitDiff(
   externalCwd?: string,
   options?: GitDiffOptions,
 ): Promise<DiffResult> {
+  const context = resolveDiffExecutionContext(diffType, externalCwd);
+  if (!context) {
+    return {
+      patch: "",
+      label: "Worktree error",
+      error: "Could not parse worktree diff type",
+    };
+  }
+  const { cwd, effectiveDiffType } = context;
   let patch = "";
   let label = "";
-  let cwd: string | undefined = externalCwd;
-  // SAFETY: DiffType is a string union; widening to string for worktree prefix check is intentional
-  let effectiveDiffType = diffType as string;
-
-  if (diffType.startsWith("worktree:")) {
-    const parsed = parseWorktreeDiffType(diffType);
-    if (!parsed) {
-      return {
-        patch: "",
-        label: "Worktree error",
-        error: "Could not parse worktree diff type",
-      };
-    }
-    cwd = parsed.path;
-    effectiveDiffType = parsed.subType;
-  }
 
   const wFlag = options?.hideWhitespace ? ["-w"] : [];
 
@@ -690,15 +717,7 @@ export async function runGitDiff(
     }
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
-    // Git dumps its entire --help output on some failures; keep only the
-    // first meaningful line so the UI doesn't vomit a wall of text.
-    const firstLine = raw.split("\n").find((l) => l.trim().length > 0) ?? raw;
-    const message = firstLine.length > 200 ? firstLine.slice(0, 200) + "…" : firstLine;
-    return {
-      patch: "",
-      label: cwd ? "Worktree error" : `Error: ${diffType}`,
-      error: message,
-    };
+    return gitDiffFailureResult(raw, cwd, diffType);
   }
 
   if (cwd) {
@@ -748,6 +767,10 @@ export function hashFingerprintPart(value: string): string {
 
 const MAX_UNTRACKED_FINGERPRINT_FILES = 20;
 
+function gitWhitespaceArgs(hideWhitespace: boolean | undefined): string[] {
+  return hideWhitespace ? ["-w"] : [];
+}
+
 export async function getGitDiffFingerprint(
   runtime: ReviewGitRuntime,
   diffType: DiffType,
@@ -755,17 +778,11 @@ export async function getGitDiffFingerprint(
   externalCwd?: string,
   options?: GitDiffOptions,
 ): Promise<string | null> {
-  let cwd: string | undefined = externalCwd;
-  // SAFETY: DiffType is a string union; widening to string for worktree prefix check is intentional
-  let effectiveDiffType = diffType as string;
-  if (diffType.startsWith("worktree:")) {
-    const parsed = parseWorktreeDiffType(diffType);
-    if (!parsed) return null;
-    cwd = parsed.path;
-    effectiveDiffType = parsed.subType;
-  }
+  const context = resolveDiffExecutionContext(diffType, externalCwd);
+  if (!context) return null;
+  const { cwd, effectiveDiffType } = context;
 
-  const wFlag = options?.hideWhitespace ? ["-w"] : [];
+  const wFlag = gitWhitespaceArgs(options?.hideWhitespace);
 
   try {
     // --no-optional-locks: fingerprint probes run in the background (polled
