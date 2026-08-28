@@ -820,54 +820,93 @@ export function decodeInitialDiffResponse(
   if (Result.isFailure(root)) return Result.fail(root.failure);
 
   const data = root.success;
-  const origin = Option.getOrUndefined(decodeOrigin(data.origin));
-  const mode = Option.getOrUndefined(decodeMode(data.mode));
-  const diffType = Option.getOrUndefined(decodeString(data.diffType));
-  const base = Option.getOrUndefined(decodeString(data.base));
-  const gitContext = decodeGitContext(data.gitContext);
-  const diffOptions = decodeDiffOptions(data.diffOptions);
-  const agentCwd = Option.getOrUndefined(decodeNullableString(data.agentCwd));
-  const sharingEnabled = Option.getOrUndefined(decodeBoolean(data.sharingEnabled));
-  const repoInfo = decodeRepoInfo(data.repoInfo);
-  const prMetadata = decodePRMetadata(data.prMetadata);
-  const prStackInfo = decodePRStackInfo(data.prStackInfo);
-  const prStackTree = decodePRStackTree(data.prStackTree);
-  const prDiffScope = Option.getOrUndefined(decodePRDiffScope(data.prDiffScope));
-  const prDiffScopeOptions = decodePRDiffScopeOptions(data.prDiffScopeOptions);
-  const prPatchIncomplete = Option.getOrUndefined(decodeBoolean(data.prPatchIncomplete));
-  const prPatchUpgradeAvailable = Option.getOrUndefined(
-    decodeBoolean(data.prPatchUpgradeAvailable),
-  );
-  const platformUser = Option.getOrUndefined(decodeString(data.platformUser));
-  const viewedFiles = decodeViewedFiles(data.viewedFiles);
-  const error = Option.getOrUndefined(decodeString(data.error));
-  const semanticDiff = decodeSemanticDiff(data.semanticDiff);
-  const serverConfig = decodeServerConfig(data.serverConfig);
+
+  function decodeInitialDiffPrimitiveFields(): Pick<
+    InitialDiffResponse,
+    | "origin"
+    | "mode"
+    | "diffType"
+    | "base"
+    | "agentCwd"
+    | "sharingEnabled"
+    | "prDiffScope"
+    | "prPatchIncomplete"
+    | "prPatchUpgradeAvailable"
+    | "platformUser"
+    | "error"
+  > {
+    const origin = Option.getOrUndefined(decodeOrigin(data.origin));
+    const mode = Option.getOrUndefined(decodeMode(data.mode));
+    const diffType = Option.getOrUndefined(decodeString(data.diffType));
+    const base = Option.getOrUndefined(decodeString(data.base));
+    const agentCwd = Option.getOrUndefined(decodeNullableString(data.agentCwd));
+    const sharingEnabled = Option.getOrUndefined(decodeBoolean(data.sharingEnabled));
+    const prDiffScope = Option.getOrUndefined(decodePRDiffScope(data.prDiffScope));
+    const prPatchIncomplete = Option.getOrUndefined(decodeBoolean(data.prPatchIncomplete));
+    const prPatchUpgradeAvailable = Option.getOrUndefined(
+      decodeBoolean(data.prPatchUpgradeAvailable),
+    );
+    const platformUser = Option.getOrUndefined(decodeString(data.platformUser));
+    const error = Option.getOrUndefined(decodeString(data.error));
+
+    return {
+      ...(origin !== undefined && { origin }),
+      ...(mode !== undefined && { mode }),
+      ...(diffType !== undefined && { diffType }),
+      ...(base !== undefined && { base }),
+      ...(agentCwd !== undefined && { agentCwd }),
+      ...(sharingEnabled !== undefined && { sharingEnabled }),
+      ...(prDiffScope !== undefined && { prDiffScope }),
+      ...(prPatchIncomplete !== undefined && { prPatchIncomplete }),
+      ...(prPatchUpgradeAvailable !== undefined && { prPatchUpgradeAvailable }),
+      ...(platformUser !== undefined && { platformUser }),
+      ...(error !== undefined && { error }),
+    };
+  }
+
+  function decodeInitialDiffStructuredFields(): Pick<
+    InitialDiffResponse,
+    | "gitContext"
+    | "diffOptions"
+    | "repoInfo"
+    | "prMetadata"
+    | "prStackInfo"
+    | "prStackTree"
+    | "prDiffScopeOptions"
+    | "viewedFiles"
+    | "semanticDiff"
+    | "serverConfig"
+  > {
+    const gitContext = decodeGitContext(data.gitContext);
+    const diffOptions = decodeDiffOptions(data.diffOptions);
+    const repoInfo = decodeRepoInfo(data.repoInfo);
+    const prMetadata = decodePRMetadata(data.prMetadata);
+    const prStackInfo = decodePRStackInfo(data.prStackInfo);
+    const prStackTree = decodePRStackTree(data.prStackTree);
+    const prDiffScopeOptions = decodePRDiffScopeOptions(data.prDiffScopeOptions);
+    const viewedFiles = decodeViewedFiles(data.viewedFiles);
+    const semanticDiff = decodeSemanticDiff(data.semanticDiff);
+    const serverConfig = decodeServerConfig(data.serverConfig);
+
+    return {
+      ...(gitContext !== undefined && { gitContext }),
+      ...(diffOptions !== undefined && { diffOptions }),
+      ...(repoInfo !== undefined && { repoInfo }),
+      ...(prMetadata !== undefined && { prMetadata }),
+      ...(prStackInfo !== undefined && { prStackInfo }),
+      ...(prStackTree !== undefined && { prStackTree }),
+      ...(prDiffScopeOptions !== undefined && { prDiffScopeOptions }),
+      ...(viewedFiles !== undefined && { viewedFiles }),
+      ...(semanticDiff !== undefined && { semanticDiff }),
+      ...(serverConfig !== undefined && { serverConfig }),
+    };
+  }
 
   return Result.succeed({
     rawPatch: data.rawPatch,
     gitRef: data.gitRef,
-    ...(origin !== undefined && { origin }),
-    ...(mode !== undefined && { mode }),
-    ...(diffType !== undefined && { diffType }),
-    ...(base !== undefined && { base }),
-    ...(gitContext !== undefined && { gitContext }),
-    ...(diffOptions !== undefined && { diffOptions }),
-    ...(agentCwd !== undefined && { agentCwd }),
-    ...(sharingEnabled !== undefined && { sharingEnabled }),
-    ...(repoInfo !== undefined && { repoInfo }),
-    ...(prMetadata !== undefined && { prMetadata }),
-    ...(prStackInfo !== undefined && { prStackInfo }),
-    ...(prStackTree !== undefined && { prStackTree }),
-    ...(prDiffScope !== undefined && { prDiffScope }),
-    ...(prDiffScopeOptions !== undefined && { prDiffScopeOptions }),
-    ...(prPatchIncomplete !== undefined && { prPatchIncomplete }),
-    ...(prPatchUpgradeAvailable !== undefined && { prPatchUpgradeAvailable }),
-    ...(platformUser !== undefined && { platformUser }),
-    ...(viewedFiles !== undefined && { viewedFiles }),
-    ...(error !== undefined && { error }),
-    ...(semanticDiff !== undefined && { semanticDiff }),
-    ...(serverConfig !== undefined && { serverConfig }),
+    ...decodeInitialDiffPrimitiveFields(),
+    ...decodeInitialDiffStructuredFields(),
   });
 }
 

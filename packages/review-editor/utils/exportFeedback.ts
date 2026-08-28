@@ -197,7 +197,11 @@ function scopeDisplayLabel(scope: string): string {
 }
 
 function renderScopedGroups(annotations: CodeAnnotation[], headingLevel: string): string {
-  const scopes = new Set(annotations.map((a) => a.diffScope).filter(Boolean));
+  const scopes = new Set(
+    annotations
+      .map((a) => a.diffScope)
+      .filter((scope): scope is NonNullable<CodeAnnotation["diffScope"]> => Boolean(scope)),
+  );
   if (scopes.size <= 1) return renderFileGroups(groupByFile(annotations), headingLevel);
 
   let output = "";
@@ -211,6 +215,83 @@ function renderScopedGroups(annotations: CodeAnnotation[], headingLevel: string)
     output += renderFileGroups(groupByFile(unscopedAnns), headingLevel);
   }
   return output;
+}
+
+function renderSingleReviewFeedback(
+  annotations: CodeAnnotation[],
+  placed: CodeAnnotation[],
+  generalSection: string,
+  prMeta: PRMetadata | null | undefined,
+  diffContext: FeedbackDiffContext | undefined,
+  prReviewScope: string | undefined,
+): string {
+  const scopes = new Set(annotations.map((a) => a.diffScope).filter(Boolean));
+  const derivedScope = scopes.size === 1 ? [...scopes][0] : undefined;
+  const scopeLabel = derivedScope ?? (scopes.size === 0 ? prReviewScope : undefined);
+  let output = prMeta
+    ? `# PR Review: ${getDisplayRepo(prMeta)}#${prMeta.number}\n\n` +
+      `**${prMeta.title}**\n` +
+      `Branch: \`${prMeta.headBranch}\` → \`${prMeta.baseBranch}\`\n` +
+      `${scopeLabel ? `Review scope: ${scopeLabel}\n` : ""}` +
+      `${prMeta.url}\n\n`
+    : `# Code Review Feedback\n\n${diffContext ? `**Diff:** ${describeDiff(diffContext)}\n\n` : ""}`;
+
+  output += renderScopedGroups(placed, "##");
+  output += generalSection;
+  return output;
+}
+
+function renderGroupedPRFeedback(placed: CodeAnnotation[], generalSection: string): string {
+  const prUrls = new Set(placed.map((a) => a.prUrl).filter(Boolean));
+  let output = prUrls.size > 1 ? "# Multi-PR Review\n\n" : "# Code Review\n\n";
+
+  const byPR = new Map<string, CodeAnnotation[]>();
+  for (const ann of placed) {
+    const key = ann.prUrl ?? "_none";
+    const existing = byPR.get(key) || [];
+    existing.push(ann);
+    byPR.set(key, existing);
+  }
+
+  for (const [prUrl, prAnnotations] of byPR) {
+    const [sample] = prAnnotations;
+    if (!sample) continue;
+
+    if (prUrl === "_none") {
+      output += "## Local Changes\n\n";
+    } else {
+      const repo = sample.prRepo ?? "";
+      const num = sample.prNumber != null ? `#${sample.prNumber}` : "";
+      const title = sample.prTitle ?? "";
+      output += `## ${repo}${num}${title ? ` — ${title}` : ""}\n\n`;
+    }
+
+    const scopes = new Set(prAnnotations.map((a) => a.diffScope).filter(Boolean));
+    const [scope] = scopes;
+    if (scopes.size === 1 && scope !== undefined) {
+      output += `Review scope: ${scope}\n\n`;
+    }
+
+    output += renderScopedGroups(prAnnotations, "###");
+  }
+
+  return output + generalSection;
+}
+
+function requiresGroupedPRFeedback(
+  placed: CodeAnnotation[],
+  prMeta: PRMetadata | null | undefined,
+): boolean {
+  const prUrls = new Set(placed.map((a) => a.prUrl).filter(Boolean));
+  if (prUrls.size > 1) return true;
+
+  const [singlePrUrl] = prUrls;
+  return (
+    singlePrUrl !== undefined &&
+    prMeta !== undefined &&
+    prMeta !== null &&
+    singlePrUrl !== prMeta.url
+  );
 }
 
 export function exportReviewFeedback(
@@ -229,59 +310,16 @@ export function exportReviewFeedback(
   const placed = annotations.filter((a) => (a.scope ?? "line") !== "general");
   const generalSection = general.length > 0 ? renderGeneralComments(general) : "";
 
-  const prUrls = new Set(placed.map((a) => a.prUrl).filter(Boolean));
-  const isMultiPR = prUrls.size > 1;
-  const singlePrUrl = prUrls.size === 1 ? [...prUrls][0] : null;
-  const prMismatch = singlePrUrl && prMeta && singlePrUrl !== prMeta.url;
-
-  if (!isMultiPR && !prMismatch) {
-    const scopes = new Set(annotations.map((a) => a.diffScope).filter(Boolean));
-    const derivedScope = scopes.size === 1 ? [...scopes][0] : undefined;
-    const scopeLabel = derivedScope ?? (scopes.size === 0 ? prReviewScope : undefined);
-
-    let output = prMeta
-      ? `# PR Review: ${getDisplayRepo(prMeta)}#${prMeta.number}\n\n` +
-        `**${prMeta.title}**\n` +
-        `Branch: \`${prMeta.headBranch}\` → \`${prMeta.baseBranch}\`\n` +
-        `${scopeLabel ? `Review scope: ${scopeLabel}\n` : ""}` +
-        `${prMeta.url}\n\n`
-      : `# Code Review Feedback\n\n${diffContext ? `**Diff:** ${describeDiff(diffContext)}\n\n` : ""}`;
-
-    output += renderScopedGroups(placed, "##");
-    output += generalSection;
-    return output;
+  if (requiresGroupedPRFeedback(placed, prMeta)) {
+    return renderGroupedPRFeedback(placed, generalSection);
   }
 
-  // Multi-PR: group by prUrl, then by file within each
-  let output = isMultiPR ? "# Multi-PR Review\n\n" : "# Code Review\n\n";
-
-  const byPR = new Map<string, CodeAnnotation[]>();
-  for (const ann of placed) {
-    const key = ann.prUrl ?? "_none";
-    const existing = byPR.get(key) || [];
-    existing.push(ann);
-    byPR.set(key, existing);
-  }
-
-  for (const [prUrl, prAnnotations] of byPR) {
-    const sample = prAnnotations[0];
-    if (prUrl === "_none") {
-      output += "## Local Changes\n\n";
-    } else {
-      const repo = sample.prRepo ?? "";
-      const num = sample.prNumber != null ? `#${sample.prNumber}` : "";
-      const title = sample.prTitle ?? "";
-      output += `## ${repo}${num}${title ? ` — ${title}` : ""}\n\n`;
-    }
-
-    const scopes = new Set(prAnnotations.map((a) => a.diffScope).filter(Boolean));
-    if (scopes.size === 1) {
-      output += `Review scope: ${[...scopes][0]}\n\n`;
-    }
-
-    output += renderScopedGroups(prAnnotations, "###");
-  }
-
-  output += generalSection;
-  return output;
+  return renderSingleReviewFeedback(
+    annotations,
+    placed,
+    generalSection,
+    prMeta,
+    diffContext,
+    prReviewScope,
+  );
 }
