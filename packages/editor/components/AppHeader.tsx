@@ -69,6 +69,35 @@ interface AppHeaderProps {
   obsidianConfigured: boolean;
 }
 
+/** Header interactions retained by App while the header renders display state. */
+export type AppHeaderActions = Readonly<
+  Pick<
+    AppHeaderProps,
+    | "onToggleHtmlTools"
+    | "onCallbackFeedback"
+    | "onCallbackApprove"
+    | "onAnnotateExit"
+    | "onAnnotateFeedback"
+    | "onAnnotateApprove"
+    | "onAnnotationPanelToggle"
+    | "onAIChatToggle"
+    | "onIdentityChange"
+    | "onUIPreferencesChange"
+    | "onOpenSettings"
+    | "onCloseSettings"
+    | "onOpenExport"
+    | "onCopyAgentInstructions"
+    | "onDownloadAnnotations"
+    | "onPrint"
+    | "onCopyShareLink"
+    | "onOpenImport"
+    | "onSaveToObsidian"
+  >
+>;
+
+/** Header display state passed without App's state setters or mutations. */
+export type AppHeaderDisplayModel = Readonly<Omit<AppHeaderProps, keyof AppHeaderActions>>;
+
 type AppHeaderCallbackActionsProps = Pick<
   AppHeaderProps,
   | "isApiMode"

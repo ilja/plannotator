@@ -8,20 +8,32 @@ import {
 } from "./app-boundaries";
 
 describe("editor presentation boundaries", () => {
-  test("delegates dialogs and overlays to dedicated components", () => {
+  test("delegates the editor screen to a dedicated component", () => {
     const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+    const screenSource = readFileSync(
+      new URL("./components/EditorAppScreen.tsx", import.meta.url),
+      "utf8",
+    );
 
-    expect(appSource).toContain('from "./components/EditorDialogs";');
-    expect(appSource).toContain('from "./components/EditorOverlays";');
-    expect(appSource).toContain("<EditorDialogs");
-    expect(appSource).toContain("<EditorOverlays");
-    expect(appSource).not.toContain("<ExportModal");
-    expect(appSource).not.toContain("<ImportModal");
-    expect(appSource).not.toContain("<ConfirmDialog");
-    expect(appSource).not.toContain("<CodeFilePopout");
-    expect(appSource).not.toContain("<CompletionOverlay");
-    expect(appSource).not.toContain("<LookAndFeelAnnouncementDialog");
-    expect(appSource).not.toContain("<ImageAnnotator");
+    expect(appSource).toContain('from "./components/EditorAppScreen";');
+    expect(appSource).toContain("<EditorAppScreen");
+    expect(appSource).not.toContain("<ThemeProvider");
+    expect(appSource).not.toContain("<TooltipProvider");
+    expect(appSource).not.toContain("<AppHeader");
+    expect(appSource).not.toContain("<WorkspaceBanners");
+    expect(appSource).not.toContain("<EditorWorkspace");
+    expect(appSource).not.toContain("<EditorDialogs");
+    expect(appSource).not.toContain("<EditorOverlays");
+    expect(appSource).not.toContain("<Toaster");
+
+    expect(screenSource).toContain("<ThemeProvider");
+    expect(screenSource).toContain("<TooltipProvider");
+    expect(screenSource).toContain("<AppHeader");
+    expect(screenSource).toContain("<WorkspaceBanners");
+    expect(screenSource).toContain("<EditorWorkspace");
+    expect(screenSource).toContain("<EditorDialogs");
+    expect(screenSource).toContain("<EditorOverlays");
+    expect(screenSource).toContain("<Toaster");
   });
 });
 
