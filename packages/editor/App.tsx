@@ -19,9 +19,6 @@ import {
 } from "@plannotator/ui/utils/parser";
 import { type ViewerHandle } from "@plannotator/ui/components/Viewer";
 import { type MarkdownEditorHandle } from "@plannotator/ui/components/MarkdownEditor";
-import { AnnotationPanel } from "@plannotator/ui/components/AnnotationPanel";
-import { DocumentAIChatPanel } from "@plannotator/ui/components/ai/DocumentAIChatPanel";
-import { SparklesIcon } from "@plannotator/ui/components/SparklesIcon";
 import { ExportModal } from "@plannotator/ui/components/ExportModal";
 import { ImportModal } from "@plannotator/ui/components/ImportModal";
 import { ConfirmDialog } from "@plannotator/ui/components/ConfirmDialog";
@@ -73,8 +70,6 @@ import { getInputMethod, saveInputMethod } from "@plannotator/ui/utils/inputMeth
 import { useInputMethodSwitch } from "@plannotator/ui/hooks/useInputMethodSwitch";
 import { usePrintMode } from "@plannotator/ui/hooks/usePrintMode";
 import { useResizablePanel } from "@plannotator/ui/hooks/useResizablePanel";
-import { ResizeHandle } from "@plannotator/ui/components/ResizeHandle";
-import { ScrollViewportContext } from "@plannotator/ui/hooks/useScrollViewport";
 import { useOverlayViewport } from "@plannotator/ui/hooks/useOverlayViewport";
 import { useIsMobile } from "@plannotator/ui/hooks/useIsMobile";
 import { ImageAnnotator } from "@plannotator/ui/components/ImageAnnotator";
@@ -92,8 +87,6 @@ import { getFileEditStatus } from "@plannotator/ui/components/sidebar/FileBrowse
 import { isVaultBrowserEnabled } from "@plannotator/ui/utils/obsidian";
 import { isFileBrowserEnabled, getFileBrowserSettings } from "@plannotator/ui/utils/fileBrowser";
 import { generateId } from "@plannotator/ui/utils/generateId";
-import { SidebarTabs } from "@plannotator/ui/components/sidebar/SidebarTabs";
-import { SidebarContainer } from "@plannotator/ui/components/sidebar/SidebarContainer";
 import type { PickerMessage } from "@plannotator/ui/components/sidebar/MessagesBrowser";
 import {
   CodeFilePopout,
@@ -120,11 +113,8 @@ import {
 import { useCheckboxOverrides } from "./hooks/useCheckboxOverrides";
 import { AppHeader } from "./components/AppHeader";
 import { WorkspaceBanners } from "./components/WorkspaceBanners";
-import { EditorDocumentSurface } from "./components/EditorDocumentSurface";
-import {
-  AnnotateAgentTerminalPanel,
-  type AnnotateAgentTerminalPanelHandle,
-} from "./components/AnnotateAgentTerminalPanel";
+import { type AnnotateAgentTerminalPanelHandle } from "./components/AnnotateAgentTerminalPanel";
+import { EditorWorkspace } from "./components/EditorWorkspace";
 import {
   buildAgentTerminalDeliveryRecord,
   buildTerminalAskPrompt,
@@ -604,6 +594,10 @@ const App: React.FC = () => {
 
   const hideAgentTerminal = useCallback(() => {
     setIsAgentTerminalOpen(false);
+  }, []);
+
+  const handleAgentTerminalRunningChange = useCallback((isRunning: boolean) => {
+    setIsAgentTerminalRunning(isRunning);
   }, []);
 
   const setAgentTerminalDelivery = useCallback((delivery: AgentTerminalDeliveryRecord | null) => {
@@ -3790,6 +3784,40 @@ const App: React.FC = () => {
   const handleOpenSettings = useCallback(() => setMobileSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setMobileSettingsOpen(false), []);
   const handleOpenMessagePicker = useCallback(() => sidebar.open("messages"), [sidebar.open]);
+  const handleCloseRightSidebar = useCallback(() => setIsPanelOpen(false), []);
+  const handleSelectSidebarFile = useCallback(
+    (absolutePath: string, dirPath: string) => {
+      if (isEditingMarkdown && annotateSource !== "folder") {
+        toast("Finish editing first", { description: 'Use "Done editing" before opening files.' });
+        return;
+      }
+      if (isEditingMarkdown && !/\.(mdx?|txt)$/i.test(absolutePath)) {
+        toast("Finish editing first", {
+          description: 'Use "Done editing" before opening non-editable files.',
+        });
+        return;
+      }
+      handleFileBrowserSelect(absolutePath, dirPath);
+    },
+    [annotateSource, handleFileBrowserSelect, isEditingMarkdown],
+  );
+  const handleFetchAllSidebarFiles = useCallback(() => {
+    fileBrowser.fetchAll(fileBrowserDirs);
+  }, [fileBrowser, fileBrowserDirs]);
+  const handleRetrySidebarVaultDirectory = useCallback(
+    (vaultPath: string) => fileBrowser.addVaultDir(vaultPath),
+    [fileBrowser],
+  );
+  const handleQuickCopyFeedback = useCallback(async () => {
+    const output = getCurrentFeedbackPayload();
+    await navigator.clipboard.writeText(wrapFeedbackForAgent(output));
+  }, [getCurrentFeedbackPayload]);
+  const handleOpenShareExport = useCallback(() => {
+    setIsPanelOpen(false);
+    setInitialExportTab("share");
+    setShowExport(true);
+  }, []);
+  const handleDiscardPlanEdits = useCallback(() => handleDiscardEdits(), [handleDiscardEdits]);
   const handleOpenExport = useCallback(() => {
     setInitialExportTab(undefined);
     setShowExport(true);
@@ -3952,143 +3980,76 @@ const App: React.FC = () => {
             showAgentTerminalDeliveryStatus={showAgentTerminalDeliveryStatus}
           />
 
-          {/* Main Content */}
-          <ScrollViewportContext.Provider value={scrollViewport}>
-            <div
-              data-print-region="content"
-              className={`flex-1 flex overflow-hidden relative z-0 ${isResizing ? "select-none" : ""}`}
-            >
-              {shouldRenderAgentTerminal && agentTerminalCapability && (
-                <div
-                  className={
-                    isAgentTerminalOpen
-                      ? "contents group/agent-terminal"
-                      : "absolute left-0 top-0 h-full w-0 overflow-hidden pointer-events-none group/agent-terminal"
-                  }
-                  aria-hidden={!isAgentTerminalOpen}
-                  inert={!isAgentTerminalOpen ? true : undefined}
-                >
-                  <AnnotateAgentTerminalPanel
-                    ref={agentTerminalRef}
-                    capability={agentTerminalCapability}
-                    width={`var(--agent-terminal-w, ${agentTerminalResize.width}px)`}
-                    onSessionActiveChange={setIsAgentTerminalRunning}
-                    onSessionReadyChange={handleAgentTerminalReadyChange}
-                    onClose={hideAgentTerminal}
-                  />
-                  {isAgentTerminalOpen && (
-                    <ResizeHandle
-                      {...agentTerminalResize.handleProps}
-                      className="hidden lg:block z-[55]"
-                      side="left"
-                      onCollapse={hideAgentTerminal}
-                    />
-                  )}
-                </div>
-              )}
-              {/* Left Sidebar: collapsed tab flags (when sidebar is closed) */}
-              {wideModeType === null && !sidebar.isOpen && !isAgentTerminalOpen && (
-                <SidebarTabs
-                  activeTab={sidebar.activeTab}
-                  onToggleTab={toggleSidebarTab}
-                  showFilesTab={showFilesTab}
-                  showMessagesTab={annotateSource === "message" && recentMessages.length > 1}
-                  showAgentTerminalTab={showAgentTerminalControls}
-                  isAgentTerminalOpen={isAgentTerminalOpen}
-                  isAgentTerminalRunning={isAgentTerminalRunning}
-                  onToggleAgentTerminal={toggleAgentTerminal}
-                  hasMessageAnnotations={activeMessageAnnotationCounts.size > 0}
-                  hasFileAnnotations={hasFileAnnotations}
-                  className="hidden lg:flex absolute left-0 top-0 z-20"
-                />
-              )}
-
-              {/* Left Sidebar: open state (TOC, files, or messages) */}
-              {sidebar.isOpen && (
-                <div className="contents group/sidebar">
-                  <SidebarContainer
-                    activeTab={sidebar.activeTab}
-                    onTabChange={toggleSidebarTab}
-                    onClose={sidebar.close}
-                    width={`var(--toc-w, ${tocResize.width}px)`}
-                    showAgentTerminalButton={showAgentTerminalControls}
-                    isAgentTerminalOpen={isAgentTerminalOpen}
-                    isAgentTerminalRunning={isAgentTerminalRunning}
-                    onToggleAgentTerminal={toggleAgentTerminal}
-                    blocks={blocks}
-                    annotations={annotations}
-                    activeSection={activeSection}
-                    onTocNavigate={handleTocNavigate}
-                    linkedDocFilepath={linkedDocHook.filepath}
-                    onLinkedDocBack={linkedDocHook.isActive ? handleLinkedDocBack : undefined}
-                    backLabel={backLabel}
-                    showFilesTab={showFilesTab}
-                    fileAnnotationCounts={fileAnnotationCounts}
-                    highlightedFiles={highlightedFiles}
-                    fileEditStatuses={sourceBackedDocuments.fileEditStatuses}
-                    fileBrowser={fileBrowser}
-                    onFilesSelectFile={(...args: Parameters<typeof handleFileBrowserSelect>) => {
-                      // Plan/review linked-doc browsing still swaps the root document
-                      // under the editor. Folder mode snapshots the active file first.
-                      if (isEditingMarkdown && annotateSource !== "folder") {
-                        toast("Finish editing first", {
-                          description: 'Use "Done editing" before opening files.',
-                        });
-                        return;
-                      }
-                      if (isEditingMarkdown && !/\.(mdx?|txt)$/i.test(args[0])) {
-                        toast("Finish editing first", {
-                          description: 'Use "Done editing" before opening non-editable files.',
-                        });
-                        return;
-                      }
-                      handleFileBrowserSelect(...args);
-                    }}
-                    onFilesFetchAll={() => fileBrowser.fetchAll(fileBrowserDirs)}
-                    onFilesRetryVaultDir={(vaultPath) => fileBrowser.addVaultDir(vaultPath)}
-                    hasFileAnnotations={hasFileAnnotations}
-                    showMessagesTab={annotateSource === "message" && recentMessages.length > 1}
-                    messages={recentMessages}
-                    selectedMessageId={selectedMessageId}
-                    onSelectMessage={handleSelectMessage}
-                    messageAnnotationCounts={activeMessageAnnotationCounts}
-                  />
-                  <ResizeHandle
-                    {...tocResize.handleProps}
-                    className="hidden lg:block z-[55]"
-                    side="left"
-                    onCollapse={sidebar.close}
-                  />
-                </div>
-              )}
-
-              {/* Document Area */}
-              <EditorDocumentSurface
-                isHtmlSurface={isHtmlSurface}
-                gridEnabled={gridEnabled}
-                sidebarIsOpen={sidebar.isOpen}
-                agentTerminalIsOpen={isAgentTerminalOpen}
-                wideModeType={wideModeType}
-                isEditingMarkdown={isEditingMarkdown}
-                htmlToolsHidden={htmlToolsHidden}
-                stickyActionsEnabled={uiPrefs.stickyActionsEnabled}
-                inputMethod={inputMethod}
-                editorMode={editorMode}
-                repoInfo={repoInfo}
-                readerMaxWidth={annotateReaderMaxWidth}
-                viewerContentKey={viewerContentKey}
-                showEmptyFolderPresentation={showEmptyFolderPresentation}
-                canUseWideMode={canUseWideMode}
-                canEditMarkdown={canEditMarkdown}
-                activeSourceSaveFileName={activeSourceSave?.basename ?? null}
-                activeSaveStatus={activeSaveStatus}
-                saveFailed={saveFailed}
-                emphasizeSave={emphasizeSave}
-                hasUnsavedDiskChanges={hasUnsavedDiskChanges}
-                cancelMode={cancelMode}
-                confirmCancelEdits={confirmCancelEdits}
-                planAreaRef={planAreaRef}
-                draftRecoveryDialog={
+          <EditorWorkspace
+            model={{
+              scrollViewport,
+              isResizing,
+              terminal: {
+                shouldRender: shouldRenderAgentTerminal,
+                isOpen: isAgentTerminalOpen,
+                capability: agentTerminalCapability,
+                panelRef: agentTerminalRef,
+                width: agentTerminalResize.width,
+                isResizeDragging: agentTerminalResize.isDragging,
+                resizeHandleStyle: agentTerminalResize.handleProps.style,
+              },
+              leftSidebar: {
+                isWideMode: wideModeType !== null,
+                isOpen: sidebar.isOpen,
+                activeTab: sidebar.activeTab,
+                width: tocResize.width,
+                isResizeDragging: tocResize.isDragging,
+                resizeHandleStyle: tocResize.handleProps.style,
+                showFilesTab,
+                showMessagesTab: annotateSource === "message" && recentMessages.length > 1,
+                showAgentTerminalControls,
+                isAgentTerminalOpen,
+                isAgentTerminalRunning,
+                hasMessageAnnotations: activeMessageAnnotationCounts.size > 0,
+                hasFileAnnotations,
+                blocks,
+                annotations,
+                activeSection,
+                isLinkedDocumentActive: linkedDocHook.isActive,
+                linkedDocumentFilepath: linkedDocHook.filepath,
+                backLabel,
+                fileAnnotationCounts,
+                highlightedFiles,
+                fileEditStatuses: sourceBackedDocuments.fileEditStatuses,
+                fileBrowserDirectories: fileBrowser.dirs,
+                expandedFolders: fileBrowser.expandedFolders,
+                collapsedDirectories: fileBrowser.collapsedDirs,
+                activeFile: fileBrowser.activeFile,
+                messages: recentMessages,
+                selectedMessageId,
+                messageAnnotationCounts: activeMessageAnnotationCounts,
+              },
+              document: {
+                isHtmlSurface,
+                gridEnabled,
+                sidebarIsOpen: sidebar.isOpen,
+                agentTerminalIsOpen: isAgentTerminalOpen,
+                wideModeType,
+                isEditingMarkdown,
+                htmlToolsHidden,
+                stickyActionsEnabled: uiPrefs.stickyActionsEnabled,
+                inputMethod,
+                editorMode,
+                repoInfo,
+                readerMaxWidth: annotateReaderMaxWidth,
+                viewerContentKey,
+                showEmptyFolderPresentation,
+                canUseWideMode,
+                canEditMarkdown,
+                activeSourceSaveFileName: activeSourceSave?.basename ?? null,
+                activeSaveStatus,
+                saveFailed,
+                emphasizeSave,
+                hasUnsavedDiskChanges,
+                cancelMode,
+                confirmCancelEdits,
+                planAreaRef,
+                draftRecoveryDialog: (
                   <ConfirmDialog
                     isOpen={!!draftBanner}
                     onClose={dismissDraft}
@@ -4107,176 +4068,124 @@ const App: React.FC = () => {
                     cancelText="Dismiss"
                     showCancel
                   />
-                }
-                onViewportReady={handleViewportReady}
-                onInputMethodChange={handleInputMethodChange}
-                onEditorModeChange={handleEditorModeChange}
-                onToggleViewMode={toggleViewMode}
-                onSaveSourceFile={handleSaveSourceFile}
-                onEditExit={handleEditExitClick}
-                renderAs={renderAs}
-                rawHtml={rawHtml}
-                displayedMarkdown={displayedMarkdown}
-                blocks={blocks}
-                frontmatter={frontmatter}
-                annotations={viewerAnnotations}
-                selectedAnnotationId={selectedAnnotationId}
-                globalAttachments={globalAttachments}
-                activeSourceDocumentKey={activeSourceBackedDocument?.key ?? null}
-                editGeneration={editGeneration}
-                viewerRef={viewerRef}
-                showDemoBadge={!isApiMode && !isLoadingShared && !isSharedSession}
-                linkedDocument={renderedLinkedDocument}
-                imageBaseDir={imageBaseDir}
-                codePathBaseDir={activeDocBaseDir}
-                copyLabel={viewerCopyLabel}
-                sourceInfo={sourceInfo}
-                openInAppPath={viewerOpenInAppPath}
-                messagePickerInfo={viewerMessagePickerInfo}
-                checkboxOverrides={checkbox.overrides}
-                actionsLabelMode={actionsLabelMode}
-                typographyStyle={annotationTypographyStyle}
-                onAddAnnotation={handleAddAnnotation}
-                onRemoveAnnotation={removeAnnotation}
-                onSelectAnnotation={handleSelectAnnotation}
-                onAddGlobalAttachment={handleAddGlobalAttachment}
-                onRemoveGlobalAttachment={handleRemoveGlobalAttachment}
-                onEditorHandleReady={handleMarkdownEditorReady}
-                onMarkdownChange={handleEditorChange}
-                onOpenLinkedDocument={handleOpenLinkedDoc}
-                onOpenCodeFile={codeFilePopout.open}
-                onOpenMessagePicker={handleOpenMessagePicker}
-                onToggleCheckbox={checkbox.toggle}
-                onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
-              />
-
-              {/* Right panel region — `group/sidebar` so the collapse button reveals when
-              hovering the whole panel, not just the thin handle. The handle and the
-              panel(s) are separate sibling conditionals, so they need a shared hover
-              ancestor (`contents` = no layout box). */}
-              <div className="contents group/sidebar">
-                {/* Resize Handle */}
-                {isPanelOpen &&
-                  wideModeType === null &&
-                  (rightSidebarTab === "annotations" || canUseAskAI) && (
-                    <ResizeHandle
-                      {...panelResize.handleProps}
-                      className="hidden md:block z-[55]"
-                      side="right"
-                      onCollapse={() => setIsPanelOpen(false)}
-                    />
-                  )}
-
-                {/* Annotation Panel */}
-                <AnnotationPanel
-                  isOpen={isPanelOpen && rightSidebarTab === "annotations" && wideModeType === null}
-                  blocks={blocks}
-                  annotations={allAnnotations}
-                  selectedId={selectedAnnotationId ?? selectedCodeAnnotationId}
-                  onSelect={handleSelectAnnotation}
-                  onDelete={handleDeleteAnnotation}
-                  onEdit={handleEditAnnotation}
-                  codeAnnotations={codeAnnotations}
-                  onSelectCodeAnnotation={handleSelectCodeAnnotation}
-                  onDeleteCodeAnnotation={handleDeleteCodeAnnotation}
-                  onEditCodeAnnotation={handleEditCodeAnnotation}
-                  sharingEnabled={canShareCurrentSession}
-                  width={`var(--rpanel-w, ${panelResize.width}px)`}
-                  editorAnnotations={editorAnnotations}
-                  onDeleteEditorAnnotation={deleteEditorAnnotation}
-                  onClose={() => setIsPanelOpen(false)}
-                  onQuickCopy={async () => {
-                    const output = getCurrentFeedbackPayload();
-                    await navigator.clipboard.writeText(wrapFeedbackForAgent(output));
-                  }}
-                  onShare={
-                    canShareCurrentSession
-                      ? () => {
-                          setIsPanelOpen(false);
-                          setInitialExportTab("share");
-                          setShowExport(true);
-                        }
-                      : undefined
-                  }
-                  otherFileAnnotations={otherFileAnnotations}
-                  directEdits={
-                    directEditsPanelInfo?.map((item) => ({
-                      ...item,
-                      onDiscard: item.id === "plan" ? () => handleDiscardEdits() : undefined,
-                    })) ?? null
-                  }
-                  onOtherFileAnnotationsClick={handleFlashAnnotatedFiles}
-                />
-                {isPanelOpen &&
-                  rightSidebarTab === "ai" &&
-                  wideModeType === null &&
-                  canUseAskAI && (
-                    <aside
-                      data-annotation-panel="true"
-                      className={`border-l border-border/50 bg-card flex flex-col flex-shrink-0 ${
-                        isMobile
-                          ? "fixed top-12 bottom-0 right-0 z-[60] w-full max-w-sm shadow-2xl bg-card"
-                          : ""
-                      }`}
-                      style={
-                        isMobile
-                          ? undefined
-                          : { width: `var(--rpanel-w, ${panelResize.width ?? 288}px)` }
-                      }
-                    >
-                      <div className="border-b border-border/50">
-                        <div className="flex h-10 items-center justify-between px-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <SparklesIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                            <h2 className="text-xs font-medium text-foreground">AI</h2>
-                            {visibleAIMessages.length > 0 && (
-                              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/10 px-1 font-mono text-[10px] font-medium tabular-nums text-primary">
-                                {visibleAIMessages.length}
-                              </span>
-                            )}
-                          </div>
-                          {isMobile && (
-                            <button
-                              onClick={() => setIsPanelOpen(false)}
-                              className="relative rounded-md p-1.5 text-muted-foreground transition-colors before:absolute before:-inset-1.5 before:content-[''] hover:text-foreground md:hidden"
-                              title="Close panel"
-                              aria-label="Close AI panel"
-                            >
-                              <svg
-                                className="w-3.5 h-3.5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <DocumentAIChatPanel
-                        messages={visibleAIMessages}
-                        isCreatingSession={isAgentTerminalReady ? false : aiIsCreatingSession}
-                        isStreaming={isAgentTerminalReady ? false : aiIsStreaming}
-                        onAskGeneral={handleAskGeneralAI}
-                        permissionRequests={isAgentTerminalReady ? [] : aiPermissionRequests}
-                        onRespondToPermission={
-                          isAgentTerminalReady ? undefined : respondToAIPermission
-                        }
-                        aiProviders={visibleAIProviders}
-                        aiConfig={visibleAIConfig}
-                        onAIConfigChange={isAgentTerminalReady ? undefined : handleAIConfigChange}
-                      />
-                    </aside>
-                  )}
-              </div>
-            </div>
-          </ScrollViewportContext.Provider>
+                ),
+                renderAs,
+                rawHtml,
+                displayedMarkdown,
+                blocks,
+                frontmatter,
+                annotations: viewerAnnotations,
+                selectedAnnotationId,
+                globalAttachments,
+                activeSourceDocumentKey: activeSourceBackedDocument?.key ?? null,
+                editGeneration,
+                viewerRef,
+                showDemoBadge: !isApiMode && !isLoadingShared && !isSharedSession,
+                linkedDocument: renderedLinkedDocument,
+                imageBaseDir,
+                codePathBaseDir: activeDocBaseDir,
+                copyLabel: viewerCopyLabel,
+                sourceInfo,
+                openInAppPath: viewerOpenInAppPath,
+                messagePickerInfo: viewerMessagePickerInfo,
+                checkboxOverrides: checkbox.overrides,
+                actionsLabelMode,
+                typographyStyle: annotationTypographyStyle,
+              },
+              rightSidebar: {
+                isOpen: isPanelOpen,
+                activeTab: rightSidebarTab,
+                isWideMode: wideModeType !== null,
+                canUseAskAI,
+                isMobile,
+                width: panelResize.width,
+                isResizeDragging: panelResize.isDragging,
+                resizeHandleStyle: panelResize.handleProps.style,
+                blocks,
+                annotations: allAnnotations,
+                selectedAnnotationId,
+                selectedCodeAnnotationId,
+                codeAnnotations,
+                sharingEnabled: canShareCurrentSession,
+                editorAnnotations,
+                otherFileAnnotations,
+                directEdits: directEditsPanelInfo,
+                aiMessages: visibleAIMessages,
+                aiIsCreatingSession,
+                aiIsStreaming,
+                aiPermissionRequests,
+                aiProviders: visibleAIProviders,
+                aiConfig: visibleAIConfig,
+                isAgentTerminalReady,
+              },
+            }}
+            actions={{
+              terminal: {
+                onSessionActiveChange: handleAgentTerminalRunningChange,
+                onSessionReadyChange: handleAgentTerminalReadyChange,
+                onClose: hideAgentTerminal,
+                onResizePointerDown: agentTerminalResize.handleProps.onPointerDown,
+                onResizeDoubleClick: agentTerminalResize.handleProps.onDoubleClick,
+              },
+              leftSidebar: {
+                onToggleTab: toggleSidebarTab,
+                onClose: sidebar.close,
+                onToggleAgentTerminal: toggleAgentTerminal,
+                onResizePointerDown: tocResize.handleProps.onPointerDown,
+                onResizeDoubleClick: tocResize.handleProps.onDoubleClick,
+                onTocNavigate: handleTocNavigate,
+                onLinkedDocumentBack: handleLinkedDocBack,
+                onSelectFile: handleSelectSidebarFile,
+                onFetchAllFiles: handleFetchAllSidebarFiles,
+                onRetryVaultDirectory: handleRetrySidebarVaultDirectory,
+                onToggleFolder: fileBrowser.toggleFolder,
+                onToggleDirectoryCollapse: fileBrowser.toggleCollapse,
+                onFetchFileTree: fileBrowser.fetchTree,
+                onClearVaultDirectories: fileBrowser.clearVaultDirs,
+                onSetActiveFile: fileBrowser.setActiveFile,
+                onSelectMessage: handleSelectMessage,
+              },
+              document: {
+                onViewportReady: handleViewportReady,
+                onInputMethodChange: handleInputMethodChange,
+                onEditorModeChange: handleEditorModeChange,
+                onToggleViewMode: toggleViewMode,
+                onSaveSourceFile: handleSaveSourceFile,
+                onEditExit: handleEditExitClick,
+                onAddAnnotation: handleAddAnnotation,
+                onRemoveAnnotation: removeAnnotation,
+                onSelectAnnotation: handleSelectAnnotation,
+                onAddGlobalAttachment: handleAddGlobalAttachment,
+                onRemoveGlobalAttachment: handleRemoveGlobalAttachment,
+                onEditorHandleReady: handleMarkdownEditorReady,
+                onMarkdownChange: handleEditorChange,
+                onOpenLinkedDocument: handleOpenLinkedDoc,
+                onOpenCodeFile: codeFilePopout.open,
+                onOpenMessagePicker: handleOpenMessagePicker,
+                onToggleCheckbox: checkbox.toggle,
+                onAskAI: canUseDocumentAskAI ? handleAskAI : undefined,
+              },
+              rightSidebar: {
+                onClose: handleCloseRightSidebar,
+                onResizePointerDown: panelResize.handleProps.onPointerDown,
+                onResizeDoubleClick: panelResize.handleProps.onDoubleClick,
+                onSelectAnnotation: handleSelectAnnotation,
+                onDeleteAnnotation: handleDeleteAnnotation,
+                onEditAnnotation: handleEditAnnotation,
+                onSelectCodeAnnotation: handleSelectCodeAnnotation,
+                onDeleteCodeAnnotation: handleDeleteCodeAnnotation,
+                onEditCodeAnnotation: handleEditCodeAnnotation,
+                onDeleteEditorAnnotation: deleteEditorAnnotation,
+                onQuickCopy: handleQuickCopyFeedback,
+                onOpenShareExport: handleOpenShareExport,
+                onShowAnnotatedFiles: handleFlashAnnotatedFiles,
+                onDiscardPlanEdits: handleDiscardPlanEdits,
+                onAskGeneralAI: handleAskGeneralAI,
+                onRespondToAIPermission: respondToAIPermission,
+                onAIConfigChange: handleAIConfigChange,
+              },
+            }}
+          />
 
           {/* Code File Popout */}
           {codeFilePopout.popoutProps && (
