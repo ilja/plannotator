@@ -148,6 +148,7 @@ import {
   type AnnotateSource,
   type SubmissionStatus,
 } from "./appPresentation";
+import { buildAppLayoutPresentation } from "./appLayoutPresentation";
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -478,9 +479,6 @@ const App: React.FC = () => {
     onSnapClose: () => setIsAgentTerminalOpen(false),
     apply: (w) => document.documentElement.style.setProperty("--agent-terminal-w", `${w}px`),
   });
-  const isResizing =
-    panelResize.isDragging || tocResize.isDragging || agentTerminalResize.isDragging;
-
   // Whether the document has any TOC-eligible headings (level <= 3, matching
   // buildTocHierarchy). Drives the empty-doc auto-close behavior below — must
   // be declared before the effects that reference it (TDZ in dep arrays).
@@ -3109,17 +3107,35 @@ const App: React.FC = () => {
     resetThread: resetAIThread,
     sessionId: aiSessionId,
   } = aiChat;
-  const canUseAI = aiAvailable && aiContext !== null;
-  const canUseAskAI = canUseAI || isAgentTerminalReady;
+  const layoutPresentation = buildAppLayoutPresentation({
+    isAgentTerminalResizing: agentTerminalResize.isDragging,
+    isLeftSidebarResizing: tocResize.isDragging,
+    isRightSidebarResizing: panelResize.isDragging,
+    wideModeType,
+    isRightSidebarOpen: isPanelOpen,
+    rightSidebarTab,
+    annotateSource,
+    recentMessageCount: recentMessages.length,
+    messageAnnotationCount: activeMessageAnnotationCounts.size,
+    aiAvailable,
+    hasAIContext: aiContext !== null,
+    isAgentTerminalReady,
+    aiMessages,
+    aiConfig,
+  });
+  const { aiSidebar: layoutAISidebar } = layoutPresentation;
+  const {
+    canUseAI,
+    canUseAskAI,
+    hasMessages: aiSidebarHasMessages,
+    visibleConfig: visibleAIConfig,
+    visibleMessages: visibleAIMessages,
+  } = layoutAISidebar;
   const canUseDocumentAskAI = canUseAskAI;
-  const visibleAIMessages = isAgentTerminalReady ? [] : aiMessages;
   const visibleAIProviders = useMemo<AIProviderOption[]>(
     () => (isAgentTerminalReady ? [{ id: "agent-terminal", name: "Agent terminal" }] : aiProviders),
     [aiProviders, isAgentTerminalReady],
   );
-  const visibleAIConfig = isAgentTerminalReady
-    ? { providerId: "agent-terminal", model: null, reasoningEffort: null }
-    : aiConfig;
 
   const terminalAskReadableFilePath = useMemo(() => {
     if (linkedDocHook.isActive && linkedDocHook.filepath) return linkedDocHook.filepath;
@@ -3836,6 +3852,7 @@ const App: React.FC = () => {
           total: recentMessages.length,
         }
       : undefined;
+  const { leftSidebar: layoutLeftSidebar, rightSidebar: layoutRightSidebar } = layoutPresentation;
 
   // SAFETY: sonner style tokens are custom CSS properties (--normal-bg & friends)
   // that React.CSSProperties deliberately excludes via closed typing; the keys are
@@ -3867,10 +3884,10 @@ const App: React.FC = () => {
           origin,
           isSubmitting,
           isExiting,
-          isPanelOpen: isPanelOpen && rightSidebarTab === "annotations",
+          isPanelOpen: layoutRightSidebar.isAnnotationPanelOpen,
           aiAvailable: canUseAskAI,
-          isAIChatOpen: isPanelOpen && rightSidebarTab === "ai",
-          aiHasMessages: visibleAIMessages.length > 0,
+          isAIChatOpen: layoutRightSidebar.isAIChatOpen,
+          aiHasMessages: aiSidebarHasMessages,
           hasAnyAnnotations: hasAnyAnnotations || hasDirectEdits || hasSavedFileChanges,
           linkedDocIsActive: linkedDocHook.isActive,
           callbackShareUrlReady: callbackConfig
@@ -3899,7 +3916,7 @@ const App: React.FC = () => {
         },
         workspace: {
           scrollViewport,
-          isResizing,
+          isResizing: layoutPresentation.isResizing,
           terminal: {
             shouldRender: shouldRenderAgentTerminal,
             isOpen: isAgentTerminalOpen,
@@ -3910,18 +3927,18 @@ const App: React.FC = () => {
             resizeHandleStyle: agentTerminalResize.handleProps.style,
           },
           leftSidebar: {
-            isWideMode: wideModeType !== null,
+            isWideMode: layoutLeftSidebar.isWideMode,
             isOpen: sidebar.isOpen,
             activeTab: sidebar.activeTab,
             width: tocResize.width,
             isResizeDragging: tocResize.isDragging,
             resizeHandleStyle: tocResize.handleProps.style,
             showFilesTab,
-            showMessagesTab: annotateSource === "message" && recentMessages.length > 1,
+            showMessagesTab: layoutLeftSidebar.showMessagesTab,
             showAgentTerminalControls,
             isAgentTerminalOpen,
             isAgentTerminalRunning,
-            hasMessageAnnotations: activeMessageAnnotationCounts.size > 0,
+            hasMessageAnnotations: layoutLeftSidebar.hasMessageAnnotations,
             hasFileAnnotations,
             blocks,
             annotations,
@@ -3989,9 +4006,9 @@ const App: React.FC = () => {
             typographyStyle: annotationTypographyStyle,
           },
           rightSidebar: {
-            isOpen: isPanelOpen,
+            isOpen: layoutRightSidebar.isOpen,
             activeTab: rightSidebarTab,
-            isWideMode: wideModeType !== null,
+            isWideMode: layoutRightSidebar.isWideMode,
             canUseAskAI,
             isMobile,
             width: panelResize.width,
