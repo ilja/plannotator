@@ -113,9 +113,7 @@ import {
   type AnnotateFeedbackTarget,
 } from "./agentTerminalIntegration";
 import {
-  buildPlanEditPanelItem,
   buildDirectEditsSection,
-  buildSavedFileChangePanelItems,
   buildSavedFileChangesSection,
   composeFeedbackWithEditSections,
   computeEditStats,
@@ -143,12 +141,15 @@ import {
 import {
   buildAnnotationFeedbackHeading,
   buildAppDocumentPresentation,
-  buildFeedbackLossDescription,
   getActionsLabelMode,
   type AnnotateSource,
   type SubmissionStatus,
 } from "./appPresentation";
 import { buildAppLayoutPresentation } from "./appLayoutPresentation";
+import {
+  buildAppAnnotationEditSummary,
+  copyAnnotationEditSummaryPanelItemsForSidebar,
+} from "./appAnnotationEditSummary";
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -1226,35 +1227,73 @@ const App: React.FC = () => {
     () => allAnnotations.filter((a) => !a.diffContext),
     [allAnnotations],
   );
-  // Any-annotations flag used by Close/Approve/Send guards. Consolidates the
-  // four-term check that was inlined across the annotate-mode header + keyboard paths.
-  const messageMultiSelectMode = annotateSource === "message" && recentMessages.length > 1;
-  const hasAnyAnnotations = useMemo(
+  const unsavedSourceBackedDocuments = useMemo(
+    () => sourceBackedDocuments.getUnsavedSourceBackedDocuments(),
+    [sourceBackedDocuments, sourceBackedDocuments.version],
+  );
+  const savedFileChanges = useMemo(
+    () => sourceBackedDocuments.getSourceBackedSavedFileChanges(),
+    [sourceBackedDocuments, sourceBackedDocuments.version],
+  );
+  const savedFileChangesForValidation = useMemo(
+    () => sourceBackedDocuments.getSourceBackedSavedFileChangesForValidation(),
+    [sourceBackedDocuments, sourceBackedDocuments.version],
+  );
+  const activeSourceSave = activeSourceBackedDocument?.sourceSave?.enabled
+    ? activeSourceBackedDocument.sourceSave
+    : null;
+  const annotationEditSummary = useMemo(
     () =>
-      messageMultiSelectMode
-        ? messageFeedbackAnnotationCount > 0 || editorAnnotations.length > 0
-        : allAnnotations.length > 0 ||
-          codeAnnotations.length > 0 ||
-          editorAnnotations.length > 0 ||
-          linkedDocHook.docAnnotationCount > 0 ||
-          globalAttachments.length > 0,
+      buildAppAnnotationEditSummary({
+        annotateSource,
+        recentMessageCount: recentMessages.length,
+        messageFeedbackAnnotationCount,
+        annotationCount: allAnnotations.length,
+        codeAnnotationCount: codeAnnotations.length,
+        editorAnnotationCount: editorAnnotations.length,
+        linkedDocumentAnnotationCount: linkedDocHook.docAnnotationCount,
+        globalAttachmentCount: globalAttachments.length,
+        sharingEnabled,
+        activeSourceSaveEnabled: activeSourceSave !== null,
+        unsavedSourceFileBufferCount: unsavedSourceBackedDocuments.length,
+        isEditingMarkdown,
+        editorDiffersFromBaseline,
+        hasCommittedPlanEdit: editedMarkdownRef.current !== null,
+        savedFileChanges,
+        hasEditStats: editStats !== null,
+        originalMarkdown: originalMarkdownRef.current,
+        editedMarkdown: editedMarkdownRef.current,
+      }),
     [
-      messageMultiSelectMode,
-      messageFeedbackAnnotationCount,
+      activeSourceSave,
       allAnnotations.length,
+      annotateSource,
       codeAnnotations.length,
+      editStats,
       editorAnnotations.length,
-      linkedDocHook.docAnnotationCount,
+      editorDiffersFromBaseline,
       globalAttachments.length,
+      isEditingMarkdown,
+      linkedDocHook.docAnnotationCount,
+      messageFeedbackAnnotationCount,
+      recentMessages.length,
+      savedFileChanges,
+      sharingEnabled,
+      unsavedSourceBackedDocuments.length,
     ],
   );
-  const feedbackAnnotationCount = messageMultiSelectMode
-    ? messageFeedbackAnnotationCount + editorAnnotations.length
-    : allAnnotations.length +
-      codeAnnotations.length +
-      editorAnnotations.length +
-      linkedDocHook.docAnnotationCount +
-      globalAttachments.length;
+  const {
+    canShareCurrentSession,
+    directEditsPanelInfo,
+    feedbackLoss,
+    hasAnyAnnotations,
+    hasDirectEdits,
+    hasFeedbackContent,
+    hasSavedFileChanges,
+    hasUnsentFeedback,
+    hasUnsavedSourceFileBuffers,
+    messageMultiSelectMode,
+  } = annotationEditSummary;
 
   const buildFullAnnotationsOutput = React.useCallback((): string => {
     if (messageMultiSelectMode) {
@@ -1326,10 +1365,6 @@ const App: React.FC = () => {
     linkedDocHook.isActive,
     linkedDocHook.filepath,
   ]);
-
-  // Code-file comments are intentionally not serialized into share URLs in v1.
-  // Hide share entry points once they exist so we do not silently drop feedback.
-  const canShareCurrentSession = sharingEnabled && codeAnnotations.length === 0;
 
   const resolveRawHtmlForShare = useCallback(async (): Promise<string | null> => {
     if (renderAs !== "html" || !rawHtml) return null;
@@ -2023,24 +2058,10 @@ const App: React.FC = () => {
     [activeSourceBackedDocument, sourceBackedDocuments, scheduleDraftSave],
   );
 
-  const unsavedSourceBackedDocuments = useMemo(
-    () => sourceBackedDocuments.getUnsavedSourceBackedDocuments(),
-    [sourceBackedDocuments, sourceBackedDocuments.version],
-  );
-  const savedFileChanges = useMemo(
-    () => sourceBackedDocuments.getSourceBackedSavedFileChanges(),
-    [sourceBackedDocuments, sourceBackedDocuments.version],
-  );
   const openSourceDocuments = useMemo(
     () => sourceBackedDocuments.getSourceBackedDocuments(),
     [sourceBackedDocuments, sourceBackedDocuments.version],
   );
-  const savedFileChangesForValidation = useMemo(() => {
-    return sourceBackedDocuments.getSourceBackedSavedFileChangesForValidation();
-  }, [sourceBackedDocuments, sourceBackedDocuments.version]);
-  const activeSourceSave = activeSourceBackedDocument?.sourceSave?.enabled
-    ? activeSourceBackedDocument.sourceSave
-    : null;
 
   // Save-button display is driven by the sourceBackedDocuments state machine — one
   // source of truth for dirty/saving/saved, rather than a parallel flag.
@@ -2097,36 +2118,6 @@ const App: React.FC = () => {
   useEffect(() => {
     setConfirmCancelEdits(false);
   }, [activeSourceBackedDocument?.key]);
-
-  const hasUnsavedSourceFileBuffers = unsavedSourceBackedDocuments.length > 0;
-
-  // True when the feedback payload carries unsaved direct edits. Source-backed
-  // file buffers are ordinary dirty editor state; they only become review
-  // context once saved to disk and tracked through savedFileChanges.
-  const hasDirectEdits =
-    !activeSourceSave &&
-    !hasUnsavedSourceFileBuffers &&
-    (isEditingMarkdown ? editorDiffersFromBaseline : editedMarkdownRef.current !== null);
-  const hasSavedFileChanges = savedFileChanges.length > 0;
-  const hasFeedbackContent = hasAnyAnnotations || hasDirectEdits || hasSavedFileChanges;
-  const feedbackLoss = buildFeedbackLossDescription(feedbackAnnotationCount, hasDirectEdits);
-  const hasUnsentFeedback = feedbackAnnotationCount > 0 || hasDirectEdits;
-
-  // Pinned "Direct edits" card data for the annotation sidebar. Source-backed
-  // documents show saved-to-disk changes only; dirty buffers stay in the editor
-  // and file tree until the user explicitly saves.
-  const directEditsPanelInfo = useMemo(() => {
-    if (savedFileChanges.length > 0) {
-      return buildSavedFileChangePanelItems(savedFileChanges);
-    }
-
-    if (activeSourceBackedDocument?.sourceSave?.enabled) return null;
-    if (!editStats) return null;
-    const base = originalMarkdownRef.current;
-    const edited = editedMarkdownRef.current;
-    if (base === null || edited === null) return null;
-    return [buildPlanEditPanelItem(base, edited)];
-  }, [activeSourceBackedDocument, editStats, savedFileChanges]);
 
   // "Direct Edits" feedback section: unified diff of user edits vs the
   // as-submitted baseline. getEditedMarkdown owns the read discipline.
@@ -4022,7 +4013,7 @@ const App: React.FC = () => {
             sharingEnabled: canShareCurrentSession,
             editorAnnotations,
             otherFileAnnotations,
-            directEdits: directEditsPanelInfo,
+            directEdits: copyAnnotationEditSummaryPanelItemsForSidebar(directEditsPanelInfo),
             aiMessages: visibleAIMessages,
             aiIsCreatingSession,
             aiIsStreaming,
