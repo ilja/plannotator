@@ -155,6 +155,7 @@ import {
   buildAppTerminalFeedbackPresentation,
   buildEditorFeedbackRequest,
 } from "./appTerminalSubmissionPresentation";
+import { buildAppSourceBackedSavePresentation } from "./appSourceBackedSavePresentation";
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -1235,9 +1236,11 @@ const App: React.FC = () => {
     () => sourceBackedDocuments.getSourceBackedSavedFileChangesForValidation(),
     [sourceBackedDocuments, sourceBackedDocuments.version],
   );
-  const activeSourceSave = activeSourceBackedDocument?.sourceSave?.enabled
-    ? activeSourceBackedDocument.sourceSave
-    : null;
+  const sourceBackedSavePresentation = buildAppSourceBackedSavePresentation({
+    activeDocument: activeSourceBackedDocument,
+    isEditingMarkdown,
+  });
+  const { activeSourceSave } = sourceBackedSavePresentation;
   const annotationEditSummary = useMemo(
     () =>
       buildAppAnnotationEditSummary({
@@ -2059,35 +2062,14 @@ const App: React.FC = () => {
     [sourceBackedDocuments, sourceBackedDocuments.version],
   );
 
-  // Save-button display is driven by the sourceBackedDocuments state machine — one
-  // source of truth for dirty/saving/saved, rather than a parallel flag.
-  const activeSaveStatus = activeSourceBackedDocument?.saveStatus;
-  const hasUnsavedDiskChanges =
-    activeSaveStatus === "dirty" ||
-    activeSaveStatus === "conflict" ||
-    activeSaveStatus === "error" ||
-    activeSaveStatus === "missing";
-  // Emphasize the Save control (dot + primary text) whenever there is work to
-  // persist or a save is in flight — one predicate drives both so they can't diverge.
-  const emphasizeSave = hasUnsavedDiskChanges || activeSaveStatus === "saving";
-  // A rejected save (disk conflict or write error) — surfaced as a destructive
-  // dot/label so it reads as "save failed, retry" rather than ordinary unsaved.
-  const saveFailed = activeSaveStatus === "conflict" || activeSaveStatus === "error";
-  const activeSourceBufferDirty =
-    activeSourceBackedDocument?.sourceSave?.enabled === true &&
-    activeSourceBackedDocument.currentText !== activeSourceBackedDocument.diskBaseline;
-  const canOverwriteDiskConflict =
-    activeSourceBackedDocument?.sourceSave?.enabled === true &&
-    !!activeSourceBackedDocument.diskConflict &&
-    activeSourceBackedDocument.currentText !== activeSourceBackedDocument.diskConflict.text;
-
-  // Editing exit control: a source-backed session with unsaved edits gets a
-  // two-step "Cancel" (discard + exit). Plan mode and clean source sessions keep
-  // the plain "Done" (commit edits + exit), so annotation close behavior is unchanged.
-  const cancelMode =
-    isEditingMarkdown &&
-    !!activeSourceSave &&
-    (activeSourceBufferDirty || activeSaveStatus === "conflict" || activeSaveStatus === "error");
+  const {
+    activeSaveStatus,
+    canOverwriteDiskConflict,
+    cancelMode,
+    emphasizeSave,
+    hasUnsavedDiskChanges,
+    saveFailed,
+  } = sourceBackedSavePresentation;
   const handleEditExitClick = useCallback(() => {
     if (!isEditingMarkdown) {
       handleEditToggle();
