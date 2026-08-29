@@ -156,6 +156,7 @@ import {
   buildEditorFeedbackRequest,
 } from "./appTerminalSubmissionPresentation";
 import { buildAppSourceBackedSavePresentation } from "./appSourceBackedSavePresentation";
+import { buildAppScreenPresentation } from "./appScreenPresentation";
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -3810,26 +3811,27 @@ const App: React.FC = () => {
   } = documentPresentation;
   const _selectedAIProvider =
     aiProviders.find((provider) => provider.id === aiConfig.providerId) ?? null;
-  // Only greet in a normal authoring context — not on a read-only shared session
-  // (a viewer would also be able to flip the owner's gridEnabled). Deferred
-  // (not marked seen) until then.
-  const shouldShowLookAndFeelAnnouncement = showLookAndFeelAnnouncement && !isSharedSession;
-  const renderedLinkedDocument = linkedDocHook.isActive
-    ? {
-        filepath: linkedDocHook.filepath!,
-        onBack: handleLinkedDocBack,
-        label: linkedDocumentLabel,
-        backLabel,
-        variant: linkedDocumentVariant,
-      }
-    : null;
-  const viewerMessagePickerInfo =
-    annotateSource === "message" && recentMessages.length > 1
-      ? {
-          current: recentMessages.findIndex((message) => message.messageId === selectedMessageId) + 1,
-          total: recentMessages.length,
-        }
-      : undefined;
+  const screenPresentation = buildAppScreenPresentation({
+    activeSourceDocument: activeSourceBackedDocument,
+    activeSourceSave,
+    isApiMode,
+    isLoadingShared,
+    isSharedSession,
+    showExport,
+    getCurrentFeedbackPayload,
+    canUseDocumentAskAI,
+    onAskAI: handleAskAI,
+    showLookAndFeelAnnouncement,
+    linkedDocumentIsActive: linkedDocHook.isActive,
+    linkedDocumentPath: linkedDocHook.filepath,
+    onLinkedDocumentBack: handleLinkedDocBack,
+    linkedDocumentLabel,
+    linkedDocumentBackLabel: backLabel,
+    linkedDocumentVariant,
+    annotateSource,
+    recentMessages,
+    selectedMessageId,
+  });
   const { leftSidebar: layoutLeftSidebar, rightSidebar: layoutRightSidebar } = layoutPresentation;
 
   // SAFETY: sonner style tokens are custom CSS properties (--normal-bg & friends)
@@ -3879,12 +3881,7 @@ const App: React.FC = () => {
         },
         banners: {
           linkedDocumentError: linkedDocHook.error,
-          hasDiskConflict: Boolean(activeSourceBackedDocument?.diskConflict),
-          conflictedFileName: activeSourceBackedDocument?.basename ?? "",
-          hasMissingSourceFile:
-            activeSourceBackedDocument?.missingOnDisk === true &&
-            !activeSourceBackedDocument.diskConflict,
-          missingFileName: activeSourceBackedDocument?.basename ?? "",
+          ...screenPresentation.banners,
           isEditingMarkdown,
           canOverwriteDiskConflict,
           isSavingSourceFile: activeSaveStatus === "saving",
@@ -3950,7 +3947,7 @@ const App: React.FC = () => {
             showEmptyFolderPresentation,
             canUseWideMode,
             canEditMarkdown,
-            activeSourceSaveFileName: activeSourceSave?.basename ?? null,
+            activeSourceSaveFileName: screenPresentation.document.activeSourceSaveFileName,
             activeSaveStatus,
             saveFailed,
             emphasizeSave,
@@ -3966,17 +3963,17 @@ const App: React.FC = () => {
             annotations: viewerAnnotations,
             selectedAnnotationId,
             globalAttachments,
-            activeSourceDocumentKey: activeSourceBackedDocument?.key ?? null,
+            activeSourceDocumentKey: screenPresentation.document.activeSourceDocumentKey,
             editGeneration,
             viewerRef,
-            showDemoBadge: !isApiMode && !isLoadingShared && !isSharedSession,
-            linkedDocument: renderedLinkedDocument,
+            showDemoBadge: screenPresentation.document.showDemoBadge,
+            linkedDocument: screenPresentation.document.linkedDocument,
             imageBaseDir,
             codePathBaseDir: activeDocBaseDir,
             copyLabel: viewerCopyLabel,
             sourceInfo,
             openInAppPath: viewerOpenInAppPath,
-            messagePickerInfo: viewerMessagePickerInfo,
+            messagePickerInfo: screenPresentation.document.messagePickerInfo,
             checkboxOverrides: checkbox.overrides,
             actionsLabelMode,
             typographyStyle: annotationTypographyStyle,
@@ -4016,7 +4013,7 @@ const App: React.FC = () => {
           shortShareUrl,
           isGeneratingShortUrl,
           shortUrlError,
-          annotationsOutput: showExport ? getCurrentFeedbackPayload() : "",
+          annotationsOutput: screenPresentation.dialogs.annotationsOutput,
           annotationCount: allAnnotations.length + codeAnnotations.length,
           sharingEnabled: canShareCurrentSession,
           markdown,
@@ -4044,7 +4041,8 @@ const App: React.FC = () => {
           submitted: completion.submitted,
           agentName: completion.agentName,
           annotateSource: completion.annotateSource,
-          shouldShowLookAndFeelAnnouncement,
+          shouldShowLookAndFeelAnnouncement:
+            screenPresentation.overlays.shouldShowLookAndFeelAnnouncement,
           gridEnabled,
           pendingPasteImage,
         },
@@ -4122,7 +4120,7 @@ const App: React.FC = () => {
             onOpenCodeFile: codeFilePopout.open,
             onOpenMessagePicker: handleOpenMessagePicker,
             onToggleCheckbox: checkbox.toggle,
-            onAskAI: canUseDocumentAskAI ? handleAskAI : undefined,
+            onAskAI: screenPresentation.documentActions.onAskAI,
           },
           rightSidebar: {
             onClose: handleCloseRightSidebar,
