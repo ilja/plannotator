@@ -17,18 +17,11 @@ export const DiffTypeSchema = Schema.Union([
     "staged",
     "unstaged",
     "last-commit",
-    "jj-current",
-    "jj-last",
-    "jj-line",
-    "jj-all",
-    "jj-evolog",
     "branch",
     "merge-base",
     "all",
-    "p4-default",
   ]),
   Schema.TemplateLiteral(["worktree:", Schema.String]),
-  Schema.TemplateLiteral(["p4-changelist:", Schema.String]),
 ]);
 
 /** Workspace-mode diff variants. */

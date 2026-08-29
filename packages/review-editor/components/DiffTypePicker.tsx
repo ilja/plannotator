@@ -27,13 +27,7 @@ const OPTION_HINTS: OptionHintMap = {
   "workspace-current": "Current local changes in every workspace repo.",
   "workspace-staged": "Staged Git changes in every workspace repo.",
   "workspace-unstaged": "Unstaged Git changes in every workspace repo.",
-  "workspace-last": "The last committed Git change or previous jj change in every workspace repo.",
-  "jj-current": "Changes in the current jj change.",
-  "jj-last": "Changes in the previous jj change.",
-  "jj-line": "Changes in your line of work from the selected bookmark or revision.",
-  "jj-evolog":
-    "What changed between two evolutions of the current change — shows what you amended.",
-  "jj-all": "Every tracked file in the current jj workspace, shown as additions.",
+  "workspace-last": "The last committed Git change in every workspace repo.",
   branch:
     "Straight compare against the base branch (picked below). Can show commits that aren't yours if the base has new commits.",
   "merge-base":

@@ -60,18 +60,6 @@ function describeDiff(ctx: FeedbackDiffContext): string {
     case "workspace-last":
       label = "Workspace last change";
       break;
-    case "jj-current":
-      label = "Current change";
-      break;
-    case "jj-last":
-      label = "Last change";
-      break;
-    case "jj-line":
-      label = base ? `Line of work vs \`${base}\`` : "Line of work";
-      break;
-    case "jj-all":
-      label = "All files";
-      break;
     case "branch":
       label = base ? `Branch diff vs \`${base}\`` : "Branch diff";
       break;
@@ -82,7 +70,7 @@ function describeDiff(ctx: FeedbackDiffContext): string {
       label = "All files";
       break;
     default:
-      label = mode; // p4-* or anything else — show raw
+      label = mode;
   }
   return worktreePath ? `${label} _(worktree: ${worktreePath})_` : label;
 }

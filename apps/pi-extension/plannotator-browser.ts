@@ -3,24 +3,25 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { createWorktreePool, type WorktreePool } from "./generated/worktree-pool.js";
+import {
+  getFileContentsForDiff,
+  getGitDiffFingerprint,
+  gitAddFile,
+  gitResetFile,
+} from "./generated/review-core.js";
 import { fileURLToPath } from "node:url";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  prepareLocalReviewDiff,
   reviewRuntime,
-  detectManagedVcs,
-  getVcsContext,
-  getVcsDiffFingerprint,
-  getVcsFileContentsForDiff,
-  canStageFiles,
-  runVcsDiff,
-  stageFile,
   startAnnotateServer,
   startReviewServer,
   type DiffType,
-  type VcsSelection,
-  unstageFile,
 } from "./server.js";
+import {
+  getGitContext,
+  isGitRepository,
+  runGitDiff,
+} from "./server/git.js";
 import { openBrowser, isRemoteSession } from "./server/network.js";
 import { parsePRUrl, checkPRAuth, fetchPR } from "./server/pr.js";
 import { getDisplayRepo } from "./generated/pr-provider.js";
@@ -89,13 +90,14 @@ async function buildLocalWorkspaceReview(
 ): Promise<WorkspaceReviewSession> {
   return WorkspaceReviewSession.create(
     {
-      getVcsContext,
-      runVcsDiff,
-      getVcsFileContentsForDiff,
-      getVcsDiffFingerprint,
-      canStageFiles,
-      stageFile,
-      unstageFile,
+      getGitContext,
+      runGitDiff,
+      getFileContentsForDiff: (diffType, defaultBranch, filePath, oldPath, cwd) =>
+        getFileContentsForDiff(reviewRuntime, diffType, defaultBranch, filePath, oldPath, cwd),
+      getGitDiffFingerprint: (diffType, defaultBranch, cwd, options) =>
+        getGitDiffFingerprint(reviewRuntime, diffType, defaultBranch, cwd, options),
+      gitAddFile: (filePath, cwd) => gitAddFile(reviewRuntime, filePath, cwd),
+      gitResetFile: (filePath, cwd) => gitResetFile(reviewRuntime, filePath, cwd),
     },
     root,
     options,
@@ -157,7 +159,7 @@ interface PreparedReview {
   gitRef: string;
   diffError?: string;
   diffType?: DiffType | WorkspaceDiffType;
-  gitContext?: Awaited<ReturnType<typeof prepareLocalReviewDiff>>["gitContext"];
+  gitContext?: Awaited<ReturnType<typeof getGitContext>>;
   initialBase?: string;
   prMetadata?: PrMetadata;
   prPatchIncomplete?: boolean;
@@ -441,27 +443,27 @@ async function prepareLocalReview(
   cwd: string,
   requestedDiffType: DiffType | undefined,
   requestedBase: string | undefined,
-  vcsType: VcsSelection | undefined,
 ): Promise<PreparedReview> {
   const config = loadConfig();
-  const managedVcs = await detectManagedVcs(cwd, vcsType);
-  const forcedVcs = !!vcsType && vcsType !== "auto";
-  if (managedVcs || forcedVcs) {
-    const result = await prepareLocalReviewDiff({
-      cwd,
-      vcsType,
-      requestedDiffType,
-      requestedBase,
-      configuredDiffType: resolveDefaultDiffType(config),
+  if (await isGitRepository(cwd)) {
+    const gitContext = await getGitContext(cwd);
+    const diffType =
+      requestedDiffType &&
+      (requestedDiffType.startsWith("worktree:") ||
+        gitContext.diffOptions.some((option) => option.id === requestedDiffType))
+        ? requestedDiffType
+        : resolveDefaultDiffType(config);
+    const base = requestedBase ?? gitContext.defaultBranch;
+    const result = await runGitDiff(diffType, base, gitContext.cwd ?? cwd, {
       hideWhitespace: config.diffOptions?.hideWhitespace ?? false,
     });
     return {
-      rawPatch: result.rawPatch,
-      gitRef: result.gitRef,
+      rawPatch: result.patch,
+      gitRef: result.label,
       diffError: result.error,
-      diffType: result.diffType,
-      gitContext: result.gitContext,
-      initialBase: result.base,
+      diffType,
+      gitContext,
+      initialBase: base,
     };
   }
   const workspace = await buildLocalWorkspaceReview(cwd, {
@@ -470,7 +472,7 @@ async function prepareLocalReview(
     hideWhitespace: config.diffOptions?.hideWhitespace ?? false,
   });
   if (workspace.repos.length === 0) {
-    throw new Error("Not in a VCS repo and no nested Git/JJ repositories were found.");
+    throw new Error("Not in a Git repository and no nested Git repositories were found.");
   }
   return {
     rawPatch: workspace.rawPatch,
@@ -489,7 +491,6 @@ export async function openCodeReview(
     defaultBranch?: string;
     diffType?: DiffType;
     prUrl?: string;
-    vcsType?: VcsSelection;
     useLocal?: boolean;
   } = {},
 ): Promise<{
@@ -509,7 +510,6 @@ export async function startCodeReviewBrowserSession(
     defaultBranch?: string;
     diffType?: DiffType;
     prUrl?: string;
-    vcsType?: VcsSelection;
     useLocal?: boolean;
   } = {},
 ): Promise<
@@ -533,7 +533,6 @@ export async function startCodeReviewBrowserSession(
           options.cwd ?? ctx.cwd,
           options.diffType,
           options.defaultBranch,
-          options.vcsType,
         );
 
   const server = await startReviewServer({

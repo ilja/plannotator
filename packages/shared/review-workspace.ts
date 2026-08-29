@@ -1,6 +1,13 @@
 import { isAbsolute, relative, resolve } from "node:path";
 
-import type { DiffOption, DiffResult, DiffType, GitContext, GitDiffOptions } from "./review-core";
+import {
+  canStageGitFiles,
+  type DiffOption,
+  type DiffResult,
+  type DiffType,
+  type GitContext,
+  type GitDiffOptions,
+} from "./review-core";
 import {
   aggregateWorkspacePatch,
   buildWorkspaceRepoLabels,
@@ -16,14 +23,11 @@ export type WorkspaceDiffType =
   | "workspace-unstaged"
   | "workspace-last";
 
-export type WorkspaceChildVcsType = "git" | "jj";
-
 export interface WorkspaceRepoState {
   id: string;
   label: string;
   cwd: string;
   selected: boolean;
-  vcsType?: WorkspaceChildVcsType;
   diffType?: DiffType;
   gitContext?: GitContext;
   diffOptions?: DiffOption[];
@@ -44,26 +48,25 @@ export interface WorkspaceReviewState {
 }
 
 export interface WorkspaceReviewRuntime {
-  getVcsContext(cwd?: string): Promise<GitContext>;
-  runVcsDiff(
+  getGitContext(cwd?: string): Promise<GitContext>;
+  runGitDiff(
     diffType: DiffType,
     defaultBranch?: string,
     cwd?: string,
     options?: GitDiffOptions,
   ): Promise<DiffResult>;
-  getVcsFileContentsForDiff(
+  getFileContentsForDiff(
     diffType: DiffType,
     defaultBranch: string,
     filePath: string,
     oldPath?: string,
     cwd?: string,
   ): Promise<{ oldContent: string | null; newContent: string | null }>;
-  canStageFiles(diffType: string, cwd?: string): Promise<boolean>;
-  stageFile(diffType: string, filePath: string, cwd?: string): Promise<void>;
-  unstageFile(diffType: string, filePath: string, cwd?: string): Promise<void>;
-  /** Optional staleness fingerprint probe (see vcs-core). Absent or `null`
+  gitAddFile(filePath: string, cwd?: string): Promise<void>;
+  gitResetFile(filePath: string, cwd?: string): Promise<void>;
+  /** Optional staleness fingerprint probe. Absent or `null`
    * results are treated as always-fresh. */
-  getVcsDiffFingerprint?(
+  getGitDiffFingerprint?(
     diffType: DiffType,
     defaultBranch?: string,
     cwd?: string,
@@ -81,7 +84,6 @@ export interface WorkspacePromptRepoContext {
   label: string;
   cwd: string;
   changed: boolean;
-  vcsType?: WorkspaceChildVcsType;
   gitRef?: string;
   error?: string;
 }
@@ -114,39 +116,19 @@ function isWorkspaceDiffType(value: string | undefined): value is WorkspaceDiffT
   return !!value && WORKSPACE_DIFF_TYPES.has(value as WorkspaceDiffType);
 }
 
-function normalizeVcsType(value: string | undefined): WorkspaceChildVcsType | undefined {
-  return value === "git" || value === "jj" ? value : undefined;
-}
-
 export function mapWorkspaceModeToRepoDiffType(
   workspaceDiffType: WorkspaceDiffType,
-  vcsType: WorkspaceChildVcsType | undefined,
-): DiffType | null {
-  if (vcsType === "jj") {
-    switch (workspaceDiffType) {
-      case "workspace-current":
-        return "jj-current";
-      case "workspace-last":
-        return "jj-last";
-      default:
-        return null;
-    }
+): DiffType {
+  switch (workspaceDiffType) {
+    case "workspace-current":
+      return "uncommitted";
+    case "workspace-staged":
+      return "staged";
+    case "workspace-unstaged":
+      return "unstaged";
+    case "workspace-last":
+      return "last-commit";
   }
-
-  if (vcsType === "git") {
-    switch (workspaceDiffType) {
-      case "workspace-current":
-        return "uncommitted";
-      case "workspace-staged":
-        return "staged";
-      case "workspace-unstaged":
-        return "unstaged";
-      case "workspace-last":
-        return "last-commit";
-    }
-  }
-
-  return null;
 }
 
 export function mapRepoDiffTypeToWorkspaceMode(
@@ -155,14 +137,12 @@ export function mapRepoDiffTypeToWorkspaceMode(
   if (isWorkspaceDiffType(diffType)) return diffType;
   switch (diffType) {
     case "uncommitted":
-    case "jj-current":
       return "workspace-current";
     case "staged":
       return "workspace-staged";
     case "unstaged":
       return "workspace-unstaged";
     case "last-commit":
-    case "jj-last":
       return "workspace-last";
     default:
       return undefined;
@@ -179,25 +159,18 @@ export function resolveWorkspaceInitialDiffType(
     mapRepoDiffTypeToWorkspaceMode(configured),
     "workspace-current" as const,
   ]) {
-    if (candidate && workspaceModeAvailable(repos, candidate)) return candidate;
+    if (candidate && hasWorkspaceRepos(repos)) return candidate;
   }
   return "workspace-current";
 }
 
-export function workspaceModeAvailable(
-  repos: WorkspaceRepoRuntimeState[],
-  diffType: WorkspaceDiffType,
-): boolean {
-  if (diffType === "workspace-staged" || diffType === "workspace-unstaged") {
-    const detectedRepos = repos.filter((repo) => repo.vcsType);
-    return detectedRepos.length > 0 && detectedRepos.every((repo) => repo.vcsType === "git");
-  }
-  return true;
+function hasWorkspaceRepos(repos: WorkspaceRepoRuntimeState[]): boolean {
+  return repos.length > 0;
 }
 
 export function getWorkspaceDiffOptions(repos: WorkspaceRepoRuntimeState[]): DiffOption[] {
   const options = [WORKSPACE_CURRENT];
-  if (workspaceModeAvailable(repos, "workspace-staged")) {
+  if (hasWorkspaceRepos(repos)) {
     options.push(WORKSPACE_STAGED, WORKSPACE_UNSTAGED);
   }
   options.push(WORKSPACE_LAST);
@@ -290,14 +263,12 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
       repoPaths.map(async (cwd, index) => {
         const label = labels[index];
         try {
-          const gitContext = await runtime.getVcsContext(cwd);
-          const vcsType = normalizeVcsType(gitContext.vcsType);
+          const gitContext = await runtime.getGitContext(cwd);
           return {
             id: `repo-${index + 1}`,
             label,
             cwd,
             selected: false,
-            vcsType,
             gitContext,
             diffOptions: gitContext.diffOptions,
             rawPatch: "",
@@ -318,7 +289,7 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
     );
 
     const diffType = resolveWorkspaceInitialDiffType(
-      repos.filter((repo) => repo.vcsType),
+      repos,
       options.requestedDiffType,
       options.configuredDiffType,
     );
@@ -340,7 +311,7 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
     } = {},
   ): Promise<WorkspaceDiffSnapshot> {
     const requestedMode = mapRepoDiffTypeToWorkspaceMode(options.diffType) ?? this.diffType;
-    if (!workspaceModeAvailable(this.repos, requestedMode)) {
+    if (!hasWorkspaceRepos(this.repos)) {
       throw new Error(`Workspace diff mode is not available: ${requestedMode}`);
     }
 
@@ -350,24 +321,14 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
 
     const repos = await Promise.all(
       this.repos.map(async (repo) => {
-        if (!repo.vcsType || !repo.gitContext) {
+        if (!repo.gitContext) {
           return { ...repo, selected: false, rawPatch: "", gitRef: "" };
         }
 
-        const repoDiffType = mapWorkspaceModeToRepoDiffType(requestedMode, repo.vcsType);
-        if (!repoDiffType) {
-          return {
-            ...repo,
-            selected: false,
-            diffType: undefined,
-            rawPatch: "",
-            gitRef: "",
-            error: `Workspace diff mode ${requestedMode} is not available for ${repo.vcsType}`,
-          };
-        }
+        const repoDiffType = mapWorkspaceModeToRepoDiffType(requestedMode);
 
         try {
-          const diff = await this.runtime.runVcsDiff(
+          const diff = await this.runtime.runGitDiff(
             repoDiffType,
             repo.gitContext.defaultBranch,
             repo.cwd,
@@ -410,14 +371,12 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
    * a repo with no changes at snapshot time still alters the workspace diff if
    * it gains changes later). `null` when the runtime has no fingerprint probe. */
   async getFingerprint(): Promise<string | null> {
-    const probe = this.runtime.getVcsDiffFingerprint;
+    const probe = this.runtime.getGitDiffFingerprint;
     if (!probe) return null;
     const parts: string[] = ["workspace", this.diffType];
     for (const repo of this.repos) {
-      if (!repo.vcsType || !repo.gitContext) continue;
-      const repoDiffType =
-        repo.diffType ?? mapWorkspaceModeToRepoDiffType(this.diffType, repo.vcsType);
-      if (!repoDiffType) continue;
+      if (!repo.gitContext) continue;
+      const repoDiffType = repo.diffType ?? mapWorkspaceModeToRepoDiffType(this.diffType);
       const fingerprint = await probe(repoDiffType, repo.gitContext.defaultBranch, repo.cwd, {
         hideWhitespace: this.hideWhitespace,
       });
@@ -437,7 +396,6 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
           label: repo.label,
           cwd: repo.cwd,
           changed: repo.selected && !!repo.rawPatch.trim(),
-          vcsType: repo.vcsType,
           gitRef: repo.gitRef,
           error: repo.error,
         })),
@@ -460,10 +418,8 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
       throw new Error("Old path is not part of the same workspace repository");
     }
 
-    return this.runtime.getVcsFileContentsForDiff(
-      resolved.repo.diffType ??
-        mapWorkspaceModeToRepoDiffType(this.diffType, resolved.repo.vcsType) ??
-        "uncommitted",
+    return this.runtime.getFileContentsForDiff(
+      resolved.repo.diffType ?? mapWorkspaceModeToRepoDiffType(this.diffType),
       resolved.repo.gitContext?.defaultBranch ?? "main",
       resolved.repoRelativePath,
       resolvedOld?.repoRelativePath,
@@ -475,18 +431,13 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
     const resolved = resolveWorkspaceFilePath(this.repos, filePath);
     if (!resolved) throw new Error("File is not part of this workspace review");
 
-    const diffType =
-      resolved.repo.diffType ??
-      mapWorkspaceModeToRepoDiffType(this.diffType, resolved.repo.vcsType) ??
-      "uncommitted";
-    if (!(await this.runtime.canStageFiles(diffType, resolved.repo.cwd))) {
-      throw new Error("Staging not available");
-    }
+    const diffType = resolved.repo.diffType ?? mapWorkspaceModeToRepoDiffType(this.diffType);
+    if (!canStageGitFiles(diffType)) throw new Error("Staging not available");
 
     if (undo) {
-      await this.runtime.unstageFile(diffType, resolved.repoRelativePath, resolved.repo.cwd);
+      await this.runtime.gitResetFile(resolved.repoRelativePath, resolved.repo.cwd);
     } else {
-      await this.runtime.stageFile(diffType, resolved.repoRelativePath, resolved.repo.cwd);
+      await this.runtime.gitAddFile(resolved.repoRelativePath, resolved.repo.cwd);
     }
   }
 }

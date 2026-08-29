@@ -29,7 +29,7 @@ import {
   type WorkspaceRepoRuntimeState,
 } from "./review-workspace";
 import { startReviewServer } from "./review";
-import { getVcsContext, type DiffType, type GitContext } from "./vcs";
+import { getGitContext, type GitContext } from "./git";
 
 const tempDirs: string[] = [];
 const originalSemPath = process.env.PLANNOTATOR_SEM_PATH;
@@ -225,7 +225,7 @@ describe("review-workspace", () => {
       const repoDir = makeTempDir("plannotator-sem-local-repo-");
       const cwdLogPath = join(dir, "cwd-log");
       initRepo(repoDir);
-      const gitContext = await getVcsContext(repoDir);
+      const gitContext = await getGitContext(repoDir);
       process.env.PLANNOTATOR_SEM_PATH = makeMockSem(dir, { runCwdLogPath: cwdLogPath });
 
       const server = await startReviewServer({
@@ -597,7 +597,7 @@ describe("review-workspace", () => {
       expect(repos).not.toContain(root);
     });
 
-    it("discovers multiple nested VCS repos", () => {
+    it("discovers multiple nested Git repos", () => {
       const root = makeTempDir("plannotator-workspace-multi-");
 
       // Create nested repos
@@ -642,16 +642,6 @@ describe("review-workspace", () => {
       expect(repos).toHaveLength(1);
       expect(repos).toContain(parentRepo);
       expect(repos).not.toContain(grandchildRepo);
-    });
-
-    it("discovers nested jj repos", () => {
-      const root = makeTempDir("plannotator-workspace-jj-");
-      const jjRepo = join(root, "jj-app");
-      mkdirSync(join(jjRepo, ".jj"), { recursive: true });
-
-      const repos = discoverWorkspaceRepoPaths(root);
-
-      expect(repos).toEqual([jjRepo]);
     });
 
     it("skips ignored directories", () => {
@@ -773,99 +763,14 @@ describe("review-workspace", () => {
   });
 
   describe("workspace review server integration", () => {
-    it("maps one workspace mode across mixed Git and JJ repos", async () => {
-      const root = makeTempDir("plannotator-workspace-mixed-vcs-");
-      const gitRepo = join(root, "api");
-      const jjRepo = join(root, "web");
-      mkdirSync(join(gitRepo, ".git"), { recursive: true });
-      mkdirSync(join(jjRepo, ".jj"), { recursive: true });
-      const calls: Array<{ cwd?: string; diffType: DiffType }> = [];
-
-      const runtime = {
-        async getVcsContext(cwd?: string): Promise<GitContext> {
-          const isJj = cwd === jjRepo;
-          return {
-            vcsType: isJj ? "jj" : "git",
-            currentBranch: "main",
-            defaultBranch: "main",
-            cwd: cwd ?? root,
-            worktrees: [],
-            availableBranches: { local: [], remote: [] },
-            diffOptions: isJj
-              ? [
-                  { id: "jj-current", label: "Current change" },
-                  { id: "jj-last", label: "Last change" },
-                ]
-              : [
-                  { id: "uncommitted", label: "Uncommitted changes" },
-                  { id: "last-commit", label: "Last commit" },
-                ],
-          };
-        },
-        async runVcsDiff(diffType: DiffType, _defaultBranch?: string, cwd?: string) {
-          calls.push({ cwd, diffType });
-          return {
-            patch: [
-              "diff --git a/file.txt b/file.txt",
-              "--- a/file.txt",
-              "+++ b/file.txt",
-              "@@ -1 +1 @@",
-              "-old",
-              "+new",
-            ].join("\n"),
-            label: diffType,
-          };
-        },
-        async getVcsFileContentsForDiff() {
-          return { oldContent: null, newContent: null };
-        },
-        async canStageFiles() {
-          return true;
-        },
-        async stageFile() {},
-        async unstageFile() {},
-      };
-
-      const workspace = await WorkspaceReviewSession.create(runtime, root, {
-        requestedDiffType: "staged",
-      });
-
-      expect(workspace.diffType).toBe("workspace-current");
-      expect(workspace.diffOptions.map((option) => option.id)).toEqual([
-        "workspace-current",
-        "workspace-last",
-      ]);
-      expect(calls).toEqual(
-        expect.arrayContaining([
-          { cwd: gitRepo, diffType: "uncommitted" },
-          { cwd: jjRepo, diffType: "jj-current" },
-        ]),
-      );
-      expect(workspace.rawPatch).toContain("diff --git a/api/file.txt b/api/file.txt");
-      expect(workspace.rawPatch).toContain("diff --git a/web/file.txt b/web/file.txt");
-
-      calls.length = 0;
-      await workspace.rebuild({ diffType: "workspace-last" });
-      expect(calls).toEqual(
-        expect.arrayContaining([
-          { cwd: gitRepo, diffType: "last-commit" },
-          { cwd: jjRepo, diffType: "jj-last" },
-        ]),
-      );
-      await expect(workspace.rebuild({ diffType: "workspace-staged" })).rejects.toThrow(
-        "Workspace diff mode is not available",
-      );
-    });
-
     it("normalizes agent annotation paths to workspace-prefixed paths", async () => {
       const root = makeTempDir("plannotator-workspace-agent-path-");
       const api = join(root, "api");
       mkdirSync(join(api, ".git"), { recursive: true });
 
       const runtime = {
-        async getVcsContext(cwd?: string): Promise<GitContext> {
+        async getGitContext(cwd?: string): Promise<GitContext> {
           return {
-            vcsType: "git",
             currentBranch: "main",
             defaultBranch: "main",
             cwd: cwd ?? api,
@@ -874,7 +779,7 @@ describe("review-workspace", () => {
             diffOptions: [{ id: "uncommitted", label: "Uncommitted changes" }],
           };
         },
-        async runVcsDiff() {
+        async runGitDiff() {
           return {
             patch: [
               "diff --git a/src/file.ts b/src/file.ts",
@@ -887,14 +792,11 @@ describe("review-workspace", () => {
             label: "Uncommitted changes",
           };
         },
-        async getVcsFileContentsForDiff() {
+        async getFileContentsForDiff() {
           return { oldContent: null, newContent: null };
         },
-        async canStageFiles() {
-          return true;
-        },
-        async stageFile() {},
-        async unstageFile() {},
+        async gitAddFile() {},
+        async gitResetFile() {},
       };
 
       const workspace = await WorkspaceReviewSession.create(runtime, root);
@@ -912,10 +814,9 @@ describe("review-workspace", () => {
       mkdirSync(join(broken, ".git"), { recursive: true });
 
       const runtime = {
-        async getVcsContext(cwd?: string): Promise<GitContext> {
+        async getGitContext(cwd?: string): Promise<GitContext> {
           if (cwd === broken) throw new Error("broken repo");
           return {
-            vcsType: "git",
             currentBranch: "main",
             defaultBranch: "main",
             cwd: cwd ?? api,
@@ -924,7 +825,7 @@ describe("review-workspace", () => {
             diffOptions: [{ id: "staged", label: "Staged changes" }],
           };
         },
-        async runVcsDiff() {
+        async runGitDiff() {
           return {
             patch: [
               "diff --git a/src/file.ts b/src/file.ts",
@@ -937,14 +838,11 @@ describe("review-workspace", () => {
             label: "Staged changes",
           };
         },
-        async getVcsFileContentsForDiff() {
+        async getFileContentsForDiff() {
           return { oldContent: null, newContent: null };
         },
-        async canStageFiles() {
-          return true;
-        },
-        async stageFile() {},
-        async unstageFile() {},
+        async gitAddFile() {},
+        async gitResetFile() {},
       };
 
       const workspace = await WorkspaceReviewSession.create(runtime, root, {
@@ -1063,6 +961,14 @@ describe("review-workspace", () => {
         expect(lastPayload.diffOptions?.map((option) => option.id)).toContain("workspace-current");
         expect(lastPayload.semanticDiff).toEqual(expect.objectContaining({ available: true }));
         expect(lastPayload.rawPatch).toContain("diff --git a/api/tracked.txt b/api/tracked.txt");
+
+        const stageLastResponse = await fetch(`${server.url}/api/git-add`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath: "api/tracked.txt" }),
+        });
+        expect(stageLastResponse.status).toBe(400);
+        expect(await stageLastResponse.json()).toEqual({ error: "Staging not available" });
 
         const currentResponse = await fetch(`${server.url}/api/diff/switch`, {
           method: "POST",

@@ -14,7 +14,7 @@ export interface DiffFreshness {
 
 /**
  * Polls `GET /api/diff/fresh` while the review is open. The server compares a
- * cheap VCS fingerprint captured when the diff snapshot was computed against
+  * cheap Git fingerprint captured when the diff snapshot was computed against
  * the repo's state NOW — files changing mid-review (the normal agent-editing-
  * while-you-review workflow) flips `fresh` to false.
  *
@@ -61,7 +61,7 @@ export function useDiffFreshness({
     };
 
     const tick = async () => {
-      // Nobody is looking — don't burn VCS commands on a hidden window.
+       // Nobody is looking — don't burn Git commands on a hidden window.
       if (document.hidden) {
         schedule();
         return;

@@ -1,9 +1,7 @@
-import type { VcsSelection } from "./vcs-core";
 import { stripWrappingQuotes } from "./resolve-file";
 
 export interface ParsedReviewArgs {
   prUrl?: string;
-  vcsType?: VcsSelection;
   useLocal: boolean;
 }
 
@@ -12,15 +10,11 @@ export function parseReviewArgs(input: string | string[]): ParsedReviewArgs {
     ? input.map((token) => stripWrappingQuotes(token.trim())).filter(Boolean)
     : tokenizeReviewArgs(input ?? "");
 
-  let vcsType: VcsSelection | undefined;
   let useLocal = true;
   const positional: string[] = [];
 
   for (const token of tokens) {
     switch (token) {
-      case "--git":
-        vcsType = "git";
-        break;
       case "--local":
         useLocal = true;
         break;
@@ -36,7 +30,6 @@ export function parseReviewArgs(input: string | string[]): ParsedReviewArgs {
   const target = positional[0];
   return {
     prUrl: target && isReviewUrl(target) ? target : undefined,
-    vcsType,
     useLocal,
   };
 }

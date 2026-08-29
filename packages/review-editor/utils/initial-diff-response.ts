@@ -47,12 +47,6 @@ const RepositoryContextSchema = Schema.Struct({
   displayFallback: Schema.optionalKey(Schema.Unknown),
 });
 
-const JjEvologSchema = Schema.Struct({
-  commitId: Schema.String,
-  description: Schema.String,
-  age: Schema.optionalKey(Schema.Unknown),
-});
-
 const RecentCommitSchema = Schema.Struct({
   sha: Schema.String,
   shortSha: Schema.String,
@@ -70,8 +64,6 @@ const GitContextFieldsSchema = Schema.Struct({
   compareTarget: Schema.optionalKey(Schema.Unknown),
   repository: Schema.optionalKey(Schema.Unknown),
   cwd: Schema.optionalKey(Schema.Unknown),
-  vcsType: Schema.optionalKey(Schema.Unknown),
-  jjEvologs: Schema.optionalKey(Schema.Unknown),
   recentCommits: Schema.optionalKey(Schema.Unknown),
 });
 
@@ -417,23 +409,6 @@ function decodeRepository(
   };
 }
 
-function decodeJjEvolog(
-  value: Schema.Schema.Type<typeof Schema.Unknown>,
-): NonNullable<GitContext["jjEvologs"]>[number] | undefined {
-  const record = decodeRecord(value);
-  if (!record) return undefined;
-  const fields = Option.getOrUndefined(Schema.decodeUnknownOption(JjEvologSchema)(record));
-  if (!fields) return undefined;
-
-  const age = Option.getOrUndefined(decodeString(fields.age));
-  return {
-    ...withoutKnownFields(record, ["commitId", "description", "age"]),
-    commitId: fields.commitId,
-    description: fields.description,
-    ...(age !== undefined && { age }),
-  };
-}
-
 function decodePRStackNode(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): PRStackNode | undefined {
@@ -515,30 +490,11 @@ function decodeGitContext(
   const compareTarget = decodeCompareTarget(context.compareTarget);
   const repository = decodeRepository(context.repository);
   const cwd = Option.getOrUndefined(decodeString(context.cwd));
-  const vcsType = Option.getOrUndefined(
-    Schema.decodeUnknownOption(Schema.Literals(["git", "jj", "p4"]))(context.vcsType),
-  );
-  const jjEvologs = decodeValidArrayItems(context.jjEvologs, (item) =>
-    decodeOptionalItem(decodeJjEvolog, item),
-  );
   const recentCommits = decodeValidArrayItems(context.recentCommits, (item) =>
     decodeOptionalItem(decodeRecentCommit, item),
   );
 
   return {
-    ...withoutKnownFields(record, [
-      "currentBranch",
-      "defaultBranch",
-      "diffOptions",
-      "worktrees",
-      "availableBranches",
-      "compareTarget",
-      "repository",
-      "cwd",
-      "vcsType",
-      "jjEvologs",
-      "recentCommits",
-    ]),
     currentBranch: context.currentBranch,
     defaultBranch: context.defaultBranch,
     diffOptions,
@@ -547,8 +503,6 @@ function decodeGitContext(
     ...(compareTarget !== undefined && { compareTarget }),
     ...(repository !== undefined && { repository }),
     ...(cwd !== undefined && { cwd }),
-    ...(vcsType !== undefined && { vcsType }),
-    ...(jjEvologs !== undefined && { jjEvologs }),
     ...(recentCommits !== undefined && { recentCommits }),
   };
 }

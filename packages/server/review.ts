@@ -15,18 +15,22 @@ import type { Origin } from "@plannotator/shared/agents";
 import {
   type DiffType,
   type GitContext,
-  runVcsDiff,
-  getVcsFileContentsForDiff,
-  getVcsDiffFingerprint,
-  canStageFiles,
-  stageFile,
-  unstageFile,
-  resolveVcsCwd,
   validateFilePath,
-  getVcsContext,
-  detectRemoteDefaultCompareTarget,
-  gitRuntime,
-} from "./vcs";
+} from "./git";
+import {
+  canStageGitFiles,
+  detectRemoteDefaultBranch,
+  getGitDiffFingerprint,
+  resolveGitDiffCwd,
+} from "@plannotator/shared/review-core";
+import {
+  getFileContentsForDiff,
+  getGitContext,
+  gitAddFile,
+  gitResetFile,
+  runGitDiff,
+  runtime as gitRuntime,
+} from "./git";
 import { basename } from "node:path";
 import { existsSync } from "node:fs";
 import { resolveBaseBranch } from "@plannotator/shared/review-core";
@@ -106,7 +110,7 @@ import {
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
 export { openBrowser } from "./browser";
-export { type DiffType, type DiffOption, type GitContext, type WorktreeInfo } from "./vcs";
+export { type DiffType, type DiffOption, type GitContext, type WorktreeInfo } from "./git";
 export { type PRMetadata } from "./pr";
 export { handleServerReady as handleReviewServerReady } from "./shared-handlers";
 
@@ -127,7 +131,7 @@ export interface ReviewServerOptions {
   diffType?: DiffType | WorkspaceDiffType;
   /** Git context with branch info and available diff options */
   gitContext?: GitContext;
-  /** Local parent directory containing multiple child VCS repositories. */
+  /** Local parent directory containing multiple child Git repositories. */
   workspace?: LocalWorkspaceReview;
   /**
    * Initial base branch the caller used to compute `rawPatch`. When a caller
@@ -215,7 +219,6 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   const workspace = options.workspace;
   const isWorkspaceMode = !!workspace;
   const hasLocalAccess = !!gitContext;
-  const sessionVcsType = gitContext?.vcsType;
   let draftKey = contentHash(options.rawPatch);
   const editorAnnotations = createEditorAnnotationHandler();
   const externalAnnotations = createExternalAnnotationHandler("review");
@@ -351,7 +354,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         return await getPRFullStackFingerprint(gitRuntime, prMetadata, fullStackCwd);
       }
       if (!hasLocalAccess || isWorkspaceDiffType(currentDiffType)) return null;
-      return await getVcsDiffFingerprint(currentDiffType, currentBase, gitContext?.cwd, {
+      return await getGitDiffFingerprint(gitRuntime, currentDiffType, currentBase, gitContext?.cwd, {
         hideWhitespace: currentHideWhitespace,
       });
     } catch {
@@ -381,7 +384,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   // Non-blocking — the server is already listening by the time this resolves.
   const detectRemoteCompareTarget = () => {
     if (!gitContext || options.initialBase || isPRMode) return;
-    detectRemoteDefaultCompareTarget(gitContext.cwd, sessionVcsType).then((remote) => {
+    detectRemoteDefaultBranch(gitRuntime, gitContext.cwd).then((remote) => {
       if (remote && !baseEverSwitched) currentBase = remote;
     });
   };
@@ -393,10 +396,10 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     if (workspace) return workspace.root;
     if (options.worktreePool && prMetadata) {
       return (
-        resolvePRLocalCwd() ?? resolveVcsCwd(currentDiffType, gitContext?.cwd) ?? process.cwd()
+        resolvePRLocalCwd() ?? resolveGitDiffCwd(currentDiffType, gitContext?.cwd) ?? process.cwd()
       );
     }
-    return options.agentCwd ?? resolveVcsCwd(currentDiffType, gitContext?.cwd) ?? process.cwd();
+    return options.agentCwd ?? resolveGitDiffCwd(currentDiffType, gitContext?.cwd) ?? process.cwd();
   };
   // Strict launch root for /api/open-in: in PR pool mode only the PR's own
   // checkout is acceptable — never the launch-repo fallback resolveAgentCwd
@@ -406,7 +409,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   const resolveOpenInRoot = (): string | string[] => {
     if (workspace) return workspace.root;
     if (options.worktreePool && prMetadata) return resolvePRLocalCwd() ?? [];
-    return options.agentCwd ?? resolveVcsCwd(currentDiffType, gitContext?.cwd) ?? process.cwd();
+    return options.agentCwd ?? resolveGitDiffCwd(currentDiffType, gitContext?.cwd) ?? process.cwd();
   };
   // Async sibling of resolveAgentCwd: waits for the current PR's checkout
   // warmup instead of falling back while it is still being created.
@@ -429,8 +432,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     }
     if (options.agentCwd) return options.agentCwd;
     if (gitContext) {
-      const vcsCwd = resolveVcsCwd(currentDiffType, gitContext.cwd);
-      if (vcsCwd) return vcsCwd;
+      const gitCwd = resolveGitDiffCwd(currentDiffType, gitContext.cwd);
+      if (gitCwd) return gitCwd;
       if (gitContext.cwd) return gitContext.cwd;
     }
     return semanticDiffScratchCwd;
@@ -654,8 +657,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
 
   const handleOpenInRoute = async (req: Request, url: URL): Promise<Response | undefined> => {
     // API: Open a file in an app. Resolves the repo-relative `git diff`
-    // path against the VCS root server-side (resolveAgentCwd folds in
-    // workspace.root, the PR local checkout, resolveVcsCwd(gitContext.cwd),
+    // path against the Git root server-side (resolveAgentCwd folds in
+    // workspace.root, the PR local checkout, resolveGitDiffCwd(gitContext.cwd),
     // and process.cwd()) — not the client `base`, which is wrong when
     // review runs from a subdirectory — then containment-checks it.
     if (url.pathname === "/api/open-in" && req.method === "POST") {
@@ -664,7 +667,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   };
 
   const handleDiffFreshRoute = async (req: Request, url: URL): Promise<Response | undefined> => {
-    // API: cheap staleness probe — has the underlying VCS state changed
+    // API: cheap staleness probe — has the underlying Git state changed
     // since the current diff snapshot was computed? Best-effort: anything
     // that cannot be fingerprinted reports fresh (no banner).
     if (url.pathname === "/api/diff/fresh" && req.method === "GET") {
@@ -752,7 +755,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         const defaultCwd = gitContext?.cwd;
 
         // Run the new diff
-        const result = await runVcsDiff(newDiffType, base, defaultCwd, {
+        const result = await runGitDiff(newDiffType, base, defaultCwd, {
           hideWhitespace: currentHideWhitespace,
         });
 
@@ -773,8 +776,8 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         let updatedContext: GitContext | undefined;
         if (gitContext) {
           try {
-            const effectiveCwd = resolveVcsCwd(newDiffType, gitContext.cwd);
-            updatedContext = await getVcsContext(effectiveCwd, sessionVcsType);
+            const effectiveCwd = resolveGitDiffCwd(newDiffType, gitContext.cwd);
+            updatedContext = await getGitContext(effectiveCwd);
           } catch {
             /* best-effort */
           }
@@ -1152,7 +1155,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     if (!baseRef) {
       return Response.json({ oldContent: null, newContent: null });
     }
-    const result = await getVcsFileContentsForDiff(
+    const result = await getFileContentsForDiff(
       "merge-base",
       baseRef,
       filePath,
@@ -1209,7 +1212,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         const requestedBase = url.searchParams.get("base") ?? undefined;
         const base = resolveReviewBase(requestedBase);
         const defaultCwd = gitContext?.cwd;
-        const result = await getVcsFileContentsForDiff(
+        const result = await getFileContentsForDiff(
           currentDiffType,
           base,
           filePath,
@@ -1294,7 +1297,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
   };
 
   const handleGitAddRoute = async (req: Request, url: URL): Promise<Response | undefined> => {
-    // API: Stage / unstage a file (disabled when VCS doesn't support it)
+    // API: Stage / unstage a file (disabled when Git doesn't support it)
     if (url.pathname === "/api/git-add" && req.method === "POST") {
       try {
         const rawBody = await req.json();
@@ -1322,15 +1325,15 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
           }
         }
 
-        const stageCwd = resolveVcsCwd(currentDiffType, gitContext?.cwd);
-        if (isPRMode || !(await canStageFiles(currentDiffType, stageCwd))) {
+        const stageCwd = resolveGitDiffCwd(currentDiffType, gitContext?.cwd);
+        if (isPRMode || !canStageGitFiles(currentDiffType)) {
           return Response.json({ error: "Staging not available" }, { status: 400 });
         }
 
         if (body.undo) {
-          await unstageFile(currentDiffType, body.filePath, stageCwd);
+          await gitResetFile(body.filePath, stageCwd);
         } else {
-          await stageFile(currentDiffType, body.filePath, stageCwd);
+          await gitAddFile(body.filePath, stageCwd);
         }
 
         return Response.json({ ok: true });

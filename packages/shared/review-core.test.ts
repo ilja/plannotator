@@ -4,11 +4,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve as resolvePath } from "node:path";
 import {
+  canStageGitFiles,
   getDefaultBranch,
   getFileContentsForDiff,
   getGitContext,
   listRecentCommits,
   parseWorktreeDiffType,
+  resolveGitDiffCwd,
   runGitDiff,
   type DiffType,
   type ReviewGitRuntime,
@@ -287,5 +289,13 @@ describe("review-core", () => {
       const parsed = parseWorktreeDiffType(composite);
       expect(parsed).toEqual({ path: "/tmp/my-worktree", subType: sub });
     }
+  });
+
+  test("resolves worktree CWDs and staging availability from Git diff types", () => {
+    expect(resolveGitDiffCwd("worktree:/tmp/feature:unstaged", "/tmp/main")).toBe("/tmp/feature");
+    expect(resolveGitDiffCwd("merge-base", "/tmp/main")).toBe("/tmp/main");
+    expect(canStageGitFiles("worktree:/tmp/feature:unstaged")).toBeTrue();
+    expect(canStageGitFiles("worktree:/tmp/feature:staged")).toBeFalse();
+    expect(canStageGitFiles("last-commit")).toBeFalse();
   });
 });

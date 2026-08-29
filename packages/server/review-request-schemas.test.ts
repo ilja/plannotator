@@ -14,7 +14,7 @@ import {
 } from "./review-request-schemas";
 
 describe("review request schemas", () => {
-  test("DiffTypeSchema accepts VCS types and rejects workspace types", () => {
+  test("DiffTypeSchema accepts Git types and rejects workspace types", () => {
     expect(Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)("uncommitted"))).toBe(
       "uncommitted",
     );
@@ -22,12 +22,23 @@ describe("review request schemas", () => {
       Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)("worktree:feature")),
     ).toBe("worktree:feature");
     expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)("p4-changelist:123")),
-    ).toBe("p4-changelist:123");
-    expect(
       Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)("workspace-current")),
     ).toBeUndefined();
     expect(Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(123))).toBeUndefined();
+  });
+
+  test("DiffTypeSchema rejects legacy JJ and P4 values", () => {
+    for (const diffType of [
+      "jj-current",
+      "jj-last",
+      "jj-line",
+      "jj-all",
+      "jj-evolog",
+      "p4-default",
+      "p4-changelist:123",
+    ]) {
+      expect(Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(diffType))).toBeUndefined();
+    }
   });
 
   test("WorkspaceDiffTypeSchema accepts workspace variants only", () => {

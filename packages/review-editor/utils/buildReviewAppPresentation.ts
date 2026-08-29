@@ -241,8 +241,6 @@ function buildReviewFileTreeControls(
     | "detectedBase"
     | "compareTarget"
     | "recentCommits"
-    | "jjEvologs"
-    | "detectedEvoBase"
   >
 > {
   return {
@@ -282,8 +280,6 @@ function buildReviewFileTreeCompareTarget(
     | "selectedBase"
     | "detectedBase"
     | "recentCommits"
-    | "jjEvologs"
-    | "detectedEvoBase"
   >
 > {
   const isPullRequestReview = input.prMetadata !== null;
@@ -296,8 +292,6 @@ function buildReviewFileTreeCompareTarget(
       ? undefined
       : gitContext?.defaultBranch || gitContext?.compareTarget?.fallback,
     recentCommits: isPullRequestReview ? undefined : gitContext?.recentCommits,
-    jjEvologs: isPullRequestReview ? undefined : gitContext?.jjEvologs,
-    detectedEvoBase: isPullRequestReview ? undefined : gitContext?.jjEvologs?.[1]?.commitId,
   };
 }
 

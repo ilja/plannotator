@@ -310,7 +310,7 @@ export interface HandleOpenInOptions {
   /**
    * Server-supplied resolution root, used INSTEAD of the client-provided
    * `base`. The review server passes `resolveAgentCwd()` here so repo-relative
-   * `git diff` paths resolve against the VCS root rather than the launch cwd
+    * `git diff` paths resolve against the Git root rather than the launch cwd
    * (which differs when `plannotator review` runs from a subdirectory).
    * When omitted, the handler falls back to the client `base`. May return
    * several roots (annotate passes the session's reference roots).

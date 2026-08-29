@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { getGitDiffFingerprint, type ReviewGitRuntime } from "./review-core";
 
 // Real-git runtime against a throwaway repo — fingerprints are only meaningful
-// against actual VCS behavior, so no mocks.
+// against actual Git behavior, so no mocks.
 const runtime: ReviewGitRuntime = {
   async runGit(args, options) {
     const proc = Bun.spawn(["git", ...args], {
@@ -123,9 +123,4 @@ describe("getGitDiffFingerprint", () => {
     expect(staged).not.toBe(before!);
   });
 
-  test("unknown diff type returns null (treated as always-fresh)", async () => {
-    // SAFETY: testing runtime fallback for unknown diff type; string literal is intentionally outside DiffType union.
-    const result = await getGitDiffFingerprint(runtime, "p4-default" as never, "main", repo);
-    expect(result).toBeNull();
-  });
 });

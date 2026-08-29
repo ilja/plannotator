@@ -1,15 +1,16 @@
 import {
-  canStageFiles,
-  getVcsContext,
-  getVcsDiffFingerprint,
-  getVcsFileContentsForDiff,
-  runVcsDiff,
-  stageFile,
-  unstageFile,
-} from "./vcs";
+  getFileContentsForDiff,
+  getGitContext,
+  gitAddFile,
+  gitResetFile,
+  runGitDiff,
+  runtime,
+} from "./git";
+import { getGitDiffFingerprint } from "@plannotator/shared/review-core";
 import {
   WorkspaceReviewSession,
   type WorkspaceReviewBuildOptions,
+  type WorkspaceReviewRuntime,
 } from "@plannotator/shared/review-workspace";
 
 export {
@@ -32,14 +33,14 @@ export {
 
 export type LocalWorkspaceReview = WorkspaceReviewSession;
 
-const workspaceRuntime = {
-  getVcsContext,
-  runVcsDiff,
-  getVcsFileContentsForDiff,
-  getVcsDiffFingerprint,
-  canStageFiles,
-  stageFile,
-  unstageFile,
+const workspaceRuntime: WorkspaceReviewRuntime = {
+  getGitContext,
+  runGitDiff,
+  getFileContentsForDiff,
+  gitAddFile,
+  gitResetFile,
+  getGitDiffFingerprint: (diffType, defaultBranch, cwd, options) =>
+    getGitDiffFingerprint(runtime, diffType, defaultBranch, cwd, options),
 };
 
 export async function buildLocalWorkspaceReview(

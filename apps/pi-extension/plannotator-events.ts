@@ -1,6 +1,6 @@
 import { Option, Schema } from "effect";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { DiffType, VcsSelection } from "./server.js";
+import type { DiffType } from "./server.js";
 import { getRecentAssistantMessages } from "./assistant-message.js";
 import { DiffTypeSchema } from "./server/request-schemas.js";
 import {
@@ -46,7 +46,6 @@ export interface PlannotatorRequestBase<A extends PlannotatorAction, P, R> {
 export interface PlannotatorCodeReviewPayload {
   diffType?: DiffType;
   defaultBranch?: string;
-  vcsType?: VcsSelection;
   useLocal?: boolean;
   cwd?: string;
   prUrl?: string;
@@ -106,7 +105,6 @@ export type PlannotatorResponseMap = {
 const PlannotatorCodeReviewPayloadSchema = Schema.Struct({
   diffType: Schema.optionalKey(DiffTypeSchema),
   defaultBranch: Schema.optionalKey(Schema.String),
-  vcsType: Schema.optionalKey(Schema.Literals(["auto", "git", "jj", "p4"])),
   useLocal: Schema.optionalKey(Schema.Boolean),
   cwd: Schema.optionalKey(Schema.String),
   prUrl: Schema.optionalKey(Schema.String),
@@ -170,7 +168,6 @@ async function handleCodeReviewRequest(
     cwd: request.payload?.cwd,
     defaultBranch: request.payload?.defaultBranch,
     diffType: request.payload?.diffType,
-    vcsType: request.payload?.vcsType,
     useLocal: request.payload?.useLocal,
     prUrl: request.payload?.prUrl,
   });

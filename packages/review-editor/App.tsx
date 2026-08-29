@@ -959,8 +959,6 @@ const ReviewApp: React.FC = () => {
       data.mode !== "workspace" &&
       !data.prMetadata &&
       data.gitContext &&
-      data.gitContext.vcsType !== "p4" &&
-      data.gitContext.vcsType !== "jj" &&
       needsDiffTypeSetup()
     ) {
       setDiffTypeSetupPending(true);
@@ -1496,7 +1494,6 @@ const ReviewApp: React.FC = () => {
                 defaultBranch: data.gitContext!.defaultBranch,
                 diffOptions: data.gitContext!.diffOptions,
                 compareTarget: data.gitContext!.compareTarget,
-                jjEvologs: data.gitContext!.jjEvologs,
                 // HEAD differs per worktree, so refresh the commit-baseline picker.
                 recentCommits: data.gitContext!.recentCommits,
               };
@@ -1539,9 +1536,7 @@ const ReviewApp: React.FC = () => {
       setSelectedBase(branch);
       if (
         activeDiffBase === "branch" ||
-        activeDiffBase === "merge-base" ||
-        activeDiffBase === "jj-line" ||
-        activeDiffBase === "jj-evolog"
+        activeDiffBase === "merge-base"
       ) {
         const ok = await fetchDiffSwitch(diffType, branch);
         if (!ok) setSelectedBase(previous);
@@ -1557,23 +1552,9 @@ const ReviewApp: React.FC = () => {
         ? `worktree:${activeWorktreePath}:${baseDiffType}`
         : baseDiffType;
       if (fullDiffType === diffType) return;
-      // For evolog, default to the second entry (previous state of @) so the
-      // server doesn't fall back to the jj bookmark/trunk revset.
-      // When leaving evolog, restore the base to the detected compare target
-      // so other base-dependent modes (jj-line) don't inherit a commit ID.
-      const enteringEvolog =
-        baseDiffType === "jj-evolog" && gitContext?.jjEvologs && gitContext.jjEvologs.length >= 2;
-      const leavingEvolog =
-        !enteringEvolog && activeDiffBase === "jj-evolog" && gitContext?.defaultBranch;
-      const baseOverride = enteringEvolog
-        ? gitContext!.jjEvologs![1].commitId
-        : leavingEvolog
-          ? gitContext!.defaultBranch
-          : undefined;
-      if (baseOverride) setSelectedBase(baseOverride);
-      await fetchDiffSwitch(fullDiffType, baseOverride);
+      await fetchDiffSwitch(fullDiffType);
     },
-    [diffType, activeWorktreePath, fetchDiffSwitch, gitContext],
+    [diffType, activeWorktreePath, fetchDiffSwitch],
   );
 
   // Switch worktree context (or back to main repo). Preserves the current
@@ -1720,9 +1701,7 @@ const ReviewApp: React.FC = () => {
       // briefly pair an old patch with the new base's content.
       reviewBase:
         activeDiffBase === "branch" ||
-        activeDiffBase === "merge-base" ||
-        activeDiffBase === "jj-line" ||
-        activeDiffBase === "jj-evolog"
+        activeDiffBase === "merge-base"
           ? (committedBase ?? undefined)
           : undefined,
       activeDiffBase,

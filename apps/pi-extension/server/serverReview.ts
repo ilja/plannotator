@@ -106,17 +106,17 @@ import type {
   SemanticDiffResponse,
 } from "../generated/semantic-diff-types.js";
 import {
-  canStageFiles,
-  detectRemoteDefaultCompareTarget,
-  getVcsContext,
-  getVcsDiffFingerprint,
-  getVcsFileContentsForDiff,
-  resolveVcsCwd,
+  detectRemoteDefaultBranch,
+  canStageGitFiles,
+  getGitContext,
+  getGitDiffFingerprint,
+  getFileContentsForDiff,
+  gitAddFile,
+  gitResetFile,
   reviewRuntime,
-  runVcsDiff,
-  stageFile,
-  unstageFile,
-} from "./vcs.js";
+  resolveGitDiffCwd,
+  runGitDiff,
+} from "./git.js";
 
 const piCodeNavRuntime: CodeNavRuntime = {
   runCommand(command, args, options) {
@@ -208,7 +208,7 @@ export async function startReviewServer(options: {
   prPatchIncomplete?: boolean;
   /** Working directory for agent processes (e.g., --local worktree). Independent of diff pipeline. */
   agentCwd?: string;
-  /** Local parent directory containing multiple child VCS repositories. */
+  /** Local parent directory containing multiple child Git repositories. */
   workspace?: WorkspaceReviewSession;
   /** Per-PR worktree pool. When set, pr-switch creates worktrees instead of checking out. */
   worktreePool?: WorktreePool;
@@ -234,7 +234,6 @@ export async function startReviewServer(options: {
   const workspace = options.workspace;
   const isWorkspaceMode = !!workspace;
   const hasLocalAccess = !!options.gitContext;
-  const sessionVcsType = options.gitContext?.vcsType;
   const isRemote = isRemoteSession();
   const wslFlag = detectWSL();
   let prRef = prMeta ? prRefFromMetadata(prMeta) : null;
@@ -385,7 +384,7 @@ export async function startReviewServer(options: {
   // files change mid-review. Best-effort: null = "cannot fingerprint" and is
   // reported fresh, never stale.
   let currentFingerprint: string | null = null;
-  function getCurrentVcsDiffType(): DiffType | null {
+  function getCurrentGitDiffType(): DiffType | null {
     return (
       Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(currentDiffType)) ?? null
     );
@@ -413,9 +412,9 @@ export async function startReviewServer(options: {
         return await getPRFullStackFingerprint(reviewRuntime, prMeta, fullStackCwd);
       }
       if (!hasLocalAccess) return null;
-      const diffType = getCurrentVcsDiffType();
+      const diffType = getCurrentGitDiffType();
       if (!diffType) return null;
-      return await getVcsDiffFingerprint(diffType, currentBase, options.gitContext?.cwd, {
+    return await getGitDiffFingerprint(diffType, currentBase, options.gitContext?.cwd, {
         hideWhitespace: currentHideWhitespace,
       });
     } catch {
@@ -438,7 +437,7 @@ export async function startReviewServer(options: {
   // Fire-and-forget: query the remote for its actual default branch.
   function detectDefaultCompareTarget(): void {
     if (!options.gitContext || options.initialBase || isPRMode) return;
-    detectRemoteDefaultCompareTarget(options.gitContext.cwd, sessionVcsType)
+    detectRemoteDefaultBranch(options.gitContext.cwd)
       .then((remote) => {
         if (remote && !baseEverSwitched) currentBase = remote;
       })
@@ -455,9 +454,9 @@ export async function startReviewServer(options: {
       if (poolPath) return poolPath;
     }
     if (options.agentCwd) return options.agentCwd;
-    const diffType = getCurrentVcsDiffType();
+    const diffType = getCurrentGitDiffType();
     return diffType
-      ? (resolveVcsCwd(diffType, options.gitContext?.cwd) ?? process.cwd())
+      ? (resolveGitDiffCwd(diffType, options.gitContext?.cwd) ?? process.cwd())
       : process.cwd();
   }
   // The current PR's local checkout if one is usable, else null. Mirrors the
@@ -481,10 +480,10 @@ export async function startReviewServer(options: {
   function resolveOpenInRoot(): string | string[] {
     if (workspace) return workspace.root;
     if (options.worktreePool && prMeta) return resolvePRLocalCwd() ?? [];
-    const diffType = getCurrentVcsDiffType();
+    const diffType = getCurrentGitDiffType();
     return (
       options.agentCwd ??
-      (diffType ? resolveVcsCwd(diffType, options.gitContext?.cwd) : undefined) ??
+      (diffType ? resolveGitDiffCwd(diffType, options.gitContext?.cwd) : undefined) ??
       process.cwd()
     );
   }
@@ -497,10 +496,10 @@ export async function startReviewServer(options: {
     }
     if (options.agentCwd) return options.agentCwd;
     if (options.gitContext) {
-      const diffType = getCurrentVcsDiffType();
+      const diffType = getCurrentGitDiffType();
       if (diffType) {
-        const vcsCwd = resolveVcsCwd(diffType, options.gitContext.cwd);
-        if (vcsCwd) return vcsCwd;
+        const gitCwd = resolveGitDiffCwd(diffType, options.gitContext.cwd);
+        if (gitCwd) return gitCwd;
       }
       if (options.gitContext.cwd) return options.gitContext.cwd;
     }
@@ -670,7 +669,7 @@ export async function startReviewServer(options: {
     url: URL,
   ): Promise<false | void> {
     if (!(url.pathname === "/api/diff/fresh" && req.method === "GET")) return false;
-    // Cheap staleness probe — has the underlying VCS state changed since
+    // Cheap staleness probe — has the underlying Git state changed since
     // the current diff snapshot was computed? Best-effort: anything that
     // cannot be fingerprinted reports fresh (no banner).
     // In PR review the local checkout can appear (pool warmup) or change
@@ -730,7 +729,7 @@ export async function startReviewServer(options: {
       const workspaceDiffType = Option.getOrUndefined(
         Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)(body.diffType),
       );
-      const vcsDiffType = Option.getOrUndefined(
+      const gitDiffType = Option.getOrUndefined(
         Schema.decodeUnknownOption(DiffTypeSchema)(body.diffType),
       );
       if (body.hideWhitespace !== undefined) {
@@ -764,19 +763,19 @@ export async function startReviewServer(options: {
         json(res, workspaceResponse);
         return;
       }
-      if (!vcsDiffType) {
+      if (!gitDiffType) {
         json(res, { error: "Invalid diff type" }, 400);
         return;
       }
       const detectedBase = detectedCompareTarget();
       const base = resolveBaseBranch(body.base, detectedBase);
       const defaultCwd = options.gitContext?.cwd;
-      const result = await runVcsDiff(vcsDiffType, base, defaultCwd, {
+      const result = await runGitDiff(gitDiffType, base, defaultCwd, {
         hideWhitespace: currentHideWhitespace,
       });
       currentPatch = result.patch;
       currentGitRef = result.label;
-      currentDiffType = vcsDiffType;
+      currentDiffType = gitDiffType;
       currentBase = base;
       baseEverSwitched = true;
       currentError = result.error;
@@ -788,8 +787,8 @@ export async function startReviewServer(options: {
       let updatedContext: GitContext | undefined;
       if (options.gitContext) {
         try {
-          const effectiveCwd = resolveVcsCwd(vcsDiffType, options.gitContext.cwd);
-          updatedContext = await getVcsContext(effectiveCwd, sessionVcsType);
+          const effectiveCwd = resolveGitDiffCwd(gitDiffType, options.gitContext.cwd);
+          updatedContext = await getGitContext(effectiveCwd);
         } catch {
           /* best-effort */
         }
@@ -1310,12 +1309,12 @@ export async function startReviewServer(options: {
       const detectedBase = detectedCompareTarget();
       const base = resolveBaseBranch(url.searchParams.get("base") ?? undefined, detectedBase);
       const defaultCwd = options.gitContext?.cwd;
-      const diffType = getCurrentVcsDiffType();
+      const diffType = getCurrentGitDiffType();
       if (!diffType) {
         json(res, { error: "No local diff type available" }, 400);
         return true;
       }
-      const result = await getVcsFileContentsForDiff(diffType, base, filePath, oldPath, defaultCwd);
+    const result = await getFileContentsForDiff(diffType, base, filePath, oldPath, defaultCwd);
       json(res, result);
       return true;
     }
@@ -1469,21 +1468,21 @@ export async function startReviewServer(options: {
         return;
       }
 
-      const diffType = getCurrentVcsDiffType();
+      const diffType = getCurrentGitDiffType();
       if (!diffType) {
         json(res, { error: "Staging not available" }, 400);
         return;
       }
-      const stageCwd = resolveVcsCwd(diffType, options.gitContext?.cwd);
-      if (isPRMode || !(await canStageFiles(diffType, stageCwd))) {
+      const stageCwd = resolveGitDiffCwd(diffType, options.gitContext?.cwd);
+      if (isPRMode || !canStageGitFiles(diffType)) {
         json(res, { error: "Staging not available" }, 400);
         return;
       }
 
       if (undo) {
-        await unstageFile(diffType, body.filePath, stageCwd);
+      await gitResetFile(body.filePath, stageCwd);
       } else {
-        await stageFile(diffType, body.filePath, stageCwd);
+      await gitAddFile(body.filePath, stageCwd);
       }
 
       json(res, { ok: true });

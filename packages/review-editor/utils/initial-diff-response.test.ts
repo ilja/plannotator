@@ -34,8 +34,6 @@ const validResponse = {
     },
     repository: { displayFallback: "plannotator" },
     cwd: "/tmp/worktree",
-    vcsType: "git",
-    jjEvologs: [{ commitId: "abc123", description: "Review", age: "1 hour ago" }],
     recentCommits: [
       {
         sha: "abc123",
@@ -209,7 +207,6 @@ describe("decodeInitialDiffResponse", () => {
           },
         },
         repository: { displayFallback: 42, repositoryExtra: "repository" },
-        jjEvologs: [{ ...validResponse.gitContext.jjEvologs[0], age: 42, evologExtra: "evolog" }],
         recentCommits: [{ ...validResponse.gitContext.recentCommits[0], recentExtra: "recent" }],
       },
       repoInfo: { display: validResponse.repoInfo.display, branch: 42, repoExtra: "repo" },
@@ -242,7 +239,6 @@ describe("decodeInitialDiffResponse", () => {
     expect(Result.isSuccess(decoded)).toBeTrue();
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.gitContext).toMatchObject({
-        contextExtra: "context",
         diffOptions: [{ ...validResponse.gitContext.diffOptions[0], optionExtra: "option" }],
         worktrees: [{ ...validResponse.gitContext.worktrees[0], worktreeExtra: "worktree" }],
         availableBranches: {
@@ -260,17 +256,9 @@ describe("decodeInitialDiffResponse", () => {
           },
         },
         repository: { repositoryExtra: "repository" },
-        jjEvologs: [
-          {
-            commitId: "abc123",
-            description: "Review",
-            evologExtra: "evolog",
-          },
-        ],
         recentCommits: [{ ...validResponse.gitContext.recentCommits[0], recentExtra: "recent" }],
       });
       expect(decoded.success.gitContext?.repository).not.toHaveProperty("displayFallback");
-      expect(decoded.success.gitContext?.jjEvologs?.[0]).not.toHaveProperty("age");
       expect(decoded.success.repoInfo).toEqual({
         display: validResponse.repoInfo.display,
         repoExtra: "repo",
@@ -386,12 +374,7 @@ describe("decodeInitialDiffResponse", () => {
         },
         repository: { displayFallback: 42 },
         cwd: 42,
-        vcsType: "svn",
         recentCommits: [validResponse.gitContext.recentCommits[0], { sha: "missing fields" }],
-        jjEvologs: [
-          { ...validResponse.gitContext.jjEvologs[0], age: 42 },
-          { commitId: "missing description" },
-        ],
       },
     });
 
@@ -409,12 +392,6 @@ describe("decodeInitialDiffResponse", () => {
           picker: validResponse.gitContext.compareTarget.picker,
         },
         repository: {},
-        jjEvologs: [
-          {
-            commitId: validResponse.gitContext.jjEvologs[0].commitId,
-            description: validResponse.gitContext.jjEvologs[0].description,
-          },
-        ],
         recentCommits: [validResponse.gitContext.recentCommits[0]],
       });
     }

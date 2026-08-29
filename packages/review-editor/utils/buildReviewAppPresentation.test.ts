@@ -168,7 +168,6 @@ describe("buildReviewWorkspaceViewModel", () => {
     expect(workspace.fileTree.selectedBase).toBeUndefined();
     expect(workspace.fileTree.detectedBase).toBeUndefined();
     expect(workspace.fileTree.recentCommits).toBeUndefined();
-    expect(workspace.fileTree.jjEvologs).toBeUndefined();
     expect(workspace.fileTree.detectedEvoBase).toBeUndefined();
     expect(workspace.fileTree.searchQuery).toBe("");
     expect(workspace.fileTree.isSearchOpen).toBe(false);

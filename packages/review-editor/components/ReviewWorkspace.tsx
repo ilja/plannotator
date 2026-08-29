@@ -293,10 +293,6 @@ function getReviewEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
       return "No unstaged changes. All changes are staged.";
     case "last-commit":
       return getLastCommitEmptyDiffMessage(viewModel);
-    case "jj-current":
-      return "No changes in the current jj change.";
-    case "jj-last":
-      return "No changes in the last jj change.";
     case "workspace-current":
       return "No current changes in the workspace repositories.";
     case "workspace-staged":
@@ -305,12 +301,6 @@ function getReviewEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
       return "No unstaged changes in the workspace repositories.";
     case "workspace-last":
       return "No changes in the last change across workspace repositories.";
-    case "jj-line":
-      return getJjLineEmptyDiffMessage(viewModel);
-    case "jj-evolog":
-      return getJjEvologEmptyDiffMessage(viewModel);
-    case "jj-all":
-      return "No files at the current jj change.";
     case "branch":
     case "merge-base":
       return getReviewBranchEmptyDiffMessage(viewModel);
@@ -331,15 +321,6 @@ function getLastCommitEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
   return `No changes in the last commit${suffix}.`;
 }
 
-function getJjLineEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
-  const base = viewModel.selectedBase || viewModel.defaultBranch || "@-";
-  return `No changes in your line of work vs ${base}.`;
-}
-
-function getJjEvologEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
-  const evolution = viewModel.selectedBase ? viewModel.selectedBase.slice(0, 8) : "previous";
-  return `No changes since evolution ${evolution} — the change looks the same as before.`;
-}
 
 function getReviewBranchEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
   const base = viewModel.selectedBase || viewModel.defaultBranch || "main";

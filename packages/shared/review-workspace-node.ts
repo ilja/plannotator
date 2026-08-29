@@ -14,7 +14,6 @@ import { validateFilePath } from "./review-core";
 
 const SKIP_DIRS = new Set([
   ".git",
-  ".jj",
   "node_modules",
   ".turbo",
   ".next",
@@ -23,7 +22,7 @@ const SKIP_DIRS = new Set([
   "coverage",
 ]);
 
-const VCS_MARKERS = [".jj", ".git"] as const;
+const GIT_MARKERS = [".git"] as const;
 
 export interface WorkspacePathEntry {
   label: string;
@@ -157,8 +156,8 @@ export function resolveWorkspaceFilePath<T extends WorkspacePathEntry>(
   return null;
 }
 
-function hasVcsMarker(dirPath: string): boolean {
-  return VCS_MARKERS.some((marker) => existsSync(resolve(dirPath, marker)));
+function hasGitMarker(dirPath: string): boolean {
+  return GIT_MARKERS.some((marker) => existsSync(resolve(dirPath, marker)));
 }
 
 function collectWorkspaceRepos(root: string, current: string, results: string[]): void {
@@ -169,7 +168,7 @@ function collectWorkspaceRepos(root: string, current: string, results: string[])
     return;
   }
 
-  if (current !== root && hasVcsMarker(current)) {
+  if (current !== root && hasGitMarker(current)) {
     results.push(current);
     return;
   }

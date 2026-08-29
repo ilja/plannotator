@@ -12,8 +12,6 @@
     "./remote": "./remote.ts",
     "./browser": "./browser.ts",
     "./git": "./git.ts",
-    "./p4": "./p4.ts",
-    "./vcs": "./vcs.ts",
     "./repo": "./repo.ts",
     "./review-workspace": "./review-workspace.ts",
     "./agent-terminal-runtime": "./agent-terminal-runtime.ts",

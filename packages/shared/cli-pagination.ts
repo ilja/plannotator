@@ -66,7 +66,7 @@ export function parsePaginatedArray<T>(
 
   for (const page of pages) {
     if (!Array.isArray(page)) {
-      throw new Error("Expected paginated VCS response to contain arrays");
+      throw new Error("Expected paginated Git response to contain arrays");
     }
     for (const entry of page) {
       const decoded = decode(entry);

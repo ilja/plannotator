@@ -16,18 +16,16 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { Schema } from "effect";
 import {
-  canStageFiles,
-  getGitContext,
-  getVcsContext,
-  getVcsFileContentsForDiff,
-  prepareLocalReviewDiff,
-  runGitDiff,
-  runVcsDiff,
-  stageFile,
   startAnnotateServer,
   startReviewServer,
-  unstageFile,
 } from "./server";
+import {
+  getGitContext,
+  getFileContentsForDiff,
+  gitAddFile,
+  gitResetFile,
+  runGitDiff,
+} from "./server/git.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./server/ai-runtime.js";
 import { loadConfig } from "./generated/config.js";
 import { WorkspaceReviewSession } from "./generated/review-workspace.js";
@@ -58,18 +56,6 @@ function git(cwd: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd, encoding: "utf-8", env: childEnv() });
   if (result.status !== 0) {
     throw new Error(result.stderr || `git ${args.join(" ")} failed`);
-  }
-  return result.stdout.trim();
-}
-
-function hasJj(): boolean {
-  return spawnSync("jj", ["--version"], { encoding: "utf-8", env: childEnv() }).status === 0;
-}
-
-function jj(cwd: string, args: string[]): string {
-  const result = spawnSync("jj", ["-R", cwd, ...args], { encoding: "utf-8", env: childEnv() });
-  if (result.status !== 0) {
-    throw new Error(result.stderr || `jj ${args.join(" ")} failed`);
   }
   return result.stdout.trim();
 }
@@ -145,30 +131,6 @@ function makeMockSem(
   return semPath;
 }
 
-function initJjRepo(): string {
-  const repoDir = initRepo();
-  writeFileSync(join(repoDir, "spacey.ts"), "const x = 1;\n", "utf-8");
-  git(repoDir, ["add", "spacey.ts"]);
-  git(repoDir, ["commit", "-m", "add spacey file"]);
-
-  const init = spawnSync("jj", ["git", "init", "--colocate", repoDir], {
-    encoding: "utf-8",
-    env: childEnv(),
-  });
-  if (init.status !== 0) {
-    throw new Error(init.stderr || "jj git init --colocate failed");
-  }
-  jj(repoDir, ["config", "set", "--repo", "user.name", "Pi Review"]);
-  jj(repoDir, ["config", "set", "--repo", "user.email", "pi-review@example.com"]);
-
-  writeFileSync(join(repoDir, "last.txt"), "last\n", "utf-8");
-  jj(repoDir, ["commit", "-m", "add last change"]);
-
-  writeFileSync(join(repoDir, "tracked.txt"), "after\n", "utf-8");
-  writeFileSync(join(repoDir, "spacey.ts"), "const  x = 1;\n", "utf-8");
-
-  return repoDir;
-}
 
 function reservePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -731,7 +693,6 @@ describe("pi annotate server", () => {
 });
 
 describe("pi review server", () => {
-  const testIfJj = hasJj() ? test : test.skip;
   const semanticRawPatch = [
     "diff --git a/src/app.ts b/src/app.ts",
     "new file mode 100644",
@@ -820,7 +781,7 @@ describe("pi review server", () => {
     const dir = makeTempDir("plannotator-pi-sem-local-");
     const repoDir = initRepo();
     const cwdLogPath = join(dir, "cwd-log");
-    const gitContext = await getVcsContext(repoDir);
+    const gitContext = await getGitContext(repoDir);
     process.env.PLANNOTATOR_SEM_PATH = makeMockSem(dir, { runCwdLogPath: cwdLogPath });
     process.env.PLANNOTATOR_PORT = String(await reservePort());
 
@@ -1288,12 +1249,11 @@ describe("pi review server", () => {
 
     const workspace = await WorkspaceReviewSession.create(
       {
-        getVcsContext,
-        runVcsDiff,
-        getVcsFileContentsForDiff,
-        canStageFiles,
-        stageFile,
-        unstageFile,
+         getGitContext,
+         runGitDiff,
+         getFileContentsForDiff,
+         gitAddFile,
+         gitResetFile,
       },
       root,
     );
@@ -1534,157 +1494,4 @@ describe("pi review server", () => {
     }
   }, 15_000);
 
-  testIfJj(
-    "supports JJ local review modes through the Pi server",
-    async () => {
-      const homeDir = makeTempDir("plannotator-pi-home-");
-      process.env.HOME = homeDir;
-      process.env.XDG_CONFIG_HOME = join(homeDir, ".config");
-      const repoDir = initJjRepo();
-      process.chdir(repoDir);
-      process.env.PLANNOTATOR_PORT = String(await reservePort());
-
-      const vcsContext = await getVcsContext(repoDir);
-      expect(vcsContext.vcsType).toBe("jj");
-      const expectedJjBase = vcsContext.defaultBranch;
-      const prepared = await prepareLocalReviewDiff({
-        cwd: repoDir,
-        requestedDiffType: "merge-base",
-        requestedBase: "main",
-        configuredDiffType: "unstaged",
-      });
-      expect(prepared.gitContext.vcsType).toBe("jj");
-      expect(prepared.diffType).toBe("jj-current");
-      expect(prepared.base).toBe(expectedJjBase);
-
-      const forcedGit = await prepareLocalReviewDiff({
-        cwd: repoDir,
-        vcsType: "git",
-        requestedDiffType: "unstaged",
-        configuredDiffType: "unstaged",
-      });
-      expect(forcedGit.gitContext.vcsType).toBe("git");
-      expect(forcedGit.diffType).toBe("unstaged");
-      expect(forcedGit.rawPatch).toContain("tracked.txt");
-
-      const forcedGitServer = await startReviewServer({
-        rawPatch: forcedGit.rawPatch,
-        gitRef: forcedGit.gitRef,
-        error: forcedGit.error,
-        diffType: forcedGit.diffType,
-        gitContext: forcedGit.gitContext,
-        initialBase: forcedGit.base,
-        origin: "pi",
-        htmlContent: "<!doctype html><html><body>review</body></html>",
-      });
-      try {
-        const switchResponse = await fetch(`${forcedGitServer.url}/api/diff/switch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ diffType: "merge-base", base: "main" }),
-        });
-        expect(switchResponse.status).toBe(200);
-        const switched: {
-          gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-        } = await switchResponse.json();
-        expect(switched.gitContext?.vcsType).toBe("git");
-        expect(switched.gitContext?.diffOptions.map((option) => option.id)).toContain("merge-base");
-        expect(switched.gitContext?.diffOptions.map((option) => option.id)).not.toContain(
-          "jj-current",
-        );
-      } finally {
-        forcedGitServer.stop();
-      }
-
-      process.env.PLANNOTATOR_PORT = String(await reservePort());
-      const server = await startReviewServer({
-        rawPatch: prepared.rawPatch,
-        gitRef: prepared.gitRef,
-        error: prepared.error,
-        diffType: prepared.diffType,
-        gitContext: prepared.gitContext,
-        initialBase: prepared.base,
-        origin: "pi",
-        htmlContent: "<!doctype html><html><body>review</body></html>",
-      });
-
-      try {
-        const initial: {
-          diffType: string;
-          rawPatch: string;
-          base?: string;
-          gitContext?: { vcsType?: string; diffOptions: Array<{ id: string }> };
-        } = await fetch(`${server.url}/api/diff`).then((r) => r.json());
-        expect(initial.diffType).toBe("jj-current");
-        expect(initial.base).toBe(expectedJjBase);
-        expect(initial.gitContext?.vcsType).toBe("jj");
-        const optionIds = initial.gitContext?.diffOptions.map((option) => option.id) ?? [];
-        expect(optionIds).toContain("jj-current");
-        expect(optionIds).toContain("jj-last");
-        expect(optionIds).toContain("jj-line");
-        expect(optionIds).toContain("jj-all");
-        expect(initial.rawPatch).toContain("tracked.txt");
-        expect(initial.rawPatch).toContain("+after");
-
-        const lastResponse = await fetch(`${server.url}/api/diff/switch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ diffType: "jj-last" }),
-        });
-        expect(lastResponse.status).toBe(200);
-        const last: { rawPatch: string; diffType: string } = await lastResponse.json();
-        expect(last.diffType).toBe("jj-last");
-        expect(last.rawPatch).toContain("last.txt");
-
-        for (const nextType of ["jj-line", "jj-all"] as const) {
-          const response = await fetch(`${server.url}/api/diff/switch`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ diffType: nextType }),
-          });
-          expect(response.status).toBe(200);
-          const payload: { diffType: string; rawPatch: string } = await response.json();
-          expect(payload.diffType).toBe(nextType);
-          expect(payload.rawPatch).toContain("tracked.txt");
-        }
-
-        const hideWhitespaceResponse = await fetch(`${server.url}/api/diff/switch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ diffType: "jj-current", hideWhitespace: true }),
-        });
-        expect(hideWhitespaceResponse.status).toBe(200);
-        const hidden: { rawPatch: string } = await hideWhitespaceResponse.json();
-        expect(hidden.rawPatch).toContain("+after");
-        expect(hidden.rawPatch).not.toContain("+const  x = 1;");
-
-        const fileContentResponse = await fetch(`${server.url}/api/file-content?path=tracked.txt`);
-        expect(fileContentResponse.status).toBe(200);
-        const fileContent: {
-          oldContent: string | null;
-          newContent: string | null;
-        } = await fileContentResponse.json();
-        expect(fileContent.oldContent).toBe("before\n");
-        expect(fileContent.newContent).toBe("after\n");
-
-        const stageResponse = await fetch(`${server.url}/api/git-add`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filePath: "tracked.txt" }),
-        });
-        expect(stageResponse.status).toBe(400);
-        expect(await stageResponse.json()).toEqual({ error: "Staging not available" });
-
-        await fetch(`${server.url}/api/feedback`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ approved: true, feedback: "LGTM", annotations: [] }),
-        });
-        await server.waitForDecision();
-      } finally {
-        server.stop();
-      }
-    },
-    20_000,
-  );
 });
