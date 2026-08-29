@@ -46,7 +46,8 @@ export function WorkspaceBanners({
       {hasDiskConflict && (
         <div className="bg-warning/10 border-b border-warning/25 px-4 py-2 flex items-center gap-3 flex-shrink-0">
           <span className="min-w-0 flex-1 text-xs text-warning-foreground">
-            {conflictedFileName} changed on disk{isEditingMarkdown ? " while you were editing" : ""}.
+            {conflictedFileName} changed on disk{isEditingMarkdown ? " while you were editing" : ""}
+            .
           </span>
           {canOverwriteDiskConflict && (
             <button

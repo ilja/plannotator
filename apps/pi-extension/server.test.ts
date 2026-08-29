@@ -1196,7 +1196,6 @@ describe("pi review server", () => {
       });
       expect(configResponse.status).toBe(400);
       expect(await configResponse.json()).toEqual({ error: "Invalid request" });
-
     } finally {
       annotateServer.stop();
     }

@@ -18,10 +18,7 @@ import {
 import { FAVICON_SVG } from "../generated/favicon.js";
 
 import { json, send, toWebRequest } from "./helpers";
-import {
-  type IntegrationResult,
-  saveToObsidian,
-} from "./integrations.js";
+import { type IntegrationResult, saveToObsidian } from "./integrations.js";
 import { Option, Schema } from "effect";
 
 type Res = import("node:http").ServerResponse;

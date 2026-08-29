@@ -20,12 +20,7 @@ import { sanitizeTag } from "../generated/project.js";
 import { resolveUserPath } from "../generated/resolve-file.js";
 
 export type { ObsidianConfig, IntegrationResult };
-export {
-  extractTitle,
-  generateFrontmatter,
-  generateFilename,
-  detectObsidianVaults,
-};
+export { extractTitle, generateFrontmatter, generateFilename, detectObsidianVaults };
 
 /** Detect project name from git or cwd (sync). Used by extractTags for note integrations. */
 function detectProjectNameSync(): string | null {

@@ -127,9 +127,7 @@ export function buildFeedbackLossDescription(
   hasDirectEdits: boolean,
 ): string {
   const parts = [
-    annotationCount > 0
-      ? `${annotationCount} annotation${annotationCount !== 1 ? "s" : ""}`
-      : "",
+    annotationCount > 0 ? `${annotationCount} annotation${annotationCount !== 1 ? "s" : ""}` : "",
     hasDirectEdits ? "direct edits" : "",
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" and ") : "feedback";

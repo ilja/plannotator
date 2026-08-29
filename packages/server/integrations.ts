@@ -17,12 +17,7 @@ import {
 import { resolveUserPath } from "@plannotator/shared/resolve-file";
 
 export type { ObsidianConfig, IntegrationResult };
-export {
-  detectObsidianVaults,
-  extractTitle,
-  generateFrontmatter,
-  generateFilename,
-};
+export { detectObsidianVaults, extractTitle, generateFrontmatter, generateFilename };
 
 /**
  * Extract tags from markdown content using simple heuristics

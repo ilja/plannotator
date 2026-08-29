@@ -2303,61 +2303,59 @@ const App: React.FC = () => {
   useInputMethodSwitch(inputMethod, handleInputMethodChange);
 
   const initializePlanDocument = (data: PlanResponse) => {
-      // Initialize config store with server-provided values (config file > cookie > default)
-      configStore.init(data.serverConfig ? { ...data.serverConfig } : undefined);
-      // Session-level force-markdown preference (--markdown); threaded into folder/linked
-      // /api/doc requests so on-demand HTML files convert too.
-      setConvertHtml(data.convertHtml ?? false);
-      setAISessionEnabled(true);
-      // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
-      setGitUser(data.serverConfig?.gitUser);
-      if (data.renderAs === "html" && data.rawHtml) {
-        setRenderAs("html");
-        setRawHtml(data.rawHtml);
-        setShareHtml(data.shareHtml ?? "");
-        setMarkdown("");
-        return;
-      }
-      if (data.mode === "annotate-folder") {
-        // Folder annotation mode: clear demo content, let user pick a file
-        setMarkdown("");
-        return;
-      }
-      if (data.plan === null || data.plan === undefined) return;
+    // Initialize config store with server-provided values (config file > cookie > default)
+    configStore.init(data.serverConfig ? { ...data.serverConfig } : undefined);
+    // Session-level force-markdown preference (--markdown); threaded into folder/linked
+    // /api/doc requests so on-demand HTML files convert too.
+    setConvertHtml(data.convertHtml ?? false);
+    setAISessionEnabled(true);
+    // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
+    setGitUser(data.serverConfig?.gitUser);
+    if (data.renderAs === "html" && data.rawHtml) {
+      setRenderAs("html");
+      setRawHtml(data.rawHtml);
+      setShareHtml(data.shareHtml ?? "");
+      setMarkdown("");
+      return;
+    }
+    if (data.mode === "annotate-folder") {
+      // Folder annotation mode: clear demo content, let user pick a file
+      setMarkdown("");
+      return;
+    }
+    if (data.plan === null || data.plan === undefined) return;
 
-      // CM6 joins lines with \n; CRLF input would make an untouched edit round-trip
-      // fabricate a whole-document diff. Normalize once.
-      const normalizedPlan = data.plan.replace(/\r\n?/g, "\n");
-      setMarkdown(normalizedPlan);
-      originalMarkdownRef.current = normalizedPlan;
-      if (data.mode === "annotate" && data.sourceSave?.enabled) {
-        const key = sourceBackedDocumentKey(data.sourceSave, `file:${data.sourceSave.path}`);
-        sourceBackedDocuments.openSourceBackedDocument({
-          key,
-          text: normalizedPlan,
-          sourceSave: data.sourceSave,
-        });
-        setActiveSourceDocumentKey(key);
-      }
+    // CM6 joins lines with \n; CRLF input would make an untouched edit round-trip
+    // fabricate a whole-document diff. Normalize once.
+    const normalizedPlan = data.plan.replace(/\r\n?/g, "\n");
+    setMarkdown(normalizedPlan);
+    originalMarkdownRef.current = normalizedPlan;
+    if (data.mode === "annotate" && data.sourceSave?.enabled) {
+      const key = sourceBackedDocumentKey(data.sourceSave, `file:${data.sourceSave.path}`);
+      sourceBackedDocuments.openSourceBackedDocument({
+        key,
+        text: normalizedPlan,
+        sourceSave: data.sourceSave,
+      });
+      setActiveSourceDocumentKey(key);
+    }
   };
 
   const initializeAnnotateSession = (data: PlanResponse) => {
-      const isAnnotateSession =
-        data.mode === "annotate" ||
-        data.mode === "annotate-last" ||
-        data.mode === "annotate-folder";
-      if (!isAnnotateSession) return;
+    const isAnnotateSession =
+      data.mode === "annotate" || data.mode === "annotate-last" || data.mode === "annotate-folder";
+    if (!isAnnotateSession) return;
 
-      setAnnotateMode(true);
-      setGate(data.gate ?? false);
-      if (data.mode === "annotate-folder") sidebar.open("files");
-      setAnnotateSource(
-        data.mode === "annotate-last"
-          ? "message"
-          : data.mode === "annotate-folder"
-            ? "folder"
-            : "file",
-      );
+    setAnnotateMode(true);
+    setGate(data.gate ?? false);
+    if (data.mode === "annotate-folder") sidebar.open("files");
+    setAnnotateSource(
+      data.mode === "annotate-last"
+        ? "message"
+        : data.mode === "annotate-folder"
+          ? "folder"
+          : "file",
+    );
   };
 
   const initializeRecentMessages = (data: PlanResponse) => {
@@ -2812,21 +2810,20 @@ const App: React.FC = () => {
     pendingPasteImage !== null;
 
   const isSubmitShortcutBlocked = (event: KeyboardEvent) => {
-      if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return true;
+    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return true;
 
-      const target = getHTMLElementTarget(event.target);
-      const tag = target?.tagName;
-      const isTextField =
-        tag === "INPUT" || tag === "TEXTAREA" || Boolean(target?.isContentEditable);
+    const target = getHTMLElementTarget(event.target);
+    const tag = target?.tagName;
+    const isTextField = tag === "INPUT" || tag === "TEXTAREA" || Boolean(target?.isContentEditable);
 
-      // Let active confirmation dialogs own Cmd/Ctrl+Enter and Escape.
-      if (document.querySelector('[data-plannotator-confirm-dialog="true"]')) return true;
-      if (hasOpenSubmitShortcutModal()) return true;
-      if (submitted || isSubmitting || isExiting || !isApiMode || isEditingMarkdown) return true;
-      // Folder files are the active review target; normal linked docs are side
-      // references and should not submit the root plan.
-      if (linkedDocHook.isActive && annotateSource !== "folder") return true;
-      return isTextField;
+    // Let active confirmation dialogs own Cmd/Ctrl+Enter and Escape.
+    if (document.querySelector('[data-plannotator-confirm-dialog="true"]')) return true;
+    if (hasOpenSubmitShortcutModal()) return true;
+    if (submitted || isSubmitting || isExiting || !isApiMode || isEditingMarkdown) return true;
+    // Folder files are the active review target; normal linked docs are side
+    // references and should not submit the root plan.
+    if (linkedDocHook.isActive && annotateSource !== "folder") return true;
+    return isTextField;
   };
 
   // Global keyboard shortcuts (Cmd/Ctrl+Enter to submit)
@@ -3447,9 +3444,13 @@ const App: React.FC = () => {
               setEditorDiffersFromBaseline(false);
               setEditStats(null);
             } else {
-              sourceBackedDocuments.updateSourceBackedDocumentText(activeDocument.key, currentText, {
-                forceNotify: true,
-              });
+              sourceBackedDocuments.updateSourceBackedDocumentText(
+                activeDocument.key,
+                currentText,
+                {
+                  forceNotify: true,
+                },
+              );
               setEditorDirty(true);
               setEditorDiffersFromBaseline(true);
               setEditStats(computeEditStats(normalizedEdited, currentText));
@@ -3791,8 +3792,8 @@ const App: React.FC = () => {
     sourceFilePath,
     linkedDocumentPath: linkedDocHook.filepath,
     isActiveFileVault:
-      fileBrowser.dirs.find((directory) => directory.path === fileBrowser.activeDirPath)?.isVault ===
-      true,
+      fileBrowser.dirs.find((directory) => directory.path === fileBrowser.activeDirPath)
+        ?.isVault === true,
     hasActiveFile: fileBrowser.activeFile !== null,
   });
   const {

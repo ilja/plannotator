@@ -380,9 +380,7 @@ async function getAddedFilesPatch(
 }
 
 function getOpenedArgs(changelist: string): string[] {
-  return changelist === "default"
-    ? ["opened", "-c", "default"]
-    : ["opened", "-c", changelist];
+  return changelist === "default" ? ["opened", "-c", "default"] : ["opened", "-c", changelist];
 }
 
 export async function runP4Diff(diffType: DiffType, cwd?: string): Promise<DiffResult> {
@@ -412,7 +410,11 @@ export async function runP4Diff(diffType: DiffType, cwd?: string): Promise<DiffR
       workspace.normalizedRoot,
       cwd,
     );
-    const addedFilesPatch = await getAddedFilesPatch(addedDepotPaths, workspace.normalizedRoot, cwd);
+    const addedFilesPatch = await getAddedFilesPatch(
+      addedDepotPaths,
+      workspace.normalizedRoot,
+      cwd,
+    );
     const patch = [existingFilesPatch, addedFilesPatch].filter(Boolean).join("\n");
 
     return { patch, label };

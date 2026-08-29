@@ -206,7 +206,6 @@ describe("worktree-pool", () => {
     const removeCommands = commands.filter((c) => c[0] === "worktree" && c[1] === "remove");
     expect(removeCommands.length).toBe(2);
   });
-
 });
 
 // --- Seeded background warmup (non-blocking PR checkout) ---------------------

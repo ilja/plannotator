@@ -23,9 +23,7 @@ export function countMessageAnnotations(state: MessageAnnotationState): number {
   return countLinkedDocSessionAnnotations(state.linkedDocSession) + state.codeAnnotations.length;
 }
 
-export function createEmptyMessageAnnotationState(
-  message: PickerMessage,
-): MessageAnnotationState {
+export function createEmptyMessageAnnotationState(message: PickerMessage): MessageAnnotationState {
   return {
     messageId: message.messageId,
     text: message.text,

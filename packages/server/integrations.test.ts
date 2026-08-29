@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "fs";
-import {
-  extractTitle,
-  extractTags,
-  saveToObsidian,
-} from "./integrations";
+import { extractTitle, extractTags, saveToObsidian } from "./integrations";
 
 describe("extractTitle", () => {
   test("extracts plain H1", () => {
