@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { ConfigPatch, type PlannotatorConfig } from "./config";
+import { ConfigPatch, resolveDefaultDiffType, type PlannotatorConfig } from "./config";
 
 const TEST_HOME = join(tmpdir(), `config-test-${Date.now()}`);
 const CONFIG_DIR = join(TEST_HOME, ".plannotator");
@@ -144,6 +144,12 @@ async function saveAndLoadConfig(config: string): Promise<string> {
 
 afterEach(() => {
   if (existsSync(TEST_HOME)) rmSync(TEST_HOME, { recursive: true, force: true });
+});
+
+describe("resolveDefaultDiffType", () => {
+  test("defaults Git reviews to all changes", () => {
+    expect(resolveDefaultDiffType()).toBe("all");
+  });
 });
 
 describe("ConfigPatch", () => {

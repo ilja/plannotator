@@ -7,6 +7,7 @@
     "./compress": "./compress.ts",
     "./crypto": "./crypto.ts",
     "./diff-paths": "./diff-paths.ts",
+    "./diff-defaults": "./diff-defaults.ts",
     "./feedback-templates": "./feedback-templates.ts",
     "./jj-core": "./jj-core.ts",
     "./review-core": "./review-core.ts",

@@ -6,6 +6,7 @@
  */
 
 import { join } from "path";
+import { DEFAULT_DIFF_OPTIONS } from "./diff-defaults";
 import { getPlannotatorDataDir } from "./data-dir";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { execSync } from "child_process";
@@ -581,7 +582,7 @@ export function getServerConfig(gitUser: string | null): ServerConfigPayload {
 }
 
 /**
- * Read the user's preferred default diff type from config, falling back to 'unstaged'.
+ * Read the user's preferred default diff type from config, falling back to all changes.
  */
 export function resolveDefaultDiffType(cfg?: PlannotatorConfig): DefaultDiffType {
   const v: string | undefined = cfg?.diffOptions?.defaultDiffType;
@@ -592,7 +593,7 @@ export function resolveDefaultDiffType(cfg?: PlannotatorConfig): DefaultDiffType
     v === "merge-base" ||
     v === "all"
     ? v
-    : "unstaged";
+    : DEFAULT_DIFF_OPTIONS.defaultDiffType;
 }
 
 /**

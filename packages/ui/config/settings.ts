@@ -10,6 +10,7 @@
  */
 
 import type { ConfigPatch, DiffLineBgIntensity } from "@plannotator/shared/config";
+import { DEFAULT_DIFF_OPTIONS } from "@plannotator/shared/diff-defaults";
 import { Option, Schema } from "effect";
 import { storage } from "../utils/storage";
 import { generateIdentity } from "../utils/generateIdentity";
@@ -119,7 +120,12 @@ export const SETTINGS = {
 
   defaultDiffType: {
     // SAFETY: literal widened to SettingDef value type — required for generic inference
-    defaultValue: "all" as "uncommitted" | "unstaged" | "staged" | "merge-base" | "all",
+    defaultValue: DEFAULT_DIFF_OPTIONS.defaultDiffType as
+      | "uncommitted"
+      | "unstaged"
+      | "staged"
+      | "merge-base"
+      | "all",
     fromCookie: () => {
       const v = storage.getItem("plannotator-default-diff-type");
       if (v === "branch") return "merge-base" as const;
@@ -247,7 +253,7 @@ export const SETTINGS = {
 
   diffExpandUnchanged: {
     // SAFETY: literal widened to SettingDef value type — required for generic inference
-    defaultValue: false as boolean,
+    defaultValue: DEFAULT_DIFF_OPTIONS.expandUnchanged as boolean,
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-expand-unchanged");
       return v === "true" ? true : v === "false" ? false : undefined;
@@ -328,7 +334,7 @@ export const SETTINGS = {
   },
   diffLineBgIntensity: {
     // SAFETY: literal widened to SettingDef value type — required for generic inference
-    defaultValue: "subtle" as DiffLineBgIntensity,
+    defaultValue: DEFAULT_DIFF_OPTIONS.lineBgIntensity as DiffLineBgIntensity,
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-line-bg-intensity");
       return readDiffLineBgIntensity(v);
