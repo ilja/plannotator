@@ -119,7 +119,7 @@ export const SETTINGS = {
 
   defaultDiffType: {
     // SAFETY: literal widened to SettingDef value type — required for generic inference
-    defaultValue: "unstaged" as "uncommitted" | "unstaged" | "staged" | "merge-base" | "all",
+    defaultValue: "all" as "uncommitted" | "unstaged" | "staged" | "merge-base" | "all",
     fromCookie: () => {
       const v = storage.getItem("plannotator-default-diff-type");
       if (v === "branch") return "merge-base" as const;

@@ -67,6 +67,14 @@ describe("UI server config decoding", () => {
 });
 
 describe("ConfigStore", () => {
+  test("defaults reviews to all changes with subtle backgrounds and collapsed unchanged regions", () => {
+    const store = new ConfigStore();
+
+    expect(store.get("defaultDiffType")).toBe("all");
+    expect(store.get("diffExpandUnchanged")).toBe(false);
+    expect(store.get("diffLineBgIntensity")).toBe("subtle");
+  });
+
   test("applies independently decoded settings from an untrusted payload", () => {
     const store = new ConfigStore();
     const initialDiffStyle = store.get("diffStyle");
