@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildAnnotationFeedbackHeading,
+  buildAppDocumentPresentation,
   buildCompletionSubtitle,
   buildCompletionTitle,
   buildDraftBannerMessage,
@@ -35,6 +36,45 @@ describe("editor presentation decisions", () => {
     );
     expect(getViewerContentKey(false, null, "message", "message-1", 4)).toBe("msg:message-1");
     expect(getViewerContentKey(false, null, "file", null, 4)).toBe("plan:4");
+  });
+
+  test("builds document and presentation facts from the active session", () => {
+    const presentation = buildAppDocumentPresentation({
+      displayedMarkdown: "# Active file\n\nBody",
+      rootMarkdown: "# Root plan",
+      renderAs: "markdown",
+      annotateSource: "folder",
+      selectedMessageId: null,
+      editGeneration: 2,
+      activeSourceSaveEnabled: true,
+      hasEditStats: false,
+      linkedDocumentIsActive: true,
+      isSharedSession: false,
+      isSubmitted: false,
+      canUseWideMode: true,
+      wideModeType: "wide",
+      planWidth: "wide",
+      annotateMode: true,
+      agentTerminalAvailable: true,
+      isAgentTerminalOpen: false,
+      isAgentTerminalRunning: true,
+      sourceFilePath: "/repo/root.md",
+      linkedDocumentPath: "/repo/active.md",
+      isActiveFileVault: true,
+      hasActiveFile: true,
+    });
+
+    expect(presentation.isHtmlSurface).toBe(false);
+    expect(presentation.backLabel).toBe("file list");
+    expect(presentation.viewerContentKey).toBe("doc:/repo/active.md");
+    expect(presentation.annotateReaderMaxWidth).toBeNull();
+    expect(presentation.canEditMarkdown).toBe(true);
+    expect(presentation.showAgentTerminalControls).toBe(true);
+    expect(presentation.shouldRenderAgentTerminal).toBe(false);
+    expect(presentation.linkedDocumentLabel).toBeUndefined();
+    expect(presentation.viewerCopyLabel).toBe("Copy file");
+    expect(presentation.viewerOpenInAppPath).toBe("/repo/active.md");
+    expect(presentation.showEmptyFolderPresentation).toBe(false);
   });
 
   test("chooses responsive label modes and plan widths at thresholds", () => {

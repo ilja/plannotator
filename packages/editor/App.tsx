@@ -142,11 +142,9 @@ import {
 } from "./messageAnnotationSession";
 import {
   buildAnnotationFeedbackHeading,
+  buildAppDocumentPresentation,
   buildFeedbackLossDescription,
   getActionsLabelMode,
-  getBackLabel,
-  getPlanMaxWidth,
-  getViewerContentKey,
   type AnnotateSource,
   type SubmissionStatus,
 } from "./appPresentation";
@@ -362,9 +360,6 @@ const App: React.FC = () => {
   const [sourceInfo, setSourceInfo] = useState<string | undefined>();
   const [sourceConverted, setSourceConverted] = useState(false);
   const [renderAs, setRenderAs] = useState<"markdown" | "html">("markdown");
-  // HTML plans render edge-to-edge (full-viewport) instead of in the centered,
-  // card-chromed markdown column. Branch the document-area containers on this.
-  const isHtmlSurface = renderAs === "html";
   const [rawHtml, setRawHtml] = useState("");
   const [shareHtml, setShareHtml] = useState("");
   // Session-level force-markdown preference (`--markdown`). When set, folder/linked HTML
@@ -1175,21 +1170,6 @@ const App: React.FC = () => {
     });
   }, [allAnnotationCounts, openSidebarTab, sidebar, hasFileAnnotations]);
 
-  // Context-aware back label for linked doc navigation
-  const backLabel = getBackLabel(annotateSource);
-
-  // Viewer identity must change when the rendered document changes: web-highlighter
-  // mutates the Viewer DOM, so reconciling new content against the old subtree throws
-  // removeChild errors — a changed key remounts it cleanly instead. StickyHeaderLane
-  // observes a node inside Viewer, so it re-anchors off the same token.
-  const viewerContentKey = getViewerContentKey(
-    linkedDocHook.isActive,
-    linkedDocHook.filepath,
-    annotateSource,
-    selectedMessageId,
-    editGeneration,
-  );
-
   // Track active section for TOC highlighting
   const headingCount = useMemo(() => blocks.filter((b) => b.type === "heading").length, [blocks]);
   const activeSection = useActiveSection(containerRef, headingCount, scrollViewport);
@@ -1542,23 +1522,6 @@ const App: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [blocks, pendingSharedAnnotations, clearPendingSharedAnnotations, resetExternalHighlights]);
-
-  // Markdown edit mode: single consolidated gate. The editor only ever opens on
-  // the main plan/file markdown — never on HTML surfaces, linked docs, messages,
-  // folder pickers, diff view, or shared sessions.
-  const canEditMarkdown =
-    renderAs !== "html" &&
-    // editStats non-null keeps the toggle available after committing an
-    // emptied document, so the user can re-enter and undo. Source-backed files
-    // are source-backed even when they start empty.
-    (activeSourceBackedDocument?.sourceSave?.enabled ||
-      displayedMarkdown !== "" ||
-      editStats !== null) &&
-    (!linkedDocHook.isActive ||
-      (annotateSource === "folder" && activeSourceBackedDocument?.sourceSave?.enabled)) &&
-    !isSharedSession &&
-    annotateSource !== "message" &&
-    !submitted;
 
   // Swap the document to `next` and re-resolve annotation block anchors against
   // the new parse so exported line labels don't point at stale content.
@@ -3811,17 +3774,48 @@ const App: React.FC = () => {
     [],
   );
 
-  const planMaxWidth = useMemo(() => getPlanMaxWidth(uiPrefs.planWidth), [uiPrefs.planWidth]);
-  const annotateReaderMaxWidth = canUseWideMode && wideModeType === "wide" ? null : planMaxWidth;
+  const documentPresentation = buildAppDocumentPresentation({
+    displayedMarkdown,
+    rootMarkdown: markdown,
+    renderAs,
+    annotateSource,
+    selectedMessageId,
+    editGeneration,
+    activeSourceSaveEnabled: activeSourceBackedDocument?.sourceSave?.enabled === true,
+    hasEditStats: editStats !== null,
+    linkedDocumentIsActive: linkedDocHook.isActive,
+    isSharedSession,
+    isSubmitted: submitted !== null,
+    canUseWideMode,
+    wideModeType,
+    planWidth: uiPrefs.planWidth,
+    annotateMode,
+    agentTerminalAvailable: agentTerminalCapability !== null,
+    isAgentTerminalOpen,
+    isAgentTerminalRunning,
+    sourceFilePath,
+    linkedDocumentPath: linkedDocHook.filepath,
+    isActiveFileVault:
+      fileBrowser.dirs.find((directory) => directory.path === fileBrowser.activeDirPath)?.isVault ===
+      true,
+    hasActiveFile: fileBrowser.activeFile !== null,
+  });
+  const {
+    annotateReaderMaxWidth,
+    backLabel,
+    canEditMarkdown,
+    isHtmlSurface,
+    linkedDocumentLabel,
+    linkedDocumentVariant,
+    shouldRenderAgentTerminal,
+    showAgentTerminalControls,
+    showEmptyFolderPresentation,
+    viewerContentKey,
+    viewerCopyLabel,
+    viewerOpenInAppPath,
+  } = documentPresentation;
   const _selectedAIProvider =
     aiProviders.find((provider) => provider.id === aiConfig.providerId) ?? null;
-  const showAgentTerminalControls =
-    annotateMode && annotateSource !== "message" && agentTerminalCapability !== null;
-  const shouldRenderAgentTerminal =
-    showAgentTerminalControls &&
-    agentTerminalCapability !== null &&
-    wideModeType === null &&
-    (isAgentTerminalOpen || isAgentTerminalRunning);
   // Only greet in a normal authoring context — not on a read-only shared session
   // (a viewer would also be able to flip the owner's gridEnabled). Deferred
   // (not marked seen) until then.
@@ -3830,38 +3824,18 @@ const App: React.FC = () => {
     ? {
         filepath: linkedDocHook.filepath!,
         onBack: handleLinkedDocBack,
-        label:
-          annotateSource === "folder"
-            ? undefined
-            : fileBrowser.dirs.find((d) => d.path === fileBrowser.activeDirPath)?.isVault
-              ? "Vault File"
-              : fileBrowser.activeFile
-                ? "File"
-                : undefined,
+        label: linkedDocumentLabel,
         backLabel,
-        variant: annotateSource === "folder" ? "folder-file" : "breadcrumb",
+        variant: linkedDocumentVariant,
       }
-    : null;
-  const viewerCopyLabel =
-    annotateSource === "message"
-      ? "Copy message"
-      : annotateSource === "file" || annotateSource === "folder"
-        ? "Copy file"
-        : undefined;
-  const viewerOpenInAppPath = annotateMode
-    ? linkedDocHook.isActive
-      ? (linkedDocHook.filepath ?? null)
-      : sourceFilePath
     : null;
   const viewerMessagePickerInfo =
     annotateSource === "message" && recentMessages.length > 1
       ? {
-          current: recentMessages.findIndex((m) => m.messageId === selectedMessageId) + 1,
+          current: recentMessages.findIndex((message) => message.messageId === selectedMessageId) + 1,
           total: recentMessages.length,
         }
       : undefined;
-  const showEmptyFolderPresentation =
-    annotateSource === "folder" && !markdown && !linkedDocHook.isActive;
 
   // SAFETY: sonner style tokens are custom CSS properties (--normal-bg & friends)
   // that React.CSSProperties deliberately excludes via closed typing; the keys are
