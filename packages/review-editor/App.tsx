@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { type Origin, getAgentName } from "@plannotator/shared/agents";
+import { type Origin } from "@plannotator/shared/agents";
 import { ThemeProvider, useTheme } from "@plannotator/ui/components/ThemeProvider";
 import { TooltipProvider } from "@plannotator/ui/components/Tooltip";
-import { ConfirmDialog } from "@plannotator/ui/components/ConfirmDialog";
-import { Settings } from "@plannotator/ui/components/Settings";
-import { CompletionOverlay } from "@plannotator/ui/components/CompletionOverlay";
 import { getDisplayRepo } from "@plannotator/shared/pr-types";
 import type { SemanticDiffAdvert } from "@plannotator/shared/semantic-diff-types";
 import { configStore, useConfigValue } from "@plannotator/ui/config";
@@ -15,9 +12,7 @@ import {
   resolveAIProviderSelection,
   saveAIProviderSelection,
 } from "@plannotator/ui/utils/aiProvider";
-import { DiffTypeSetupDialog } from "@plannotator/ui/components/DiffTypeSetupDialog";
 import { needsDiffTypeSetup } from "@plannotator/ui/utils/diffTypeSetup";
-import { LookAndFeelAnnouncementDialog } from "@plannotator/ui/components/LookAndFeelAnnouncementDialog";
 import {
   markLookAndFeelAnnouncementSeen,
   needsLookAndFeelAnnouncement,
@@ -52,7 +47,6 @@ import {
   type ReviewWorkspaceActions,
   type ReviewWorkspaceViewModel,
 } from "./components/ReviewWorkspace";
-import { PRSwitchOverlay } from "./components/PRSwitchOverlay";
 import { usePRStack } from "./hooks/usePRStack";
 import { useDiffFreshness } from "./hooks/useDiffFreshness";
 import { usePRSession, type PRSessionUpdate } from "./hooks/usePRSession";
@@ -68,8 +62,18 @@ import {
   type InitialDiffResponse,
 } from "./utils/initial-diff-response";
 import { loadReviewAICapabilitiesState } from "./utils/ai-capabilities-response";
-import { ReviewSubmissionDialog } from "./components/ReviewSubmissionDialog";
 import { ReviewStateProvider, type ReviewState } from "./dock/ReviewStateContext";
+import {
+  ReviewDialogs,
+  type ReviewDialogsActions,
+  type ReviewDialogsModel,
+} from "./components/ReviewDialogs";
+import {
+  ReviewOverlays,
+  type ReviewOverlaysActions,
+  type ReviewOverlaysModel,
+  type ReviewSubmissionStatus,
+} from "./components/ReviewOverlays";
 import { usePRContext } from "./hooks/usePRContext";
 import {
   REVIEW_PANEL_TYPES,
@@ -128,21 +132,6 @@ function buildDiffSwitchRequest(
     ...(base && { base }),
     hideWhitespace,
   };
-}
-
-function getRecoveredDraftMessage(
-  draftBanner: ReturnType<typeof useCodeAnnotationDraft>["draftBanner"],
-): string {
-  if (!draftBanner) return "";
-
-  const parts: string[] = [];
-  if (draftBanner.count > 0) {
-    parts.push(`${draftBanner.count} annotation${draftBanner.count !== 1 ? "s" : ""}`);
-  }
-  if (draftBanner.viewedCount > 0) {
-    parts.push(`${draftBanner.viewedCount} viewed file${draftBanner.viewedCount !== 1 ? "s" : ""}`);
-  }
-  return `Found ${parts.join(" and ")} from ${draftBanner.timeAgo}. Would you like to restore them?`;
 }
 
 const ReviewApp: React.FC = () => {
@@ -236,7 +225,7 @@ const ReviewApp: React.FC = () => {
   const [agentCwd, setAgentCwd] = useState<string | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState<"approved" | "feedback" | "exited" | false>(false);
+  const [submitted, setSubmitted] = useState<ReviewSubmissionStatus>(false);
   const [showApproveWarning, setShowApproveWarning] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
   const [_sharingEnabled, setSharingEnabled] = useState(true);
@@ -1943,6 +1932,90 @@ const ReviewApp: React.FC = () => {
     setShowExportModal(true);
   }, []);
 
+  const handleCloseExportModal = useCallback(() => {
+    setShowExportModal(false);
+  }, []);
+
+  const handleCopyExportFeedback = useCallback(async () => {
+    await navigator.clipboard.writeText(feedbackMarkdown);
+  }, [feedbackMarkdown]);
+
+  const handleCloseSettingsMenu = useCallback(() => {
+    setOpenSettingsMenu(false);
+  }, []);
+
+  const worktreePath = agentCwd || gitContext?.cwd || null;
+
+  const handleCloseWorktreeDialog = useCallback(() => {
+    setShowWorktreeDialog(false);
+  }, []);
+
+  const handleCopyWorktreePath = useCallback(() => {
+    if (!worktreePath) return;
+    void navigator.clipboard.writeText(worktreePath);
+  }, [worktreePath]);
+
+  const handleCloseNoAnnotationsDialog = useCallback(() => {
+    setShowNoAnnotationsDialog(false);
+  }, []);
+
+  const handleCloseApproveWarning = useCallback(() => {
+    setShowApproveWarning(false);
+  }, []);
+
+  const handleConfirmApproveWarning = useCallback(() => {
+    setShowApproveWarning(false);
+    handleApprove();
+  }, [handleApprove]);
+
+  const handleCloseExitWarning = useCallback(() => {
+    setShowExitWarning(false);
+  }, []);
+
+  const handleConfirmExitWarning = useCallback(() => {
+    setShowExitWarning(false);
+    handleExit();
+  }, [handleExit]);
+
+  const handleToggleGrid = useCallback((enabled: boolean) => {
+    configStore.set("gridEnabled", enabled);
+  }, []);
+
+  const handleCompleteDiffTypeSetup = useCallback(
+    (selectedDiffType: string) => {
+      setShowDiffTypeSetup(false);
+      if (selectedDiffType !== diffType) handleDiffSwitch(selectedDiffType);
+    },
+    [diffType, handleDiffSwitch],
+  );
+
+  const handleChangePlatformGeneralComment = useCallback(
+    (comment: string) => {
+      setPlatformGeneralComment(comment);
+    },
+    [setPlatformGeneralComment],
+  );
+
+  const handleChangePlatformOpenPR = useCallback(
+    (openPR: boolean) => {
+      setPlatformOpenPR(openPR);
+    },
+    [setPlatformOpenPR],
+  );
+
+  const handleConfirmPlatformSubmission = useCallback(() => {
+    if (!platformCommentDialog) return;
+    void submitPlatformAction(
+      platformCommentDialog.action,
+      platformCommentDialog.plan,
+      platformGeneralComment,
+    );
+  }, [platformCommentDialog, platformGeneralComment, submitPlatformAction]);
+
+  const handleCancelPlatformSubmission = useCallback(() => {
+    closePlatformDialog();
+  }, [closePlatformDialog]);
+
   const handleToggleSidebar = useCallback(() => {
     if (reviewSidebar.isOpen) {
       reviewSidebar.close();
@@ -2170,6 +2243,64 @@ const ReviewApp: React.FC = () => {
     },
   };
 
+  const dialogsModel: ReviewDialogsModel = {
+    draftRecovery: draftBanner,
+    origin,
+    aiProviders,
+    gitUser,
+    isSettingsOpen: openSettingsMenu,
+    isPullRequestReview: prMetadata !== null,
+    worktreePath,
+    isWorktreeDialogOpen: showWorktreeDialog,
+    isNoAnnotationsDialogOpen: showNoAnnotationsDialog,
+    annotationCount: totalAnnotationCount,
+    isApproveWarningOpen: showApproveWarning,
+    isExitWarningOpen: showExitWarning,
+    isLookAndFeelAnnouncementOpen: showLookAndFeel,
+    gridEnabled,
+    isDiffTypeSetupOpen: showDiffTypeSetup,
+    platformSubmission: platformCommentDialog,
+    platformGeneralComment,
+    platformOpenPR,
+    isPlatformSubmitting: isPlatformActioning,
+  };
+
+  const dialogsActions: ReviewDialogsActions = {
+    onDismissDraftRecovery: dismissDraft,
+    onRestoreDraftRecovery: handleRestoreDraft,
+    onIdentityChange: handleIdentityChange,
+    onCloseSettings: handleCloseSettingsMenu,
+    onCloseWorktreeDialog: handleCloseWorktreeDialog,
+    onCopyWorktreePath: handleCopyWorktreePath,
+    onCloseNoAnnotationsDialog: handleCloseNoAnnotationsDialog,
+    onCloseApproveWarning: handleCloseApproveWarning,
+    onConfirmApproveWarning: handleConfirmApproveWarning,
+    onCloseExitWarning: handleCloseExitWarning,
+    onConfirmExitWarning: handleConfirmExitWarning,
+    onToggleGrid: handleToggleGrid,
+    onDismissLookAndFeelAnnouncement: dismissLookAndFeel,
+    onCompleteDiffTypeSetup: handleCompleteDiffTypeSetup,
+    onChangePlatformGeneralComment: handleChangePlatformGeneralComment,
+    onChangePlatformOpenPR: handleChangePlatformOpenPR,
+    onConfirmPlatformSubmission: handleConfirmPlatformSubmission,
+    onCancelPlatformSubmission: handleCancelPlatformSubmission,
+  };
+
+  const overlaysModel: ReviewOverlaysModel = {
+    isSwitchingPRScope,
+    isExportOpen: showExportModal,
+    annotationCount: allAnnotations.length,
+    feedbackMarkdown,
+    submitted,
+    origin,
+    platformMode,
+  };
+
+  const overlaysActions: ReviewOverlaysActions = {
+    onCloseExport: handleCloseExportModal,
+    onCopyExportFeedback: handleCopyExportFeedback,
+  };
+
   if (isLoading) {
     return (
       <ThemeProvider defaultTheme="dark">
@@ -2184,230 +2315,10 @@ const ReviewApp: React.FC = () => {
     <ThemeProvider defaultTheme="dark">
       <TooltipProvider delayDuration={200} skipDelayDuration={100}>
         <ReviewStateProvider value={reviewStateValue}>
-          {isSwitchingPRScope && <PRSwitchOverlay />}
+          <ReviewOverlays model={overlaysModel} actions={overlaysActions} />
           <div className="h-screen flex flex-col bg-background overflow-hidden">
             <ReviewWorkspace viewModel={workspaceViewModel} actions={workspaceActions} />
-
-            <ConfirmDialog
-              isOpen={!!draftBanner}
-              onClose={dismissDraft}
-              onConfirm={handleRestoreDraft}
-              title="Draft Recovered"
-              message={getRecoveredDraftMessage(draftBanner)}
-              confirmText="Restore"
-              cancelText="Dismiss"
-              showCancel
-            />
-            {/* Export Modal */}
-            {showExportModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-                <div className="bg-card border border-border rounded-xl w-full max-w-2xl flex flex-col max-h-[80vh] shadow-2xl">
-                  <div className="p-4 border-b border-border flex justify-between items-center">
-                    <h3 className="font-semibold text-sm">Export Review Feedback</h3>
-                    <button
-                      onClick={() => setShowExportModal(false)}
-                      className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-auto p-4">
-                    <div className="text-xs text-muted-foreground mb-2">
-                      {allAnnotations.length} annotation{allAnnotations.length !== 1 ? "s" : ""}
-                    </div>
-                    <pre className="export-code-block whitespace-pre-wrap">{feedbackMarkdown}</pre>
-                  </div>
-                  <div className="p-4 border-t border-border flex justify-end gap-2">
-                    <button
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(feedbackMarkdown);
-                      }}
-                      className="px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-colors"
-                    >
-                      Copy to Clipboard
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="hidden" aria-hidden="true">
-              <Settings
-                onIdentityChange={handleIdentityChange}
-                origin={origin}
-                mode="review"
-                aiProviders={aiProviders}
-                gitUser={gitUser}
-                externalOpen={openSettingsMenu}
-                onExternalClose={() => setOpenSettingsMenu(false)}
-              />
-            </div>
-
-            {/* Worktree info dialog */}
-            {(gitContext?.cwd || agentCwd) && prMetadata && (
-              <ConfirmDialog
-                isOpen={showWorktreeDialog}
-                onClose={() => setShowWorktreeDialog(false)}
-                title="Local Worktree"
-                wide
-                message={
-                  <div className="space-y-3">
-                    <p>
-                      This PR is checked out locally so file actions can use the checked-out source.
-                    </p>
-                    <div>
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
-                        Path
-                      </span>
-                      <button
-                        onClick={() =>
-                          navigator.clipboard.writeText((agentCwd || gitContext?.cwd)!)
-                        }
-                        className="mt-1 w-full text-left font-mono text-xs bg-muted/50 border border-border/50 rounded-md px-3 py-2 text-foreground hover:bg-muted transition-colors cursor-pointer break-all"
-                        title="Click to copy"
-                      >
-                        {agentCwd || gitContext?.cwd}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground/60">
-                      Automatically removed when this review session ends.
-                    </p>
-                  </div>
-                }
-                variant="info"
-              />
-            )}
-
-            {/* No annotations dialog */}
-            <ConfirmDialog
-              isOpen={showNoAnnotationsDialog}
-              onClose={() => setShowNoAnnotationsDialog(false)}
-              title="No Annotations"
-              message="You haven't made any annotations yet. There's nothing to copy."
-              variant="info"
-            />
-
-            {/* Approve with annotations warning */}
-            <ConfirmDialog
-              isOpen={showApproveWarning}
-              onClose={() => setShowApproveWarning(false)}
-              onConfirm={() => {
-                setShowApproveWarning(false);
-                handleApprove();
-              }}
-              title="Annotations Won't Be Sent"
-              message={
-                <>
-                  You have {totalAnnotationCount} annotation{totalAnnotationCount !== 1 ? "s" : ""}{" "}
-                  that will be lost if you approve.
-                </>
-              }
-              subMessage="To send your feedback, use Send Feedback instead."
-              confirmText="Approve Anyway"
-              cancelText="Cancel"
-              variant="warning"
-              showCancel
-            />
-
-            <ConfirmDialog
-              isOpen={showExitWarning}
-              onClose={() => setShowExitWarning(false)}
-              onConfirm={() => {
-                setShowExitWarning(false);
-                handleExit();
-              }}
-              title="Annotations Won't Be Sent"
-              message={
-                <>
-                  You have {totalAnnotationCount} annotation{totalAnnotationCount !== 1 ? "s" : ""}{" "}
-                  that will be lost if you close.
-                </>
-              }
-              subMessage="To send your feedback, use Send Feedback instead."
-              confirmText="Close Anyway"
-              cancelText="Cancel"
-              variant="warning"
-              showCancel
-            />
-
-            {/* 0.20.0 look-and-feel / release announcement. Shared with the plan
-            editor via a host-scoped cookie, so it shows once across both apps.
-            Takes precedence over the diff-type setup so the two never stack. */}
-            <LookAndFeelAnnouncementDialog
-              isOpen={showLookAndFeel}
-              gridEnabled={gridEnabled}
-              onToggleGrid={(v) => configStore.set("gridEnabled", v)}
-              onDismiss={dismissLookAndFeel}
-            />
-
-            {/* Diff type setup dialog — first-run only */}
-            {showDiffTypeSetup && !showLookAndFeel && (
-              <DiffTypeSetupDialog
-                onComplete={(selected) => {
-                  setShowDiffTypeSetup(false);
-                  if (selected !== diffType) handleDiffSwitch(selected);
-                }}
-              />
-            )}
-
-            {/* Completion overlay - shown after approve/feedback/exit */}
-            <CompletionOverlay
-              submitted={submitted}
-              title={
-                submitted === "approved"
-                  ? "Changes Approved"
-                  : submitted === "exited"
-                    ? "Session Closed"
-                    : "Feedback Sent"
-              }
-              subtitle={
-                submitted === "exited"
-                  ? "Review session closed without feedback."
-                  : platformMode
-                    ? submitted === "approved"
-                      ? "Your approval was submitted to GitHub."
-                      : "Your feedback was submitted to GitHub."
-                    : submitted === "approved"
-                      ? `${getAgentName(origin)} will proceed with the changes.`
-                      : `${getAgentName(origin)} will address your review feedback.`
-              }
-              agentLabel={getAgentName(origin)}
-            />
-
-            {/* GitHub general comment dialog */}
-            <ReviewSubmissionDialog
-              isOpen={!!platformCommentDialog}
-              action={platformCommentDialog?.action ?? "comment"}
-              submission={platformCommentDialog?.plan ?? { targets: [], orphans: [] }}
-              generalComment={platformGeneralComment}
-              onGeneralCommentChange={setPlatformGeneralComment}
-              platformOpenPR={platformOpenPR}
-              onPlatformOpenPRChange={(checked) => {
-                setPlatformOpenPR(checked);
-              }}
-              onConfirm={() => {
-                if (!platformCommentDialog) return;
-                submitPlatformAction(
-                  platformCommentDialog.action,
-                  platformCommentDialog.plan,
-                  platformGeneralComment,
-                );
-              }}
-              onCancel={closePlatformDialog}
-              isSubmitting={isPlatformActioning}
-            />
+            <ReviewDialogs model={dialogsModel} actions={dialogsActions} />
           </div>
         </ReviewStateProvider>
       </TooltipProvider>
