@@ -134,6 +134,60 @@ function buildDiffSwitchRequest(
   };
 }
 
+/** Read-only view data for the review application shell. */
+interface ReviewAppShellModel {
+  readonly isLoading: boolean;
+  readonly reviewState: ReviewState;
+  readonly workspace: ReviewWorkspaceViewModel;
+  readonly dialogs: ReviewDialogsModel;
+  readonly overlays: ReviewOverlaysModel;
+}
+
+/** Named callbacks invoked by the review application shell's rendered regions. */
+interface ReviewAppShellActions {
+  readonly workspace: ReviewWorkspaceActions;
+  readonly dialogs: ReviewDialogsActions;
+  readonly overlays: ReviewOverlaysActions;
+}
+
+interface ReviewAppShellProps {
+  readonly model: ReviewAppShellModel;
+  readonly actions: ReviewAppShellActions;
+}
+
+/** Composes the loading and loaded review application presentations. */
+function ReviewAppShell({ model, actions }: ReviewAppShellProps) {
+  if (model.isLoading) return <ReviewLoadingScreen />;
+
+  return <ReviewLoadedAppShell model={model} actions={actions} />;
+}
+
+function ReviewLoadingScreen() {
+  return (
+    <ThemeProvider defaultTheme="dark">
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="text-muted-foreground text-sm">Loading diff...</div>
+      </div>
+    </ThemeProvider>
+  );
+}
+
+function ReviewLoadedAppShell({ model, actions }: ReviewAppShellProps) {
+  return (
+    <ThemeProvider defaultTheme="dark">
+      <TooltipProvider delayDuration={200} skipDelayDuration={100}>
+        <ReviewStateProvider value={model.reviewState}>
+          <ReviewOverlays model={model.overlays} actions={actions.overlays} />
+          <div className="h-screen flex flex-col bg-background overflow-hidden">
+            <ReviewWorkspace viewModel={model.workspace} actions={actions.workspace} />
+            <ReviewDialogs model={model.dialogs} actions={actions.dialogs} />
+          </div>
+        </ReviewStateProvider>
+      </TooltipProvider>
+    </ThemeProvider>
+  );
+}
+
 const ReviewApp: React.FC = () => {
   const { resolvedMode } = useTheme();
   const [diffData, setDiffData] = useState<DiffData | null>(null);
@@ -2301,29 +2355,21 @@ const ReviewApp: React.FC = () => {
     onCopyExportFeedback: handleCopyExportFeedback,
   };
 
-  if (isLoading) {
-    return (
-      <ThemeProvider defaultTheme="dark">
-        <div className="h-screen flex items-center justify-center bg-background">
-          <div className="text-muted-foreground text-sm">Loading diff...</div>
-        </div>
-      </ThemeProvider>
-    );
-  }
+  const appShellModel: ReviewAppShellModel = {
+    isLoading,
+    reviewState: reviewStateValue,
+    workspace: workspaceViewModel,
+    dialogs: dialogsModel,
+    overlays: overlaysModel,
+  };
 
-  return (
-    <ThemeProvider defaultTheme="dark">
-      <TooltipProvider delayDuration={200} skipDelayDuration={100}>
-        <ReviewStateProvider value={reviewStateValue}>
-          <ReviewOverlays model={overlaysModel} actions={overlaysActions} />
-          <div className="h-screen flex flex-col bg-background overflow-hidden">
-            <ReviewWorkspace viewModel={workspaceViewModel} actions={workspaceActions} />
-            <ReviewDialogs model={dialogsModel} actions={dialogsActions} />
-          </div>
-        </ReviewStateProvider>
-      </TooltipProvider>
-    </ThemeProvider>
-  );
+  const appShellActions: ReviewAppShellActions = {
+    workspace: workspaceActions,
+    dialogs: dialogsActions,
+    overlays: overlaysActions,
+  };
+
+  return <ReviewAppShell model={appShellModel} actions={appShellActions} />;
 };
 
 export default ReviewApp;
