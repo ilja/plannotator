@@ -40,9 +40,7 @@ import {
   reconcileChoiceAnnotations,
 } from "@plannotator/ui/utils/choiceAnnotations";
 import { ThemeProvider } from "@plannotator/ui/components/ThemeProvider";
-import { Tooltip, TooltipProvider } from "@plannotator/ui/components/Tooltip";
-import { AnnotationToolstrip } from "@plannotator/ui/components/AnnotationToolstrip";
-import { StickyHeaderLane } from "@plannotator/ui/components/StickyHeaderLane";
+import { TooltipProvider } from "@plannotator/ui/components/Tooltip";
 import { useSharing } from "@plannotator/ui/hooks/useSharing";
 import { getCallbackConfig, CallbackAction, executeCallback } from "@plannotator/ui/utils/callback";
 import { useActiveSection } from "@plannotator/ui/hooks/useActiveSection";
@@ -76,7 +74,6 @@ import { useInputMethodSwitch } from "@plannotator/ui/hooks/useInputMethodSwitch
 import { usePrintMode } from "@plannotator/ui/hooks/usePrintMode";
 import { useResizablePanel } from "@plannotator/ui/hooks/useResizablePanel";
 import { ResizeHandle } from "@plannotator/ui/components/ResizeHandle";
-import { OverlayScrollArea } from "@plannotator/ui/components/OverlayScrollArea";
 import { ScrollViewportContext } from "@plannotator/ui/hooks/useScrollViewport";
 import { useOverlayViewport } from "@plannotator/ui/hooks/useOverlayViewport";
 import { useIsMobile } from "@plannotator/ui/hooks/useIsMobile";
@@ -123,7 +120,7 @@ import {
 import { useCheckboxOverrides } from "./hooks/useCheckboxOverrides";
 import { AppHeader } from "./components/AppHeader";
 import { WorkspaceBanners } from "./components/WorkspaceBanners";
-import { EditorDocumentRenderer } from "./components/EditorDocumentRenderer";
+import { EditorDocumentSurface } from "./components/EditorDocumentSurface";
 import {
   AnnotateAgentTerminalPanel,
   type AnnotateAgentTerminalPanelHandle,
@@ -3597,6 +3594,10 @@ const App: React.FC = () => {
     void handleSaveEditedSourceFile();
   }, [handleSaveEditedSourceFile]);
 
+  const handleSaveSourceFile = useCallback(() => {
+    void handleSaveEditedSourceFile();
+  }, [handleSaveEditedSourceFile]);
+
   const handleReloadDiskConflict = useCallback(() => {
     const activeDocument = activeSourceBackedDocument;
     if (!activeDocument?.diskConflict) return;
@@ -3788,6 +3789,7 @@ const App: React.FC = () => {
   );
   const handleOpenSettings = useCallback(() => setMobileSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setMobileSettingsOpen(false), []);
+  const handleOpenMessagePicker = useCallback(() => sidebar.open("messages"), [sidebar.open]);
   const handleOpenExport = useCallback(() => {
     setInitialExportTab(undefined);
     setShowExport(true);
@@ -3848,6 +3850,8 @@ const App: React.FC = () => {
           total: recentMessages.length,
         }
       : undefined;
+  const showEmptyFolderPresentation =
+    annotateSource === "folder" && !markdown && !linkedDocHook.isActive;
 
   if (isLoading && !isSharedSession) {
     return (
@@ -4059,303 +4063,92 @@ const App: React.FC = () => {
               )}
 
               {/* Document Area */}
-              <OverlayScrollArea
-                element="main"
-                className={`flex-1 min-w-0 ${isHtmlSurface ? "bg-background" : `${gridEnabled ? "bg-grid " : "bg-card "}${!sidebar.isOpen && !isAgentTerminalOpen && wideModeType === null ? "lg:pl-[30px]" : ""}`}`}
-                data-print-region="document"
+              <EditorDocumentSurface
+                isHtmlSurface={isHtmlSurface}
+                gridEnabled={gridEnabled}
+                sidebarIsOpen={sidebar.isOpen}
+                agentTerminalIsOpen={isAgentTerminalOpen}
+                wideModeType={wideModeType}
+                isEditingMarkdown={isEditingMarkdown}
+                htmlToolsHidden={htmlToolsHidden}
+                stickyActionsEnabled={uiPrefs.stickyActionsEnabled}
+                inputMethod={inputMethod}
+                editorMode={editorMode}
+                repoInfo={repoInfo}
+                readerMaxWidth={annotateReaderMaxWidth}
+                viewerContentKey={viewerContentKey}
+                showEmptyFolderPresentation={showEmptyFolderPresentation}
+                canUseWideMode={canUseWideMode}
+                canEditMarkdown={canEditMarkdown}
+                activeSourceSaveFileName={activeSourceSave?.basename ?? null}
+                activeSaveStatus={activeSaveStatus}
+                saveFailed={saveFailed}
+                emphasizeSave={emphasizeSave}
+                hasUnsavedDiskChanges={hasUnsavedDiskChanges}
+                cancelMode={cancelMode}
+                confirmCancelEdits={confirmCancelEdits}
+                planAreaRef={planAreaRef}
+                draftRecoveryDialog={
+                  <ConfirmDialog
+                    isOpen={!!draftBanner}
+                    onClose={dismissDraft}
+                    onConfirm={handleRestoreDraft}
+                    title="Draft Recovered"
+                    message={
+                      draftBanner
+                        ? buildDraftBannerMessage(
+                            draftBanner.count,
+                            draftBanner.timeAgo,
+                            draftBanner.hasEdits,
+                          )
+                        : ""
+                    }
+                    confirmText="Restore"
+                    cancelText="Dismiss"
+                    showCancel
+                  />
+                }
                 onViewportReady={handleViewportReady}
-              >
-                <ConfirmDialog
-                  isOpen={!!draftBanner}
-                  onClose={dismissDraft}
-                  onConfirm={handleRestoreDraft}
-                  title="Draft Recovered"
-                  message={
-                    draftBanner
-                      ? buildDraftBannerMessage(
-                          draftBanner.count,
-                          draftBanner.timeAgo,
-                          draftBanner.hasEdits,
-                        )
-                      : ""
-                  }
-                  confirmText="Restore"
-                  cancelText="Dismiss"
-                  showCancel
-                />
-                <div
-                  ref={planAreaRef}
-                  className={`${isHtmlSurface ? "h-full flex flex-col" : "min-h-full flex flex-col items-center px-2 py-3 md:px-10 md:py-8 xl:px-16"} relative z-10`}
-                >
-                  {/* Sticky header lane — ghost bar that pins the toolstrip +
-                  badges at top: 12px once the user scrolls. Invisible at top
-                  of doc; original toolstrip/badges remain the source of
-                  truth there. Hidden when sticky actions are disabled.
-                  remountToken re-anchors the
-                  ResizeObserver when Viewer swaps content (linked docs or
-                  message switches). */}
-                  {!isHtmlSurface && !isEditingMarkdown && uiPrefs.stickyActionsEnabled && (
-                    <StickyHeaderLane
-                      inputMethod={inputMethod}
-                      onInputMethodChange={handleInputMethodChange}
-                      mode={editorMode}
-                      onModeChange={handleEditorModeChange}
-                      repoInfo={repoInfo}
-                      maxWidth={annotateReaderMaxWidth}
-                      remountToken={viewerContentKey}
-                    />
-                  )}
-
-                  {/* Annotation Toolstrip — the mode switcher (selection/redline input +
-                  comment/markup mode). Hidden on HTML surfaces
-                  when the header's "Hide tools" toggle is on (leaving the rendered HTML
-                  free of overlay controls). On HTML it floats top-left over the doc. */}
-                  {!isEditingMarkdown && !(isHtmlSurface && htmlToolsHidden) && (
-                    <div
-                      data-print-hide
-                      className={
-                        isHtmlSurface
-                          ? `absolute top-3 ${sidebar.isOpen ? "left-3" : "left-10"} z-20 flex items-center rounded-lg border border-border/50 bg-background/85 px-1.5 py-1 shadow-md backdrop-blur-sm`
-                          : "w-full mb-3 md:mb-4 flex items-center justify-start"
-                      }
-                      style={
-                        isHtmlSurface || annotateReaderMaxWidth == null
-                          ? undefined
-                          : { maxWidth: annotateReaderMaxWidth }
-                      }
-                    >
-                      <AnnotationToolstrip
-                        inputMethod={inputMethod}
-                        onInputMethodChange={handleInputMethodChange}
-                        mode={editorMode}
-                        onModeChange={handleEditorModeChange}
-                        showHelpLink={!isHtmlSurface}
-                      />
-                    </div>
-                  )}
-
-                  {/* Folder annotation empty state — shown before user picks a file */}
-                  {annotateSource === "folder" && !markdown && !linkedDocHook.isActive && (
-                    <div className="w-full flex justify-center">
-                      <div className="w-full max-w-3xl p-12 text-center text-muted-foreground">
-                        <p className="text-lg font-medium mb-2">Select a file to annotate</p>
-                        <p className="text-sm">
-                          Pick a markdown or HTML file from the sidebar to begin.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {/* Normal Plan View — always mounted, hidden during diff mode */}
-                  <div
-                    className={`w-full relative ${isHtmlSurface ? "flex-1 flex flex-col" : `flex justify-center${isEditingMarkdown ? " flex-1 min-h-0" : ""}`}`}
-                    style={{
-                      display:
-                        annotateSource === "folder" && !markdown && !linkedDocHook.isActive
-                          ? "none"
-                          : undefined,
-                    }}
-                  >
-                    {(canUseWideMode || canEditMarkdown) && !isHtmlSurface && (
-                      <div
-                        data-print-hide
-                        className="absolute -top-5 left-0 right-0 mx-auto w-full flex justify-end pointer-events-none"
-                        style={
-                          annotateReaderMaxWidth === null
-                            ? undefined
-                            : { maxWidth: annotateReaderMaxWidth ?? 832 }
-                        }
-                      >
-                        <div className="pointer-events-auto flex items-center gap-1.5 text-[11px] tracking-wide mr-[4px]">
-                          {canUseWideMode &&
-                            (["wide", "focus"] as const).map((type, i) => (
-                              <React.Fragment key={type}>
-                                {i > 0 && (
-                                  <span
-                                    aria-hidden
-                                    className="text-muted-foreground/30 select-none"
-                                  >
-                                    |
-                                  </span>
-                                )}
-                                <Tooltip
-                                  side="top"
-                                  align="end"
-                                  content={
-                                    type === "wide"
-                                      ? "Hide panels and expand document width"
-                                      : "Hide panels, keep document width"
-                                  }
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleViewMode(type)}
-                                    aria-pressed={wideModeType === type}
-                                    className={`cursor-pointer rounded-sm transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:opacity-80 ${
-                                      wideModeType === type
-                                        ? "text-foreground"
-                                        : "text-muted-foreground/50 hover:text-muted-foreground"
-                                    }`}
-                                  >
-                                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                                  </button>
-                                </Tooltip>
-                              </React.Fragment>
-                            ))}
-                          {canEditMarkdown && (
-                            <>
-                              {canUseWideMode && (
-                                <span aria-hidden className="text-muted-foreground/30 select-none">
-                                  |
-                                </span>
-                              )}
-                              {isEditingMarkdown && activeSourceSave && (
-                                <>
-                                  <Tooltip
-                                    side="top"
-                                    align="end"
-                                    content={`Save changes to ${activeSourceSave.basename}`}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        void handleSaveEditedSourceFile();
-                                      }}
-                                      disabled={activeSaveStatus === "saving"}
-                                      className={`flex items-center gap-1 cursor-pointer rounded-sm transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:opacity-80 disabled:cursor-not-allowed disabled:opacity-50 ${
-                                        saveFailed
-                                          ? "text-destructive"
-                                          : emphasizeSave
-                                            ? "text-primary"
-                                            : "text-muted-foreground/50 hover:text-muted-foreground"
-                                      }`}
-                                    >
-                                      {/* Invisible widest label reserves the width so Save/Saving/Saved
-                                      swap without nudging neighbors (font-agnostic, no fixed px). */}
-                                      <span className="grid justify-items-start">
-                                        <span
-                                          aria-hidden
-                                          className="invisible col-start-1 row-start-1"
-                                        >
-                                          Saving
-                                        </span>
-                                        <span className="col-start-1 row-start-1">
-                                          {activeSaveStatus === "saving"
-                                            ? "Saving"
-                                            : hasUnsavedDiskChanges
-                                              ? "Save"
-                                              : "Saved"}
-                                        </span>
-                                      </span>
-                                      {/* Dot slot is always present — only its color changes — so the
-                                      button never reflows when edits appear/clear. */}
-                                      <span
-                                        aria-hidden
-                                        className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors duration-150 ${
-                                          saveFailed
-                                            ? "bg-destructive"
-                                            : emphasizeSave
-                                              ? "bg-primary"
-                                              : "bg-transparent"
-                                        }`}
-                                      />
-                                    </button>
-                                  </Tooltip>
-                                  <span
-                                    aria-hidden
-                                    className="text-muted-foreground/30 select-none"
-                                  >
-                                    |
-                                  </span>
-                                </>
-                              )}
-                              <Tooltip
-                                side="top"
-                                align="end"
-                                content={
-                                  !isEditingMarkdown
-                                    ? "Edit the document text directly"
-                                    : cancelMode
-                                      ? "Discard your edits and stop editing"
-                                      : "Commit your edits and return to annotating"
-                                }
-                              >
-                                <button
-                                  type="button"
-                                  onClick={handleEditExitClick}
-                                  aria-pressed={isEditingMarkdown}
-                                  className={`cursor-pointer rounded-sm transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:opacity-80 ${
-                                    cancelMode
-                                      ? confirmCancelEdits
-                                        ? "text-destructive"
-                                        : "text-muted-foreground/70 hover:text-foreground"
-                                      : isEditingMarkdown
-                                        ? "text-primary"
-                                        : "text-muted-foreground/50 hover:text-muted-foreground"
-                                  }`}
-                                >
-                                  {!isEditingMarkdown
-                                    ? "Edit"
-                                    : cancelMode
-                                      ? confirmCancelEdits
-                                        ? "Discard?"
-                                        : "Cancel"
-                                      : "Done"}
-                                </button>
-                              </Tooltip>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    <EditorDocumentRenderer
-                      renderAs={renderAs}
-                      rawHtml={rawHtml}
-                      displayedMarkdown={displayedMarkdown}
-                      blocks={blocks}
-                      frontmatter={frontmatter}
-                      annotations={viewerAnnotations}
-                      selectedAnnotationId={selectedAnnotationId}
-                      editorMode={editorMode}
-                      inputMethod={inputMethod}
-                      globalAttachments={globalAttachments}
-                      isHtmlSurface={isHtmlSurface}
-                      htmlToolsHidden={htmlToolsHidden}
-                      isEditingMarkdown={isEditingMarkdown}
-                      activeSourceDocumentKey={activeSourceBackedDocument?.key ?? null}
-                      editGeneration={editGeneration}
-                      viewerContentKey={viewerContentKey}
-                      viewerRef={viewerRef}
-                      readerMaxWidth={annotateReaderMaxWidth}
-                      gridEnabled={gridEnabled}
-                      repoInfo={repoInfo}
-                      stickyActionsEnabled={uiPrefs.stickyActionsEnabled}
-                      showDemoBadge={!isApiMode && !isLoadingShared && !isSharedSession}
-                      linkedDocument={renderedLinkedDocument}
-                      imageBaseDir={imageBaseDir}
-                      codePathBaseDir={activeDocBaseDir}
-                      copyLabel={viewerCopyLabel}
-                      sourceInfo={sourceInfo}
-                      openInAppPath={viewerOpenInAppPath}
-                      messagePickerInfo={viewerMessagePickerInfo}
-                      checkboxOverrides={checkbox.overrides}
-                      actionsLabelMode={actionsLabelMode}
-                      typographyStyle={annotationTypographyStyle}
-                      onAddAnnotation={handleAddAnnotation}
-                      onRemoveAnnotation={removeAnnotation}
-                      onSelectAnnotation={handleSelectAnnotation}
-                      onAddGlobalAttachment={handleAddGlobalAttachment}
-                      onRemoveGlobalAttachment={handleRemoveGlobalAttachment}
-                      onEditorHandleReady={handleMarkdownEditorReady}
-                      onMarkdownChange={handleEditorChange}
-                      onOpenLinkedDocument={handleOpenLinkedDoc}
-                      onOpenCodeFile={codeFilePopout.open}
-                      onOpenMessagePicker={() => sidebar.open("messages")}
-                      onToggleCheckbox={checkbox.toggle}
-                      onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
-                    />
-                  </div>
-                </div>
-              </OverlayScrollArea>
+                onInputMethodChange={handleInputMethodChange}
+                onEditorModeChange={handleEditorModeChange}
+                onToggleViewMode={toggleViewMode}
+                onSaveSourceFile={handleSaveSourceFile}
+                onEditExit={handleEditExitClick}
+                renderAs={renderAs}
+                rawHtml={rawHtml}
+                displayedMarkdown={displayedMarkdown}
+                blocks={blocks}
+                frontmatter={frontmatter}
+                annotations={viewerAnnotations}
+                selectedAnnotationId={selectedAnnotationId}
+                globalAttachments={globalAttachments}
+                activeSourceDocumentKey={activeSourceBackedDocument?.key ?? null}
+                editGeneration={editGeneration}
+                viewerRef={viewerRef}
+                showDemoBadge={!isApiMode && !isLoadingShared && !isSharedSession}
+                linkedDocument={renderedLinkedDocument}
+                imageBaseDir={imageBaseDir}
+                codePathBaseDir={activeDocBaseDir}
+                copyLabel={viewerCopyLabel}
+                sourceInfo={sourceInfo}
+                openInAppPath={viewerOpenInAppPath}
+                messagePickerInfo={viewerMessagePickerInfo}
+                checkboxOverrides={checkbox.overrides}
+                actionsLabelMode={actionsLabelMode}
+                typographyStyle={annotationTypographyStyle}
+                onAddAnnotation={handleAddAnnotation}
+                onRemoveAnnotation={removeAnnotation}
+                onSelectAnnotation={handleSelectAnnotation}
+                onAddGlobalAttachment={handleAddGlobalAttachment}
+                onRemoveGlobalAttachment={handleRemoveGlobalAttachment}
+                onEditorHandleReady={handleMarkdownEditorReady}
+                onMarkdownChange={handleEditorChange}
+                onOpenLinkedDocument={handleOpenLinkedDoc}
+                onOpenCodeFile={codeFilePopout.open}
+                onOpenMessagePicker={handleOpenMessagePicker}
+                onToggleCheckbox={checkbox.toggle}
+                onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
+              />
 
               {/* Right panel region — `group/sidebar` so the collapse button reveals when
               hovering the whole panel, not just the thin handle. The handle and the
