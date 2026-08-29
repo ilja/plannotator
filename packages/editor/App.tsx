@@ -17,12 +17,8 @@ import {
   type LinkedDocAnnotationEntry,
   type MessageAnnotationEntry,
 } from "@plannotator/ui/utils/parser";
-import { Viewer, ViewerHandle } from "@plannotator/ui/components/Viewer";
-import { HtmlViewer } from "@plannotator/ui/components/html-viewer";
-import {
-  MarkdownEditor,
-  type MarkdownEditorHandle,
-} from "@plannotator/ui/components/MarkdownEditor";
+import { type ViewerHandle } from "@plannotator/ui/components/Viewer";
+import { type MarkdownEditorHandle } from "@plannotator/ui/components/MarkdownEditor";
 import { AnnotationPanel } from "@plannotator/ui/components/AnnotationPanel";
 import { DocumentAIChatPanel } from "@plannotator/ui/components/ai/DocumentAIChatPanel";
 import { SparklesIcon } from "@plannotator/ui/components/SparklesIcon";
@@ -127,6 +123,7 @@ import {
 import { useCheckboxOverrides } from "./hooks/useCheckboxOverrides";
 import { AppHeader } from "./components/AppHeader";
 import { WorkspaceBanners } from "./components/WorkspaceBanners";
+import { EditorDocumentRenderer } from "./components/EditorDocumentRenderer";
 import {
   AnnotateAgentTerminalPanel,
   type AnnotateAgentTerminalPanelHandle,
@@ -3817,6 +3814,40 @@ const App: React.FC = () => {
   // (a viewer would also be able to flip the owner's gridEnabled). Deferred
   // (not marked seen) until then.
   const shouldShowLookAndFeelAnnouncement = showLookAndFeelAnnouncement && !isSharedSession;
+  const renderedLinkedDocument = linkedDocHook.isActive
+    ? {
+        filepath: linkedDocHook.filepath!,
+        onBack: handleLinkedDocBack,
+        label:
+          annotateSource === "folder"
+            ? undefined
+            : fileBrowser.dirs.find((d) => d.path === fileBrowser.activeDirPath)?.isVault
+              ? "Vault File"
+              : fileBrowser.activeFile
+                ? "File"
+                : undefined,
+        backLabel,
+        variant: annotateSource === "folder" ? "folder-file" : "breadcrumb",
+      }
+    : null;
+  const viewerCopyLabel =
+    annotateSource === "message"
+      ? "Copy message"
+      : annotateSource === "file" || annotateSource === "folder"
+        ? "Copy file"
+        : undefined;
+  const viewerOpenInAppPath = annotateMode
+    ? linkedDocHook.isActive
+      ? (linkedDocHook.filepath ?? null)
+      : sourceFilePath
+    : null;
+  const viewerMessagePickerInfo =
+    annotateSource === "message" && recentMessages.length > 1
+      ? {
+          current: recentMessages.findIndex((m) => m.messageId === selectedMessageId) + 1,
+          total: recentMessages.length,
+        }
+      : undefined;
 
   if (isLoading && !isSharedSession) {
     return (
@@ -4276,117 +4307,52 @@ const App: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    {renderAs === "html" ? (
-                      <HtmlViewer
-                        key={linkedDocHook.isActive ? `doc:${linkedDocHook.filepath}` : "plan"}
-                        ref={viewerRef}
-                        rawHtml={rawHtml}
-                        annotations={viewerAnnotations}
-                        onAddAnnotation={handleAddAnnotation}
-                        onSelectAnnotation={handleSelectAnnotation}
-                        selectedAnnotationId={selectedAnnotationId}
-                        mode={editorMode}
-                        inputMethod={inputMethod}
-                        globalAttachments={globalAttachments}
-                        onAddGlobalAttachment={handleAddGlobalAttachment}
-                        onRemoveGlobalAttachment={handleRemoveGlobalAttachment}
-                        maxWidth={isHtmlSurface ? null : annotateReaderMaxWidth}
-                        fullViewport={isHtmlSurface}
-                        hideControls={htmlToolsHidden}
-                        typographyStyle={annotationTypographyStyle}
-                        onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
-                      />
-                    ) : isEditingMarkdown ? (
-                      <MarkdownEditor
-                        markdown={displayedMarkdown}
-                        documentId={`edit:${activeSourceBackedDocument?.key ?? "root"}:${editGeneration}`}
-                        onEditorHandleReady={handleMarkdownEditorReady}
-                        onMarkdownChange={handleEditorChange}
-                        maxWidth={annotateReaderMaxWidth}
-                        gridEnabled={gridEnabled}
-                      />
-                    ) : (
-                      <Viewer
-                        key={viewerContentKey}
-                        ref={viewerRef}
-                        blocks={blocks}
-                        markdown={displayedMarkdown}
-                        frontmatter={frontmatter}
-                        annotations={viewerAnnotations}
-                        onAddAnnotation={handleAddAnnotation}
-                        onRemoveAnnotation={removeAnnotation}
-                        onSelectAnnotation={handleSelectAnnotation}
-                        selectedAnnotationId={selectedAnnotationId}
-                        mode={editorMode}
-                        inputMethod={inputMethod}
-                        gridEnabled={gridEnabled}
-                        globalAttachments={globalAttachments}
-                        onAddGlobalAttachment={handleAddGlobalAttachment}
-                        onRemoveGlobalAttachment={handleRemoveGlobalAttachment}
-                        repoInfo={repoInfo}
-                        stickyActions={uiPrefs.stickyActionsEnabled}
-                        showDemoBadge={!isApiMode && !isLoadingShared && !isSharedSession}
-                        maxWidth={annotateReaderMaxWidth}
-                        onOpenLinkedDoc={handleOpenLinkedDoc}
-                        onOpenCodeFile={codeFilePopout.open}
-                        linkedDocInfo={
-                          linkedDocHook.isActive
-                            ? {
-                                filepath: linkedDocHook.filepath!,
-                                onBack: handleLinkedDocBack,
-                                label:
-                                  annotateSource === "folder"
-                                    ? undefined
-                                    : fileBrowser.dirs.find(
-                                          (d) => d.path === fileBrowser.activeDirPath,
-                                        )?.isVault
-                                      ? "Vault File"
-                                      : fileBrowser.activeFile
-                                        ? "File"
-                                        : undefined,
-                                backLabel,
-                                variant: annotateSource === "folder" ? "folder-file" : "breadcrumb",
-                              }
-                            : null
-                        }
-                        imageBaseDir={imageBaseDir}
-                        codePathBaseDir={activeDocBaseDir}
-                        copyLabel={
-                          annotateSource === "message"
-                            ? "Copy message"
-                            : annotateSource === "file" || annotateSource === "folder"
-                              ? "Copy file"
-                              : undefined
-                        }
-                        sourceInfo={sourceInfo}
-                        openInAppPath={
-                          annotateMode
-                            ? linkedDocHook.isActive
-                              ? (linkedDocHook.filepath ?? null)
-                              : sourceFilePath
-                            : null
-                        }
-                        messagePickerInfo={
-                          annotateSource === "message" && recentMessages.length > 1
-                            ? {
-                                // selectedMessageId is always one of recentMessages (set on init,
-                                // only changed via handleSelectMessage), so findIndex is >= 0.
-                                current:
-                                  recentMessages.findIndex(
-                                    (m) => m.messageId === selectedMessageId,
-                                  ) + 1,
-                                total: recentMessages.length,
-                                onOpen: () => sidebar.open("messages"),
-                              }
-                            : undefined
-                        }
-                        onToggleCheckbox={checkbox.toggle}
-                        checkboxOverrides={checkbox.overrides}
-                        actionsLabelMode={actionsLabelMode}
-                        typographyStyle={annotationTypographyStyle}
-                        onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
-                      />
-                    )}
+                    <EditorDocumentRenderer
+                      renderAs={renderAs}
+                      rawHtml={rawHtml}
+                      displayedMarkdown={displayedMarkdown}
+                      blocks={blocks}
+                      frontmatter={frontmatter}
+                      annotations={viewerAnnotations}
+                      selectedAnnotationId={selectedAnnotationId}
+                      editorMode={editorMode}
+                      inputMethod={inputMethod}
+                      globalAttachments={globalAttachments}
+                      isHtmlSurface={isHtmlSurface}
+                      htmlToolsHidden={htmlToolsHidden}
+                      isEditingMarkdown={isEditingMarkdown}
+                      activeSourceDocumentKey={activeSourceBackedDocument?.key ?? null}
+                      editGeneration={editGeneration}
+                      viewerContentKey={viewerContentKey}
+                      viewerRef={viewerRef}
+                      readerMaxWidth={annotateReaderMaxWidth}
+                      gridEnabled={gridEnabled}
+                      repoInfo={repoInfo}
+                      stickyActionsEnabled={uiPrefs.stickyActionsEnabled}
+                      showDemoBadge={!isApiMode && !isLoadingShared && !isSharedSession}
+                      linkedDocument={renderedLinkedDocument}
+                      imageBaseDir={imageBaseDir}
+                      codePathBaseDir={activeDocBaseDir}
+                      copyLabel={viewerCopyLabel}
+                      sourceInfo={sourceInfo}
+                      openInAppPath={viewerOpenInAppPath}
+                      messagePickerInfo={viewerMessagePickerInfo}
+                      checkboxOverrides={checkbox.overrides}
+                      actionsLabelMode={actionsLabelMode}
+                      typographyStyle={annotationTypographyStyle}
+                      onAddAnnotation={handleAddAnnotation}
+                      onRemoveAnnotation={removeAnnotation}
+                      onSelectAnnotation={handleSelectAnnotation}
+                      onAddGlobalAttachment={handleAddGlobalAttachment}
+                      onRemoveGlobalAttachment={handleRemoveGlobalAttachment}
+                      onEditorHandleReady={handleMarkdownEditorReady}
+                      onMarkdownChange={handleEditorChange}
+                      onOpenLinkedDocument={handleOpenLinkedDoc}
+                      onOpenCodeFile={codeFilePopout.open}
+                      onOpenMessagePicker={() => sidebar.open("messages")}
+                      onToggleCheckbox={checkbox.toggle}
+                      onAskAI={canUseDocumentAskAI ? handleAskAI : undefined}
+                    />
                   </div>
                 </div>
               </OverlayScrollArea>
