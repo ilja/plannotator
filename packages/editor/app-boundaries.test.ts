@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import {
   parseAICapabilitiesResponse,
@@ -5,6 +6,24 @@ import {
   parseSaveNotesResponse,
   parseShareHtmlResponse,
 } from "./app-boundaries";
+
+describe("editor presentation boundaries", () => {
+  test("delegates dialogs and overlays to dedicated components", () => {
+    const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+
+    expect(appSource).toContain('from "./components/EditorDialogs";');
+    expect(appSource).toContain('from "./components/EditorOverlays";');
+    expect(appSource).toContain("<EditorDialogs");
+    expect(appSource).toContain("<EditorOverlays");
+    expect(appSource).not.toContain("<ExportModal");
+    expect(appSource).not.toContain("<ImportModal");
+    expect(appSource).not.toContain("<ConfirmDialog");
+    expect(appSource).not.toContain("<CodeFilePopout");
+    expect(appSource).not.toContain("<CompletionOverlay");
+    expect(appSource).not.toContain("<LookAndFeelAnnouncementDialog");
+    expect(appSource).not.toContain("<ImageAnnotator");
+  });
+});
 
 describe("editor API boundary parsers", () => {
   test("parses a plan response with source metadata", () => {

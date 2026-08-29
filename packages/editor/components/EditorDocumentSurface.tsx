@@ -44,7 +44,6 @@ interface EditorDocumentSurfaceProps {
   readonly cancelMode: boolean;
   readonly confirmCancelEdits: boolean;
   readonly planAreaRef: RefObject<HTMLDivElement | null>;
-  readonly draftRecoveryDialog: React.ReactNode;
   readonly onViewportReady: (viewport: HTMLElement | null) => void;
   readonly onInputMethodChange: (method: InputMethod) => void;
   readonly onEditorModeChange: (mode: EditorMode) => void;
@@ -456,7 +455,6 @@ export function EditorDocumentSurface({
   cancelMode,
   confirmCancelEdits,
   planAreaRef,
-  draftRecoveryDialog,
   onViewportReady,
   onInputMethodChange,
   onEditorModeChange,
@@ -515,7 +513,6 @@ export function EditorDocumentSurface({
       data-print-region="document"
       onViewportReady={onViewportReady}
     >
-      {draftRecoveryDialog}
       <div ref={planAreaRef} className={`${documentFrameClassName} relative z-10`}>
         <StickyDocumentHeader
           isHtmlSurface={isHtmlSurface}

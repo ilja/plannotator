@@ -19,9 +19,6 @@ import {
 } from "@plannotator/ui/utils/parser";
 import { type ViewerHandle } from "@plannotator/ui/components/Viewer";
 import { type MarkdownEditorHandle } from "@plannotator/ui/components/MarkdownEditor";
-import { ExportModal } from "@plannotator/ui/components/ExportModal";
-import { ImportModal } from "@plannotator/ui/components/ImportModal";
-import { ConfirmDialog } from "@plannotator/ui/components/ConfirmDialog";
 import {
   Annotation,
   AnnotationType,
@@ -43,8 +40,6 @@ import { getCallbackConfig, CallbackAction, executeCallback } from "@plannotator
 import { useActiveSection } from "@plannotator/ui/hooks/useActiveSection";
 import { configStore, useConfigValue } from "@plannotator/ui/config";
 import { loadCodeFont, loadProseFont } from "@plannotator/ui/utils/diffFonts";
-import { CompletionOverlay } from "@plannotator/ui/components/CompletionOverlay";
-import { LookAndFeelAnnouncementDialog } from "@plannotator/ui/components/LookAndFeelAnnouncementDialog";
 import {
   getObsidianSettings,
   getEffectiveVaultPath,
@@ -72,7 +67,6 @@ import { usePrintMode } from "@plannotator/ui/hooks/usePrintMode";
 import { useResizablePanel } from "@plannotator/ui/hooks/useResizablePanel";
 import { useOverlayViewport } from "@plannotator/ui/hooks/useOverlayViewport";
 import { useIsMobile } from "@plannotator/ui/hooks/useIsMobile";
-import { ImageAnnotator } from "@plannotator/ui/components/ImageAnnotator";
 import { deriveImageName } from "@plannotator/ui/components/AttachmentsButton";
 import { useSidebar, type SidebarTab } from "@plannotator/ui/hooks/useSidebar";
 import { useLinkedDoc } from "@plannotator/ui/hooks/useLinkedDoc";
@@ -88,10 +82,7 @@ import { isVaultBrowserEnabled } from "@plannotator/ui/utils/obsidian";
 import { isFileBrowserEnabled, getFileBrowserSettings } from "@plannotator/ui/utils/fileBrowser";
 import { generateId } from "@plannotator/ui/utils/generateId";
 import type { PickerMessage } from "@plannotator/ui/components/sidebar/MessagesBrowser";
-import {
-  CodeFilePopout,
-  type CodeFileAnnotationInput,
-} from "@plannotator/ui/components/CodeFilePopout";
+import type { CodeFileAnnotationInput } from "@plannotator/ui/components/CodeFilePopout";
 import type { AIContext } from "@plannotator/ai";
 import type { CommentAskAIContext } from "@plannotator/ui/components/CommentPopover";
 import { type SourceSaveCapability } from "@plannotator/shared/source-save";
@@ -115,6 +106,12 @@ import { AppHeader } from "./components/AppHeader";
 import { WorkspaceBanners } from "./components/WorkspaceBanners";
 import { type AnnotateAgentTerminalPanelHandle } from "./components/AnnotateAgentTerminalPanel";
 import { EditorWorkspace } from "./components/EditorWorkspace";
+import {
+  EditorDialogs,
+  type EditorExportTab,
+  type SourceFileEditWarningAction,
+} from "./components/EditorDialogs";
+import { EditorOverlays, type PendingPasteImage } from "./components/EditorOverlays";
 import {
   buildAgentTerminalDeliveryRecord,
   buildTerminalAskPrompt,
@@ -153,9 +150,6 @@ import {
 } from "./messageAnnotationSession";
 import {
   buildAnnotationFeedbackHeading,
-  buildCompletionSubtitle,
-  buildCompletionTitle,
-  buildDraftBannerMessage,
   buildFeedbackLossDescription,
   getActionsLabelMode,
   getBackLabel,
@@ -215,8 +209,6 @@ const buildSourceBackedDraftRestorePlan = (
 function getHTMLElementTarget(target: EventTarget | null): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
-
-type SourceFileEditWarningAction = "send-feedback" | "approve" | "close";
 
 const choiceQuestionsFromBlocks = (blocks: Block[]) =>
   blocks.flatMap((block) =>
@@ -395,11 +387,7 @@ const App: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [submitted, setSubmitted] = useState<SubmissionStatus>(null);
-  const [pendingPasteImage, setPendingPasteImage] = useState<{
-    file: File;
-    blobUrl: string;
-    initialName: string;
-  } | null>(null);
+  const [pendingPasteImage, setPendingPasteImage] = useState<PendingPasteImage | null>(null);
   const [sharingEnabled, setSharingEnabled] = useState(true);
   const [shareBaseUrl, setShareBaseUrl] = useState<string | undefined>(undefined);
   const [pasteApiUrl, setPasteApiUrl] = useState<string | undefined>(undefined);
@@ -428,7 +416,7 @@ const App: React.FC = () => {
     document.title = repoInfo ? `${repoInfo.display} · Plannotator` : "Plannotator";
   }, [repoInfo]);
 
-  const [initialExportTab, setInitialExportTab] = useState<"share" | "annotations" | "notes">();
+  const [initialExportTab, setInitialExportTab] = useState<EditorExportTab>();
   const [aiSessionEnabled, setAISessionEnabled] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const [aiProviders, setAiProviders] = useState<
@@ -2170,28 +2158,6 @@ const App: React.FC = () => {
   const hasFeedbackContent = hasAnyAnnotations || hasDirectEdits || hasSavedFileChanges;
   const feedbackLoss = buildFeedbackLossDescription(feedbackAnnotationCount, hasDirectEdits);
   const hasUnsentFeedback = feedbackAnnotationCount > 0 || hasDirectEdits;
-  const hasOnlySavedFileChanges = hasSavedFileChanges && !hasUnsentFeedback;
-  const savedFileChangesLabel =
-    savedFileChanges.length === 1 ? "saved file change" : "saved file changes";
-  const savedFileChangesVerb = savedFileChanges.length === 1 ? "is" : "are";
-  const savedFileChangesPronoun = savedFileChanges.length === 1 ? "it" : "them";
-  const savedFileChangesOnDiskMessage = (
-    <>
-      Your {savedFileChangesLabel} {savedFileChangesVerb} already on disk.
-    </>
-  );
-  const _savedFileAwarenessOnlyMessage = (
-    <>
-      {savedFileChangesOnDiskMessage} The agent won't be told about {savedFileChangesPronoun}.
-    </>
-  );
-  const savedFileAwarenessMixedMessage = hasSavedFileChanges ? (
-    <>
-      {" "}
-      Your {savedFileChangesLabel} will stay on disk, but the agent won't be told about{" "}
-      {savedFileChangesPronoun}.
-    </>
-  ) : null;
 
   // Pinned "Direct edits" card data for the annotation sidebar. Source-backed
   // documents show saved-to-disk changes only; dirty buffers stay in the editor
@@ -3016,6 +2982,11 @@ const App: React.FC = () => {
     setSelectedCodeAnnotationId(annotation.id);
   }, []);
 
+  const handleSelectCodeFileAnnotation = React.useCallback((id: string | null) => {
+    setSelectedAnnotationId(null);
+    setSelectedCodeAnnotationId(id);
+  }, []);
+
   // The code popout is full-viewport modal — the annotation panel is behind it.
   // This handler only fires when the popout is closed (sidebar visible), so
   // reopening the file via codeFilePopout.open() is the correct behavior.
@@ -3822,8 +3793,23 @@ const App: React.FC = () => {
     setInitialExportTab(undefined);
     setShowExport(true);
   }, []);
+  const handleCloseExport = useCallback(() => {
+    setShowExport(false);
+    setInitialExportTab(undefined);
+  }, []);
   const handlePrint = useCallback(() => window.print(), []);
   const handleOpenImport = useCallback(() => setShowImport(true), []);
+  const handleCloseImport = useCallback(() => setShowImport(false), []);
+  const handleCloseFeedbackPrompt = useCallback(() => setShowFeedbackPrompt(false), []);
+  const handleCloseExitWarning = useCallback(() => setShowExitWarning(false), []);
+  const handleConfirmExitWarning = useCallback(() => {
+    setShowExitWarning(false);
+    if (exitWarningAction === "approve") handleAnnotateApprove();
+    else handleAnnotateExit();
+  }, [exitWarningAction, handleAnnotateApprove, handleAnnotateExit]);
+  const handleToggleGrid = useCallback((enabled: boolean) => {
+    configStore.set("gridEnabled", enabled);
+  }, []);
   const handleSaveToObsidian = useCallback(
     () => headerHandlersRef.current.handleQuickSaveToNotes(),
     [],
@@ -4049,26 +4035,6 @@ const App: React.FC = () => {
                 cancelMode,
                 confirmCancelEdits,
                 planAreaRef,
-                draftRecoveryDialog: (
-                  <ConfirmDialog
-                    isOpen={!!draftBanner}
-                    onClose={dismissDraft}
-                    onConfirm={handleRestoreDraft}
-                    title="Draft Recovered"
-                    message={
-                      draftBanner
-                        ? buildDraftBannerMessage(
-                            draftBanner.count,
-                            draftBanner.timeAgo,
-                            draftBanner.hasEdits,
-                          )
-                        : ""
-                    }
-                    confirmText="Restore"
-                    cancelText="Dismiss"
-                    showCancel
-                  />
-                ),
                 renderAs,
                 rawHtml,
                 displayedMarkdown,
@@ -4187,179 +4153,77 @@ const App: React.FC = () => {
             }}
           />
 
-          {/* Code File Popout */}
-          {codeFilePopout.popoutProps && (
-            <CodeFilePopout
-              {...codeFilePopout.popoutProps}
-              annotations={codeAnnotations.filter(
-                (ann) => ann.filePath === codeFilePopout.popoutProps?.filepath,
-              )}
-              selectedAnnotationId={selectedCodeAnnotationId}
-              onAddAnnotation={handleAddCodeAnnotation}
-              onEditAnnotation={handleEditCodeAnnotation}
-              onDeleteAnnotation={handleDeleteCodeAnnotation}
-              onSelectAnnotation={(id) => {
-                setSelectedAnnotationId(null);
-                setSelectedCodeAnnotationId(id);
-              }}
-            />
-          )}
-
-          {/* Export Modal */}
-          <ExportModal
-            isOpen={showExport}
-            onClose={() => {
-              setShowExport(false);
-              setInitialExportTab(undefined);
+          <EditorDialogs
+            model={{
+              draftBanner,
+              showExport,
+              shareUrl,
+              shareUrlSize,
+              shortShareUrl,
+              isGeneratingShortUrl,
+              shortUrlError,
+              annotationsOutput: showExport ? getCurrentFeedbackPayload() : "",
+              annotationCount: allAnnotations.length + codeAnnotations.length,
+              sharingEnabled: canShareCurrentSession,
+              markdown,
+              isApiMode,
+              initialExportTab,
+              showImport,
+              shareBaseUrl,
+              showFeedbackPrompt,
+              canEditMarkdown,
+              agentName,
+              showSourceFileEditWarning,
+              sourceFileEditWarningAction,
+              showExitWarning,
+              exitWarningAction,
+              feedbackLoss,
+              hasSavedFileChanges,
+              hasUnsentFeedback,
+              savedFileChangesCount: savedFileChanges.length,
+              shareLoadError,
             }}
-            shareUrl={shareUrl}
-            shareUrlSize={shareUrlSize}
-            shortShareUrl={shortShareUrl}
-            isGeneratingShortUrl={isGeneratingShortUrl}
-            shortUrlError={shortUrlError}
-            onGenerateShortUrl={generateShortUrl}
-            annotationsOutput={
-              // Computed only while the modal is open: composeFeedback runs a
-              // unified diff when edits exist — not per-render work.
-              showExport ? getCurrentFeedbackPayload() : ""
-            }
-            annotationCount={allAnnotations.length + codeAnnotations.length}
-            sharingEnabled={canShareCurrentSession}
-            markdown={markdown}
-            isApiMode={isApiMode}
-            initialTab={initialExportTab}
-          />
-
-          {/* Import Modal */}
-          <ImportModal
-            isOpen={showImport}
-            onClose={() => setShowImport(false)}
-            onImport={importFromShareUrl}
-            shareBaseUrl={shareBaseUrl}
-          />
-
-          {/* Feedback prompt dialog */}
-          <ConfirmDialog
-            isOpen={showFeedbackPrompt}
-            onClose={() => setShowFeedbackPrompt(false)}
-            title="Add Feedback First"
-            message={
-              canEditMarkdown
-                ? `To provide feedback, add annotations or direct edits. ${agentName} will use your feedback to revise the document.`
-                : `To provide feedback, select text and add annotations. ${agentName} will use your annotations to revise the document.`
-            }
-            variant="info"
-          />
-
-          {/* Unsaved source-file edit warning dialog */}
-          <ConfirmDialog
-            isOpen={showSourceFileEditWarning}
-            onClose={closeSourceFileEditWarning}
-            onConfirm={confirmSourceFileEditWarning}
-            title={
-              sourceFileEditWarningAction === "close"
-                ? "Unsaved File Edits"
-                : "File Edits Won't Be Sent"
-            }
-            message={
-              sourceFileEditWarningAction === "close" ? (
-                <>
-                  You have unsaved file edits. They are not saved to disk and will be lost if you
-                  close this session.
-                </>
-              ) : (
-                <>
-                  You have unsaved file edits. They are not saved to disk, and {agentName} won't get
-                  them if you{" "}
-                  {sourceFileEditWarningAction === "approve" ? "approve" : "send feedback"}.
-                </>
-              )
-            }
-            subMessage="Save or discard the file edits first if you want Plannotator to keep them."
-            confirmText={
-              sourceFileEditWarningAction === "approve"
-                ? "Approve Anyway"
-                : sourceFileEditWarningAction === "close"
-                  ? "Close Anyway"
-                  : "Send Anyway"
-            }
-            cancelText="Cancel"
-            variant="warning"
-            showCancel
-          />
-
-          {/* Unsent feedback warning dialog — reused by Close and (in gate mode) Approve */}
-          <ConfirmDialog
-            isOpen={showExitWarning}
-            onClose={() => setShowExitWarning(false)}
-            onConfirm={() => {
-              setShowExitWarning(false);
-              if (exitWarningAction === "approve") handleAnnotateApprove();
-              else handleAnnotateExit();
+            actions={{
+              onDismissDraft: dismissDraft,
+              onRestoreDraft: handleRestoreDraft,
+              onCloseExport: handleCloseExport,
+              onGenerateShortUrl: generateShortUrl,
+              onCloseImport: handleCloseImport,
+              onImport: importFromShareUrl,
+              onCloseFeedbackPrompt: handleCloseFeedbackPrompt,
+              onCloseSourceFileEditWarning: closeSourceFileEditWarning,
+              onConfirmSourceFileEditWarning: confirmSourceFileEditWarning,
+              onCloseExitWarning: handleCloseExitWarning,
+              onConfirmExitWarning: handleConfirmExitWarning,
+              onClearShareLoadError: clearShareLoadError,
             }}
-            title="Feedback Won't Be Sent"
-            message={
-              hasOnlySavedFileChanges ? (
-                <>
-                  {savedFileChangesOnDiskMessage} The agent will not get that context if you{" "}
-                  {exitWarningAction === "approve" ? "approve" : "close"}.
-                </>
-              ) : (
-                <>
-                  You have {feedbackLoss} that will be lost if you{" "}
-                  {exitWarningAction === "approve" ? "approve" : "close"}.
-                  {savedFileAwarenessMixedMessage}
-                </>
-              )
-            }
-            subMessage={
-              hasOnlySavedFileChanges
-                ? "To tell the agent what changed, use Send Feedback instead."
-                : "To send this feedback, use Send Feedback instead."
-            }
-            confirmText={exitWarningAction === "approve" ? "Approve Anyway" : "Close Anyway"}
-            cancelText="Cancel"
-            variant="warning"
-            showCancel
-          />
-
-          {/* Shared URL load failure warning */}
-          <ConfirmDialog
-            isOpen={!!shareLoadError && !isApiMode}
-            onClose={clearShareLoadError}
-            title="Shared Document Could Not Be Loaded"
-            message={shareLoadError}
-            subMessage="You are viewing a demo document. This is sample content — it is not your data or anyone else's."
-            variant="warning"
           />
 
           <Toaster position="top-right" offset={64} toastOptions={{ style: toastStyle }} />
 
-          {/* Completion overlay - shown after approve/deny */}
-          <CompletionOverlay
-            submitted={submitted}
-            title={buildCompletionTitle(submitted)}
-            subtitle={buildCompletionSubtitle(submitted, agentName, annotateSource)}
-            agentLabel={agentName}
+          <EditorOverlays
+            model={{
+              codeFilePopoutProps: codeFilePopout.popoutProps,
+              codeAnnotations,
+              selectedCodeAnnotationId,
+              submitted,
+              agentName,
+              annotateSource,
+              shouldShowLookAndFeelAnnouncement,
+              gridEnabled,
+              pendingPasteImage,
+            }}
+            actions={{
+              onAddCodeAnnotation: handleAddCodeAnnotation,
+              onEditCodeAnnotation: handleEditCodeAnnotation,
+              onDeleteCodeAnnotation: handleDeleteCodeAnnotation,
+              onSelectCodeAnnotation: handleSelectCodeFileAnnotation,
+              onToggleGrid: handleToggleGrid,
+              onDismissLookAndFeelAnnouncement: dismissLookAndFeelAnnouncement,
+              onAcceptPasteImage: handlePasteAnnotatorAccept,
+              onClosePasteImage: handlePasteAnnotatorClose,
+            }}
           />
-
-          <LookAndFeelAnnouncementDialog
-            isOpen={shouldShowLookAndFeelAnnouncement}
-            gridEnabled={gridEnabled}
-            onToggleGrid={(v) => configStore.set("gridEnabled", v)}
-            onDismiss={dismissLookAndFeelAnnouncement}
-          />
-
-          {/* Image Annotator for pasted images */}
-          <ImageAnnotator
-            isOpen={!!pendingPasteImage}
-            imageSrc={pendingPasteImage?.blobUrl ?? ""}
-            initialName={pendingPasteImage?.initialName}
-            onAccept={handlePasteAnnotatorAccept}
-            onClose={handlePasteAnnotatorClose}
-          />
-
-          {/* Permission Mode Setup (Claude Code first-time) */}
         </div>
       </TooltipProvider>
     </ThemeProvider>

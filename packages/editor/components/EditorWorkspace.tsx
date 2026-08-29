@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent, ReactNode, RefObject } from "react";
+import type { CSSProperties, PointerEvent, RefObject } from "react";
 import type { CommentAskAIHandler } from "@plannotator/ui/components/CommentPopover";
 import { ScrollViewportContext } from "@plannotator/ui/hooks/useScrollViewport";
 import type { ViewerHandle } from "@plannotator/ui/components/Viewer";
@@ -58,7 +58,6 @@ export interface EditorWorkspaceDocumentModel {
   readonly cancelMode: boolean;
   readonly confirmCancelEdits: boolean;
   readonly planAreaRef: RefObject<HTMLDivElement | null>;
-  readonly draftRecoveryDialog: ReactNode;
   readonly renderAs: "markdown" | "html";
   readonly rawHtml: string;
   readonly displayedMarkdown: string;
@@ -184,7 +183,6 @@ export function EditorWorkspace({
           cancelMode={model.document.cancelMode}
           confirmCancelEdits={model.document.confirmCancelEdits}
           planAreaRef={model.document.planAreaRef}
-          draftRecoveryDialog={model.document.draftRecoveryDialog}
           onViewportReady={actions.document.onViewportReady}
           onInputMethodChange={actions.document.onInputMethodChange}
           onEditorModeChange={actions.document.onEditorModeChange}
