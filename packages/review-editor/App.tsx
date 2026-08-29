@@ -4,16 +4,7 @@ import { ThemeProvider, useTheme } from "@plannotator/ui/components/ThemeProvide
 import { TooltipProvider } from "@plannotator/ui/components/Tooltip";
 import { ConfirmDialog } from "@plannotator/ui/components/ConfirmDialog";
 import { Settings } from "@plannotator/ui/components/Settings";
-import {
-  FeedbackButton,
-  ApproveButton,
-  ExitButton,
-} from "@plannotator/ui/components/ToolbarButtons";
-import { AgentReviewActions } from "./components/AgentReviewActions";
-import { DiffOptionsPopover } from "./components/DiffOptionsPopover";
 import { CompletionOverlay } from "@plannotator/ui/components/CompletionOverlay";
-import { GitHubIcon } from "@plannotator/ui/components/GitHubIcon";
-import { RepoIcon } from "@plannotator/ui/components/RepoIcon";
 import { getDisplayRepo } from "@plannotator/shared/pr-types";
 import type { SemanticDiffAdvert } from "@plannotator/shared/semantic-diff-types";
 import { configStore, useConfigValue } from "@plannotator/ui/config";
@@ -54,16 +45,12 @@ import { useExternalAnnotations } from "@plannotator/ui/hooks/useExternalAnnotat
 import { decodeCodeAnnotation } from "@plannotator/ui/utils/annotationSchemas";
 import { exportEditorAnnotations } from "@plannotator/ui/utils/parser";
 import { ResizeHandle } from "@plannotator/ui/components/ResizeHandle";
-import { FolderTree } from "lucide-react";
 import { DockviewReact, type DockviewReadyEvent, type DockviewApi } from "dockview-react";
-import { ReviewHeaderMenu } from "./components/ReviewHeaderMenu";
 import { ReviewSidebar } from "./components/ReviewSidebar";
 import type { ReviewSidebarTab } from "./components/ReviewSidebar";
-import { SparklesIcon } from "@plannotator/ui/components/SparklesIcon";
 import { useSidebar } from "@plannotator/ui/hooks/useSidebar";
 import { FileTree } from "./components/FileTree";
-import { StackedPRLabel } from "./components/StackedPRLabel";
-import { PRSelector } from "./components/PRSelector";
+import { ReviewHeader } from "./components/ReviewHeader";
 import { PRSwitchOverlay } from "./components/PRSwitchOverlay";
 import { usePRStack } from "./hooks/usePRStack";
 import { useDiffFreshness } from "./hooks/useDiffFreshness";
@@ -101,7 +88,6 @@ import type { DiffFile, AnnotationScrollTarget } from "./types";
 import { annotationMatchesPrScope } from "./utils/annotationScope";
 import type { DiffOption, GitContext } from "@plannotator/shared/types";
 import type { PRDiffScope, PRDiffScopeOption, PRStackInfo } from "@plannotator/shared/pr-stack";
-import { altKey } from "@plannotator/ui/utils/platform";
 import { usePlatformReviewActions } from "./hooks/usePlatformReviewActions";
 
 declare const __APP_VERSION__: string;
@@ -1882,6 +1868,77 @@ const ReviewApp: React.FC = () => {
     sendFeedback: handleSendFeedback,
   });
 
+  const handleToggleFileTree = useCallback(() => {
+    setIsFileTreeOpen((previous) => !previous);
+  }, []);
+
+  const handleToggleDestinationMenu = useCallback(() => {
+    setShowDestinationMenu((previous) => !previous);
+  }, [setShowDestinationMenu]);
+
+  const handleCloseDestinationMenu = useCallback(() => {
+    setShowDestinationMenu(false);
+  }, [setShowDestinationMenu]);
+
+  const handleSelectReviewDestination = useCallback(
+    (destination: "agent" | "platform") => {
+      selectReviewDestination(destination);
+      setShowDestinationMenu(false);
+    },
+    [selectReviewDestination, setShowDestinationMenu],
+  );
+
+  const handleRequestApprove = useCallback(() => {
+    if (totalAnnotationCount > 0) {
+      setShowApproveWarning(true);
+      return;
+    }
+    handleApprove();
+  }, [totalAnnotationCount, handleApprove]);
+
+  const handleRequestExit = useCallback(() => {
+    if (totalAnnotationCount > 0) {
+      setShowExitWarning(true);
+      return;
+    }
+    handleExit();
+  }, [totalAnnotationCount, handleExit]);
+
+  const handleRequestPlatformComment = useCallback(() => {
+    openPlatformDialog("comment");
+  }, [openPlatformDialog]);
+
+  const handleRequestPlatformApprove = useCallback(() => {
+    if (platformUser && prMetadata?.author === platformUser) return;
+    openPlatformDialog("approve");
+  }, [platformUser, prMetadata, openPlatformDialog]);
+
+  const handleToggleAnnotations = useCallback(() => {
+    reviewSidebar.toggleTab("annotations");
+  }, [reviewSidebar]);
+
+  const handleToggleAI = useCallback(() => {
+    reviewSidebar.toggleTab("ai");
+  }, [reviewSidebar]);
+
+  const handleOpenSettingsMenu = useCallback(() => {
+    setOpenSettingsMenu(true);
+  }, []);
+
+  const handleOpenExportModal = useCallback(() => {
+    setShowExportModal(true);
+  }, []);
+
+  const handleToggleSidebar = useCallback(() => {
+    if (reviewSidebar.isOpen) {
+      reviewSidebar.close();
+      return;
+    }
+    reviewSidebar.open();
+  }, [reviewSidebar]);
+
+  const isOwnPullRequest = !!platformUser && prMetadata?.author === platformUser;
+
   if (isLoading) {
     return (
       <ThemeProvider defaultTheme="dark">
@@ -1898,518 +1955,67 @@ const ReviewApp: React.FC = () => {
         <ReviewStateProvider value={reviewStateValue}>
           {isSwitchingPRScope && <PRSwitchOverlay />}
           <div className="h-screen flex flex-col bg-background overflow-hidden">
-            {/* Header */}
-            <header className="py-1 flex items-center justify-between px-2 md:px-4 border-b border-border/50 bg-card/50 backdrop-blur-xl z-50">
-              <div className="min-w-0 flex items-center gap-2 md:gap-3">
-                {shouldShowFileTree && (
-                  <>
-                    <button
-                      onClick={() => setIsFileTreeOpen((prev) => !prev)}
-                      className={`p-1 rounded-md transition-all focus-visible:outline-none ${
-                        isFileTreeOpen
-                          ? "text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      }`}
-                      title={isFileTreeOpen ? "Hide file tree" : "Show file tree"}
-                    >
-                      <FolderTree className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
-                  </>
-                )}
-                {prMetadata ? (
-                  <div className="min-w-0 flex items-center gap-2 md:gap-3">
-                    <span className="text-xs text-muted-foreground/60 inline-flex items-center gap-1 whitespace-nowrap">
-                      <RepoIcon className="w-3 h-3 flex-shrink-0" />
-                      {displayRepo}
-                    </span>
-                    <PRSelector
-                      prNumberLabel={prNumberLabel}
-                      prTitle={prMetadata.title}
-                      currentNumber={prMetadata.number}
-                      onSelect={handlePRSwitch}
-                      disabled={isSwitchingPRScope}
-                    />
-                    <StackedPRLabel
-                      metadata={prMetadata}
-                      prNumberLabel={prNumberLabel}
-                      stackInfo={prStackInfo}
-                      stackTree={prStackTree}
-                      scope={prDiffScope}
-                      scopeOptions={prDiffScopeOptions}
-                      isSwitchingScope={isSwitchingPRScope}
-                      onSelectScope={handlePRDiffScopeSelect}
-                      onNavigatePR={handlePRSwitch}
-                    />
-                    <div className="hidden md:flex items-center gap-0.5 ml-1">
-                      <button
-                        onClick={() => handleOpenPRPanel("summary")}
-                        className="p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors duration-150"
-                        title="PR Summary"
-                      >
-                        <svg
-                          className="w-3 h-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleOpenPRPanel("comments")}
-                        className="p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors duration-150"
-                        title="PR Comments"
-                      >
-                        <svg
-                          className="w-3 h-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleOpenPRPanel("checks")}
-                        className="p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors duration-150"
-                        title="PR Checks"
-                      >
-                        <svg
-                          className="w-3 h-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ) : repoInfo ? (
-                  <div className="min-w-0 flex items-center gap-2 md:gap-3">
-                    {repoInfo.branch && (
-                      <span
-                        className="text-xs font-mono text-foreground truncate"
-                        title={repoInfo.branch}
-                      >
-                        {repoInfo.branch}
-                      </span>
-                    )}
-                    <span
-                      className="text-xs text-muted-foreground/60 inline-flex items-center gap-1 truncate max-w-[220px]"
-                      title={repoInfo.display}
-                    >
-                      <RepoIcon className="w-3 h-3 flex-shrink-0" />
-                      {repoInfo.display}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground/70">Review</span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1 md:gap-2">
-                {/* Diff-display controls: Split/Unified toggle + settings cog in
-                one pill. The cog is an action (not a toggle segment), set off
-                by a divider so the grouping reads clearly. */}
-                <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-                  <button
-                    onClick={() => handleDiffStyleChange("split")}
-                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                      diffStyle === "split"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Split
-                  </button>
-                  <button
-                    onClick={() => handleDiffStyleChange("unified")}
-                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                      diffStyle === "unified"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Unified
-                  </button>
-                  <div className="w-px h-4 bg-border/60 mx-0.5" />
-                  <DiffOptionsPopover />
-                </div>
-
-                {origin ? (
-                  <>
-                    {/* Destination dropdown (PR mode only) */}
-                    {prMetadata && (
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowDestinationMenu((prev) => !prev)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-muted hover:bg-muted/80 transition-colors"
-                          title={
-                            reviewDestination === "platform"
-                              ? "Posting to GitHub pull request"
-                              : "Sending to agent session"
-                          }
-                        >
-                          {reviewDestination === "platform" ? (
-                            <>
-                              <GitHubIcon className="w-3.5 h-3.5" />
-                              <span>GitHub</span>
-                            </>
-                          ) : (
-                            "Agent"
-                          )}
-                          <svg
-                            className="w-3 h-3 opacity-60"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                        {showDestinationMenu && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-40"
-                              onClick={() => setShowDestinationMenu(false)}
-                            />
-                            <div className="absolute right-0 top-full mt-1 py-1 bg-popover border border-border rounded-lg shadow-xl z-50 min-w-[160px]">
-                              <button
-                                onClick={() => {
-                                  selectReviewDestination("platform");
-                                  setShowDestinationMenu(false);
-                                }}
-                                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                                  reviewDestination === "platform"
-                                    ? "text-foreground bg-muted/50"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                                }`}
-                              >
-                                <div className="font-medium">GitHub</div>
-                                <div className="text-muted-foreground/60">Post to pull request</div>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  selectReviewDestination("agent");
-                                  setShowDestinationMenu(false);
-                                }}
-                                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                                  reviewDestination === "agent"
-                                    ? "text-foreground bg-muted/50"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                                }`}
-                              >
-                                <div className="font-medium">Agent</div>
-                                <div className="text-muted-foreground/60">Send to session</div>
-                              </button>
-                              <div className="border-t border-border/50 mt-1 pt-1 px-3 py-1">
-                                <span className="text-[10px] text-muted-foreground/40">
-                                  <kbd className="inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded bg-muted border border-border/60 border-b-[2px] text-[9px] font-mono leading-none text-foreground/60 shadow-sm">
-                                    {altKey}
-                                  </kbd>
-                                  <kbd className="inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded bg-muted border border-border/60 border-b-[2px] text-[9px] font-mono leading-none text-foreground/60 shadow-sm ml-0.5">
-                                    {altKey}
-                                  </kbd>
-                                  <span className="ml-1.5">to toggle</span>
-                                </span>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {/* GitHub error message */}
-                    {platformActionError && (
-                      <div
-                        className="text-xs text-destructive px-2 py-1 bg-destructive/10 rounded border border-destructive/20 max-w-[200px] truncate"
-                        title={platformActionError}
-                      >
-                        {platformActionError}
-                      </div>
-                    )}
-
-                    {reviewMode === "workspace" && diffError && (
-                      <div
-                        className="text-xs text-amber-700 dark:text-amber-300 px-2 py-1 bg-amber-500/10 rounded border border-amber-500/25 max-w-[240px] truncate"
-                        title={diffError}
-                      >
-                        {files.length > 0
-                          ? "Some workspace changes could not be loaded"
-                          : "Workspace changes could not be loaded"}
-                      </div>
-                    )}
-
-                    {/* Partial PR diff notice — GitHub withheld per-file
-                    content (PR too large). "Load full diff" re-requests the
-                    layer scope; the server recomputes the exact diff from the
-                    local checkout (waiting out the warmup if needed). The
-                    request is non-blocking on purpose: it can park for
-                    minutes behind a cold clone, and the reviewer keeps
-                    working with the partial diff meanwhile. */}
-                    {prPatchIncomplete && prDiffScope === "layer" && !isSwitchingPRScope && (
-                      <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 px-2 py-1 bg-amber-500/10 rounded border border-amber-500/25">
-                        <span
-                          className="hidden md:inline"
-                          title="GitHub omitted diff content for some files because this PR is too large"
-                        >
-                          Partial diff
-                        </span>
-                        <span className="md:hidden">Partial</span>
-                        {!prPatchUpgradeAvailable ? (
-                          // Partiality without a local checkout: informational
-                          // only — never offer a button that cannot work. The
-                          // visible text stays runtime-neutral (--local is a CLI
-                          // remedy that not every runtime supports).
-                          <span
-                            className="hidden sm:inline text-amber-700/70 dark:text-amber-300/70"
-                            title="GitHub omitted diff content for some files and this session has no local checkout to recompute from. CLI sessions can re-run the review with --local."
-                          >
-                            (no local checkout — full diff unavailable)
-                          </span>
-                        ) : isLoadingFullDiff ? (
-                          <span
-                            className="flex items-center gap-1.5 font-medium"
-                            title="Recomputing the full diff from the local checkout — waiting for the background clone if it's still running. You can keep reviewing."
-                          >
-                            <span
-                              className="inline-block w-3 h-3 border-[1.5px] border-current border-t-transparent rounded-full animate-spin"
-                              aria-hidden
-                            />
-                            Loading full diff…
-                          </span>
-                        ) : (
-                          <button
-                            onClick={handleLoadFullDiff}
-                            className="font-medium underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
-                            title="Recompute the full diff from the local checkout (may wait for the background clone to finish — you can keep reviewing meanwhile)"
-                          >
-                            Load full diff
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Diff staleness notice — files changed since this snapshot
-                    was computed (agent editing mid-review). Non-blocking; the
-                    user refreshes when ready. */}
-                    {diffFreshness.isStale && !isLoadingDiff && (
-                      <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 px-2 py-1 bg-amber-500/10 rounded border border-amber-500/25">
-                        <span className="hidden md:inline">Diff out of date</span>
-                        <span className="md:hidden">Stale</span>
-                        <button
-                          onClick={handleRefreshStaleDiff}
-                          className="font-medium underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
-                          title="Re-run the diff with the current settings"
-                        >
-                          Refresh
-                        </button>
-                        <button
-                          onClick={diffFreshness.dismiss}
-                          className="text-amber-700/60 dark:text-amber-300/60 hover:text-amber-900 dark:hover:text-amber-100 transition-colors leading-none"
-                          title="Dismiss"
-                          aria-label="Dismiss stale diff notice"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Agent mode: Close/SendFeedback flip + Approve */}
-                    {!platformMode ? (
-                      <AgentReviewActions
-                        totalAnnotationCount={totalAnnotationCount}
-                        isSendingFeedback={isSendingFeedback}
-                        isApproving={isApproving}
-                        isExiting={isExiting}
-                        onSendFeedback={handleSendFeedback}
-                        onApprove={() =>
-                          totalAnnotationCount > 0 ? setShowApproveWarning(true) : handleApprove()
-                        }
-                        onExit={() =>
-                          totalAnnotationCount > 0 ? setShowExitWarning(true) : handleExit()
-                        }
-                      />
-                    ) : (
-                      <>
-                        {/* Platform mode: Close + Post Comments + Approve */}
-                        <ExitButton
-                          onClick={() =>
-                            totalAnnotationCount > 0 ? setShowExitWarning(true) : handleExit()
-                          }
-                          disabled={
-                            isSendingFeedback || isApproving || isExiting || isPlatformActioning
-                          }
-                          isLoading={isExiting}
-                        />
-                        <FeedbackButton
-                          onClick={() => openPlatformDialog("comment")}
-                          disabled={isSendingFeedback || isApproving || isPlatformActioning}
-                          isLoading={isSendingFeedback || isPlatformActioning}
-                          label="Post Comments"
-                          shortLabel="Post"
-                          loadingLabel="Posting..."
-                          shortLoadingLabel="Posting..."
-                          title="Post review to GitHub"
-                        />
-                        <div className="relative group/approve">
-                          <ApproveButton
-                            onClick={() => {
-                              if (platformUser && prMetadata?.author === platformUser) return;
-                              openPlatformDialog("approve");
-                            }}
-                            disabled={
-                              isSendingFeedback ||
-                              isApproving ||
-                              isPlatformActioning ||
-                              (!!platformUser && prMetadata?.author === platformUser)
-                            }
-                            isLoading={isApproving}
-                            muted={
-                              !!platformUser &&
-                              prMetadata?.author === platformUser &&
-                              !isSendingFeedback &&
-                              !isApproving &&
-                              !isPlatformActioning
-                            }
-                            title={
-                              platformUser && prMetadata?.author === platformUser
-                                ? "You can't approve your own pull request"
-                                : "Approve - no changes needed"
-                            }
-                          />
-                          {platformUser && prMetadata?.author === platformUser && (
-                            <div className="absolute top-full right-0 mt-2 px-3 py-2 bg-popover border border-border rounded-lg shadow-xl text-xs text-foreground w-48 text-center opacity-0 invisible group-hover/approve:opacity-100 group-hover/approve:visible transition-all pointer-events-none z-50">
-                              <div className="absolute bottom-full right-4 border-4 border-transparent border-b-border" />
-                              <div className="absolute bottom-full right-4 mt-px border-4 border-transparent border-b-popover" />
-                              You can't approve your own pull request on GitHub.
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    onClick={handleCopyFeedback}
-                    className="px-2 py-1 md:px-2.5 rounded-md text-xs font-medium bg-muted hover:bg-muted/80 transition-colors flex items-center gap-1.5"
-                    title="Copy feedback for LLM"
-                  >
-                    {copyFeedback === "Feedback copied!" ? (
-                      <>
-                        <svg
-                          className="w-3.5 h-3.5 text-success"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span className="hidden md:inline">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                        <span className="hidden md:inline">Copy Feedback</span>
-                      </>
-                    )}
-                  </button>
-                )}
-
-                <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
-
-                {/* Sidebar tab toggles */}
-                <button
-                  onClick={() => reviewSidebar.toggleTab("annotations")}
-                  className={`relative p-1.5 rounded-md transition-all ${
-                    reviewSidebar.isOpen && reviewSidebar.activeTab === "annotations"
-                      ? "bg-primary/15 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                  title="Annotations"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                    />
-                  </svg>
-                  {totalAnnotationCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground px-0.5">
-                      {totalAnnotationCount > 99 ? "99+" : totalAnnotationCount}
-                    </span>
-                  )}
-                </button>
-                {aiAvailable && (
-                  <button
-                    onClick={() => reviewSidebar.toggleTab("ai")}
-                    className={`relative p-1.5 rounded-md transition-all ${
-                      reviewSidebar.isOpen && reviewSidebar.activeTab === "ai"
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                    title="AI Chat"
-                  >
-                    <SparklesIcon className="w-4 h-4" />
-                    {aiMessages.length > 0 &&
-                      !(reviewSidebar.isOpen && reviewSidebar.activeTab === "ai") && (
-                        <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-primary" />
-                      )}
-                  </button>
-                )}
-                <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
-
-                <ReviewHeaderMenu
-                  onOpenSettings={() => setOpenSettingsMenu(true)}
-                  onOpenExport={() => setShowExportModal(true)}
-                  onToggleFileTree={() => setIsFileTreeOpen((prev) => !prev)}
-                  onToggleSidebar={() =>
-                    reviewSidebar.isOpen ? reviewSidebar.close() : reviewSidebar.open()
-                  }
-                  isFileTreeOpen={isFileTreeOpen}
-                  isSidebarOpen={reviewSidebar.isOpen}
-                  appVersion={appVersion}
-                />
-              </div>
-            </header>
+            <ReviewHeader
+              shouldShowFileTree={shouldShowFileTree}
+              isFileTreeOpen={isFileTreeOpen}
+              onToggleFileTree={handleToggleFileTree}
+              prMetadata={prMetadata}
+              displayRepo={displayRepo}
+              prNumberLabel={prNumberLabel}
+              onSelectPR={handlePRSwitch}
+              prStackInfo={prStackInfo}
+              prStackTree={prStackTree}
+              prDiffScope={prDiffScope}
+              prDiffScopeOptions={prDiffScopeOptions}
+              isSwitchingPRScope={isSwitchingPRScope}
+              onSelectPRDiffScope={handlePRDiffScopeSelect}
+              onOpenPRPanel={handleOpenPRPanel}
+              repoInfo={repoInfo}
+              diffStyle={diffStyle}
+              onDiffStyleChange={handleDiffStyleChange}
+              origin={origin}
+              reviewDestination={reviewDestination}
+              showDestinationMenu={showDestinationMenu}
+              onToggleDestinationMenu={handleToggleDestinationMenu}
+              onCloseDestinationMenu={handleCloseDestinationMenu}
+              onSelectReviewDestination={handleSelectReviewDestination}
+              platformActionError={platformActionError}
+              isWorkspaceReview={reviewMode === "workspace"}
+              diffError={diffError}
+              fileCount={files.length}
+              prPatchIncomplete={prPatchIncomplete}
+              prPatchUpgradeAvailable={prPatchUpgradeAvailable}
+              isLoadingFullDiff={isLoadingFullDiff}
+              onLoadFullDiff={handleLoadFullDiff}
+              isDiffStale={diffFreshness.isStale}
+              isLoadingDiff={isLoadingDiff}
+              onRefreshStaleDiff={handleRefreshStaleDiff}
+              onDismissStaleDiff={diffFreshness.dismiss}
+              platformMode={platformMode}
+              totalAnnotationCount={totalAnnotationCount}
+              isSendingFeedback={isSendingFeedback}
+              isApproving={isApproving}
+              isExiting={isExiting}
+              isPlatformActioning={isPlatformActioning}
+              onSendFeedback={handleSendFeedback}
+              onRequestApprove={handleRequestApprove}
+              onRequestExit={handleRequestExit}
+              onRequestPlatformComment={handleRequestPlatformComment}
+              onRequestPlatformApprove={handleRequestPlatformApprove}
+              isOwnPullRequest={isOwnPullRequest}
+              copyFeedback={copyFeedback}
+              onCopyFeedback={handleCopyFeedback}
+              isSidebarOpen={reviewSidebar.isOpen}
+              activeSidebarTab={reviewSidebar.activeTab}
+              aiAvailable={aiAvailable}
+              aiMessageCount={aiMessages.length}
+              onToggleAnnotations={handleToggleAnnotations}
+              onToggleAI={handleToggleAI}
+              onOpenSettings={handleOpenSettingsMenu}
+              onOpenExport={handleOpenExportModal}
+              onToggleSidebar={handleToggleSidebar}
+              appVersion={appVersion}
+            />
 
             {/* Main content */}
             <div className={`flex-1 flex overflow-hidden ${isResizing ? "select-none" : ""}`}>
