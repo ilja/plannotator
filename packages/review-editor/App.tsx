@@ -44,13 +44,14 @@ import { useEditorAnnotations } from "@plannotator/ui/hooks/useEditorAnnotations
 import { useExternalAnnotations } from "@plannotator/ui/hooks/useExternalAnnotations";
 import { decodeCodeAnnotation } from "@plannotator/ui/utils/annotationSchemas";
 import { exportEditorAnnotations } from "@plannotator/ui/utils/parser";
-import { ResizeHandle } from "@plannotator/ui/components/ResizeHandle";
-import { DockviewReact, type DockviewReadyEvent, type DockviewApi } from "dockview-react";
-import { ReviewSidebar } from "./components/ReviewSidebar";
+import { type DockviewReadyEvent, type DockviewApi } from "dockview-react";
 import type { ReviewSidebarTab } from "./components/ReviewSidebar";
 import { useSidebar } from "@plannotator/ui/hooks/useSidebar";
-import { FileTree } from "./components/FileTree";
-import { ReviewHeader } from "./components/ReviewHeader";
+import {
+  ReviewWorkspace,
+  type ReviewWorkspaceActions,
+  type ReviewWorkspaceViewModel,
+} from "./components/ReviewWorkspace";
 import { PRSwitchOverlay } from "./components/PRSwitchOverlay";
 import { usePRStack } from "./hooks/usePRStack";
 import { useDiffFreshness } from "./hooks/useDiffFreshness";
@@ -69,8 +70,6 @@ import {
 import { loadReviewAICapabilitiesState } from "./utils/ai-capabilities-response";
 import { ReviewSubmissionDialog } from "./components/ReviewSubmissionDialog";
 import { ReviewStateProvider, type ReviewState } from "./dock/ReviewStateContext";
-import { reviewPanelComponents } from "./dock/reviewPanelComponents";
-import { ReviewDockTabRenderer } from "./dock/ReviewDockTabRenderer";
 import { usePRContext } from "./hooks/usePRContext";
 import {
   REVIEW_PANEL_TYPES,
@@ -129,6 +128,21 @@ function buildDiffSwitchRequest(
     ...(base && { base }),
     hideWhitespace,
   };
+}
+
+function getRecoveredDraftMessage(
+  draftBanner: ReturnType<typeof useCodeAnnotationDraft>["draftBanner"],
+): string {
+  if (!draftBanner) return "";
+
+  const parts: string[] = [];
+  if (draftBanner.count > 0) {
+    parts.push(`${draftBanner.count} annotation${draftBanner.count !== 1 ? "s" : ""}`);
+  }
+  if (draftBanner.viewedCount > 0) {
+    parts.push(`${draftBanner.viewedCount} viewed file${draftBanner.viewedCount !== 1 ? "s" : ""}`);
+  }
+  return `Found ${parts.join(" and ")} from ${draftBanner.timeAgo}. Would you like to restore them?`;
 }
 
 const ReviewApp: React.FC = () => {
@@ -1937,7 +1951,224 @@ const ReviewApp: React.FC = () => {
     reviewSidebar.open();
   }, [reviewSidebar]);
 
+  const handleToggleHideViewed = useCallback(() => {
+    setHideViewedFiles((previous) => !previous);
+  }, []);
+
+  const handleCollapseFileTree = useCallback(() => {
+    setIsFileTreeOpen(false);
+  }, []);
+
+  const handleCollapseSidebar = useCallback(() => {
+    reviewSidebar.close();
+  }, [reviewSidebar]);
+
+  const handleSelectSemanticDiff = useCallback(() => {
+    openSemanticDiffPanel();
+  }, [openSemanticDiffPanel]);
+
   const isOwnPullRequest = !!platformUser && prMetadata?.author === platformUser;
+
+  const workspaceViewModel: ReviewWorkspaceViewModel = {
+    header: {
+      shouldShowFileTree,
+      isFileTreeOpen,
+      prMetadata,
+      displayRepo,
+      prNumberLabel,
+      prStackInfo,
+      prStackTree,
+      prDiffScope,
+      prDiffScopeOptions,
+      isSwitchingPRScope,
+      repoInfo,
+      diffStyle,
+      origin,
+      reviewDestination,
+      showDestinationMenu,
+      platformActionError,
+      isWorkspaceReview: reviewMode === "workspace",
+      diffError,
+      fileCount: files.length,
+      prPatchIncomplete,
+      prPatchUpgradeAvailable,
+      isLoadingFullDiff,
+      isDiffStale: diffFreshness.isStale,
+      isLoadingDiff,
+      platformMode,
+      totalAnnotationCount,
+      isSendingFeedback,
+      isApproving,
+      isExiting,
+      isPlatformActioning,
+      isOwnPullRequest,
+      copyFeedback,
+      isSidebarOpen: reviewSidebar.isOpen,
+      activeSidebarTab: reviewSidebar.activeTab,
+      aiAvailable,
+      aiMessageCount: aiMessages.length,
+      appVersion,
+    },
+    isResizing,
+    shouldShowFileTree,
+    fileTree: {
+      files,
+      activeFileIndex,
+      annotations: allAnnotations,
+      viewedFiles,
+      hideViewedFiles,
+      enableKeyboardNav: !showExportModal && hasSearchableFiles,
+      diffOptions:
+        reviewMode === "workspace" ? (workspaceDiffOptions ?? undefined) : gitContext?.diffOptions,
+      activeDiffType: activeDiffBase,
+      isLoadingDiff,
+      width: fileTreeResize.width,
+      worktrees: gitContext?.worktrees,
+      activeWorktreePath,
+      currentBranch: gitContext?.currentBranch,
+      availableBranches: prMetadata ? undefined : gitContext?.availableBranches,
+      selectedBase: prMetadata ? undefined : (selectedBase ?? undefined),
+      detectedBase: prMetadata
+        ? undefined
+        : gitContext?.defaultBranch || gitContext?.compareTarget?.fallback,
+      compareTarget: gitContext?.compareTarget,
+      recentCommits: prMetadata ? undefined : gitContext?.recentCommits,
+      jjEvologs: prMetadata ? undefined : gitContext?.jjEvologs,
+      detectedEvoBase: prMetadata ? undefined : gitContext?.jjEvologs?.[1]?.commitId,
+      stagedFiles,
+      canCopyRawDiff: !!diffData?.rawPatch,
+      copyRawDiffStatus,
+      searchQuery: hasSearchableFiles ? searchQuery : "",
+      isSearchOpen: hasSearchableFiles ? isSearchOpen : false,
+      isSearchPending,
+      searchInputRef: hasSearchableFiles ? searchInputRef : undefined,
+      searchGroups: hasSearchableFiles ? searchGroups : [],
+      searchMatches: hasSearchableFiles ? searchMatches : [],
+      activeSearchMatchId: hasSearchableFiles ? activeSearchMatchId : null,
+      isSemanticDiffActive,
+      semanticDiffAvailable,
+      isAllFilesActive,
+      scrollHighlightIndex:
+        isAllFilesActive && allFilesVisibleFile
+          ? files.findIndex((file) => file.path === allFilesVisibleFile)
+          : undefined,
+      repoRoot: prMetadata ? null : (activeWorktreePath ?? agentCwd ?? gitContext?.cwd ?? null),
+      resizeHandle: {
+        isDragging: fileTreeResize.isDragging,
+        style: fileTreeResize.handleProps.style,
+      },
+    },
+    dock: {
+      hasDiffFiles: files.length > 0,
+      resolvedMode,
+      diffError,
+      activeDiffBase,
+      activeWorktreePath,
+      selectedBase,
+      defaultBranch: gitContext?.defaultBranch,
+      isWorkspaceReview: reviewMode === "workspace",
+      workspaceDiffOptionCount: workspaceDiffOptions?.length ?? 0,
+      gitDiffOptionCount: gitContext?.diffOptions?.length ?? 0,
+    },
+    sidebar: {
+      isOpen: reviewSidebar.isOpen,
+      activeTab: reviewSidebar.activeTab,
+      annotations: allAnnotations,
+      files,
+      selectedAnnotationId,
+      feedbackMarkdown,
+      width: panelResize.width,
+      editorAnnotations,
+      prMetadata,
+      aiAvailable,
+      aiMessages,
+      isAICreatingSession: aiIsCreatingSession,
+      isAIStreaming: aiIsStreaming,
+      activeFilePath: files[activeFileIndex]?.path,
+      scrollToQuestionId,
+      pendingAIContext,
+      aiComposerFocusToken,
+      aiPermissionRequests,
+      aiProviders,
+      aiConfig,
+      hasAISession: !!aiSessionId,
+      resizeHandle: {
+        isDragging: panelResize.isDragging,
+        style: panelResize.handleProps.style,
+      },
+    },
+  };
+
+  const workspaceActions: ReviewWorkspaceActions = {
+    header: {
+      onToggleFileTree: handleToggleFileTree,
+      onSelectPR: handlePRSwitch,
+      onSelectPRDiffScope: handlePRDiffScopeSelect,
+      onOpenPRPanel: handleOpenPRPanel,
+      onDiffStyleChange: handleDiffStyleChange,
+      onToggleDestinationMenu: handleToggleDestinationMenu,
+      onCloseDestinationMenu: handleCloseDestinationMenu,
+      onSelectReviewDestination: handleSelectReviewDestination,
+      onLoadFullDiff: handleLoadFullDiff,
+      onRefreshStaleDiff: handleRefreshStaleDiff,
+      onDismissStaleDiff: diffFreshness.dismiss,
+      onSendFeedback: handleSendFeedback,
+      onRequestApprove: handleRequestApprove,
+      onRequestExit: handleRequestExit,
+      onRequestPlatformComment: handleRequestPlatformComment,
+      onRequestPlatformApprove: handleRequestPlatformApprove,
+      onCopyFeedback: handleCopyFeedback,
+      onToggleAnnotations: handleToggleAnnotations,
+      onToggleAI: handleToggleAI,
+      onOpenSettings: handleOpenSettingsMenu,
+      onOpenExport: handleOpenExportModal,
+      onToggleSidebar: handleToggleSidebar,
+    },
+    fileTree: {
+      onSelectFile: handleFilePreview,
+      onDoubleClickFile: handleFilePinned,
+      onToggleViewed: handleToggleViewed,
+      onToggleHideViewed: handleToggleHideViewed,
+      onSelectDiff: handleDiffSwitch,
+      onSelectWorktree: handleWorktreeSwitch,
+      onSelectBase: prMetadata ? undefined : handleBaseSelect,
+      onCopyRawDiff: handleCopyDiff,
+      onOpenSearch: hasSearchableFiles ? openSearch : undefined,
+      onSearchChange: hasSearchableFiles ? handleSearchInputChange : undefined,
+      onSearchClear: hasSearchableFiles ? clearSearch : undefined,
+      onSearchClose: hasSearchableFiles ? closeSearch : undefined,
+      onSelectSearchMatch: hasSearchableFiles ? handleSelectSearchMatch : undefined,
+      onStepSearchMatch: hasSearchableFiles ? stepSearchMatch : undefined,
+      onSelectSemanticDiff: handleSelectSemanticDiff,
+      onSelectAllFiles: openAllFilesPanel,
+      resizeHandle: {
+        onPointerDown: fileTreeResize.handleProps.onPointerDown,
+        onDoubleClick: fileTreeResize.handleProps.onDoubleClick,
+      },
+      onCollapse: handleCollapseFileTree,
+    },
+    dock: {
+      onReady: handleDockReady,
+    },
+    sidebar: {
+      onClose: reviewSidebar.close,
+      onSelectAnnotation: handleSelectAnnotation,
+      onNavigateToAnnotation: handleNavigateToAnnotation,
+      onDeleteAnnotation: handleDeleteAnnotation,
+      onDeleteEditorAnnotation: deleteEditorAnnotation,
+      onScrollToAILines: handleScrollToAILines,
+      onAskChat: handleAskChat,
+      onRemovePendingAIContext: handleRemovePendingAIContext,
+      onRespondToPermission: respondToAIPermission,
+      onAIConfigChange: handleAIConfigChange,
+      onOpenPRPanel: handleOpenPRPanel,
+      resizeHandle: {
+        onPointerDown: panelResize.handleProps.onPointerDown,
+        onDoubleClick: panelResize.handleProps.onDoubleClick,
+      },
+      onCollapse: handleCollapseSidebar,
+    },
+  };
 
   if (isLoading) {
     return (
@@ -1955,330 +2186,18 @@ const ReviewApp: React.FC = () => {
         <ReviewStateProvider value={reviewStateValue}>
           {isSwitchingPRScope && <PRSwitchOverlay />}
           <div className="h-screen flex flex-col bg-background overflow-hidden">
-            <ReviewHeader
-              shouldShowFileTree={shouldShowFileTree}
-              isFileTreeOpen={isFileTreeOpen}
-              onToggleFileTree={handleToggleFileTree}
-              prMetadata={prMetadata}
-              displayRepo={displayRepo}
-              prNumberLabel={prNumberLabel}
-              onSelectPR={handlePRSwitch}
-              prStackInfo={prStackInfo}
-              prStackTree={prStackTree}
-              prDiffScope={prDiffScope}
-              prDiffScopeOptions={prDiffScopeOptions}
-              isSwitchingPRScope={isSwitchingPRScope}
-              onSelectPRDiffScope={handlePRDiffScopeSelect}
-              onOpenPRPanel={handleOpenPRPanel}
-              repoInfo={repoInfo}
-              diffStyle={diffStyle}
-              onDiffStyleChange={handleDiffStyleChange}
-              origin={origin}
-              reviewDestination={reviewDestination}
-              showDestinationMenu={showDestinationMenu}
-              onToggleDestinationMenu={handleToggleDestinationMenu}
-              onCloseDestinationMenu={handleCloseDestinationMenu}
-              onSelectReviewDestination={handleSelectReviewDestination}
-              platformActionError={platformActionError}
-              isWorkspaceReview={reviewMode === "workspace"}
-              diffError={diffError}
-              fileCount={files.length}
-              prPatchIncomplete={prPatchIncomplete}
-              prPatchUpgradeAvailable={prPatchUpgradeAvailable}
-              isLoadingFullDiff={isLoadingFullDiff}
-              onLoadFullDiff={handleLoadFullDiff}
-              isDiffStale={diffFreshness.isStale}
-              isLoadingDiff={isLoadingDiff}
-              onRefreshStaleDiff={handleRefreshStaleDiff}
-              onDismissStaleDiff={diffFreshness.dismiss}
-              platformMode={platformMode}
-              totalAnnotationCount={totalAnnotationCount}
-              isSendingFeedback={isSendingFeedback}
-              isApproving={isApproving}
-              isExiting={isExiting}
-              isPlatformActioning={isPlatformActioning}
-              onSendFeedback={handleSendFeedback}
-              onRequestApprove={handleRequestApprove}
-              onRequestExit={handleRequestExit}
-              onRequestPlatformComment={handleRequestPlatformComment}
-              onRequestPlatformApprove={handleRequestPlatformApprove}
-              isOwnPullRequest={isOwnPullRequest}
-              copyFeedback={copyFeedback}
-              onCopyFeedback={handleCopyFeedback}
-              isSidebarOpen={reviewSidebar.isOpen}
-              activeSidebarTab={reviewSidebar.activeTab}
-              aiAvailable={aiAvailable}
-              aiMessageCount={aiMessages.length}
-              onToggleAnnotations={handleToggleAnnotations}
-              onToggleAI={handleToggleAI}
-              onOpenSettings={handleOpenSettingsMenu}
-              onOpenExport={handleOpenExportModal}
-              onToggleSidebar={handleToggleSidebar}
-              appVersion={appVersion}
+            <ReviewWorkspace viewModel={workspaceViewModel} actions={workspaceActions} />
+
+            <ConfirmDialog
+              isOpen={!!draftBanner}
+              onClose={dismissDraft}
+              onConfirm={handleRestoreDraft}
+              title="Draft Recovered"
+              message={getRecoveredDraftMessage(draftBanner)}
+              confirmText="Restore"
+              cancelText="Dismiss"
+              showCancel
             />
-
-            {/* Main content */}
-            <div className={`flex-1 flex overflow-hidden ${isResizing ? "select-none" : ""}`}>
-              {shouldShowFileTree && isFileTreeOpen && (
-                <div className="contents group/sidebar">
-                  <FileTree
-                    files={files}
-                    activeFileIndex={activeFileIndex}
-                    onSelectSemanticDiff={() => openSemanticDiffPanel()}
-                    isSemanticDiffActive={isSemanticDiffActive}
-                    semanticDiffAvailable={semanticDiffAvailable}
-                    onSelectAllFiles={openAllFilesPanel}
-                    isAllFilesActive={isAllFilesActive}
-                    scrollHighlightIndex={
-                      isAllFilesActive && allFilesVisibleFile
-                        ? files.findIndex((f) => f.path === allFilesVisibleFile)
-                        : undefined
-                    }
-                    onSelectFile={handleFilePreview}
-                    onDoubleClickFile={handleFilePinned}
-                    annotations={allAnnotations}
-                    viewedFiles={viewedFiles}
-                    onToggleViewed={handleToggleViewed}
-                    hideViewedFiles={hideViewedFiles}
-                    onToggleHideViewed={() => setHideViewedFiles((prev) => !prev)}
-                    enableKeyboardNav={!showExportModal && hasSearchableFiles}
-                    diffOptions={
-                      reviewMode === "workspace"
-                        ? (workspaceDiffOptions ?? undefined)
-                        : gitContext?.diffOptions
-                    }
-                    activeDiffType={activeDiffBase}
-                    onSelectDiff={handleDiffSwitch}
-                    isLoadingDiff={isLoadingDiff}
-                    width={fileTreeResize.width}
-                    worktrees={gitContext?.worktrees}
-                    activeWorktreePath={activeWorktreePath}
-                    onSelectWorktree={handleWorktreeSwitch}
-                    currentBranch={gitContext?.currentBranch}
-                    availableBranches={prMetadata ? undefined : gitContext?.availableBranches}
-                    selectedBase={prMetadata ? undefined : (selectedBase ?? undefined)}
-                    detectedBase={
-                      prMetadata
-                        ? undefined
-                        : gitContext?.defaultBranch || gitContext?.compareTarget?.fallback
-                    }
-                    onSelectBase={prMetadata ? undefined : handleBaseSelect}
-                    compareTarget={gitContext?.compareTarget}
-                    recentCommits={prMetadata ? undefined : gitContext?.recentCommits}
-                    jjEvologs={prMetadata ? undefined : gitContext?.jjEvologs}
-                    detectedEvoBase={prMetadata ? undefined : gitContext?.jjEvologs?.[1]?.commitId}
-                    stagedFiles={stagedFiles}
-                    onCopyRawDiff={handleCopyDiff}
-                    canCopyRawDiff={!!diffData?.rawPatch}
-                    copyRawDiffStatus={copyRawDiffStatus}
-                    searchQuery={hasSearchableFiles ? searchQuery : ""}
-                    isSearchOpen={hasSearchableFiles ? isSearchOpen : false}
-                    isSearchPending={isSearchPending}
-                    searchInputRef={hasSearchableFiles ? searchInputRef : undefined}
-                    onOpenSearch={hasSearchableFiles ? openSearch : undefined}
-                    onSearchChange={hasSearchableFiles ? handleSearchInputChange : undefined}
-                    onSearchClear={hasSearchableFiles ? clearSearch : undefined}
-                    onSearchClose={hasSearchableFiles ? closeSearch : undefined}
-                    searchGroups={hasSearchableFiles ? searchGroups : []}
-                    searchMatches={hasSearchableFiles ? searchMatches : []}
-                    activeSearchMatchId={hasSearchableFiles ? activeSearchMatchId : null}
-                    onSelectSearchMatch={hasSearchableFiles ? handleSelectSearchMatch : undefined}
-                    onStepSearchMatch={hasSearchableFiles ? stepSearchMatch : undefined}
-                    repoRoot={
-                      prMetadata
-                        ? null
-                        : (activeWorktreePath ?? agentCwd ?? gitContext?.cwd ?? null)
-                    }
-                  />
-                  <ResizeHandle
-                    {...fileTreeResize.handleProps}
-                    className="z-10"
-                    side="left"
-                    onCollapse={() => setIsFileTreeOpen(false)}
-                  />
-                </div>
-              )}
-
-              {/* Center dock area */}
-              <div className="flex-1 min-w-0 overflow-hidden relative">
-                <ConfirmDialog
-                  isOpen={!!draftBanner}
-                  onClose={dismissDraft}
-                  onConfirm={handleRestoreDraft}
-                  title="Draft Recovered"
-                  message={
-                    draftBanner
-                      ? (() => {
-                          const parts: string[] = [];
-                          if (draftBanner.count > 0)
-                            parts.push(
-                              `${draftBanner.count} annotation${draftBanner.count !== 1 ? "s" : ""}`,
-                            );
-                          if (draftBanner.viewedCount > 0)
-                            parts.push(
-                              `${draftBanner.viewedCount} viewed file${draftBanner.viewedCount !== 1 ? "s" : ""}`,
-                            );
-                          return `Found ${parts.join(" and ")} from ${draftBanner.timeAgo}. Would you like to restore them?`;
-                        })()
-                      : ""
-                  }
-                  confirmText="Restore"
-                  cancelText="Dismiss"
-                  showCancel
-                />
-                {files.length > 0 ? (
-                  <DockviewReact
-                    className={`h-full ${resolvedMode === "light" ? "dockview-theme-light" : "dockview-theme-dark"}`}
-                    components={reviewPanelComponents}
-                    defaultTabComponent={ReviewDockTabRenderer}
-                    onReady={handleDockReady}
-                    disableFloatingGroups
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="text-center space-y-3 max-w-md px-8">
-                      <div
-                        className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center ${diffError ? "bg-destructive/10" : "bg-muted/50"}`}
-                      >
-                        {diffError ? (
-                          <svg
-                            className="w-6 h-6 text-destructive"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
-                            />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-6 h-6 text-muted-foreground"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <div>
-                        {diffError ? (
-                          <>
-                            <h3 className="text-sm font-medium text-destructive">
-                              Failed to load diff
-                            </h3>
-                            <p className="text-xs text-muted-foreground mt-1 max-w-sm break-words line-clamp-3">
-                              {diffError}
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <h3 className="text-sm font-medium text-foreground">No changes</h3>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {activeDiffBase === "uncommitted" &&
-                                `No uncommitted changes${activeWorktreePath ? " in this worktree" : " to review"}.`}
-                              {activeDiffBase === "staged" &&
-                                "No staged changes. Stage some files with git add."}
-                              {activeDiffBase === "unstaged" &&
-                                "No unstaged changes. All changes are staged."}
-                              {activeDiffBase === "last-commit" &&
-                                `No changes in the last commit${activeWorktreePath ? " in this worktree" : ""}.`}
-                              {activeDiffBase === "jj-current" &&
-                                "No changes in the current jj change."}
-                              {activeDiffBase === "jj-last" && "No changes in the last jj change."}
-                              {activeDiffBase === "workspace-current" &&
-                                "No current changes in the workspace repositories."}
-                              {activeDiffBase === "workspace-staged" &&
-                                "No staged changes in the workspace repositories."}
-                              {activeDiffBase === "workspace-unstaged" &&
-                                "No unstaged changes in the workspace repositories."}
-                              {activeDiffBase === "workspace-last" &&
-                                "No changes in the last change across workspace repositories."}
-                              {activeDiffBase === "jj-line" &&
-                                `No changes in your line of work vs ${selectedBase || gitContext?.defaultBranch || "@-"}.`}
-                              {activeDiffBase === "jj-evolog" &&
-                                `No changes since evolution ${selectedBase ? selectedBase.slice(0, 8) : "previous"} — the change looks the same as before.`}
-                              {activeDiffBase === "jj-all" && "No files at the current jj change."}
-                              {activeDiffBase === "branch" &&
-                                `No changes vs ${selectedBase || gitContext?.defaultBranch || "main"}${activeWorktreePath ? " in this worktree" : ""}.`}
-                              {activeDiffBase === "merge-base" &&
-                                `No changes vs ${selectedBase || gitContext?.defaultBranch || "main"}${activeWorktreePath ? " in this worktree" : ""}.`}
-                              {activeDiffBase === "all" &&
-                                `No tracked files${activeWorktreePath ? " in this worktree" : " in this repository"}.`}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                      {((reviewMode === "workspace"
-                        ? workspaceDiffOptions
-                        : gitContext?.diffOptions
-                      )?.length ?? 0) > 1 && (
-                        <p className="text-xs text-muted-foreground/60">
-                          Try selecting a different view from the dropdown.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Resize Handle + Sidebar */}
-              {reviewSidebar.isOpen && (
-                <div className="contents group/sidebar">
-                  <ResizeHandle
-                    {...panelResize.handleProps}
-                    className="z-10"
-                    side="right"
-                    onCollapse={() => reviewSidebar.close()}
-                  />
-                  <ReviewSidebar
-                    isOpen
-                    onClose={reviewSidebar.close}
-                    activeTab={reviewSidebar.activeTab}
-                    annotations={allAnnotations}
-                    files={files}
-                    selectedAnnotationId={selectedAnnotationId}
-                    onSelectAnnotation={handleSelectAnnotation}
-                    onNavigateToAnnotation={handleNavigateToAnnotation}
-                    onDeleteAnnotation={handleDeleteAnnotation}
-                    feedbackMarkdown={feedbackMarkdown}
-                    width={panelResize.width}
-                    editorAnnotations={editorAnnotations}
-                    onDeleteEditorAnnotation={deleteEditorAnnotation}
-                    prMetadata={prMetadata}
-                    aiAvailable={aiAvailable}
-                    aiMessages={aiMessages}
-                    isAICreatingSession={aiIsCreatingSession}
-                    isAIStreaming={aiIsStreaming}
-                    onScrollToAILines={handleScrollToAILines}
-                    activeFilePath={files[activeFileIndex]?.path}
-                    scrollToQuestionId={scrollToQuestionId}
-                    onAskChat={handleAskChat}
-                    pendingAIContext={pendingAIContext}
-                    aiComposerFocusToken={aiComposerFocusToken}
-                    onRemovePendingAIContext={handleRemovePendingAIContext}
-                    aiPermissionRequests={aiPermissionRequests}
-                    onRespondToPermission={respondToAIPermission}
-                    aiProviders={aiProviders}
-                    aiConfig={aiConfig}
-                    onAIConfigChange={handleAIConfigChange}
-                    hasAISession={!!aiSessionId}
-                    externalAnnotations={externalAnnotations}
-                    onOpenPRPanel={handleOpenPRPanel}
-                  />
-                </div>
-              )}
-            </div>
-
             {/* Export Modal */}
             {showExportModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
