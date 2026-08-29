@@ -92,6 +92,12 @@ import { annotationMatchesPrScope } from "./utils/annotationScope";
 import type { DiffOption, GitContext } from "@plannotator/shared/types";
 import type { PRDiffScope, PRDiffScopeOption, PRStackInfo } from "@plannotator/shared/pr-stack";
 import { usePlatformReviewActions } from "./hooks/usePlatformReviewActions";
+import {
+  buildReviewFileTreeActions,
+  buildReviewPresentationFlags,
+  buildReviewWorktreePath,
+  buildReviewWorkspaceViewModel,
+} from "./utils/buildReviewAppPresentation";
 
 declare const __APP_VERSION__: string;
 
@@ -436,12 +442,22 @@ const ReviewApp: React.FC = () => {
     onRevealMatch: handleRevealSearchMatch,
   });
 
-  const hasSearchableFiles = files.length > 0;
-  const shouldShowFileTree =
-    hasSearchableFiles ||
-    (reviewMode === "workspace" && !!workspaceDiffOptions?.length) ||
-    !!gitContext?.diffOptions?.length ||
-    !!gitContext?.worktrees?.length;
+  const handleStepSearchMatch = useCallback(
+    (direction: number) => {
+      if (direction === 1 || direction === -1) stepSearchMatch(direction);
+    },
+    [stepSearchMatch],
+  );
+
+  const { hasSearchableFiles, shouldShowFileTree, isPullRequestReview } =
+    buildReviewPresentationFlags(
+      files,
+      reviewMode,
+      workspaceDiffOptions,
+      gitContext,
+      false,
+      prMetadata !== null,
+    );
 
   // Merge local + SSE annotations, deduping draft-restored externals against
   // live SSE versions. Prefer the SSE version when both exist (same source,
@@ -902,7 +918,7 @@ const ReviewApp: React.FC = () => {
     isSearchOpen,
     searchQuery,
     openSearch,
-    stepSearchMatch,
+    stepSearchMatch: handleStepSearchMatch,
     clearSearch,
     closeSearch,
     isFileTreeOpen,
@@ -990,7 +1006,7 @@ const ReviewApp: React.FC = () => {
           diffType: data.diffType,
           gitContext: data.gitContext,
           diffOptions: data.diffOptions,
-          sharingEnabled: data.sharingEnabled,
+          _sharingEnabled: data.sharingEnabled,
         });
         setFiles(apiFiles);
         setReviewMode(data.mode ?? null);
@@ -1303,10 +1319,14 @@ const ReviewApp: React.FC = () => {
     onFileViewed: handleFileViewedFromStage,
   });
   // Staging is never available in PR review mode — the server rejects it and the UI shouldn't offer it.
-  const canStageInWorkspace =
-    reviewMode !== "workspace" ||
-    workspaceDiffOptions?.some((option) => option.id === "workspace-staged");
-  const canStageFiles = canStageRaw && !prMetadata && canStageInWorkspace;
+  const { canStageFiles } = buildReviewPresentationFlags(
+    files,
+    reviewMode,
+    workspaceDiffOptions,
+    gitContext,
+    canStageRaw,
+    isPullRequestReview,
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1580,7 +1600,7 @@ const ReviewApp: React.FC = () => {
       hideWhitespaceInitialized.current = true;
       return;
     }
-    fetchDiffSwitch(diffType, selectedBase, { preserveFile: true });
+    fetchDiffSwitch(diffType, selectedBase ?? undefined, { preserveFile: true });
   }, [diffHideWhitespace, origin, reviewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Diff staleness ---------------------------------------------------------
@@ -1604,7 +1624,7 @@ const ReviewApp: React.FC = () => {
     }
     // Same params, fresh snapshot. preserveFile keeps the reviewer on the
     // file they were reading.
-    void fetchDiffSwitch(diffType, selectedBase, { preserveFile: true });
+    void fetchDiffSwitch(diffType, selectedBase ?? undefined, { preserveFile: true });
   }, [prMetadata, prDiffScope, handlePRDiffScopeSelect, fetchDiffSwitch, diffType, selectedBase]);
 
   // Select annotation - switches file if needed and scrolls to it.
@@ -1998,7 +2018,7 @@ const ReviewApp: React.FC = () => {
     setOpenSettingsMenu(false);
   }, []);
 
-  const worktreePath = agentCwd || gitContext?.cwd || null;
+  const worktreePath = buildReviewWorktreePath(agentCwd, gitContext);
 
   const handleCloseWorktreeDialog = useCallback(() => {
     setShowWorktreeDialog(false);
@@ -2094,137 +2114,95 @@ const ReviewApp: React.FC = () => {
     openSemanticDiffPanel();
   }, [openSemanticDiffPanel]);
 
-  const isOwnPullRequest = !!platformUser && prMetadata?.author === platformUser;
-
-  const workspaceViewModel: ReviewWorkspaceViewModel = {
-    header: {
-      shouldShowFileTree,
-      isFileTreeOpen,
-      prMetadata,
-      displayRepo,
-      prNumberLabel,
-      prStackInfo,
-      prStackTree,
-      prDiffScope,
-      prDiffScopeOptions,
-      isSwitchingPRScope,
-      repoInfo,
-      diffStyle,
-      origin,
-      reviewDestination,
-      showDestinationMenu,
-      platformActionError,
-      isWorkspaceReview: reviewMode === "workspace",
-      diffError,
-      fileCount: files.length,
-      prPatchIncomplete,
-      prPatchUpgradeAvailable,
-      isLoadingFullDiff,
-      isDiffStale: diffFreshness.isStale,
-      isLoadingDiff,
-      platformMode,
-      totalAnnotationCount,
-      isSendingFeedback,
-      isApproving,
-      isExiting,
-      isPlatformActioning,
-      isOwnPullRequest,
-      copyFeedback,
-      isSidebarOpen: reviewSidebar.isOpen,
-      activeSidebarTab: reviewSidebar.activeTab,
-      aiAvailable,
-      aiMessageCount: aiMessages.length,
-      appVersion,
-    },
-    isResizing,
+  const workspaceViewModel = buildReviewWorkspaceViewModel({
     shouldShowFileTree,
-    fileTree: {
-      files,
-      activeFileIndex,
-      annotations: allAnnotations,
-      viewedFiles,
-      hideViewedFiles,
-      enableKeyboardNav: !showExportModal && hasSearchableFiles,
-      diffOptions:
-        reviewMode === "workspace" ? (workspaceDiffOptions ?? undefined) : gitContext?.diffOptions,
-      activeDiffType: activeDiffBase,
-      isLoadingDiff,
-      width: fileTreeResize.width,
-      worktrees: gitContext?.worktrees,
-      activeWorktreePath,
-      currentBranch: gitContext?.currentBranch,
-      availableBranches: prMetadata ? undefined : gitContext?.availableBranches,
-      selectedBase: prMetadata ? undefined : (selectedBase ?? undefined),
-      detectedBase: prMetadata
-        ? undefined
-        : gitContext?.defaultBranch || gitContext?.compareTarget?.fallback,
-      compareTarget: gitContext?.compareTarget,
-      recentCommits: prMetadata ? undefined : gitContext?.recentCommits,
-      jjEvologs: prMetadata ? undefined : gitContext?.jjEvologs,
-      detectedEvoBase: prMetadata ? undefined : gitContext?.jjEvologs?.[1]?.commitId,
-      stagedFiles,
-      canCopyRawDiff: !!diffData?.rawPatch,
-      copyRawDiffStatus,
-      searchQuery: hasSearchableFiles ? searchQuery : "",
-      isSearchOpen: hasSearchableFiles ? isSearchOpen : false,
-      isSearchPending,
-      searchInputRef: hasSearchableFiles ? searchInputRef : undefined,
-      searchGroups: hasSearchableFiles ? searchGroups : [],
-      searchMatches: hasSearchableFiles ? searchMatches : [],
-      activeSearchMatchId: hasSearchableFiles ? activeSearchMatchId : null,
-      isSemanticDiffActive,
-      semanticDiffAvailable,
-      isAllFilesActive,
-      scrollHighlightIndex:
-        isAllFilesActive && allFilesVisibleFile
-          ? files.findIndex((file) => file.path === allFilesVisibleFile)
-          : undefined,
-      repoRoot: prMetadata ? null : (activeWorktreePath ?? agentCwd ?? gitContext?.cwd ?? null),
-      resizeHandle: {
-        isDragging: fileTreeResize.isDragging,
-        style: fileTreeResize.handleProps.style,
-      },
+    isResizing,
+    isFileTreeOpen,
+    prMetadata,
+    displayRepo,
+    prNumberLabel,
+    prStackInfo,
+    prStackTree,
+    prDiffScope,
+    prDiffScopeOptions,
+    isSwitchingPRScope,
+    repoInfo,
+    diffStyle,
+    origin,
+    reviewDestination,
+    showDestinationMenu,
+    platformActionError,
+    reviewMode,
+    diffError,
+    prPatchIncomplete,
+    prPatchUpgradeAvailable,
+    isLoadingFullDiff,
+    isDiffStale: diffFreshness.isStale,
+    isLoadingDiff,
+    platformMode,
+    totalAnnotationCount,
+    isSendingFeedback,
+    isApproving,
+    isExiting,
+    isPlatformActioning,
+    platformUser,
+    copyFeedback,
+    isSidebarOpen: reviewSidebar.isOpen,
+    activeSidebarTab: reviewSidebar.activeTab,
+    aiAvailable,
+    aiMessages,
+    appVersion,
+    files,
+    activeFileIndex,
+    annotations: allAnnotations,
+    viewedFiles,
+    hideViewedFiles,
+    hasSearchableFiles,
+    isExportOpen: showExportModal,
+    workspaceDiffOptions,
+    gitContext,
+    activeDiffBase,
+    fileTreeWidth: fileTreeResize.width,
+    activeWorktreePath,
+    selectedBase,
+    stagedFiles,
+    rawPatch: diffData?.rawPatch,
+    copyRawDiffStatus,
+    searchQuery,
+    isSearchOpen,
+    isSearchPending,
+    searchInputRef,
+    searchGroups,
+    searchMatches,
+    activeSearchMatchId,
+    isSemanticDiffActive,
+    semanticDiffAvailable,
+    isAllFilesActive,
+    allFilesVisibleFile,
+    agentCwd,
+    fileTreeResizeHandle: {
+      isDragging: fileTreeResize.isDragging,
+      style: fileTreeResize.handleProps.style,
     },
-    dock: {
-      hasDiffFiles: files.length > 0,
-      resolvedMode,
-      diffError,
-      activeDiffBase,
-      activeWorktreePath,
-      selectedBase,
-      defaultBranch: gitContext?.defaultBranch,
-      isWorkspaceReview: reviewMode === "workspace",
-      workspaceDiffOptionCount: workspaceDiffOptions?.length ?? 0,
-      gitDiffOptionCount: gitContext?.diffOptions?.length ?? 0,
+    resolvedMode,
+    panelResizeHandle: {
+      isDragging: panelResize.isDragging,
+      style: panelResize.handleProps.style,
     },
-    sidebar: {
-      isOpen: reviewSidebar.isOpen,
-      activeTab: reviewSidebar.activeTab,
-      annotations: allAnnotations,
-      files,
-      selectedAnnotationId,
-      feedbackMarkdown,
-      width: panelResize.width,
-      editorAnnotations,
-      prMetadata,
-      aiAvailable,
-      aiMessages,
-      isAICreatingSession: aiIsCreatingSession,
-      isAIStreaming: aiIsStreaming,
-      activeFilePath: files[activeFileIndex]?.path,
-      scrollToQuestionId,
-      pendingAIContext,
-      aiComposerFocusToken,
-      aiPermissionRequests,
-      aiProviders,
-      aiConfig,
-      hasAISession: !!aiSessionId,
-      resizeHandle: {
-        isDragging: panelResize.isDragging,
-        style: panelResize.handleProps.style,
-      },
-    },
-  };
+    panelWidth: panelResize.width,
+    selectedAnnotationId,
+    editorAnnotations,
+    feedbackMarkdown,
+    aiIsCreatingSession,
+    aiIsStreaming,
+    scrollToQuestionId,
+    pendingAIContext,
+    aiComposerFocusToken,
+    aiPermissionRequests,
+    aiProviders,
+    aiConfig,
+    aiSessionId,
+  });
 
   const workspaceActions: ReviewWorkspaceActions = {
     header: {
@@ -2251,29 +2229,29 @@ const ReviewApp: React.FC = () => {
       onOpenExport: handleOpenExportModal,
       onToggleSidebar: handleToggleSidebar,
     },
-    fileTree: {
-      onSelectFile: handleFilePreview,
-      onDoubleClickFile: handleFilePinned,
-      onToggleViewed: handleToggleViewed,
-      onToggleHideViewed: handleToggleHideViewed,
-      onSelectDiff: handleDiffSwitch,
-      onSelectWorktree: handleWorktreeSwitch,
-      onSelectBase: prMetadata ? undefined : handleBaseSelect,
-      onCopyRawDiff: handleCopyDiff,
-      onOpenSearch: hasSearchableFiles ? openSearch : undefined,
-      onSearchChange: hasSearchableFiles ? handleSearchInputChange : undefined,
-      onSearchClear: hasSearchableFiles ? clearSearch : undefined,
-      onSearchClose: hasSearchableFiles ? closeSearch : undefined,
-      onSelectSearchMatch: hasSearchableFiles ? handleSelectSearchMatch : undefined,
-      onStepSearchMatch: hasSearchableFiles ? stepSearchMatch : undefined,
-      onSelectSemanticDiff: handleSelectSemanticDiff,
-      onSelectAllFiles: openAllFilesPanel,
-      resizeHandle: {
-        onPointerDown: fileTreeResize.handleProps.onPointerDown,
-        onDoubleClick: fileTreeResize.handleProps.onDoubleClick,
-      },
-      onCollapse: handleCollapseFileTree,
-    },
+    fileTree: buildReviewFileTreeActions(
+      isPullRequestReview,
+      hasSearchableFiles,
+      handleFilePreview,
+      handleFilePinned,
+      handleToggleViewed,
+      handleToggleHideViewed,
+      handleDiffSwitch,
+      handleWorktreeSwitch,
+      handleBaseSelect,
+      handleCopyDiff,
+      openSearch,
+      handleSearchInputChange,
+      clearSearch,
+      closeSearch,
+      handleSelectSearchMatch,
+      stepSearchMatch,
+      handleSelectSemanticDiff,
+      openAllFilesPanel,
+      fileTreeResize.handleProps.onPointerDown,
+      fileTreeResize.handleProps.onDoubleClick,
+      handleCollapseFileTree,
+    ),
     dock: {
       onReady: handleDockReady,
     },
