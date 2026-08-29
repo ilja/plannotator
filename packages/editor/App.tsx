@@ -377,6 +377,9 @@ const App: React.FC = () => {
   // What the current edit session mounted with, for live dirty tracking.
   const editSessionBaseRef = useRef<string>("");
   const markdownEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
+  const handleMarkdownEditorReady = useCallback((handle: MarkdownEditorHandle | null) => {
+    markdownEditorHandleRef.current = handle;
+  }, []);
   const suspendedRootSourceBackedDocumentKeyRef = useRef<string | null>(null);
   const [globalAttachments, setGlobalAttachments] = useState<ImageAttachment[]>([]);
   const [annotateMode, setAnnotateMode] = useState(false);
@@ -4297,7 +4300,7 @@ const App: React.FC = () => {
                       <MarkdownEditor
                         markdown={displayedMarkdown}
                         documentId={`edit:${activeSourceBackedDocument?.key ?? "root"}:${editGeneration}`}
-                        editorHandleRef={markdownEditorHandleRef}
+                        onEditorHandleReady={handleMarkdownEditorReady}
                         onMarkdownChange={handleEditorChange}
                         maxWidth={annotateReaderMaxWidth}
                         gridEnabled={gridEnabled}
