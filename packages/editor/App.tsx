@@ -107,7 +107,6 @@ import { EditorAppScreen } from "./components/EditorAppScreen";
 import {
   buildAgentTerminalDeliveryRecord,
   buildTerminalAskPrompt,
-  isMatchingAgentTerminalDelivery,
   shouldSendAgentTerminalFeedback,
   type AgentTerminalDeliveryRecord,
   type AnnotateFeedbackTarget,
@@ -150,6 +149,12 @@ import {
   buildAppAnnotationEditSummary,
   copyAnnotationEditSummaryPanelItemsForSidebar,
 } from "./appAnnotationEditSummary";
+import {
+  buildAppSubmissionCompletionPresentation,
+  buildAppTerminalDocumentPresentation,
+  buildAppTerminalFeedbackPresentation,
+  buildEditorFeedbackRequest,
+} from "./appTerminalSubmissionPresentation";
 
 type NoteAutoSaveResults = {
   obsidian?: boolean;
@@ -164,15 +169,6 @@ type AnnotationTypographyStyle = React.CSSProperties & {
 
 type SaveNotesRequest = {
   obsidian?: ObsidianConfig;
-};
-
-type EditorFeedbackRequest = {
-  draftGeneration: number;
-  feedback: string;
-  annotations: Annotation[];
-  codeAnnotations: CodeAnnotation[];
-  selectedMessageId?: string;
-  feedbackScope?: "messages";
 };
 
 type PlanResponse = ReturnType<typeof parsePlanResponse>;
@@ -2697,13 +2693,13 @@ const App: React.FC = () => {
     currentFeedbackPayload,
     currentAgentFeedbackTarget.filePath,
   ]);
-  const isCurrentFeedbackDeliveredToAgent = isMatchingAgentTerminalDelivery(
-    agentTerminalDelivery,
-    currentAgentFeedbackDelivery,
-  );
-  const showAgentTerminalDeliveryStatus =
-    annotateMode && agentTerminalDelivery !== null && isCurrentFeedbackDeliveredToAgent;
-  const hasFeedbackToSend = hasFeedbackContent && !isCurrentFeedbackDeliveredToAgent;
+  const { showAgentTerminalDeliveryStatus, hasFeedbackToSend } =
+    buildAppTerminalFeedbackPresentation({
+      annotateMode,
+      hasFeedbackContent,
+      deliveredTerminalFeedback: agentTerminalDelivery,
+      currentTerminalFeedback: currentAgentFeedbackDelivery,
+    });
 
   // Annotate mode handler — sends feedback to the running terminal agent when
   // available, otherwise through the original server feedback channel.
@@ -2745,21 +2741,15 @@ const App: React.FC = () => {
         toast.error("Agent terminal is not ready. Sending through the original session.");
       }
 
-      const scopedSelectedMessageId = messageMultiSelectMode
-        ? annotatedMessageIds.length === 1
-          ? annotatedMessageIds[0]
-          : undefined
-        : (selectedMessageId ?? undefined);
-      const feedbackRequest: EditorFeedbackRequest = {
+      const feedbackRequest = buildEditorFeedbackRequest({
         draftGeneration: getDraftGeneration(),
         feedback,
         annotations: allAnnotations,
         codeAnnotations,
-      };
-      if (scopedSelectedMessageId) feedbackRequest.selectedMessageId = scopedSelectedMessageId;
-      if (messageMultiSelectMode && annotatedMessageIds.length > 1) {
-        feedbackRequest.feedbackScope = "messages";
-      }
+        messageMultiSelectMode,
+        annotatedMessageIds,
+        selectedMessageId,
+      });
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3035,24 +3025,29 @@ const App: React.FC = () => {
     [annotationsOutput, hasAnyAnnotations],
   );
 
-  const aiDocumentPath = linkedDocHook.isActive
-    ? (linkedDocHook.filepath ?? "linked document")
-    : (sourceFilePath ??
-      (annotateSource === "message"
-        ? "agent message"
-        : annotateSource === "folder"
-          ? "folder document"
-          : "document"));
-  const aiSourceInfo = linkedDocHook.isActive ? (linkedDocHook.filepath ?? undefined) : sourceInfo;
-  const aiSourceConverted = linkedDocHook.isActive
-    ? (linkedDocHook.getDocAnnotations().get(linkedDocHook.filepath ?? "")?.isConverted ?? false)
-    : sourceConverted;
+  const terminalDocumentPresentation = buildAppTerminalDocumentPresentation({
+    linkedDocumentIsActive: linkedDocHook.isActive,
+    linkedDocumentPath: linkedDocHook.filepath,
+    linkedDocumentIsConverted:
+      linkedDocHook.isActive &&
+      (linkedDocHook.getDocAnnotations().get(linkedDocHook.filepath ?? "")?.isConverted ?? false),
+    sourceFilePath,
+    activeFilePath: fileBrowser.activeFile,
+    annotateMode,
+    annotateSource,
+    sourceInfo,
+    sourceConverted,
+  });
+  const {
+    aiDocumentPath,
+    aiSourceConverted,
+    aiSourceInfo,
+    hasAIDocumentContext,
+    terminalAskReadableFilePath,
+  } = terminalDocumentPresentation;
   // renderAs now tracks the active file (plan, linked doc, or folder file), so the AI
   // sees the current surface's mode — raw HTML for an .html file, markdown otherwise.
   const aiRenderAs = renderAs;
-  const _aiDocumentMode = annotateMode || linkedDocHook.isActive;
-  const hasAIDocumentContext =
-    annotateMode || linkedDocHook.isActive || !!sourceFilePath || annotateSource === "message";
 
   const aiContext = useMemo<AIContext | null>(() => {
     if (!aiSessionEnabled || !hasAIDocumentContext) return null;
@@ -3127,13 +3122,6 @@ const App: React.FC = () => {
     () => (isAgentTerminalReady ? [{ id: "agent-terminal", name: "Agent terminal" }] : aiProviders),
     [aiProviders, isAgentTerminalReady],
   );
-
-  const terminalAskReadableFilePath = useMemo(() => {
-    if (linkedDocHook.isActive && linkedDocHook.filepath) return linkedDocHook.filepath;
-    if (sourceFilePath) return sourceFilePath;
-    if (fileBrowser.activeFile) return fileBrowser.activeFile;
-    return null;
-  }, [fileBrowser.activeFile, linkedDocHook.filepath, linkedDocHook.isActive, sourceFilePath]);
 
   const buildAgentAskPrompt = useCallback(
     (question: string, context?: CommentAskAIContext) => {
@@ -3781,6 +3769,23 @@ const App: React.FC = () => {
     [],
   );
 
+  const submissionCompletionPresentation = buildAppSubmissionCompletionPresentation({
+    submitted,
+    agentName,
+    annotateSource,
+    callbackConfigured: callbackConfig !== null,
+    shareUrl,
+    shortShareUrl,
+    renderAs,
+    shareHtml,
+    rawHtml,
+    hasAnyAnnotations,
+    hasDirectEdits,
+    hasSavedFileChanges,
+  });
+  const { callbackShareUrlReady, completion, hasHeaderFeedback, isSubmitted } =
+    submissionCompletionPresentation;
+
   const documentPresentation = buildAppDocumentPresentation({
     displayedMarkdown,
     rootMarkdown: markdown,
@@ -3792,7 +3797,7 @@ const App: React.FC = () => {
     hasEditStats: editStats !== null,
     linkedDocumentIsActive: linkedDocHook.isActive,
     isSharedSession,
-    isSubmitted: submitted !== null,
+    isSubmitted,
     canUseWideMode,
     wideModeType,
     planWidth: uiPrefs.planWidth,
@@ -3879,11 +3884,9 @@ const App: React.FC = () => {
           aiAvailable: canUseAskAI,
           isAIChatOpen: layoutRightSidebar.isAIChatOpen,
           aiHasMessages: aiSidebarHasMessages,
-          hasAnyAnnotations: hasAnyAnnotations || hasDirectEdits || hasSavedFileChanges,
+          hasAnyAnnotations: hasHeaderFeedback,
           linkedDocIsActive: linkedDocHook.isActive,
-          callbackShareUrlReady: callbackConfig
-            ? Boolean(shareUrl || shortShareUrl || (renderAs === "html" && (shareHtml || rawHtml)))
-            : true,
+          callbackShareUrlReady,
           canShareCurrentSession,
           callbackConfig,
           mobileSettingsOpen,
@@ -4056,9 +4059,9 @@ const App: React.FC = () => {
           codeFilePopoutProps: codeFilePopout.popoutProps,
           codeAnnotations,
           selectedCodeAnnotationId,
-          submitted,
-          agentName,
-          annotateSource,
+          submitted: completion.submitted,
+          agentName: completion.agentName,
+          annotateSource: completion.annotateSource,
           shouldShowLookAndFeelAnnouncement,
           gridEnabled,
           pendingPasteImage,
