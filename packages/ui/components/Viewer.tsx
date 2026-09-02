@@ -1152,6 +1152,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
         },
         clearAllHighlights: () => {
           // For code blocks, capture affected elements before unwrapping
+          // SAFETY: querySelectorAll for code[data-markdown-code-block] returns HTMLElements
           const codeBlocksToRestore = Array.from(
             containerRef.current?.querySelectorAll(`code[data-markdown-code-block]`) ?? [],
           ).filter((codeEl) => codeEl.querySelector("mark[data-bind-id]")) as HTMLElement[];

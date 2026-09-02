@@ -16,8 +16,10 @@ let runtime: ManagedRuntime.ManagedRuntime<CodeHighlightingService, unknown> | n
 let layer: Layer.Layer<CodeHighlightingService, unknown, never> | null = null;
 
 function getLayer(): Layer.Layer<CodeHighlightingService, unknown, never> {
-  if (!layer)
-    layer = CodeHighlightingLive as unknown as Layer.Layer<CodeHighlightingService, unknown, never>;
+  if (!layer) {
+    // SAFETY: CodeHighlightingLive error channel widens from HighlightProviderError to unknown at runtime boundary
+    layer = CodeHighlightingLive as Layer.Layer<CodeHighlightingService, unknown, never>;
+  }
   return layer;
 }
 

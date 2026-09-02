@@ -3,7 +3,7 @@ import { resolvePinpointTarget } from "./blockTargeting";
 
 const hasDom = process.env.DOM_TESTS === "1";
 
-function makeCodeBlockContainer(): { container: HTMLElement; blockEl: HTMLElement; codeEl: HTMLElement } {
+function makeCodeBlockContainer() {
   const container = document.createElement("div");
   const blockEl = document.createElement("div");
   blockEl.setAttribute("data-block-id", "block-1");
@@ -19,7 +19,7 @@ function makeCodeBlockContainer(): { container: HTMLElement; blockEl: HTMLElemen
   return { container, blockEl, codeEl: code };
 }
 
-function makeInlineCodeContainer(): { container: HTMLElement; blockEl: HTMLElement; inlineCode: HTMLElement } {
+function makeInlineCodeContainer() {
   const container = document.createElement("div");
   const blockEl = document.createElement("div");
   blockEl.setAttribute("data-block-id", "block-2");
@@ -35,7 +35,7 @@ function makeInlineCodeContainer(): { container: HTMLElement; blockEl: HTMLEleme
 
 describe("blockTargeting", () => {
   test.skipIf(!hasDom)("targets code block from code element", async () => {
-    const { container, blockEl, codeEl } = makeCodeBlockContainer();
+    const { container, codeEl } = makeCodeBlockContainer();
     const target = resolvePinpointTarget(codeEl, container);
     expect(target).not.toBeNull();
     expect(target!.isCodeBlock).toBeTrue();
@@ -44,7 +44,7 @@ describe("blockTargeting", () => {
   });
 
   test.skipIf(!hasDom)("targets code block from nested token span", async () => {
-    const { container, blockEl, codeEl } = makeCodeBlockContainer();
+    const { container, codeEl } = makeCodeBlockContainer();
     const span = document.createElement("span");
     span.textContent = "amount_total_before";
     span.style.color = "red";
@@ -58,6 +58,7 @@ describe("blockTargeting", () => {
 
   test.skipIf(!hasDom)("targets code block from pre padding", async () => {
     const { container, blockEl } = makeCodeBlockContainer();
+    // SAFETY: pre element is always present in code block container
     const pre = blockEl.querySelector("pre") as HTMLElement;
     const target = resolvePinpointTarget(pre, container);
     expect(target).not.toBeNull();
@@ -66,7 +67,7 @@ describe("blockTargeting", () => {
   });
 
   test.skipIf(!hasDom)("targets code block from active mark inside code", async () => {
-    const { container, blockEl, codeEl } = makeCodeBlockContainer();
+    const { container, codeEl } = makeCodeBlockContainer();
     const mark = document.createElement("mark");
     mark.setAttribute("data-bind-id", "ann-1");
     mark.textContent = codeEl.textContent || "";

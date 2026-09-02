@@ -167,8 +167,9 @@ const INITIAL_THEMES = [
 
 function createShikiHighlighter(): Promise<Highlighter> {
   return createHighlighter({
-    themes: [...INITIAL_THEMES] as unknown as string[],
-    langs: [...INITIAL_LANGUAGES] as unknown as string[],
+    // SAFETY: Shiki accepts ThemeRegistrationRaw with tokenColors (framerLight) alongside bundled names
+    themes: [...INITIAL_THEMES] as never,
+    langs: [...INITIAL_LANGUAGES],
     engine: createJavaScriptRegexEngine(),
   });
 }
@@ -195,13 +196,15 @@ export const CodeHighlightingLive = Layer.effect(
     const themeLoadCache = new Map<string, Promise<void>>();
 
     const ensureLanguage = (lang: string): Promise<void> => {
-      if ((highlighter.getLoadedLanguages() as string[]).includes(lang)) {
+      if (highlighter.getLoadedLanguages().includes(lang)) {
         return Promise.resolve();
       }
       const existing = languageLoadCache.get(lang);
       if (existing) return existing;
+      // SAFETY: Shiki accepts string language names beyond BundledLanguage union at runtime
+      const langParam = lang as never;
       const p = highlighter
-        .loadLanguage(lang as any)
+        .loadLanguage(langParam)
         .then(() => {
           languageLoadCache.delete(lang);
         })
@@ -214,13 +217,14 @@ export const CodeHighlightingLive = Layer.effect(
     };
 
     const ensureTheme = (theme: string): Promise<void> => {
-      if ((highlighter.getLoadedThemes() as string[]).includes(theme)) {
+      if (highlighter.getLoadedThemes().includes(theme)) {
         return Promise.resolve();
       }
       const existing = themeLoadCache.get(theme);
       if (existing) return existing;
-      const p = highlighter
-        .loadTheme(theme as any)
+      // SAFETY: custom theme names like plannotator-framer-light are registered at runtime
+      const themeParam = theme as never;
+      const p = highlighter.loadTheme(themeParam)
         .then(() => {
           themeLoadCache.delete(theme);
         })
@@ -240,9 +244,10 @@ export const CodeHighlightingLive = Layer.effect(
             await ensureLanguage(key.normalizedLanguage);
             await ensureTheme(key.themeName);
             const shikiResult = highlighter.codeToTokens(key.code, {
-              // SAFETY: Shiki validates language/theme at runtime; normalized string is safe
-              lang: key.normalizedLanguage as any,
-              theme: key.themeName as any,
+              // SAFETY: normalizedLanguage/themeName validated by ensure* and Shiki runtime
+              lang: key.normalizedLanguage as never,
+              // SAFETY: themeName is a loaded theme name validated above
+              theme: key.themeName as never,
             });
             return mapShikiTokens(shikiResult);
           },
@@ -281,6 +286,7 @@ export const CodeHighlightingLive = Layer.effect(
         capacity: 100,
         timeToLive: (exit) => {
           if (Exit.isSuccess(exit)) {
+            // SAFETY: exit.value is HighlightResult per Cache<HighlightCacheKey, HighlightResult>
             const v = exit.value as HighlightResult;
             if (v._tag === "PlainText" && v.reason === "provider-error") {
               return Duration.millis(0);

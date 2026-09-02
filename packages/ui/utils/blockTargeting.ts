@@ -53,6 +53,7 @@ export function resolvePinpointTarget(
   if (markInsideCode) {
     const codeEl = markInsideCode.closest("code[data-markdown-code-block]");
     if (codeEl && container.contains(codeEl)) {
+      // SAFETY: closest returned Element inside code selector is HTMLElement
       const blockEl = closestHTMLElement(codeEl as HTMLElement, "[data-block-id]");
       const blockId = blockEl?.getAttribute("data-block-id");
       if (blockEl && blockId) {
