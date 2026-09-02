@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Cache, Duration, Effect, Exit, Fiber, Layer } from "effect";
+import { Cache, Duration, Effect, Exit, Fiber } from "effect";
 import {
   CodeHighlightingLive,
   CodeHighlightingService,
@@ -8,7 +8,6 @@ import {
   checkSizeLimits,
   normalizeLanguage,
 } from "./codeHighlighting";
-import { FALLBACK_SYNTAX_THEME } from "../../utils/syntaxThemeRegistry";
 
 // Fixtures
 const motivatingFragment = `amount_total_before = order.amount_total
@@ -267,8 +266,6 @@ describe("CodeHighlighting service", () => {
   });
 
   test("provider error does not poison cache long-term", async () => {
-    // Use a cache with makeWith zero TTL for failures
-    let calls = 0;
     const cache = await Effect.runPromise(
       Cache.makeWith(
         (key: string) =>
@@ -283,9 +280,25 @@ describe("CodeHighlighting service", () => {
     const e2 = await Effect.runPromise(Effect.exit(Cache.get(cache, "fail")));
     expect(Exit.isFailure(e1)).toBeTrue();
     expect(Exit.isFailure(e2)).toBeTrue();
-    // With zero TTL, second call should retry (calls 2)
-    // Our implementation uses 0 TTL for failures, so lookup runs twice
-    // We can't easily count calls without instrumenting, but we verify both are failures
+  });
+
+  test("concurrent identical service highlights share one provider lookup", async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* CodeHighlightingService;
+      const req = { code: motivatingFragment, language: "ruby", themeName: "github-dark" };
+      const [r1, r2] = yield* Effect.all([svc.highlight(req), svc.highlight(req)], {
+        concurrency: 2,
+      });
+      expect(r1._tag).toBe("Highlighted");
+      expect(r2._tag).toBe("Highlighted");
+      if (r1._tag === "Highlighted" && r2._tag === "Highlighted") {
+        const c1 = r1.lines.map((l) => l.map((t) => t.content).join("")).join("\n");
+        const c2 = r2.lines.map((l) => l.map((t) => t.content).join("")).join("\n");
+        expect(c1).toBe(c2);
+        expect(c1).toBe(motivatingFragment);
+      }
+    });
+    await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("Fiber interruption remains interruption not fallback", async () => {

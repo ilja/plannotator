@@ -21,6 +21,19 @@ const li = (level: number, ordered: boolean, orderedStart?: number): Block => ({
 });
 
 describe("parseMarkdownToBlocks — code fences", () => {
+  test("ruby fence with motivating fragment parses as one code block", () => {
+    const fragment = `amount_total_before = order.amount_total
+
+save_order_line(order_line)
+  .and_then { |value| apply_invoice_correction_after_commit(transaction, value) }`;
+    const md = "```ruby\n" + fragment + "\n```";
+    const blocks = parseMarkdownToBlocks(md);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe("code");
+    expect(blocks[0].language).toBe("ruby");
+    expect(blocks[0].content).toBe(fragment);
+  });
+
   /**
    * Baseline: the common triple-backtick fence still works after the nested-
    * fence fix. Regression guard so we don't break normal plans.

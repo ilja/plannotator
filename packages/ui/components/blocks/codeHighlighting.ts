@@ -249,11 +249,12 @@ export const CodeHighlightingLive = Layer.effect(
           catch: (cause) => {
             const msg = String(cause);
             const lower = msg.toLowerCase();
-            if (
-              lower.includes("not found") ||
-              lower.includes("not included") ||
-              lower.includes("unsupported")
-            ) {
+            const isLanguageError =
+              lower.includes("language") &&
+              (lower.includes("not found") ||
+                lower.includes("not included") ||
+                lower.includes("unsupported"));
+            if (isLanguageError) {
               return new UnsupportedLanguageError({ language: key.normalizedLanguage });
             }
             return new HighlightProviderError({ cause, message: msg });
