@@ -331,13 +331,13 @@ export const CodeHighlightingLive = Layer.effect(
                 const n = normalizeLanguage(input.language);
                 if (n && !warnedLanguages.has(n)) {
                   warnedLanguages.add(n);
-                  if (typeof console !== "undefined" && process.env.NODE_ENV !== "production") {
+                  if (process.env.NODE_ENV !== "production") {
                     console.warn(`[codeHighlighting] unsupported language: ${n}`);
                   }
                 }
               }
               if (result._tag === "PlainText" && result.reason === "provider-error") {
-                if (typeof console !== "undefined" && process.env.NODE_ENV !== "production") {
+                if (process.env.NODE_ENV !== "production") {
                   console.warn(
                     `[codeHighlighting] provider error for lang=${input.language} theme=${input.themeName}`,
                   );

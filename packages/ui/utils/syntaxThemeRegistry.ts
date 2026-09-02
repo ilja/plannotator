@@ -22,7 +22,7 @@ export const FALLBACK_SYNTAX_THEME: SyntaxTheme = {
  * Pure mapping from Plannotator palette IDs to Shiki theme names.
  * No React, Pierre, or review-editor imports.
  */
-export const SHIKI_THEME_MAP: ShikiThemeMap = {
+export const SHIKI_THEME_MAP = {
   andromeeda: { dark: "andromeeda", light: null },
   "aurora-x": { dark: "aurora-x", light: null },
   "ayu-dark": { dark: "ayu-dark", light: null },
@@ -59,7 +59,7 @@ export const SHIKI_THEME_MAP: ShikiThemeMap = {
   vesper: { dark: "vesper", light: null },
   vitesse: { dark: "vitesse-dark", light: "vitesse-light" },
   "vitesse-black": { dark: "vitesse-black", light: null },
-};
+} satisfies ShikiThemeMap;
 
 export function resolveSyntaxTheme(colorTheme: string, mode: "dark" | "light"): SyntaxTheme {
   const entry = SHIKI_THEME_MAP[colorTheme];
