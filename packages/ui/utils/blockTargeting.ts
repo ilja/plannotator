@@ -94,10 +94,16 @@ function resolveCodeBlockTarget(
   blockEl: HTMLElement,
   blockId: string,
 ): PinpointTarget | null {
-  const codeEl = blockEl.querySelector("pre > code.hljs");
-  if (!codeEl || !(target === codeEl || codeEl.contains(target) || target.closest("pre"))) {
-    return null;
-  }
+  const codeEl = blockEl.querySelector("code[data-markdown-code-block]");
+  if (!codeEl) return null;
+  const isInsideCode =
+    target === codeEl ||
+    codeEl.contains(target) ||
+    !!target.closest("code[data-markdown-code-block]") ||
+    !!target.closest("pre");
+  // Also handle annotation mark inside code
+  const isMarkInsideCode = target.matches("mark[data-bind-id]") && codeEl.contains(target);
+  if (!isInsideCode && !isMarkInsideCode) return null;
 
   return { element: blockEl, blockId, label: getCodeBlockLabel(blockEl), isCodeBlock: true };
 }
@@ -127,7 +133,11 @@ function resolveTableEdgeTarget(
 }
 
 function resolveInlineTarget(target: HTMLElement, blockId: string): PinpointTarget | null {
-  if (target.tagName === "CODE" && !target.classList.contains("hljs")) {
+  if (
+    target.tagName === "CODE" &&
+    !target.hasAttribute("data-markdown-code-block") &&
+    !target.closest("pre")
+  ) {
     const text = target.textContent?.trim() || "";
     if (!text) return null;
     return {
@@ -197,8 +207,9 @@ function getListItemLabel(contentSpan: HTMLElement): string {
 }
 
 function getCodeBlockLabel(blockEl: HTMLElement): string {
-  const codeEl = blockEl.querySelector("code");
-  const lang = codeEl?.className?.match(/language-(\S+)/)?.[1];
+  const codeEl = blockEl.querySelector("code[data-markdown-code-block]");
+  const lang =
+    codeEl?.getAttribute("data-language") || codeEl?.className?.match(/language-(\S+)/)?.[1];
   return lang ? `code block (${lang})` : "code block";
 }
 

@@ -1,7 +1,16 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import hljs from "highlight.js";
-import "highlight.js/styles/github-dark.css";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Effect } from "effect";
+import * as Fiber from "effect/Fiber";
 import { Block } from "../../types";
+import { useTheme } from "../ThemeProvider";
+import { resolveShikiThemeName } from "../../utils/syntaxThemeRegistry";
+import { getCodeHighlightingRuntime } from "./codeHighlightingRuntime";
+import {
+  CodeHighlightingService,
+  type HighlightResult,
+  checkSizeLimits,
+  normalizeLanguage,
+} from "./codeHighlighting";
 
 interface CodeBlockProps {
   block: Block;
@@ -19,16 +28,86 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   const [copied, setCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLElement>(null);
+  const { colorTheme, resolvedMode } = useTheme();
+  const themeName = useMemo(
+    () => resolveShikiThemeName(colorTheme, resolvedMode),
+    [colorTheme, resolvedMode],
+  );
 
-  // Highlight code block on mount and when content/language changes
+  const [highlightResult, setHighlightResult] = useState<HighlightResult | null>(null);
+  const [syntaxState, setSyntaxState] = useState<"plain" | "loading" | "highlighted" | "fallback">(
+    "plain",
+  );
+  const generationRef = useRef(0);
+  const fiberRef = useRef<Fiber.Fiber<unknown, unknown> | null>(null);
+
   useEffect(() => {
-    if (codeRef.current) {
-      // Reset any previous highlighting
-      codeRef.current.removeAttribute("data-highlighted");
-      codeRef.current.className = `hljs font-mono${block.language ? ` language-${block.language}` : ""}`;
-      hljs.highlightElement(codeRef.current);
+    const normalized = normalizeLanguage(block.language);
+    const sizeReason = checkSizeLimits(block.content);
+
+    // Pure fallback cases – no provider needed
+    if (sizeReason === "empty") {
+      setHighlightResult({ _tag: "PlainText", reason: "empty" });
+      setSyntaxState("plain");
+      return;
     }
-  }, [block.content, block.language]);
+    if (sizeReason) {
+      setHighlightResult({ _tag: "PlainText", reason: sizeReason });
+      setSyntaxState("fallback");
+      return;
+    }
+    if (!normalized) {
+      setHighlightResult({ _tag: "PlainText", reason: "unlabelled" });
+      setSyntaxState("fallback");
+      return;
+    }
+
+    const gen = ++generationRef.current;
+    setSyntaxState("loading");
+    setHighlightResult(null);
+
+    const runtime = getCodeHighlightingRuntime();
+    const effect = Effect.gen(function* () {
+      const svc = yield* CodeHighlightingService;
+      const result = yield* svc.highlight({
+        code: block.content,
+        language: block.language,
+        themeName,
+      });
+      return result;
+    }).pipe(
+      Effect.tap((result) =>
+        Effect.sync(() => {
+          if (gen !== generationRef.current) return;
+          if (!codeRef.current?.isConnected) return;
+          if (codeRef.current.querySelector("mark[data-bind-id]")) return;
+          setHighlightResult(result);
+          setSyntaxState(result._tag === "Highlighted" ? "highlighted" : "fallback");
+        }),
+      ),
+      Effect.catch(() =>
+        Effect.sync(() => {
+          if (gen !== generationRef.current) return;
+          if (!codeRef.current?.isConnected) return;
+          setHighlightResult({ _tag: "PlainText", reason: "provider-error" });
+          setSyntaxState("fallback");
+        }),
+      ),
+    );
+
+    const fiber = runtime.runFork(effect as unknown as Effect.Effect<void, never, never>);
+    // Store as unknown due to Fiber variance
+    fiberRef.current = fiber as unknown as Fiber.Fiber<unknown, unknown>;
+
+    return () => {
+      generationRef.current++;
+      const f = fiberRef.current;
+      if (f) {
+        fiberRef.current = null;
+        runtime.runFork(Fiber.interrupt(f as Fiber.Fiber<never, never>));
+      }
+    };
+  }, [block.content, block.language, themeName]);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -46,8 +125,33 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
     }
   };
 
-  // Build className for code element
-  const codeClassName = `hljs font-mono${block.language ? ` language-${block.language}` : ""}`;
+  const normalizedLanguage = normalizeLanguage(block.language);
+  const dataLanguage = normalizedLanguage ?? block.language ?? "";
+
+  const renderContent = () => {
+    if (!highlightResult || highlightResult._tag === "PlainText") {
+      return block.content;
+    }
+    return highlightResult.lines.map((line, lineIdx) => (
+      <React.Fragment key={lineIdx}>
+        {line.map((token, tokenIdx) => (
+          <span
+            key={`${lineIdx}-${tokenIdx}`}
+            style={
+              token.htmlStyle
+                ? parseStyle(token.htmlStyle)
+                : token.color
+                  ? { color: token.color }
+                  : undefined
+            }
+          >
+            {token.content}
+          </span>
+        ))}
+        {lineIdx < highlightResult.lines.length - 1 ? "\n" : null}
+      </React.Fragment>
+    ));
+  };
 
   return (
     <div
@@ -94,12 +198,27 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
       >
         <code
           ref={codeRef}
-          className={codeClassName}
+          className={`font-mono${normalizedLanguage ? ` language-${normalizedLanguage}` : ""}`}
+          data-markdown-code-block="true"
+          data-language={dataLanguage}
+          data-syntax-state={syntaxState}
           style={{ fontFamily: "var(--annotation-code-font-family, var(--font-mono))" }}
         >
-          {block.content}
+          {renderContent()}
         </code>
       </pre>
     </div>
   );
 };
+
+function parseStyle(htmlStyle: string): React.CSSProperties {
+  const style: Record<string, string> = {};
+  for (const part of htmlStyle.split(";")) {
+    const [key, value] = part.split(":").map((s) => s.trim());
+    if (!key || !value) continue;
+    // Convert kebab-case to camelCase
+    const camel = key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    style[camel] = value;
+  }
+  return style as React.CSSProperties;
+}

@@ -8,7 +8,6 @@ import React, {
   useCallback,
 } from "react";
 import { createPortal } from "react-dom";
-import hljs from "highlight.js";
 import {
   AnnotationType,
   type Block,
@@ -83,6 +82,9 @@ import { usePinpoint } from "../hooks/usePinpoint";
 import { useAnnotationHighlighter } from "../hooks/useAnnotationHighlighter";
 import { useScrollViewport } from "../hooks/useScrollViewport";
 import { decodeAnchorHash } from "../utils/anchors";
+import { useTheme } from "./ThemeProvider";
+import { resolveShikiThemeName } from "../utils/syntaxThemeRegistry";
+import { highlightCodeElement, invalidateCodeHighlight } from "./blocks/codeHighlightingDom";
 import {
   isChoiceAnnotationForBlock,
   nextChoiceAnnotationId,
@@ -888,7 +890,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       handleFloatingQuickLabel: hookFloatingQuickLabel,
       handleQuickLabelPickerDismiss: hookQuickLabelPickerDismiss,
       removeHighlight: hookRemoveHighlight,
-      clearAllHighlights,
+      clearAllHighlights: hookClearAllHighlights,
       applyAnnotations,
     } = useAnnotationHighlighter({
       containerRef,
@@ -1111,6 +1113,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       return () => document.removeEventListener("copy", handleCopy);
     }, [toolbarState]);
 
+    const { colorTheme, resolvedMode } = useTheme();
+    const syntaxThemeName = resolveShikiThemeName(colorTheme, resolvedMode);
+
     // Imperative handle — delegates to hook, extends removeHighlight for code blocks
     useImperativeHandle(
       ref,
@@ -1130,18 +1135,52 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
               const block = blocks.find(
                 (b) => b.id === codeEl.closest("[data-block-id]")?.getAttribute("data-block-id"),
               );
-              codeEl.removeAttribute("data-highlighted");
-              codeEl.className = `hljs font-mono${block?.language ? ` language-${block.language}` : ""}`;
-              hljs.highlightElement(codeEl);
+              // Reset to plain state; async re-highlight will replace it
+              codeEl.setAttribute("data-syntax-state", "plain");
+              if (block) {
+                codeEl.setAttribute("data-language", block.language ?? "");
+                // Invalidate any in-flight highlight for this element
+                invalidateCodeHighlight(codeEl);
+                void highlightCodeElement(codeEl, plainText, block.language, syntaxThemeName);
+              } else {
+                codeEl.textContent = plainText;
+              }
             }
           });
 
           hookRemoveHighlight(id);
         },
-        clearAllHighlights,
+        clearAllHighlights: () => {
+          // For code blocks, capture affected elements before unwrapping
+          const codeBlocksToRestore = Array.from(
+            containerRef.current?.querySelectorAll(`code[data-markdown-code-block]`) ?? [],
+          ).filter((codeEl) => codeEl.querySelector("mark[data-bind-id]")) as HTMLElement[];
+          const plainTexts = new Map<HTMLElement, string>();
+          codeBlocksToRestore.forEach((codeEl) => {
+            const mark = codeEl.querySelector("mark[data-bind-id]");
+            if (mark) plainTexts.set(codeEl, mark.textContent || codeEl.textContent || "");
+          });
+
+          hookClearAllHighlights();
+
+          // Re-highlight affected code blocks
+          codeBlocksToRestore.forEach((codeEl) => {
+            const plainText = plainTexts.get(codeEl) ?? codeEl.textContent ?? "";
+            const block = blocks.find(
+              (b) => b.id === codeEl.closest("[data-block-id]")?.getAttribute("data-block-id"),
+            );
+            if (block) {
+              codeEl.textContent = plainText;
+              codeEl.setAttribute("data-syntax-state", "plain");
+              codeEl.setAttribute("data-language", block.language ?? "");
+              invalidateCodeHighlight(codeEl);
+              void highlightCodeElement(codeEl, plainText, block.language, syntaxThemeName);
+            }
+          });
+        },
         applySharedAnnotations: applyAnnotations,
       }),
-      [hookRemoveHighlight, clearAllHighlights, applyAnnotations, blocks],
+      [hookRemoveHighlight, hookClearAllHighlights, applyAnnotations, blocks, syntaxThemeName],
     );
 
     // --- Viewer-specific: code block annotation ---
@@ -1157,6 +1196,10 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     ) => {
       const id = `codeblock-${Date.now()}`;
       const codeText = codeEl.textContent || "";
+      // Invalidate any in-flight highlight for this element before mutating
+      if (codeEl instanceof HTMLElement) {
+        invalidateCodeHighlight(codeEl);
+      }
 
       const wrapper = document.createElement("mark");
       wrapper.className =
