@@ -34,11 +34,11 @@ export interface HighlightInput {
   readonly themeName: string;
 }
 
-interface InternalHighlightKey {
+export class HighlightCacheKey extends Data.Class<{
   readonly code: string;
   readonly normalizedLanguage: string;
   readonly themeName: string;
-}
+}> {}
 
 // ---------------------------------------------------------------------------
 // Language normalization
@@ -233,13 +233,14 @@ export const CodeHighlightingLive = Layer.effect(
     };
 
     // Cache with provider inside lookup – deduplicates concurrent identical tokenization
-    const cache: Cache.Cache<InternalHighlightKey, HighlightResult> = yield* Cache.makeWith(
-      (key: InternalHighlightKey) =>
+    const cache: Cache.Cache<HighlightCacheKey, HighlightResult> = yield* Cache.makeWith(
+      (key: HighlightCacheKey) =>
         Effect.tryPromise({
           try: async () => {
             await ensureLanguage(key.normalizedLanguage);
             await ensureTheme(key.themeName);
             const shikiResult = highlighter.codeToTokens(key.code, {
+              // SAFETY: Shiki validates language/theme at runtime; normalized string is safe
               lang: key.normalizedLanguage as any,
               theme: key.themeName as any,
             });
@@ -306,11 +307,11 @@ export const CodeHighlightingLive = Layer.effect(
       if (!normalized) {
         return { _tag: "PlainText", reason: "unlabelled" } as const;
       }
-      const key: InternalHighlightKey = {
+      const key = new HighlightCacheKey({
         code: input.code,
         normalizedLanguage: normalized,
         themeName: input.themeName,
-      };
+      });
       return yield* Cache.get(cache, key);
     });
 

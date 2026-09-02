@@ -1,16 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Effect } from "effect";
-import * as Fiber from "effect/Fiber";
+import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from "react";
 import { Block } from "../../types";
 import { useTheme } from "../ThemeProvider";
 import { resolveShikiThemeName } from "../../utils/syntaxThemeRegistry";
-import { getCodeHighlightingRuntime } from "./codeHighlightingRuntime";
-import {
-  CodeHighlightingService,
-  type HighlightResult,
-  checkSizeLimits,
-  normalizeLanguage,
-} from "./codeHighlighting";
+import { highlightCodeElement, invalidateCodeHighlight } from "./codeHighlightingDom";
+import { checkSizeLimits, normalizeLanguage } from "./codeHighlighting";
 
 interface CodeBlockProps {
   block: Block;
@@ -34,78 +27,65 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
     [colorTheme, resolvedMode],
   );
 
-  const [highlightResult, setHighlightResult] = useState<HighlightResult | null>(null);
-  const [syntaxState, setSyntaxState] = useState<"plain" | "loading" | "highlighted" | "fallback">(
-    "plain",
-  );
-  const generationRef = useRef(0);
-  const fiberRef = useRef<Fiber.Fiber<unknown, unknown> | null>(null);
+  const normalizedLanguage = normalizeLanguage(block.language);
+  const dataLanguage = normalizedLanguage ?? block.language ?? "";
+
+  // Keep code element in sync with block.content when not highlighted/annotated
+  // Use layout effect so plain text is visible before async highlight
+  useLayoutEffect(() => {
+    const el = codeRef.current;
+    if (!el) return;
+    // Don't overwrite if already highlighted with same code or if annotated
+    if (el.querySelector("mark[data-bind-id]")) return;
+    const currentText = el.textContent ?? "";
+    // If element is empty or plain text differs, set plain
+    if (currentText !== block.content) {
+      // Only reset if not already highlighted with same code
+      // Check if highlighted content reconstructs to same text
+      // For now, if data-syntax-state is highlighted and text matches, keep it until new highlight
+      const state = el.getAttribute("data-syntax-state");
+      if (state === "highlighted" && currentText === block.content) {
+        // Already highlighted with same code – keep until theme change triggers new highlight
+        // But if code changed, we need to reset
+        if (el.textContent !== block.content) {
+          el.textContent = block.content;
+          el.setAttribute("data-syntax-state", "plain");
+        }
+      } else {
+        el.textContent = block.content;
+        el.setAttribute("data-syntax-state", "plain");
+      }
+    }
+  }, [block.content]);
 
   useEffect(() => {
+    const el = codeRef.current;
+    if (!el) return;
+
     const normalized = normalizeLanguage(block.language);
     const sizeReason = checkSizeLimits(block.content);
-
-    // Pure fallback cases – no provider needed
     if (sizeReason === "empty") {
-      setHighlightResult({ _tag: "PlainText", reason: "empty" });
-      setSyntaxState("plain");
+      el.textContent = block.content;
+      el.setAttribute("data-syntax-state", "plain");
       return;
     }
-    if (sizeReason) {
-      setHighlightResult({ _tag: "PlainText", reason: sizeReason });
-      setSyntaxState("fallback");
-      return;
-    }
-    if (!normalized) {
-      setHighlightResult({ _tag: "PlainText", reason: "unlabelled" });
-      setSyntaxState("fallback");
+    if (sizeReason || !normalized) {
+      // Ensure plain text visible for fallback
+      if (el.textContent !== block.content) el.textContent = block.content;
+      el.setAttribute("data-syntax-state", "fallback");
       return;
     }
 
-    const gen = ++generationRef.current;
-    setSyntaxState("loading");
-    setHighlightResult(null);
+    // Don't highlight if already annotated
+    if (el.querySelector("mark[data-bind-id]")) {
+      return;
+    }
 
-    const runtime = getCodeHighlightingRuntime();
-    const effect = Effect.gen(function* () {
-      const svc = yield* CodeHighlightingService;
-      const result = yield* svc.highlight({
-        code: block.content,
-        language: block.language,
-        themeName,
-      });
-      return result;
-    }).pipe(
-      Effect.tap((result) =>
-        Effect.sync(() => {
-          if (gen !== generationRef.current) return;
-          if (!codeRef.current?.isConnected) return;
-          if (codeRef.current.querySelector("mark[data-bind-id]")) return;
-          setHighlightResult(result);
-          setSyntaxState(result._tag === "Highlighted" ? "highlighted" : "fallback");
-        }),
-      ),
-      Effect.catch(() =>
-        Effect.sync(() => {
-          if (gen !== generationRef.current) return;
-          if (!codeRef.current?.isConnected) return;
-          setHighlightResult({ _tag: "PlainText", reason: "provider-error" });
-          setSyntaxState("fallback");
-        }),
-      ),
-    );
-
-    const fiber = runtime.runFork(effect as unknown as Effect.Effect<void, never, never>);
-    // Store as unknown due to Fiber variance
-    fiberRef.current = fiber as unknown as Fiber.Fiber<unknown, unknown>;
+    el.setAttribute("data-syntax-state", "loading");
+    void highlightCodeElement(el, block.content, block.language, themeName);
 
     return () => {
-      generationRef.current++;
-      const f = fiberRef.current;
-      if (f) {
-        fiberRef.current = null;
-        runtime.runFork(Fiber.interrupt(f as Fiber.Fiber<never, never>));
-      }
+      if (el) invalidateCodeHighlight(el);
     };
   }, [block.content, block.language, themeName]);
 
@@ -123,34 +103,6 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
     if (containerRef.current) {
       onHover(containerRef.current);
     }
-  };
-
-  const normalizedLanguage = normalizeLanguage(block.language);
-  const dataLanguage = normalizedLanguage ?? block.language ?? "";
-
-  const renderContent = () => {
-    if (!highlightResult || highlightResult._tag === "PlainText") {
-      return block.content;
-    }
-    return highlightResult.lines.map((line, lineIdx) => (
-      <React.Fragment key={lineIdx}>
-        {line.map((token, tokenIdx) => (
-          <span
-            key={`${lineIdx}-${tokenIdx}`}
-            style={
-              token.htmlStyle
-                ? parseStyle(token.htmlStyle)
-                : token.color
-                  ? { color: token.color }
-                  : undefined
-            }
-          >
-            {token.content}
-          </span>
-        ))}
-        {lineIdx < highlightResult.lines.length - 1 ? "\n" : null}
-      </React.Fragment>
-    ));
   };
 
   return (
@@ -201,24 +153,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           className={`font-mono${normalizedLanguage ? ` language-${normalizedLanguage}` : ""}`}
           data-markdown-code-block="true"
           data-language={dataLanguage}
-          data-syntax-state={syntaxState}
+          data-syntax-state="plain"
           style={{ fontFamily: "var(--annotation-code-font-family, var(--font-mono))" }}
-        >
-          {renderContent()}
-        </code>
+        />
       </pre>
     </div>
   );
 };
-
-function parseStyle(htmlStyle: string): React.CSSProperties {
-  const style: Record<string, string> = {};
-  for (const part of htmlStyle.split(";")) {
-    const [key, value] = part.split(":").map((s) => s.trim());
-    if (!key || !value) continue;
-    // Convert kebab-case to camelCase
-    const camel = key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-    style[camel] = value;
-  }
-  return style as React.CSSProperties;
-}

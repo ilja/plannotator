@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import * as Fiber from "effect/Fiber";
 import { getCodeHighlightingRuntime } from "./codeHighlightingRuntime";
 import { CodeHighlightingService, type HighlightResult } from "./codeHighlighting";
 
@@ -11,6 +12,7 @@ import { CodeHighlightingService, type HighlightResult } from "./codeHighlightin
  */
 
 const generationMap = new WeakMap<HTMLElement, number>();
+const fiberMap = new WeakMap<HTMLElement, Fiber.Fiber<HighlightResult, unknown>>();
 
 export type HighlightCodeElementResult =
   | { kind: "highlighted" }
@@ -30,26 +32,36 @@ export async function highlightCodeElement(
 
   if (!element.isConnected) return { kind: "detached" };
   if (element.querySelector("mark[data-bind-id]")) return { kind: "annotated" };
-  // Store expected values to verify staleness after async
   const expectedCode = code;
   const expectedLanguage = language;
   const expectedTheme = themeName;
 
   const runtime = getCodeHighlightingRuntime();
+  // Invalidate any previous fiber for this element
+  const prevFiber = fiberMap.get(element);
+  if (prevFiber) {
+    runtime.runFork(Fiber.interrupt(prevFiber));
+    fiberMap.delete(element);
+  }
+
+  const effect = Effect.gen(function* () {
+    const svc = yield* CodeHighlightingService;
+    return yield* svc.highlight({
+      code: expectedCode,
+      language: expectedLanguage,
+      themeName: expectedTheme,
+    });
+  });
+
+  const fiber = runtime.runFork(effect);
+  fiberMap.set(element, fiber);
+
   let result: HighlightResult;
   try {
-    result = await runtime.runPromise(
-      Effect.gen(function* () {
-        const svc = yield* CodeHighlightingService;
-        return yield* svc.highlight({
-          code: expectedCode,
-          language: expectedLanguage,
-          themeName: expectedTheme,
-        });
-      }),
-    );
+    result = await runtime.runPromise(Fiber.join(fiber));
+    fiberMap.delete(element);
   } catch {
-    // Defect or interruption – treat as stale, not plain
+    fiberMap.delete(element);
     if (generationMap.get(element) !== gen) return { kind: "stale" };
     if (!element.isConnected) return { kind: "detached" };
     if (element.querySelector("mark[data-bind-id]")) return { kind: "annotated" };
@@ -106,4 +118,10 @@ export async function highlightCodeElement(
 export function invalidateCodeHighlight(element: HTMLElement): void {
   const gen = (generationMap.get(element) ?? 0) + 1;
   generationMap.set(element, gen);
+  const fiber = fiberMap.get(element);
+  if (fiber) {
+    const runtime = getCodeHighlightingRuntime();
+    runtime.runFork(Fiber.interrupt(fiber));
+    fiberMap.delete(element);
+  }
 }

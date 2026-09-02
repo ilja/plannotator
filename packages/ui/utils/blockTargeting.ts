@@ -46,7 +46,27 @@ export function resolvePinpointTarget(
   container: HTMLElement,
   mousePos?: { clientX: number; clientY: number },
 ): PinpointTarget | null {
-  if (target.closest(SKIP_SELECTORS) || !container.contains(target)) return null;
+  if (!container.contains(target)) return null;
+
+  // Special-case marks inside fenced code blocks: they should still target the code block
+  const markInsideCode = target.closest("mark[data-bind-id]");
+  if (markInsideCode) {
+    const codeEl = markInsideCode.closest("code[data-markdown-code-block]");
+    if (codeEl && container.contains(codeEl)) {
+      const blockEl = closestHTMLElement(codeEl as HTMLElement, "[data-block-id]");
+      const blockId = blockEl?.getAttribute("data-block-id");
+      if (blockEl && blockId) {
+        return {
+          element: blockEl,
+          blockId,
+          label: getCodeBlockLabel(blockEl),
+          isCodeBlock: true,
+        };
+      }
+    }
+  }
+
+  if (target.closest(SKIP_SELECTORS)) return null;
 
   const groupTarget = resolveGroupTarget(target, container);
   if (groupTarget) return groupTarget;
