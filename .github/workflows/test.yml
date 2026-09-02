@@ -32,7 +32,7 @@ jobs:
         run: bun test
 
       - name: Run DOM tests
-        run: DOM_TESTS=1 bun test packages/ui/hooks/useFileBrowser.test.tsx packages/editor/editableDocumentsHook.test.tsx packages/ui/codeAnnotationDraftPersistence.test.tsx packages/ui/markdownEditorFidelity.test.tsx packages/ui/annotationDraftPersistence.test.tsx
+        run: DOM_TESTS=1 bun test packages/ui/hooks/useFileBrowser.test.tsx packages/editor/editableDocumentsHook.test.tsx packages/ui/codeAnnotationDraftPersistence.test.tsx packages/ui/markdownEditorFidelity.test.tsx packages/ui/annotationDraftPersistence.test.tsx packages/ui/components/blocks/CodeBlock.test.tsx packages/ui/utils/blockTargeting.test.ts packages/ui/utils/syntaxThemeRegistry.test.ts packages/ui/components/blocks/codeHighlightingDom.test.ts
 
   pi-extension-ai-runtime-windows:
     name: Pi extension AI runtime (Windows)

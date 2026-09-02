@@ -4,55 +4,7 @@ import type { DiffLineBgIntensity } from "@plannotator/shared/config";
 import { useTheme } from "@plannotator/ui/components/ThemeProvider";
 import { useConfigValue } from "@plannotator/ui/config";
 import { resolveAppliedThemeMode } from "@plannotator/ui/utils/themeRegistry";
-import { FRAMER_LIGHT_SYNTAX_THEME_NAME } from "../themes/framerLightSyntax";
-
-interface ShikiThemeEntry {
-  dark: string | null;
-  light: string | null;
-}
-
-interface ShikiThemeMap {
-  [theme: string]: ShikiThemeEntry;
-}
-
-export const SHIKI_THEME_MAP: ShikiThemeMap = {
-  andromeeda: { dark: "andromeeda", light: null },
-  "aurora-x": { dark: "aurora-x", light: null },
-  "ayu-dark": { dark: "ayu-dark", light: null },
-  catppuccin: { dark: "catppuccin-mocha", light: "catppuccin-latte" },
-  "dark-plus": { dark: "dark-plus", light: "light-plus" },
-  dracula: { dark: "dracula", light: null },
-  everforest: { dark: "everforest-dark", light: "everforest-light" },
-  "everforest-hard": { dark: "everforest-dark", light: "everforest-light" },
-  "everforest-soft": { dark: "everforest-dark", light: "everforest-light" },
-  "framer-light": { dark: FRAMER_LIGHT_SYNTAX_THEME_NAME, light: FRAMER_LIGHT_SYNTAX_THEME_NAME },
-  github: { dark: "github-dark", light: "github-light" },
-  gruvbox: { dark: "gruvbox-dark-medium", light: "gruvbox-light-medium" },
-  houston: { dark: "houston", light: null },
-  "kanagawa-dragon": { dark: "kanagawa-dragon", light: null },
-  "kanagawa-lotus": { dark: null, light: "kanagawa-lotus" },
-  "kanagawa-wave": { dark: "kanagawa-wave", light: null },
-  laserwave: { dark: "laserwave", light: null },
-  material: { dark: "material-theme", light: "material-theme-lighter" },
-  min: { dark: "min-dark", light: "min-light" },
-  "monokai-pro": { dark: "monokai", light: null },
-  "night-owl": { dark: "night-owl", light: null },
-  nord: { dark: "nord", light: null },
-  "one-dark-pro": { dark: "one-dark-pro", light: null },
-  "one-light": { dark: null, light: "one-light" },
-  plastic: { dark: "plastic", light: null },
-  poimandres: { dark: "poimandres", light: null },
-  red: { dark: "red", light: null },
-  "rose-pine": { dark: "rose-pine", light: "rose-pine-dawn" },
-  slack: { dark: "slack-dark", light: "slack-ochin" },
-  "snazzy-light": { dark: null, light: "snazzy-light" },
-  solarized: { dark: "solarized-dark", light: "solarized-light" },
-  "synthwave-84": { dark: "synthwave-84", light: null },
-  "tokyo-night": { dark: "tokyo-night", light: null },
-  vesper: { dark: "vesper", light: null },
-  vitesse: { dark: "vitesse-dark", light: "vitesse-light" },
-  "vitesse-black": { dark: "vitesse-black", light: null },
-};
+import { SHIKI_THEME_MAP } from "@plannotator/ui/utils/syntaxThemeRegistry";
 
 export interface PierreSyntaxTheme {
   dark: string;

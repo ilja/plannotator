@@ -40,8 +40,9 @@
   width: 0 !important;
 }
 
-/* Code blocks */
-pre code.hljs {
+/* Code blocks — fenced Markdown */
+pre code.hljs,
+pre code[data-markdown-code-block] {
   display: block;
   padding: 1rem;
   border-radius: var(--radius);

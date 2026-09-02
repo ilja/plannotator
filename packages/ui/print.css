@@ -34,7 +34,8 @@
 .plannotator-print pre span,
 .plannotator-print pre code span,
 .plannotator-print .hljs span,
-.plannotator-print [class*="hljs-"] {
+.plannotator-print [class*="hljs-"],
+.plannotator-print code[data-markdown-code-block] span {
   color: #1a1a1a !important;
   background: transparent !important;
   background-color: transparent !important;
@@ -305,7 +306,8 @@
   }
 
   pre span, pre code span, .hljs span, code span,
-  [class*="hljs-"] {
+  [class*="hljs-"],
+  code[data-markdown-code-block] span {
     color: #1a1a1a !important;
     background: transparent !important;
     background-color: transparent !important;
