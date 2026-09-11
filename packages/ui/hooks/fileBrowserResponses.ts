@@ -50,8 +50,11 @@ const FileBrowserSuccessEnvelopeSchema = Schema.Struct({
 const FileBrowserErrorEnvelopeSchema = Schema.Struct({ error: Schema.String });
 
 const decodeVaultNodeEnvelope = Schema.decodeUnknownOption(VaultNodeEnvelopeSchema);
+
 const decodeWorkspaceStatus = Schema.decodeUnknownOption(WorkspaceStatusSchema);
+
 const decodeSuccessEnvelope = Schema.decodeUnknownOption(FileBrowserSuccessEnvelopeSchema);
+
 const decodeErrorEnvelope = Schema.decodeUnknownOption(FileBrowserErrorEnvelopeSchema);
 
 /** A parsed successful file browser response with malformed tree nodes removed. */
@@ -62,6 +65,7 @@ export interface FileBrowserSuccessResponse {
 
 function decodeVaultNode<Input>(input: Input): VaultNode | undefined {
   const node = Option.getOrUndefined(decodeVaultNodeEnvelope(input));
+
   if (!node) return undefined;
 
   if (node.children === undefined) {
@@ -70,8 +74,10 @@ function decodeVaultNode<Input>(input: Input): VaultNode | undefined {
 
   const children = node.children.flatMap((child) => {
     const decoded = decodeVaultNode(child);
+
     return decoded ? [decoded] : [];
   });
+
   return { name: node.name, path: node.path, type: node.type, children };
 }
 
@@ -80,12 +86,15 @@ export function decodeFileBrowserSuccessResponse<Input>(
   input: Input,
 ): FileBrowserSuccessResponse | undefined {
   const response = Option.getOrUndefined(decodeSuccessEnvelope(input));
+
   if (!response) return undefined;
 
   const tree = response.tree.flatMap((node) => {
     const decoded = decodeVaultNode(node);
+
     return decoded ? [decoded] : [];
   });
+
   const workspaceStatus = Option.getOrUndefined(decodeWorkspaceStatus(response.workspaceStatus));
 
   return workspaceStatus ? { tree, workspaceStatus } : { tree };

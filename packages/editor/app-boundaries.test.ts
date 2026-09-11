@@ -10,6 +10,7 @@ import {
 describe("editor presentation boundaries", () => {
   test("delegates the editor screen to a dedicated component", () => {
     const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+
     const screenSource = readFileSync(
       new URL("./components/EditorAppScreen.tsx", import.meta.url),
       "utf8",

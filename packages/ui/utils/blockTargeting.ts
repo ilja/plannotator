@@ -50,12 +50,15 @@ export function resolvePinpointTarget(
 
   // Special-case marks inside fenced code blocks: they should still target the code block
   const markInsideCode = target.closest("mark[data-bind-id]");
+
   if (markInsideCode) {
     const codeEl = markInsideCode.closest("code[data-markdown-code-block]");
+
     if (codeEl && container.contains(codeEl)) {
       // SAFETY: closest returned Element inside code selector is HTMLElement
       const blockEl = closestHTMLElement(codeEl as HTMLElement, "[data-block-id]");
       const blockId = blockEl?.getAttribute("data-block-id");
+
       if (blockEl && blockId) {
         return {
           element: blockEl,
@@ -70,10 +73,12 @@ export function resolvePinpointTarget(
   if (target.closest(SKIP_SELECTORS)) return null;
 
   const groupTarget = resolveGroupTarget(target, container);
+
   if (groupTarget) return groupTarget;
 
   const blockEl = closestHTMLElement(target, "[data-block-id]");
   const blockId = blockEl?.getAttribute("data-block-id");
+
   if (!blockEl || blockId === null || !container.contains(blockEl) || blockEl.tagName === "HR") {
     return null;
   }
@@ -97,16 +102,20 @@ export function resolvePinpointTarget(
 
 function closestHTMLElement(element: HTMLElement, selector: string): HTMLElement | null {
   const closest = element.closest(selector);
+
   return closest instanceof HTMLElement ? closest : null;
 }
 
 function resolveGroupTarget(target: HTMLElement, container: HTMLElement): PinpointTarget | null {
   const groupEl = closestHTMLElement(target, "[data-pinpoint-group]");
+
   if (!groupEl || !container.contains(groupEl) || target.closest("[data-block-id]")) return null;
 
   const groupType = groupEl.getAttribute("data-pinpoint-group");
+
   const label =
     groupType === "list" ? "list" : groupType === "blockquote" ? "blockquote group" : "group";
+
   return { element: groupEl, blockId: "", label, isCodeBlock: false };
 }
 
@@ -116,14 +125,18 @@ function resolveCodeBlockTarget(
   blockId: string,
 ): PinpointTarget | null {
   const codeEl = blockEl.querySelector("code[data-markdown-code-block]");
+
   if (!codeEl) return null;
+
   const isInsideCode =
     target === codeEl ||
     codeEl.contains(target) ||
     !!target.closest("code[data-markdown-code-block]") ||
     !!target.closest("pre");
+
   // Also handle annotation mark inside code
   const isMarkInsideCode = target.matches("mark[data-bind-id]") && codeEl.contains(target);
+
   if (!isInsideCode && !isMarkInsideCode) return null;
 
   return { element: blockEl, blockId, label: getCodeBlockLabel(blockEl), isCodeBlock: true };
@@ -135,19 +148,25 @@ function resolveTableEdgeTarget(
   mousePos: { clientX: number; clientY: number } | undefined,
 ): PinpointTarget | null {
   const tableEl = blockEl.querySelector("table");
+
   if (!tableEl || !mousePos) return null;
 
   const tableRect = tableEl.getBoundingClientRect();
+
   const nearHorizontalEdge =
     mousePos.clientX - tableRect.left < TABLE_EDGE_ZONE ||
     tableRect.right - mousePos.clientX < TABLE_EDGE_ZONE;
+
   const nearVerticalEdge =
     mousePos.clientY - tableRect.top < TABLE_EDGE_ZONE ||
     tableRect.bottom - mousePos.clientY < TABLE_EDGE_ZONE;
+
   if (nearVerticalEdge) return { element: blockEl, blockId, label: "table", isCodeBlock: false };
+
   if (!nearHorizontalEdge) return null;
 
   const row = findRowAtY(tableEl, mousePos.clientY);
+
   return row
     ? { element: row, blockId, label: getRowLabel(row), isCodeBlock: false }
     : { element: blockEl, blockId, label: "table", isCodeBlock: false };
@@ -160,7 +179,9 @@ function resolveInlineTarget(target: HTMLElement, blockId: string): PinpointTarg
     !target.closest("pre")
   ) {
     const text = target.textContent?.trim() || "";
+
     if (!text) return null;
+
     return {
       element: target,
       blockId,
@@ -168,9 +189,12 @@ function resolveInlineTarget(target: HTMLElement, blockId: string): PinpointTarg
       isCodeBlock: false,
     };
   }
+
   if (!INLINE_TARGETS.has(target.tagName)) return null;
   const text = target.textContent?.trim() || "";
+
   if (!text) return null;
+
   return { element: target, blockId, label: getInlineLabel(target, text), isCodeBlock: false };
 }
 
@@ -180,14 +204,18 @@ function resolveTableCellTarget(
   blockId: string,
 ): PinpointTarget | null {
   const cell = CELL_TARGETS.has(target.tagName) ? target : closestHTMLElement(target, "td, th");
+
   if (!cell || !blockEl.contains(cell)) return null;
+
   return { element: cell, blockId, label: "table cell", isCodeBlock: false };
 }
 
 function resolveListItemTarget(blockEl: HTMLElement, blockId: string): PinpointTarget | null {
   if (!blockEl.querySelector(".select-none")) return null;
   const contentSpan = blockEl.children.item(1);
+
   if (!(contentSpan instanceof HTMLElement)) return null;
+
   return {
     element: contentSpan,
     blockId,
@@ -214,35 +242,45 @@ function getBlockLabel(el: HTMLElement): string {
   const text = el.textContent?.trim() || "";
 
   if (el.querySelector("table")) return "table";
+
   if (el.dataset.blockType === "heading" || /^h[1-6]$/.test(tag)) {
     return `heading: "${truncate(text, 35)}"`;
   }
+
   if (tag === "blockquote") return `blockquote: "${truncate(text, 30)}"`;
+
   if (tag === "p") return text ? `paragraph: "${truncate(text, 35)}"` : "paragraph";
+
   return truncate(text, 35) || tag;
 }
 
 function getListItemLabel(contentSpan: HTMLElement): string {
   const text = contentSpan.textContent?.trim() || "";
+
   return text ? `list item: "${truncate(text, 30)}"` : "list item";
 }
 
 function getCodeBlockLabel(blockEl: HTMLElement): string {
   const codeEl = blockEl.querySelector("code[data-markdown-code-block]");
+
   const lang =
     codeEl?.getAttribute("data-language") || codeEl?.className?.match(/language-(\S+)/)?.[1];
+
   return lang ? `code block (${lang})` : "code block";
 }
 
 /** Find the table row whose bounding box contains the given Y coordinate */
 function findRowAtY(tableEl: HTMLTableElement, clientY: number): HTMLTableRowElement | null {
   const rows = tableEl.querySelectorAll("tr");
+
   for (const row of rows) {
     const rect = row.getBoundingClientRect();
+
     if (clientY >= rect.top && clientY <= rect.bottom) {
       return row;
     }
   }
+
   return null;
 }
 
@@ -253,6 +291,7 @@ function getRowLabel(row: HTMLTableRowElement): string {
   // Body row — use first cell text as hint
   const firstCell = row.querySelector("td");
   const text = firstCell?.textContent?.trim() || "";
+
   return text ? `row: "${truncate(text, 25)}"` : "table row";
 }
 

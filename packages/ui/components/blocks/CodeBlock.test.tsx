@@ -14,6 +14,7 @@ import { Effect } from "effect";
 const hasDom = process.env.DOM_TESTS === "1";
 
 const roots: Root[] = [];
+
 const containers: HTMLDivElement[] = [];
 
 const motivatingFragment = `amount_total_before = order.amount_total
@@ -60,20 +61,25 @@ async function mountCodeBlock(
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
+
   return container;
 }
 
 async function waitForHighlight(container: HTMLDivElement, timeout = 500) {
   const start = Date.now();
+
   while (Date.now() - start < timeout) {
     const code = container.querySelector("code[data-markdown-code-block]");
+
     if (code && code.getAttribute("data-syntax-state") === "highlighted") {
       // SAFETY: querySelector with code selector returns HTMLElement
       return code as HTMLElement;
     }
+
     await new Promise((r) => setTimeout(r, 20));
     await act(async () => {});
   }
+
   // SAFETY: code block always rendered by CodeBlock
   return container.querySelector("code[data-markdown-code-block]") as HTMLElement;
 }
@@ -82,6 +88,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   for (const c of containers.splice(0)) c.remove();
   document.body.innerHTML = "";
   await disposeCodeHighlightingRuntime();
@@ -107,11 +114,13 @@ describe("CodeBlock", () => {
     expect(code.getAttribute("data-syntax-state")).toBe("highlighted");
     // Check multiple distinct colors
     const spans = code.querySelectorAll<HTMLElement>("span");
+
     const colors = new Set(
       Array.from(spans)
         .map((s) => s.style.color)
         .filter(Boolean),
     );
+
     // Shiki should produce at least 3 distinct colors for this fragment
     expect(colors.size).toBeGreaterThanOrEqual(3);
     expect(code.textContent).toBe(motivatingFragment);
@@ -163,8 +172,10 @@ describe("CodeBlock", () => {
     const container1 = await mountCodeBlock(rubyBlock);
     const code1 = await waitForHighlight(container1);
     const spans1 = code1.querySelectorAll("span").length;
+
     // cleanup first
     for (const root of roots.splice(0)) await act(async () => root.unmount());
+
     for (const c of containers.splice(0)) c.remove();
     await disposeCodeHighlightingRuntime();
     setCodeHighlightingLayerForTest(null);
@@ -213,10 +224,12 @@ describe("CodeBlock", () => {
     // We need to test with slow highlight – use test layer with delayed effect
     await disposeCodeHighlightingRuntime();
     setCodeHighlightingLayerForTest(null);
+
     const delayedLayer = makeTestLayer({
       highlightImpl: (input) =>
         Effect.gen(function* () {
           yield* Effect.sleep(100);
+
           return {
             // SAFETY: HighlightResult literal
             _tag: "Highlighted" as const,
@@ -224,6 +237,7 @@ describe("CodeBlock", () => {
           };
         }),
     });
+
     setCodeHighlightingLayerForTest(delayedLayer);
     const block2 = createBlock({ content: "delayed content", language: "ruby" });
     const container2 = await mountCodeBlock(block2);
@@ -262,32 +276,42 @@ describe("CodeBlock", () => {
     const blockSame = createBlock({ content: block.content, language: block.language });
     // Trigger highlight with new theme via direct helper — should return annotated
     const { highlightCodeElement } = await import("./codeHighlightingDom");
-    const result = await highlightCodeElement(code, blockSame.content, blockSame.language, "github-light");
+
+    const result = await highlightCodeElement(
+      code,
+      blockSame.content,
+      blockSame.language,
+      "github-light",
+    );
+
     expect(result.kind).toBe("annotated");
     expect(code.querySelector("mark[data-bind-id='ann-1']")).not.toBeNull();
   });
 
-  test.skipIf(!hasDom)("content change while annotated keeps mark, after removal highlights new content", async () => {
-    const block = createBlock({ content: "a = 1", language: "ruby" });
-    const container = await mountCodeBlock(block);
-    const code = await waitForHighlight(container);
-    const mark = document.createElement("mark");
-    mark.dataset.bindId = "ann-2";
-    mark.textContent = code.textContent || "";
-    code.replaceChildren(mark);
-    // Simulate block content update while annotated — CodeBlock's layout effect would try to set textContent but should keep mark
-    // Direct helper should still report annotated
-    const { highlightCodeElement } = await import("./codeHighlightingDom");
-    const res1 = await highlightCodeElement(code, "b = 2", "ruby", "github-dark");
-    expect(res1.kind).toBe("annotated");
-    // Remove mark and re-highlight new content
-    mark.remove();
-    code.textContent = "b = 2";
-    const res2 = await highlightCodeElement(code, "b = 2", "ruby", "github-dark");
-    expect(res2.kind).toBe("highlighted");
-    expect(code.textContent).toBe("b = 2");
-    expect(code.getAttribute("data-syntax-state")).toBe("highlighted");
-  });
+  test.skipIf(!hasDom)(
+    "content change while annotated keeps mark, after removal highlights new content",
+    async () => {
+      const block = createBlock({ content: "a = 1", language: "ruby" });
+      const container = await mountCodeBlock(block);
+      const code = await waitForHighlight(container);
+      const mark = document.createElement("mark");
+      mark.dataset.bindId = "ann-2";
+      mark.textContent = code.textContent || "";
+      code.replaceChildren(mark);
+      // Simulate block content update while annotated — CodeBlock's layout effect would try to set textContent but should keep mark
+      // Direct helper should still report annotated
+      const { highlightCodeElement } = await import("./codeHighlightingDom");
+      const res1 = await highlightCodeElement(code, "b = 2", "ruby", "github-dark");
+      expect(res1.kind).toBe("annotated");
+      // Remove mark and re-highlight new content
+      mark.remove();
+      code.textContent = "b = 2";
+      const res2 = await highlightCodeElement(code, "b = 2", "ruby", "github-dark");
+      expect(res2.kind).toBe("highlighted");
+      expect(code.textContent).toBe("b = 2");
+      expect(code.getAttribute("data-syntax-state")).toBe("highlighted");
+    },
+  );
 
   test.skipIf(!hasDom)("direct-edit remount highlights new content", async () => {
     // Simulate React remount via new block id (direct edit creates new Block)
@@ -295,8 +319,10 @@ describe("CodeBlock", () => {
     const container1 = await mountCodeBlock(block1);
     const code1 = await waitForHighlight(container1);
     expect(code1.textContent).toBe("x = 1");
+
     // Cleanup first mount
     for (const root of roots.splice(0)) await act(async () => root.unmount());
+
     for (const c of containers.splice(0)) c.remove();
     await disposeCodeHighlightingRuntime();
     setCodeHighlightingLayerForTest(null);

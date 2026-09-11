@@ -55,6 +55,7 @@ type FileBrowserFetchResponse =
 
 async function readFileBrowserResponse(res: Response): Promise<FileBrowserFetchResponse> {
   let body: unknown;
+
   try {
     body = await res.json();
   } catch (error) {
@@ -71,7 +72,9 @@ async function readFileBrowserResponse(res: Response): Promise<FileBrowserFetchR
   }
 
   const data = decodeFileBrowserSuccessResponse(body);
+
   if (!data) throw new Error("Malformed file browser success response");
+
   return { kind: "success", data };
 }
 
@@ -86,22 +89,28 @@ function remapWorkspaceStatusForDir(
   if (!status?.rootPath) return status;
   const fromRoot = normalizeRoot(status.rootPath);
   const toRoot = normalizeRoot(dirPath);
+
   if (!fromRoot) return status;
 
   const files: WorkspaceStatusPayload["files"] = {};
+
   for (const [path, change] of Object.entries(status.files)) {
     const normalizedPath = normalizeRoot(path);
+
     const nextPath =
       normalizedPath === fromRoot
         ? toRoot
         : normalizedPath.startsWith(`${fromRoot}/`)
           ? `${toRoot}${normalizedPath.slice(fromRoot.length)}`
           : normalizedPath;
+
     const normalizedOldPath = change.oldPath ? normalizeRoot(change.oldPath) : undefined;
+
     const nextOldPath =
       normalizedOldPath && normalizedOldPath.startsWith(`${fromRoot}/`)
         ? `${toRoot}${normalizedOldPath.slice(fromRoot.length)}`
         : normalizedOldPath;
+
     files[nextPath] = {
       ...change,
       path: nextPath,
@@ -125,8 +134,10 @@ export function useFileBrowser(): UseFileBrowserReturn {
   const toggleCollapse = useCallback((dirPath: string) => {
     setCollapsedDirs((prev) => {
       const next = new Set(prev);
+
       if (next.has(dirPath)) next.delete(dirPath);
       else next.add(dirPath);
+
       return next;
     });
   }, []);
@@ -136,6 +147,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
 
     setDirs((prev) => {
       const exists = prev.find((d) => d.path === dirPath);
+
       if (exists) {
         return prev.map((d) =>
           d.path === dirPath
@@ -147,6 +159,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
             : d,
         );
       }
+
       return [
         ...prev,
         { path: dirPath, name, tree: [], isLoading: true, error: null, hasLoadedTree: false },
@@ -160,6 +173,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
       if (response.kind === "failure") {
         const shouldSurfaceError =
           !options.quiet || isPermanentFileBrowserFetchError(response.status);
+
         setDirs((prev) =>
           prev.map((d) =>
             d.path === dirPath
@@ -176,6 +190,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
               : d,
           ),
         );
+
         return;
       }
 
@@ -201,9 +216,11 @@ export function useFileBrowser(): UseFileBrowserReturn {
         const rootFolders = data.tree
           .filter((n) => n.type === "folder")
           .map((n) => `${dirPath}:${n.path}`);
+
         setExpandedFolders((prev) => {
           const next = new Set(prev);
           rootFolders.forEach((f) => next.add(f));
+
           return next;
         });
       }
@@ -232,6 +249,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
       setDirs((prev) => {
         // Preserve any vault dirs that were already loaded
         const vaultDirs = prev.filter((d) => d.isVault);
+
         const regularDirs = directories.map((path) => ({
           path,
           name: path.split("/").pop() || path,
@@ -244,6 +262,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
           error: null,
           hasLoadedTree: false,
         }));
+
         return [...regularDirs, ...vaultDirs];
       });
       directories.forEach((d) => fetchTree(d));
@@ -261,6 +280,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
     // Atomically replace any existing vault dirs (handles vault path change without accumulating stale entries)
     setDirs((prev) => {
       const nonVaultDirs = prev.filter((d) => !d.isVault);
+
       return [
         ...nonVaultDirs,
         { path: vaultPath, name, tree: [], isLoading: true, error: null, isVault: true },
@@ -271,6 +291,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
       const res = await fetch(
         `/api/reference/obsidian/files?vaultPath=${encodeURIComponent(vaultPath)}`,
       );
+
       const response = await readFileBrowserResponse(res);
 
       if (response.kind === "failure") {
@@ -279,6 +300,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
             d.path === vaultPath ? { ...d, isLoading: false, error: response.error } : d,
           ),
         );
+
         return;
       }
 
@@ -293,9 +315,11 @@ export function useFileBrowser(): UseFileBrowserReturn {
       const rootFolders = data.tree
         .filter((n) => n.type === "folder")
         .map((n) => `${vaultPath}:${n.path}`);
+
       setExpandedFolders((prev) => {
         const next = new Set(prev);
         rootFolders.forEach((f) => next.add(f));
+
         return next;
       });
     } catch {
@@ -312,11 +336,13 @@ export function useFileBrowser(): UseFileBrowserReturn {
   const toggleFolder = useCallback((key: string) => {
     setExpandedFolders((prev) => {
       const next = new Set(prev);
+
       if (next.has(key)) {
         next.delete(key);
       } else {
         next.add(key);
       }
+
       return next;
     });
   }, []);
@@ -324,6 +350,7 @@ export function useFileBrowser(): UseFileBrowserReturn {
   const watchDirsKey = useMemo(() => {
     const regularDirs = dirs.filter((dir) => !dir.isVault);
     const initialLoadPending = regularDirs.some((dir) => dir.isLoading && !dir.hasLoadedTree);
+
     if (initialLoadPending) return "";
 
     return (
@@ -344,10 +371,13 @@ export function useFileBrowser(): UseFileBrowserReturn {
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
     const readyPaths = new Set<string>();
     const params = new URLSearchParams();
+
     for (const path of paths) params.append("dirPath", path);
     const source = new EventSource(`/api/reference/files/stream?${params.toString()}`);
+
     const scheduleFetch = (path: string) => {
       const existing = timers.get(path);
+
       if (existing) clearTimeout(existing);
       timers.set(
         path,
@@ -357,32 +387,44 @@ export function useFileBrowser(): UseFileBrowserReturn {
         }, 120),
       );
     };
+
     const scheduleEventFetch = (dirPath: string | null) => {
       if (dirPath && paths.includes(dirPath)) {
         scheduleFetch(dirPath);
+
         return;
       }
+
       for (const path of paths) scheduleFetch(path);
     };
+
     const hasSeenReady = (dirPath: string | null): boolean => {
       if (dirPath && paths.includes(dirPath)) {
         if (readyPaths.has(dirPath)) return true;
         readyPaths.add(dirPath);
+
         return false;
       }
 
       const hadAll = paths.every((path) => readyPaths.has(path));
+
       for (const path of paths) readyPaths.add(path);
+
       return hadAll;
     };
+
     source.onmessage = (event) => {
       try {
         const data = decodeFileWatchEvent(JSON.parse(event.data));
+
         if (!data) return;
+
         if (data.type === "ready") {
           if (hasSeenReady(data.dirPath)) scheduleEventFetch(data.dirPath);
+
           return;
         }
+
         scheduleEventFetch(data.dirPath);
       } catch {
         return;

@@ -33,6 +33,7 @@ async function mountToolbar(overrides: Partial<Props> = {}) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   let root!: Root;
+
   const props: Props = {
     toolbarState: lineToolbarState,
     toolbarRef: React.createRef<HTMLDivElement>(),
@@ -139,6 +140,7 @@ describe("AnnotationToolbar", () => {
   test.skipIf(!hasDom)("submits comments from primary button and Cmd/Ctrl+Enter", async () => {
     let submitted = 0;
     const changes: string[] = [];
+
     const session = await mountToolbar({
       commentText: "Ready",
       setCommentText: (value) => changes.push(value),
@@ -148,6 +150,7 @@ describe("AnnotationToolbar", () => {
     });
 
     const textarea = session.body.querySelector<HTMLTextAreaElement>("textarea");
+
     if (!textarea) throw new Error("expected comment textarea");
     await act(async () => changeText(textarea, "Ready now"));
     expect(changes).toEqual(["Ready now"]);
@@ -166,6 +169,7 @@ describe("AnnotationToolbar", () => {
     const addButton = Array.from(session.body.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent?.includes("Add Comment"),
     );
+
     await act(async () => addButton?.click());
     expect(submitted).toBe(2);
 

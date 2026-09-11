@@ -188,12 +188,14 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
               setShowSuggestedCode(true);
 
               const prefill = !suggestedCode && selectedOriginalCode;
+
               if (prefill) {
                 setSuggestedCode(selectedOriginalCode);
 
                 // Focus at the end of the textarea
                 requestAnimationFrame(() => {
                   const ta = suggestedCodeRef.current;
+
                   if (ta) {
                     ta.setSelectionRange(ta.value.length, ta.value.length);
                   }

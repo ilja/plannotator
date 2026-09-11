@@ -30,6 +30,7 @@ import { join } from "path";
 import { startAnnotateServer } from "./annotate";
 
 const MINIMAL_HTML = "<html><body>Plannotator</body></html>";
+
 const PROJECT_ROOT = join(import.meta.dir, "../..");
 
 async function runScript(script: string, env: Record<string, string> = {}): Promise<string> {
@@ -66,6 +67,7 @@ describe("annotate server: /api/save-notes wiring", () => {
   afterEach(() => {
     if (savedPort === undefined) delete process.env.PLANNOTATOR_PORT;
     else process.env.PLANNOTATOR_PORT = savedPort;
+
     if (savedRemote === undefined) delete process.env.PLANNOTATOR_REMOTE;
     else process.env.PLANNOTATOR_REMOTE = savedRemote;
   });
@@ -116,6 +118,7 @@ describe("annotate server: /api/save-notes wiring", () => {
 
   test("/api/config accepts annotationOptions", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "plannotator-config-route-"));
+
     const result = await runScript(
       `
       import { join } from "node:path";
@@ -159,6 +162,7 @@ describe("annotate server: /api/save-notes wiring", () => {
       filePath: join(tmpdir(), "test.md"),
       htmlContent: MINIMAL_HTML,
     });
+
     const decision = server.waitForDecision();
 
     try {
@@ -172,6 +176,7 @@ describe("annotate server: /api/save-notes wiring", () => {
       expect(await malformed.json()).toEqual({ error: "Invalid request" });
 
       const validAnnotations = [null, { type: "unknown", value: "preserved" }];
+
       const valid = await fetch(`${server.url}/api/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,6 +216,7 @@ describe("annotate server: /api/share-html symlink containment", () => {
   afterEach(() => {
     if (savedPort === undefined) delete process.env.PLANNOTATOR_PORT;
     else process.env.PLANNOTATOR_PORT = savedPort;
+
     if (savedRemote === undefined) delete process.env.PLANNOTATOR_REMOTE;
     else process.env.PLANNOTATOR_REMOTE = savedRemote;
   });
@@ -240,6 +246,7 @@ describe("annotate server: /api/share-html symlink containment", () => {
       const response = await fetch(
         `${server.url}/api/share-html?path=${encodeURIComponent(join(docDir, "evil.html"))}`,
       );
+
       expect(response.status).toBe(403);
       expect(await response.text()).not.toContain("SECRET_OUTSIDE_CONTENT");
     } finally {
@@ -262,6 +269,7 @@ describe("annotate server: source save", () => {
   afterEach(() => {
     if (savedPort === undefined) delete process.env.PLANNOTATOR_PORT;
     else process.env.PLANNOTATOR_PORT = savedPort;
+
     if (savedRemote === undefined) delete process.env.PLANNOTATOR_REMOTE;
     else process.env.PLANNOTATOR_REMOTE = savedRemote;
   });
@@ -279,9 +287,11 @@ describe("annotate server: source save", () => {
 
     try {
       const planResponse = await fetch(`${server.url}/api/plan`);
+
       const plan: {
         sourceSave?: { hash: string; mtimeMs: number; eol: "lf" | "crlf" | "mixed" | "none" };
       } = await planResponse.json();
+
       if (!plan.sourceSave) throw new Error("expected source save metadata");
       unlinkSync(sourcePath);
 
@@ -316,6 +326,7 @@ describe("annotate server: source save", () => {
 
     try {
       const planResponse = await fetch(`${server.url}/api/plan`);
+
       const plan: {
         plan?: string;
         sourceSave?: {
@@ -326,6 +337,7 @@ describe("annotate server: source save", () => {
           eol: "lf" | "crlf" | "mixed" | "none";
         };
       } = await planResponse.json();
+
       expect(plan.plan).toBe("Recovered\n");
       expect(plan.sourceSave?.enabled).toBe(true);
       expect(plan.sourceSave?.path).toBe(join(realpathSync(docDir), "source.md"));
@@ -365,6 +377,7 @@ describe("annotate server: source save", () => {
 
     try {
       const planResponse = await fetch(`${server.url}/api/plan`);
+
       const plan: {
         sourceSave?: {
           enabled?: boolean;
@@ -374,6 +387,7 @@ describe("annotate server: source save", () => {
           eol: "lf" | "crlf" | "mixed" | "none";
         };
       } = await planResponse.json();
+
       expect(plan.sourceSave?.enabled).toBe(true);
       expect(plan.sourceSave?.path).toBe(realpathSync(realPath));
 
@@ -388,14 +402,18 @@ describe("annotate server: source save", () => {
           allowMissingBase: true,
         }),
       });
+
       expect(saveResponse.status).toBe(200);
 
       const probeResponse = await fetch(
         `${server.url}/api/doc?path=${encodeURIComponent(plan.sourceSave!.path!)}`,
       );
+
       expect(probeResponse.status).toBe(200);
+
       const probe: { markdown?: string; sourceSave?: { enabled?: boolean; path?: string } } =
         await probeResponse.json();
+
       expect(probe.markdown).toBe("After\n");
       expect(probe.sourceSave?.enabled).toBe(true);
       expect(probe.sourceSave?.path).toBe(realpathSync(realPath));
@@ -422,6 +440,7 @@ describe("annotate server: source save", () => {
       const docResponse = await fetch(
         `${server.url}/api/doc?path=${encodeURIComponent(openedPath)}`,
       );
+
       const doc: {
         sourceSave?: {
           path: string;
@@ -430,6 +449,7 @@ describe("annotate server: source save", () => {
           eol: "lf" | "crlf" | "mixed" | "none";
         };
       } = await docResponse.json();
+
       if (!doc.sourceSave) throw new Error("expected folder source save metadata");
       unlinkSync(openedPath);
 
@@ -486,6 +506,7 @@ describe("annotate server: source save", () => {
       const docResponse = await fetch(
         `${server.url}/api/doc?path=${encodeURIComponent("../linked.md")}&base=${encodeURIComponent(subDir)}`,
       );
+
       const doc: {
         sourceSave?: {
           path: string;
@@ -494,6 +515,7 @@ describe("annotate server: source save", () => {
           eol: "lf" | "crlf" | "mixed" | "none";
         };
       } = await docResponse.json();
+
       if (!doc.sourceSave) throw new Error("expected folder source save metadata");
       unlinkSync(linkedPath);
 
@@ -537,9 +559,12 @@ describe("annotate server: source save", () => {
       const docResponse = await fetch(
         `${server.url}/api/doc?path=${encodeURIComponent(realpathSync(realPath))}`,
       );
+
       expect(docResponse.status).toBe(200);
+
       const doc: { markdown?: string; sourceSave?: { enabled?: boolean; path?: string } } =
         await docResponse.json();
+
       expect(doc.markdown).toBe("Before\n");
       expect(doc.sourceSave?.enabled).toBe(true);
       expect(doc.sourceSave?.path).toBe(realpathSync(realPath));
@@ -550,6 +575,7 @@ describe("annotate server: source save", () => {
 
   test("folder annotate doc lookup stays scoped to the selected folder", async () => {
     const folderPath = mkdtempSync(join(tmpdir(), "plannotator-folder-doc-scope-"));
+
     const server = await startAnnotateServer({
       markdown: "",
       filePath: folderPath,
@@ -562,6 +588,7 @@ describe("annotate server: source save", () => {
       const response = await fetch(
         `${server.url}/api/doc?path=${encodeURIComponent("package.json")}&base=${encodeURIComponent(folderPath)}`,
       );
+
       expect(response.status).toBe(404);
 
       const existsResponse = await fetch(`${server.url}/api/doc/exists`, {
@@ -569,9 +596,12 @@ describe("annotate server: source save", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paths: ["package.json"], base: folderPath }),
       });
+
       expect(existsResponse.status).toBe(200);
+
       const existsData: { results?: Record<string, { status?: string }> } =
         await existsResponse.json();
+
       expect(existsData.results?.["package.json"]?.status).toBe("missing");
     } finally {
       server.stop();
@@ -581,6 +611,7 @@ describe("annotate server: source save", () => {
   test("does not recreate a deleted folder source from draft state alone", async () => {
     const folderPath = mkdtempSync(join(tmpdir(), "plannotator-folder-draft-source-save-"));
     const deletedPath = join(realpathSync(folderPath), "deleted.md");
+
     const sourceSave = {
       enabled: true,
       kind: "local-text-file",
@@ -621,6 +652,7 @@ describe("annotate server: source save", () => {
           ts: Date.now(),
         }),
       });
+
       expect(draftResponse.status).toBe(200);
 
       const response = await fetch(`${server.url}/api/source/save`, {

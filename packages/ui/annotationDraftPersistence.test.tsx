@@ -126,6 +126,7 @@ const SAVED_FILE_CHANGE: SourceBackedSavedFileChangeDraftData = {
 // Server-side draft key: contentHash of the as-submitted plan, exactly as
 // packages/server/index.ts computes it.
 const DRAFT_KEY = contentHash(PLAN);
+
 const DEBOUNCE_WAIT_MS = 650; // hook debounce is 500ms
 
 // ---------------------------------------------------------------------------
@@ -133,18 +134,23 @@ const DEBOUNCE_WAIT_MS = 650; // hook debounce is 500ms
 // ---------------------------------------------------------------------------
 
 const realFetch = globalThis.fetch;
+
 let dataDir = "";
+
 let prevDataDirEnv: string | undefined;
 
 function installFetchShim() {
   // SAFETY: test shim implements fetch for draft API; mock returns compatible Response
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request || input instanceof URL ? input.toString() : String(input);
+
     if (url.startsWith("/api/draft")) {
       const parsedUrl = new URL(url, "http://localhost");
       const method = init?.method ?? "GET";
+
       if (method === "GET") {
         const data = loadDraft(DRAFT_KEY);
+
         return data
           ? new Response(JSON.stringify(data), {
               status: 200,
@@ -155,17 +161,22 @@ function installFetchShim() {
                 (() => {
                   const body: any = { found: false };
                   const draftGeneration = getDraftGeneration(DRAFT_KEY);
+
                   if (draftGeneration !== null) body.draftGeneration = draftGeneration;
+
                   return body;
                 })(),
               ),
               { status: 404, headers: { "Content-Type": "application/json" } },
             );
       }
+
       if (method === "POST") {
         saveDraft(DRAFT_KEY, JSON.parse(String(init?.body)));
+
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
+
       if (method === "DELETE") {
         const rawGeneration = parsedUrl.searchParams.get("generation");
         const generation = rawGeneration === null ? undefined : Number(rawGeneration);
@@ -173,9 +184,11 @@ function installFetchShim() {
           DRAFT_KEY,
           Number.isFinite(generation) && generation >= 0 ? generation : undefined,
         );
+
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
     }
+
     return new Response("Not found", { status: 404 });
   }) as typeof fetch;
 }
@@ -191,6 +204,7 @@ beforeAll(() => {
 afterAll(() => {
   if (!hasDom) return;
   globalThis.fetch = realFetch;
+
   if (prevDataDirEnv === undefined) delete process.env.PLANNOTATOR_DATA_DIR;
   else process.env.PLANNOTATOR_DATA_DIR = prevDataDirEnv;
   rmSync(dataDir, { recursive: true, force: true });
@@ -206,6 +220,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 type HookOptions = Parameters<typeof useAnnotationDraft>[0];
+
 type HookResult = ReturnType<typeof useAnnotationDraft>;
 
 const options = (over: Partial<HookOptions> = {}): HookOptions => ({
@@ -231,6 +246,7 @@ interface SavedBox {
 
 function Harness({ opts, resultRef }: { opts: HookOptions; resultRef: ResultRef }) {
   resultRef.current = useAnnotationDraft(opts);
+
   return null;
 }
 
@@ -253,6 +269,7 @@ async function mountSession(opts: HookOptions): Promise<Session> {
     root.render(<Harness opts={opts} resultRef={resultRef} />);
   });
   await tick(0); // let the GET .then chain settle (sets hasMountedRef)
+
   return {
     result: resultRef,
     rerender: async (next: HookOptions) => {
@@ -284,6 +301,7 @@ describe("direct-edit draft persistence", () => {
           getEditedMarkdown: () => EDITED,
         }),
       );
+
       act(() => s1.result.current!.scheduleDraftSave());
       await tick(DEBOUNCE_WAIT_MS);
       await s1.unmount();
@@ -385,6 +403,7 @@ describe("direct-edit draft persistence", () => {
         getSavedFileChanges: () => [SAVED_FILE_CHANGE],
       }),
     );
+
     act(() => s1.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
@@ -428,6 +447,7 @@ describe("direct-edit draft persistence", () => {
         getSavedFileChanges: () => [SAVED_FILE_CHANGE],
       }),
     );
+
     act(() => s1.result.current!.scheduleDraftSave());
     await tick(DEBOUNCE_WAIT_MS);
     await s1.unmount();
@@ -454,6 +474,7 @@ describe("direct-edit draft persistence", () => {
         currentText: "after\nlocal work\n",
         missingOnDisk: true,
       };
+
       const s1 = await mountSession(options({ getEditedDocuments: () => [missingDraft] }));
       act(() => s1.result.current!.scheduleDraftSave());
       await tick(DEBOUNCE_WAIT_MS);
@@ -484,6 +505,7 @@ describe("direct-edit draft persistence", () => {
         currentText: "after\nmore unsaved work\n",
         savedChange: { key: SAVED_FILE_CHANGE.key },
       };
+
       saveDraft(DRAFT_KEY, {
         annotations: [],
         globalAttachments: [],
@@ -515,6 +537,7 @@ describe("direct-edit draft persistence", () => {
     "dirty source drafts restore older nested saved-change records from the document source",
     async () => {
       const { sourceSave: _sourceSave, ...olderSavedChange } = SAVED_FILE_CHANGE;
+
       const dirtyDraft = {
         key: SAVED_FILE_CHANGE.key,
         sourceSave: SOURCE_SAVE,
@@ -523,6 +546,7 @@ describe("direct-edit draft persistence", () => {
         currentText: "after\nmore unsaved work\n",
         savedChange: olderSavedChange,
       };
+
       saveDraft(DRAFT_KEY, {
         annotations: [],
         globalAttachments: [],
@@ -617,6 +641,7 @@ describe("direct-edit draft persistence", () => {
           getEditedMarkdown: () => EDITED,
         }),
       );
+
       act(() => session.result.current!.scheduleDraftSave());
       expect(loadDraft(DRAFT_KEY)).toBeNull(); // debounce hasn't elapsed
       await act(async () => {
@@ -643,6 +668,7 @@ describe("direct-edit draft persistence", () => {
           getEditedMarkdown: () => EDITED,
         }),
       );
+
       act(() => session.result.current!.scheduleDraftSave());
       // Submit lands inside the debounce window.
       await session.rerender(
@@ -669,6 +695,7 @@ describe("direct-edit draft persistence", () => {
           getEditedMarkdown: () => EDITED,
         }),
       );
+
       expect(session.result.current!.getDraftGeneration()).toBeGreaterThan(2);
       act(() => session.result.current!.scheduleDraftSave());
       await tick(DEBOUNCE_WAIT_MS);

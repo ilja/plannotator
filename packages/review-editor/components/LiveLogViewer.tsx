@@ -34,11 +34,14 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
   // bubble across the library's wrapper layers.
   useEffect(() => {
     if (!viewport) return;
+
     const handleScroll = () => {
       isAtBottomRef.current =
         viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 40;
     };
+
     viewport.addEventListener("scroll", handleScroll, { passive: true });
+
     return () => viewport.removeEventListener("scroll", handleScroll);
   }, [viewport]);
 
@@ -52,6 +55,7 @@ export const LiveLogViewer: React.FC<LiveLogViewerProps> = ({
   const displayText = useMemo(() => {
     if (content.length <= maxRenderSize) return content;
     const sliceFrom = content.indexOf("\n", content.length - maxRenderSize);
+
     return (
       "[earlier output truncated]\n" +
       content.slice(sliceFrom === -1 ? content.length - maxRenderSize : sliceFrom + 1)

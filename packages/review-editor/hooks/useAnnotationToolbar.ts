@@ -67,11 +67,13 @@ interface Draft {
 }
 
 const draftStore = new Map<string, Draft>();
+
 const restoreDraftKeyByFilePath = new Map<string, string>();
 
 function draftKey(filePath: string, range: SelectedLineRange): string {
   const start = Math.min(range.start, range.end);
   const end = Math.max(range.start, range.end);
+
   return `${filePath}:${range.side}:${start}-${end}`;
 }
 
@@ -106,6 +108,7 @@ export function useAnnotationToolbar({
     conventionalLabel,
     decorations,
   });
+
   formRef.current = {
     commentText,
     suggestedCode,
@@ -122,9 +125,11 @@ export function useAnnotationToolbar({
 
   const saveDraft = useCallback(() => {
     const range = toolbarStateRef.current?.range;
+
     if (!range || editingRef.current) return;
     const form = formRef.current;
     const key = draftKey(filePath, range);
+
     if (form.commentText.trim() || form.suggestedCode.trim() || form.conventionalLabel) {
       draftStore.set(key, {
         ...form,
@@ -135,6 +140,7 @@ export function useAnnotationToolbar({
       currentDraftKeyRef.current = key;
     } else {
       draftStore.delete(key);
+
       if (currentDraftKeyRef.current === key) {
         currentDraftKeyRef.current = null;
       }
@@ -143,10 +149,12 @@ export function useAnnotationToolbar({
 
   const clearDraft = useCallback(() => {
     const range = toolbarStateRef.current?.range;
+
     if (!range) return;
     const key = draftKey(filePath, range);
     draftStore.delete(key);
     restoreDraftKeyByFilePath.delete(filePath);
+
     if (currentDraftKeyRef.current === key) {
       currentDraftKeyRef.current = null;
     }
@@ -192,6 +200,7 @@ export function useAnnotationToolbar({
       setEditingAnnotationId(null);
 
       const draft = draftStore.get(draftKey(filePath, range));
+
       if (draft) {
         setCommentText(draft.commentText);
         setSuggestedCode(draft.suggestedCode);
@@ -228,6 +237,7 @@ export function useAnnotationToolbar({
       if (!range) {
         setToolbarState(null);
         onLineSelection(null);
+
         return;
       }
 
@@ -241,6 +251,7 @@ export function useAnnotationToolbar({
   const handleSubmitAnnotation = useCallback(() => {
     const hasComment = commentText.trim().length > 0;
     const hasCode = suggestedCode.trim().length > 0;
+
     if (!toolbarState || (!hasComment && !hasCode)) return;
 
     const text = hasComment ? commentText.trim() : undefined;
@@ -252,6 +263,7 @@ export function useAnnotationToolbar({
       onEditAnnotation(editingAnnotationId, text, code, original, conventionalLabel, decorations);
     } else {
       const tokenSel = toolbarState.tokenSelection;
+
       const tokenMeta = tokenSel
         ? {
             charStart: tokenSel.anchor.charStart,
@@ -259,6 +271,7 @@ export function useAnnotationToolbar({
             tokenText: tokenSel.fullText,
           }
         : undefined;
+
       onAddAnnotation(
         "comment",
         text,
@@ -335,15 +348,18 @@ export function useAnnotationToolbar({
 
     if (wasFocused && !isFocused) {
       const key = currentDraftKeyRef.current;
+
       if (key && draftStore.has(key)) {
         restoreDraftKeyByFilePath.set(filePath, key);
       }
+
       return;
     }
 
     if (!wasFocused && isFocused && !toolbarStateRef.current) {
       const key = restoreDraftKeyByFilePath.get(filePath);
       const draft = key ? draftStore.get(key) : undefined;
+
       if (!draft) return;
 
       setCommentText(draft.commentText);
@@ -382,6 +398,7 @@ export function useAnnotationToolbar({
 
       // Same token clicked twice → deselect
       const anchor = tokenAnchorRef.current;
+
       if (
         anchor &&
         anchor.lineNumber === clickedToken.lineNumber &&
@@ -391,6 +408,7 @@ export function useAnnotationToolbar({
         tokenAnchorRef.current = null;
         setToolbarState(null);
         onLineSelection(null);
+
         return;
       }
 

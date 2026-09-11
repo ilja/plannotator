@@ -3,6 +3,7 @@ import { Option, Schema } from "effect";
 const PREFIX = "plannotator-bridge-";
 
 const AnnotationTypeSchema = Schema.Literals(["comment", "deletion"]);
+
 const BridgeOutboundMessageSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal(`${PREFIX}create-mark`),
@@ -31,6 +32,7 @@ const BridgeOutboundMessageSchema = Schema.Union([
 ]);
 
 type DecodedOutboundMessage = Schema.Schema.Type<typeof BridgeOutboundMessageSchema>;
+
 export type HtmlBridgeOutboundMessage = DecodedOutboundMessage;
 
 /** Decode messages before crossing the parent-to-iframe bridge. */
@@ -38,9 +40,13 @@ export function decodeHtmlBridgeOutboundMessage(value: any): HtmlBridgeOutboundM
   const message = Option.getOrUndefined(
     Schema.decodeUnknownOption(BridgeOutboundMessageSchema)(value),
   );
+
   if (!message) return undefined;
+
   if ("id" in message && message.id !== null && message.id.length === 0) return undefined;
+
   if ("originalText" in message && message.originalText.length === 0) return undefined;
+
   return message;
 }
 
@@ -49,5 +55,6 @@ export function postHtmlBridgeMessage(
   value: HtmlBridgeOutboundMessage,
 ): void {
   const message = decodeHtmlBridgeOutboundMessage(value);
+
   if (message) iframe?.contentWindow?.postMessage(message, "*");
 }

@@ -62,10 +62,12 @@ describe("editor layout and sidebar presentation", () => {
       ],
       aiConfig: { providerId: "provider", model: "model", reasoningEffort: null },
     };
+
     const annotationPresentation = buildAppLayoutPresentation({
       ...input,
       rightSidebarTab: "annotations",
     });
+
     const aiPresentation = buildAppLayoutPresentation({ ...input, rightSidebarTab: "ai" });
 
     expect(annotationPresentation.rightSidebar.isAnnotationPanelOpen).toBe(true);

@@ -17,6 +17,7 @@ import {
 import { resolveUserPath } from "@plannotator/shared/resolve-file";
 
 export type { ObsidianConfig, IntegrationResult };
+
 export { detectObsidianVaults, extractTitle, generateFrontmatter, generateFilename };
 
 /**
@@ -28,6 +29,7 @@ export async function extractTags(markdown: string): Promise<string[]> {
 
   // Add project name tag (git repo name or directory fallback)
   const projectName = await detectProjectName();
+
   if (projectName) {
     tags.add(projectName);
   }
@@ -51,20 +53,24 @@ export async function extractTags(markdown: string): Promise<string[]> {
 
   // Extract from first H1 title
   const h1Match = markdown.match(/^#\s+(?:Implementation\s+Plan:|Plan:)?\s*(.+)$/im);
+
   if (h1Match) {
     const titleWords = h1Match[1]
       .toLowerCase()
       .replace(/[^\w\s-]/g, " ")
       .split(/\s+/)
       .filter((word) => word.length > 2 && !stopWords.has(word));
+
     titleWords.slice(0, 3).forEach((word) => tags.add(word));
   }
 
   // Extract code fence languages
   const langMatches = markdown.matchAll(/```(\w+)/g);
   const seenLangs = new Set<string>();
+
   for (const [, lang] of langMatches) {
     const normalizedLang = lang.toLowerCase();
+
     if (
       !seenLangs.has(normalizedLang) &&
       !["json", "yaml", "yml", "text", "txt", "markdown", "md"].includes(normalizedLang)
@@ -101,6 +107,7 @@ export async function saveToObsidian(config: ObsidianConfig): Promise<Integratio
     }
 
     const vaultStat = statSync(normalizedVault);
+
     if (!vaultStat.isDirectory()) {
       return {
         success: false,
@@ -132,6 +139,7 @@ export async function saveToObsidian(config: ObsidianConfig): Promise<Integratio
     return { success: true, path: filePath };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+
     return { success: false, error: message };
   }
 }

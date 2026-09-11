@@ -8,7 +8,9 @@ import type { AllFilesCodeView } from "./AllFilesCodeView";
 import type { DiffFile } from "../types";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 function patchFor(filePath: string): string {
@@ -23,24 +25,34 @@ function patchFor(filePath: string): string {
 }
 
 const patch = patchFor("src/example.ts");
+
 const malformedOldContent = "before\nchanged\nmalformed-full-only";
+
 const oldContent = "before\nchanged\nafter\nvalid-full-only";
+
 const newContent = "before\nchanged-new\nafter\nvalid-full-only";
 
 function collectTextIncludingShadowRoots(root: Node): string {
   let text = "";
+
   const visit = (node: Node) => {
     if (node.nodeType === Node.TEXT_NODE) {
       text += node.textContent ?? "";
+
       return;
     }
+
     if (node instanceof Element && node.shadowRoot) {
       visit(node.shadowRoot);
+
       return;
     }
+
     node.childNodes.forEach(visit);
   };
+
   visit(root);
+
   return text;
 }
 
@@ -48,6 +60,7 @@ function installFetch(responses: (path: string) => Response): void {
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL): Promise<Response> => {
       const url = new URL(String(input), "http://localhost");
+
       return responses(url.searchParams.get("path") ?? "");
     },
     { preconnect: (): void => {} },
@@ -105,6 +118,7 @@ async function mount(element: React.ReactElement): Promise<HTMLDivElement> {
     root.render(element);
     await flushAsyncWork();
   });
+
   return host;
 }
 
@@ -112,7 +126,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 
@@ -150,6 +166,7 @@ describe("file-content response consumers", () => {
           status: "modified",
         },
       ];
+
       installFetch((path) =>
         path === "src/malformed.ts"
           ? new Response(JSON.stringify({ oldContent: malformedOldContent }), { status: 200 })

@@ -5,8 +5,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { HooksTab } from "./HooksTab";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
+
 type JsonResponseBody = Schema.Schema.Type<typeof Schema.Json>;
 
 function installHooksStatusFetch(body: JsonResponseBody): void {
@@ -44,7 +47,9 @@ function buttonWithText(label: string): HTMLButtonElement {
   const button = Array.from(document.querySelectorAll("button")).find(
     (candidate) => candidate.textContent?.trim() === label,
   );
+
   if (button === undefined) throw new Error(`HooksTab button not found: ${label}`);
+
   return button;
 }
 
@@ -52,7 +57,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 

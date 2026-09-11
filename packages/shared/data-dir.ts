@@ -27,13 +27,16 @@ import { join, resolve } from "path";
  */
 export function getPlannotatorDataDir(): string {
   const envDir = process.env.PLANNOTATOR_DATA_DIR?.trim();
+
   if (!envDir) {
     return join(homedir(), ".plannotator");
   }
 
   // Expand ~ to home directory
   const home = homedir();
+
   if (envDir === "~") return home;
+
   if (envDir.startsWith("~/") || envDir.startsWith("~\\")) {
     return join(home, envDir.slice(2));
   }

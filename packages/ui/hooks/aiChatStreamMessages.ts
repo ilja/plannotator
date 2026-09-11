@@ -5,6 +5,7 @@ const AIJsonObjectSchema = Schema.Record(Schema.String, Schema.Json);
 const AIChatSessionSchema = Schema.Struct({
   sessionId: Schema.String,
 });
+
 const AIChatErrorSchema = Schema.Struct({
   error: Schema.String,
 });
@@ -41,7 +42,9 @@ const AIChatStreamMessageSchema = Schema.Union([
 export type AIChatStreamMessage = Schema.Schema.Type<typeof AIChatStreamMessageSchema>;
 
 const decodeError = Schema.decodeUnknownOption(AIChatErrorSchema);
+
 const decodeMessage = Schema.decodeUnknownOption(AIChatStreamMessageSchema);
+
 const decodeSession = Schema.decodeUnknownOption(AIChatSessionSchema);
 
 export function decodeAIChatError<Input>(value: Input): string | null {

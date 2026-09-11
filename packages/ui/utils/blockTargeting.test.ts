@@ -16,6 +16,7 @@ function makeCodeBlockContainer() {
   blockEl.appendChild(pre);
   container.appendChild(blockEl);
   document.body.appendChild(container);
+
   return { container, blockEl, codeEl: code };
 }
 
@@ -30,6 +31,7 @@ function makeInlineCodeContainer() {
   blockEl.appendChild(p);
   container.appendChild(blockEl);
   document.body.appendChild(container);
+
   return { container, blockEl, inlineCode: code };
 }
 

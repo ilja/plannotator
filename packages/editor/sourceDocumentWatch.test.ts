@@ -25,7 +25,9 @@ function createFakeSource(): FakeSource {
       source.onerror?.();
     },
   };
+
   sources.push(source);
+
   return source;
 }
 
@@ -40,6 +42,7 @@ afterEach(() => {
 describe("createSourceDocumentWatch", () => {
   test("filters directories and debounces lifecycle reconciliation commands", async () => {
     const reconciled: Array<string | undefined> = [];
+
     const stop = createSourceDocumentWatch({
       directories: ["/repo/docs"],
       debounceMs: 5,
@@ -48,6 +51,7 @@ describe("createSourceDocumentWatch", () => {
     });
 
     const source = sources[0];
+
     if (!source) throw new Error("expected a source");
     source.emit({ type: "changed", dirPath: "/repo/other" });
     source.emit({ type: "changed", dirPath: "/repo/docs" });
@@ -60,6 +64,7 @@ describe("createSourceDocumentWatch", () => {
 
   test("reconciles ready events and cleans up pending work and transport", async () => {
     const reconciled: Array<string | undefined> = [];
+
     const stop = createSourceDocumentWatch({
       directories: ["/repo/docs"],
       debounceMs: 20,
@@ -68,11 +73,13 @@ describe("createSourceDocumentWatch", () => {
     });
 
     const source = sources[0];
+
     if (!source) throw new Error("expected a source");
     let closed = false;
     source.close = () => {
       closed = true;
     };
+
     source.emit({ type: "ready", dirPath: "/repo/docs" });
     stop();
     await wait(30);
@@ -90,6 +97,7 @@ describe("createSourceDocumentWatch", () => {
     });
 
     const first = sources[0];
+
     if (!first) throw new Error("expected the first source");
     first.fail();
     await wait(10);

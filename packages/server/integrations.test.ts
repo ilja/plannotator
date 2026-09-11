@@ -66,6 +66,7 @@ describe("extractTags", () => {
     const tags = await extractTags(
       "# One Two Three Four\n\n```go\n```\n```python\n```\n```ruby\n```\n```swift\n```",
     );
+
     expect(tags.length).toBeLessThanOrEqual(7);
   });
 });
@@ -73,6 +74,7 @@ describe("extractTags", () => {
 describe("saveToObsidian", () => {
   test("writes plan file to temp vault", async () => {
     const tmpDir = mkdtempSync("/tmp/plannotator-vault-");
+
     try {
       const result = await saveToObsidian({
         vaultPath: tmpDir,
@@ -102,6 +104,7 @@ describe("saveToObsidian", () => {
       folder: "plannotator",
       plan: "# Plan",
     });
+
     expect(result.success).toBe(false);
     expect(result.error).toBeString();
   });

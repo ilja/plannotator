@@ -67,21 +67,27 @@ const prRuntime: PRRuntime = {
 };
 
 export const parsePRUrl = parsePRUrlCore;
+
 export function checkPRAuth(ref: PRRef) {
   return checkAuthCore(prRuntime, ref);
 }
+
 export function getPRUser(ref: PRRef) {
   return getUserCore(prRuntime, ref);
 }
+
 export function fetchPR(ref: PRRef) {
   return fetchPRCore(prRuntime, ref);
 }
+
 export function fetchPRContext(ref: PRRef) {
   return fetchPRContextCore(prRuntime, ref);
 }
+
 export function fetchPRFileContent(ref: PRRef, sha: string, filePath: string) {
   return fetchPRFileContentCore(prRuntime, ref, sha, filePath);
 }
+
 export function submitPRReview(
   ref: PRRef,
   headSha: string,

@@ -26,13 +26,17 @@ export function detectProjectName(): string {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
+
     const name = basename(toplevel);
+
     return sanitizeTag(name) ?? "_unknown";
   } catch {
     // Not a git repo — fall back to cwd
   }
+
   try {
     const name = basename(process.cwd());
+
     return sanitizeTag(name) ?? "_unknown";
   } catch {
     return "_unknown";
@@ -45,17 +49,20 @@ export function getRepoInfo(): { display: string; branch?: string } | null {
 
   const originUrl = git("remote get-url origin");
   const orgRepo = parseRemoteUrl(originUrl);
+
   if (orgRepo) {
     return { display: orgRepo, branch: safeBranch };
   }
 
   const topLevel = git("rev-parse --show-toplevel");
   const repoName = getDirName(topLevel);
+
   if (repoName) {
     return { display: repoName, branch: safeBranch };
   }
 
   const cwdName = getDirName(process.cwd());
+
   if (cwdName) {
     return { display: cwdName };
   }

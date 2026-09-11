@@ -13,9 +13,11 @@ import { annotationMatchesPrScope } from "../../utils/annotationScope";
  */
 export const ReviewDiffPanel: React.FC<IDockviewPanelProps> = (props) => {
   const state = useReviewState();
+
   const filePath =
     getReviewDiffPanelFilePath(props.params) ??
     getReviewDiffPanelFilePath(props.api.getParameters<ReviewDiffPanelParams>());
+
   const file = filePath ? state.files.find((candidate) => candidate.path === filePath) : undefined;
   const isFocusedFile = !!file && state.focusedFilePath === file.path;
 
@@ -23,6 +25,7 @@ export const ReviewDiffPanel: React.FC<IDockviewPanelProps> = (props) => {
     if (!file) return [];
     const currentPrUrl = state.prMetadata?.url;
     const currentDiffScope = state.prDiffScope;
+
     return state.allAnnotations.filter(
       (a) =>
         a.filePath === file.path && annotationMatchesPrScope(a, currentPrUrl, currentDiffScope),

@@ -16,6 +16,7 @@ const validSession: SessionInfo = {
 };
 
 const originalDataDir = process.env.PLANNOTATOR_DATA_DIR;
+
 const temporaryDataDirs: string[] = [];
 
 afterEach(() => {
@@ -34,6 +35,7 @@ function useTemporaryDataDir(): string {
   const dataDir = mkdtempSync(join(tmpdir(), "plannotator-sessions-"));
   temporaryDataDirs.push(dataDir);
   process.env.PLANNOTATOR_DATA_DIR = dataDir;
+
   return dataDir;
 }
 

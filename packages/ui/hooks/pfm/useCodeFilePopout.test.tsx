@@ -4,7 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { useCodeFilePopout } from "./useCodeFilePopout";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 function installFetch(responses: Response[]): void {
@@ -51,19 +53,23 @@ async function mountHarness(): Promise<HTMLDivElement> {
     root.render(<HookHarness />);
     await flushAsyncWork();
   });
+
   return host;
 }
 
 async function openFile(host: HTMLDivElement): Promise<HTMLOutputElement> {
   const button = host.querySelector("button");
   const output = host.querySelector("output");
+
   if (!(button instanceof HTMLButtonElement) || !(output instanceof HTMLOutputElement)) {
     throw new Error("Hook harness did not render");
   }
+
   await act(async () => {
     button.click();
     await flushAsyncWork();
   });
+
   return output;
 }
 
@@ -71,7 +77,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 

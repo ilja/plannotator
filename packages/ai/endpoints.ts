@@ -138,7 +138,9 @@ export const SessionListResponseSchema = Schema.Array(
 );
 
 export type CreateSessionRequest = Schema.Schema.Type<typeof CreateSessionRequestSchema>;
+
 export type QueryRequest = Schema.Schema.Type<typeof QueryRequestSchema>;
+
 export type AbortRequest = Schema.Schema.Type<typeof AbortRequestSchema>;
 
 // ---------------------------------------------------------------------------
@@ -157,15 +159,18 @@ export interface AIEndpointDeps {
 }
 
 const MAX_CLIENT_MAX_TURNS = 99;
+
 const MAX_CLIENT_BUDGET_USD = 5;
 
 function clampPositiveInteger(value: number | undefined, max: number): number | undefined {
   if (value === undefined || !Number.isFinite(value)) return undefined;
+
   return Math.max(1, Math.min(max, Math.floor(value)));
 }
 
 function clampPositiveNumber(value: number | undefined, max: number): number | undefined {
   if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
+
   return Math.min(max, value);
 }
 
@@ -194,8 +199,10 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
     "/api/ai/capabilities": async (_req: Request) => {
       await beforeCapabilities?.();
       const defaultEntry = registry.getDefault();
+
       const providerDetails = registry.list().map((id) => {
         const p = registry.get(id)!;
+
         return {
           id,
           name: p.name,
@@ -203,6 +210,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
           models: p.models ?? [],
         };
       });
+
       return Response.json({
         available: !!defaultEntry,
         providers: providerDetails,
@@ -216,11 +224,13 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       let body: CreateSessionRequest;
+
       try {
         body = Schema.decodeUnknownSync(CreateSessionRequestSchema)(await req.json());
       } catch {
         return invalidRequest();
       }
+
       const { context, providerId, model, maxTurns, maxBudgetUsd } = body;
 
       if (!context?.mode) {
@@ -240,6 +250,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       try {
         const boundedMaxTurns = clampPositiveInteger(maxTurns, MAX_CLIENT_MAX_TURNS);
         const boundedMaxBudgetUsd = clampPositiveNumber(maxBudgetUsd, MAX_CLIENT_BUDGET_USD);
+
         const options: CreateSessionOptions = {
           context,
           cwd: getCwd?.(),
@@ -252,6 +263,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
         // Providers that can't fork fall back to a fresh session with the
         // full system prompt — no fake history.
         const shouldFork = context.parent && provider.capabilities.fork;
+
         const session = shouldFork
           ? await provider.forkSession(options)
           : await provider.createSession(options);
@@ -280,11 +292,13 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       let body: QueryRequest;
+
       try {
         body = Schema.decodeUnknownSync(QueryRequestSchema)(await req.json());
       } catch {
         return invalidRequest();
       }
+
       const { sessionId, prompt, contextUpdate } = body;
 
       if (!sessionId || !prompt) {
@@ -292,6 +306,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       const entry = sessionManager.get(sessionId);
+
       if (!entry) {
         return Response.json({ error: "Session not found" }, { status: 404 });
       }
@@ -310,6 +325,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
 
       // Stream the response using Server-Sent Events (SSE)
       const encoder = new TextEncoder();
+
       const stream = new ReadableStream({
         async start(controller) {
           try {
@@ -317,6 +333,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
               const data = JSON.stringify(message);
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
+
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           } catch (err) {
             const errorMsg: AIMessage = {
@@ -324,6 +341,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
               error: err instanceof Error ? err.message : String(err),
               code: "stream_error",
             };
+
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorMsg)}\n\n`));
           } finally {
             controller.close();
@@ -346,17 +364,21 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       let body: AbortRequest;
+
       try {
         body = Schema.decodeUnknownSync(AbortRequestSchema)(await req.json());
       } catch {
         return invalidRequest();
       }
+
       const entry = sessionManager.get(body.sessionId);
+
       if (!entry) {
         return Response.json({ error: "Session not found" }, { status: 404 });
       }
 
       entry.session.abort();
+
       return Response.json({ ok: true });
     },
 
@@ -366,6 +388,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       let body: Schema.Schema.Type<typeof PermissionRequestSchema>;
+
       try {
         body = Schema.decodeUnknownSync(PermissionRequestSchema)(await req.json());
       } catch {
@@ -377,6 +400,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       const entry = sessionManager.get(body.sessionId);
+
       if (!entry) {
         return Response.json({ error: "Session not found" }, { status: 404 });
       }
@@ -388,6 +412,7 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
 
     "/api/ai/sessions": async (_req: Request) => {
       const entries = sessionManager.list();
+
       return Response.json(
         entries.map((e) => ({
           sessionId: e.session.id,

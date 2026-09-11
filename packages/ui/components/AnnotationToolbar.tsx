@@ -16,8 +16,11 @@ const THUMBS_UP_LABEL: QuickLabel = {
 
 const isEditableElement = (node: EventTarget | Element | null): boolean => {
   if (!(node instanceof Element)) return false;
+
   if (node.matches('input, textarea, select, [role="textbox"]')) return true;
+
   if (node.closest('[contenteditable]:not([contenteditable="false"])')) return true;
+
   return node instanceof HTMLElement && node.isContentEditable;
 };
 
@@ -29,6 +32,7 @@ const isQuickLabelShortcut = (event: KeyboardEvent): boolean =>
 
 const quickLabelIndex = (code: string): number => {
   const digit = Number.parseInt(code.slice(5), 10);
+
   return digit === 0 ? 9 : digit - 1;
 };
 
@@ -79,6 +83,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   const [position, setPosition] = useState<{ top: number; left?: number; right?: number } | null>(
     null,
   );
+
   const [copied, setCopied] = useState(false);
   const [showQuickLabels, setShowQuickLabels] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -91,10 +96,12 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
   const handleCopy = async () => {
     let textToCopy = copyText;
+
     if (!textToCopy) {
       const codeEl = element.querySelector("code");
       textToCopy = codeEl?.textContent || element.textContent || "";
     }
+
     try {
       await navigator.clipboard.writeText(textToCopy);
     } catch {
@@ -106,6 +113,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       document.execCommand("copy");
       textarea.remove();
     }
+
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -117,6 +125,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
       if (closeOnScrollOut && (rect.bottom < 0 || rect.top > window.innerHeight)) {
         onClose();
+
         return;
       }
 
@@ -147,6 +156,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing) return;
+
       if (isEditableElement(event.target) || isEditableElement(document.activeElement)) return;
 
       // When picker is open, let FloatingQuickLabelPicker own all keyboard input
@@ -154,6 +164,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
 
       if (event.key === "Escape") {
         onClose();
+
         return;
       }
 
@@ -161,9 +172,11 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
       if (isQuickLabelShortcut(event)) {
         event.preventDefault();
         const index = quickLabelIndex(event.code);
+
         if (index < quickLabels.length) {
           onQuickLabel?.(quickLabels[index]);
         }
+
         return;
       }
 
@@ -173,6 +186,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, onRequestComment, onQuickLabel, quickLabels, showQuickLabels]);
 

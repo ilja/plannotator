@@ -49,6 +49,7 @@ interface CommentPopoverProps {
 }
 
 const MAX_POPOVER_WIDTH = 384;
+
 const GAP = 8;
 
 // Module-level draft store: survives popover unmount so reopening the same key restores in-progress text.
@@ -62,6 +63,7 @@ function useCommentDraftSync(
 ) {
   useEffect(() => {
     if (!draftKey) return;
+
     if (hasUnsavedCommentContent(text, images)) {
       draftStore.set(draftKey, { text, images });
     } else {
@@ -142,6 +144,7 @@ const DialogBody: React.FC<DialogBodyProps> = ({
     : contextText
       ? `"${contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText}"`
       : "Comment";
+
   const canAskAI = hasAskAIAction && !askAIDisabled && text.trim().length > 0;
   const canSubmit = hasUnsavedContent || (allowEmptySubmit && initialText.trim().length > 0);
 
@@ -310,6 +313,7 @@ const PositionedPopoverBody: React.FC<PositionedPopoverBodyProps> = ({
     : contextText
       ? `"${contextText.length > 50 ? contextText.slice(0, 50) + "..." : contextText}"`
       : "Comment";
+
   const canAskAI = hasAskAIAction && !askAIDisabled && text.trim().length > 0;
   const canSubmit = hasUnsavedContent || (allowEmptySubmit && initialText.trim().length > 0);
 
@@ -445,15 +449,18 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
   const [mode, setMode] = useState<"popover" | "dialog">("popover");
   const initialDraft = draftKey ? draftStore.get(draftKey) : undefined;
   const [text, setText] = useState(initialDraft?.text ?? initialText);
+
   const [images, setImages] = useState<ImageAttachment[]>(
     allowImages ? (initialDraft?.images ?? []) : [],
   );
+
   const [position, setPosition] = useState<{
     top: number;
     left: number;
     flipAbove: boolean;
     width: number;
   } | null>(null);
+
   // Direction of an open popover that has scrolled out of view, or null when on-screen.
   const [offscreen, setOffscreen] = useState<"above" | "below" | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -489,12 +496,14 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
 
     const update = () => {
       const rect = anchorEl?.getBoundingClientRect() ?? anchorRect;
+
       if (rect) setPosition(computePosition(rect));
     };
 
     update();
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
+
     return () => {
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
@@ -507,18 +516,24 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
   useEffect(() => {
     if (mode !== "popover") {
       setOffscreen(null);
+
       return;
     }
+
     const measure = () => {
       const el = popoverRef.current;
+
       if (!el) return;
       const rect = el.getBoundingClientRect();
+
       if (rect.bottom < 8) setOffscreen("above");
       else if (rect.top > window.innerHeight - 8) setOffscreen("below");
       else setOffscreen(null);
     };
+
     measure();
     window.addEventListener("resize", measure);
+
     return () => window.removeEventListener("resize", measure);
   }, [position, dragPosition, mode]);
 
@@ -530,11 +545,13 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
   useEffect(() => {
     const id = setTimeout(() => {
       const el = textareaRef.current;
+
       if (el) {
         el.focus();
         el.selectionStart = el.selectionEnd = el.value.length;
       }
     }, 0);
+
     return () => clearTimeout(id);
   }, [mode]);
 
@@ -545,22 +562,28 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
     const handlePointerDown = (e: PointerEvent) => {
       // SAFETY: pointer event target is a DOM Node when dispatched on document
       const target = e.target as Node | null;
+
       if (!target) return;
+
       if (popoverRef.current?.contains(target)) return;
       // Don't close if clicking inside a child portal (AttachmentsButton, ImageAnnotator, etc.)
       // SAFETY: target is a Node that contains Element in DOM; checked via closest check below
       const el = target as HTMLElement;
+
       if (el.closest?.("[data-popover-layer]")) return;
+
       if (hasUnsavedContentRef.current) return;
       onClose();
     };
 
     document.addEventListener("pointerdown", handlePointerDown, true);
+
     return () => document.removeEventListener("pointerdown", handlePointerDown, true);
   }, [mode, onClose]);
 
   const handleSubmit = useCallback(() => {
     const canSubmitEmpty = allowEmptySubmit && initialText.trim().length > 0;
+
     if (hasUnsavedContent || canSubmitEmpty) {
       if (draftKey) draftStore.delete(draftKey);
       onSubmit(text, allowImages && images.length > 0 ? images : undefined);
@@ -578,11 +601,15 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
 
   const handleAskAI = useCallback(async () => {
     const question = text.trim();
+
     if (!question || !onAskAI) {
       textareaRef.current?.focus();
+
       return;
     }
+
     let accepted: boolean | void;
+
     try {
       accepted = await onAskAI(
         question,
@@ -594,12 +621,16 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
     } catch (error) {
       console.error("Ask AI action failed:", error);
       textareaRef.current?.focus();
+
       return;
     }
+
     if (accepted === false) {
       textareaRef.current?.focus();
+
       return;
     }
+
     if (draftKey) draftStore.delete(draftKey);
     onDraftChange?.("", allowImages ? [] : undefined);
     onClose();
@@ -618,13 +649,16 @@ export const CommentPopover: React.FC<CommentPopoverProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Escape") {
       e.stopPropagation();
+
       if (mode === "dialog") {
         setMode("popover");
       } else {
         onClose();
       }
+
       return;
     }
+
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSubmit();

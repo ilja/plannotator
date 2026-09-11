@@ -11,5 +11,6 @@ export async function decodeGlobalPasteUploadResponse(
   if (!response.ok) return undefined;
 
   const data = decodeAttachmentUploadResponse(await response.json());
+
   return { path: data.path, name };
 }

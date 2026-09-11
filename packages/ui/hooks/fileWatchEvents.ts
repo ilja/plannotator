@@ -6,6 +6,7 @@ const FileWatchEventSchema = Schema.Struct({
 });
 
 const decodeEvent = Schema.decodeUnknownOption(FileWatchEventSchema);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 export interface FileWatchEvent {
@@ -15,7 +16,9 @@ export interface FileWatchEvent {
 
 export function decodeFileWatchEvent<Input>(value: Input): FileWatchEvent | null {
   const event = Option.getOrNull(decodeEvent(value));
+
   if (!event) return null;
+
   return {
     type: event.type,
     dirPath: Option.getOrNull(decodeString(event.dirPath)),

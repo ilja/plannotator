@@ -22,6 +22,7 @@ export type OpenInAppsResponse = {
 };
 
 const decodeOpenInAppsResponseRoot = Schema.decodeUnknownResult(OpenInAppsResponseSchema);
+
 const decodeOpenInApp = Schema.decodeUnknownResult(OpenInAppSchema);
 
 type OpenInAppsFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -34,11 +35,14 @@ export function decodeOpenInAppsResponse<Input>(
   value: Input,
 ): Result.Result<OpenInAppsResponse, Schema.SchemaError> {
   const root = decodeOpenInAppsResponseRoot(value);
+
   if (Result.isFailure(root)) return Result.fail(root.failure);
 
   const apps: OpenInAppResponse[] = [];
+
   for (const app of root.success.apps) {
     const decodedApp = decodeOpenInApp(app);
+
     if (Result.isSuccess(decodedApp)) apps.push(decodedApp.success);
   }
 
@@ -67,15 +71,19 @@ export function createOpenInAppsLoader(
       openInAppsPromise = fetcher("/api/open-in/apps")
         .then((response) => {
           if (!response.ok) throw new Error(`Open-in apps request failed: ${response.status}`);
+
           return response.json();
         })
         .then((data) => {
           const decoded = decodeOpenInAppsResponse(data);
+
           if (Result.isFailure(decoded)) throw new Error("Malformed open-in apps response");
+
           return decoded.success;
         })
         .catch(() => {
           openInAppsPromise = null;
+
           return unavailableOpenInAppsResponse();
         });
     }

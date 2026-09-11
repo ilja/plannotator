@@ -16,7 +16,9 @@ import type {
 export const PLANNOTATOR_SEM_VERSION = "v0.8.0";
 
 const SEM_TIMEOUT_MS = 20_000;
+
 const SEM_VERSION_TIMEOUT_MS = 3_000;
+
 export interface CommandResult {
   stdout: string;
   stderr: string;
@@ -75,6 +77,7 @@ function defaultRunCommand(
         exitCode: 1,
         error: error instanceof Error ? error.message : String(error),
       });
+
       return;
     }
 
@@ -85,6 +88,7 @@ function defaultRunCommand(
     const finish = (result: CommandResult) => {
       if (settled) return;
       settled = true;
+
       if (timer) clearTimeout(timer);
       resolveResult(result);
     };
@@ -96,6 +100,7 @@ function defaultRunCommand(
         } catch {
           // Ignore kill failures; process close/error will settle if needed.
         }
+
         finish({
           stdout: Buffer.concat(stdoutChunks).toString("utf-8"),
           stderr: Buffer.concat(stderrChunks).toString("utf-8"),
@@ -133,6 +138,7 @@ function defaultRunCommand(
       if (options.input !== undefined) {
         proc.stdin?.write(options.input);
       }
+
       proc.stdin?.end();
     } catch (error) {
       stdinError = error instanceof Error ? error.message : String(error);
@@ -165,13 +171,17 @@ export function getManagedSemBinaryPath(
 
 export function getSemanticDiffScratchCwd(dataDir = getPlannotatorDataDir()): string {
   const primary = join(dataDir, "semantic-diff", "patch-only");
+
   try {
     mkdirSync(primary, { recursive: true });
+
     return primary;
   } catch {
     const fallback = join(tmpdir(), "plannotator-semantic-diff");
+
     try {
       mkdirSync(fallback, { recursive: true });
+
       return fallback;
     } catch {
       return tmpdir();
@@ -189,14 +199,17 @@ function pathCandidates(runtime: SemanticDiffRuntime): SemCandidate[] {
       .split(";")
       .map((ext) => ext.trim())
       .filter(Boolean);
+
     for (const dir of (runtime.env.PATH || "").split(runtime.pathDelimiter)) {
       for (const ext of pathext) {
         const candidate = join(dir, `sem${ext.toLowerCase()}`);
+
         if (runtime.fileExists(candidate)) {
           return [{ command: candidate, source: "path", explicit: false }];
         }
       }
     }
+
     return [];
   }
 
@@ -209,20 +222,24 @@ function semCandidates(runtime: SemanticDiffRuntime): SemCandidate[] {
 
   if (explicit) {
     candidates.push({ command: explicit, source: "env", explicit: true });
+
     return candidates;
   }
 
   const managed = getManagedSemBinaryPath(runtime.dataDir, runtime.platform);
+
   if (runtime.fileExists(managed)) {
     candidates.push({ command: managed, source: "managed", explicit: false });
   }
 
   candidates.push(...pathCandidates(runtime));
+
   return candidates;
 }
 
 export function parseSemVersion(stdout: string): string | null {
   const match = stdout.trim().match(/^sem\s+([0-9]+(?:\.[0-9]+){1,3}(?:[-+][^\s]+)?)/);
+
   return match?.[1] ?? null;
 }
 
@@ -243,7 +260,9 @@ async function resolveSem(runtime: SemanticDiffRuntime): Promise<ResolvedSem | S
     const versionResult = await runtime.runCommand(candidate.command, ["--version"], {
       timeoutMs: SEM_VERSION_TIMEOUT_MS,
     });
+
     const version = parseSemVersion(versionResult.stdout);
+
     if (versionResult.exitCode === 0 && version) {
       return { command: candidate.command, source: candidate.source, version };
     }
@@ -268,6 +287,7 @@ export async function getSemanticDiffAvailability(
   runtime: SemanticDiffRuntime = createDefaultSemanticDiffRuntime(),
 ): Promise<SemanticDiffAvailability> {
   const resolved = await resolveSem(runtime);
+
   if ("command" in resolved) {
     return {
       available: true,
@@ -284,11 +304,14 @@ export async function getSemanticDiffAvailability(
 }
 
 const SummaryRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 type SummaryRecord = Schema.Schema.Type<typeof SummaryRecordSchema>;
+
 const FiniteNumberSchema = Schema.Finite;
 
 function valueAsNumber(value: any): number | null {
   const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(FiniteNumberSchema)(value));
+
   return decoded ?? null;
 }
 
@@ -303,6 +326,7 @@ function valueAsBoolean(value: any): boolean | null {
 function summaryFromJson(value: any): SemanticDiffSummary {
   const summary: SummaryRecord =
     Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
+
   return {
     fileCount: valueAsNumber(summary.fileCount) ?? 0,
     added: valueAsNumber(summary.added) ?? 0,
@@ -319,12 +343,15 @@ function summaryFromJson(value: any): SemanticDiffSummary {
 
 function changeFromJson(value: any): SemanticDiffChange | null {
   if (!(value instanceof Object)) return null;
+
   const change: SummaryRecord =
     Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
+
   const changeType = valueAsString(change.changeType);
   const entityType = valueAsString(change.entityType);
   const entityName = valueAsString(change.entityName);
   const filePath = valueAsString(change.filePath);
+
   if (!changeType || !entityType || !entityName || !filePath) return null;
 
   return {
@@ -345,10 +372,14 @@ function changeFromJson(value: any): SemanticDiffChange | null {
 
 function binaryChangeFromJson(value: any): SemanticDiffBinaryChange | null {
   if (!(value instanceof Object)) return null;
+
   const change: SummaryRecord =
     Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(value)) ?? {};
+
   const filePath = valueAsString(change.filePath);
+
   if (!filePath) return null;
+
   return {
     changeType: "binary",
     filePath,
@@ -359,6 +390,7 @@ function binaryChangeFromJson(value: any): SemanticDiffBinaryChange | null {
 
 export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): SemanticDiffResponse {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(stdout);
   } catch {
@@ -383,9 +415,11 @@ export function parseSemanticDiffJson(stdout: string, sem: ResolvedSem): Semanti
 
   const payload: SummaryRecord =
     Option.getOrUndefined(Schema.decodeUnknownOption(SummaryRecordSchema)(parsed)) ?? {};
+
   const changes = Array.isArray(payload.changes)
     ? payload.changes.map(changeFromJson).filter((change): change is SemanticDiffChange => !!change)
     : [];
+
   const binaryChanges = Array.isArray(payload.binaryChanges)
     ? payload.binaryChanges
         .map(binaryChangeFromJson)
@@ -418,6 +452,7 @@ export function semanticDiffFileExtsFromSearchParams(params: URLSearchParams): s
     ...params.getAll("fileExt"),
     ...params.getAll("fileExts").flatMap((value) => value.split(",")),
   ];
+
   return normalizeSemanticDiffFileExts(requested);
 }
 
@@ -432,6 +467,7 @@ export function semanticDiffCacheKey(input: {
   hash.update(input.cwd ?? "");
   hash.update("\0");
   hash.update(normalizeSemanticDiffFileExts(input.fileExts).join("\0"));
+
   return hash.digest("hex");
 }
 
@@ -448,12 +484,15 @@ export class SemanticDiffResponseCache {
   get(cacheKey: string, rawPatch: string): SemanticDiffResponse | undefined {
     this.syncPatch(rawPatch);
     const ok = this.cache.get(cacheKey);
+
     if (ok) return ok;
     const failed = this.failures.get(cacheKey);
+
     if (failed) {
       if (failed.expiresAt > Date.now()) return failed.response;
       this.failures.delete(cacheKey);
     }
+
     return undefined;
   }
 
@@ -462,6 +501,7 @@ export class SemanticDiffResponseCache {
 
     if (!this.cache.has(cacheKey) && this.cache.size >= this.maxEntries) {
       const oldestKey = this.cache.keys().next().value;
+
       if (oldestKey !== undefined) {
         this.cache.delete(oldestKey);
       }
@@ -530,10 +570,12 @@ export async function runSemanticDiff(
   const cwd = options.cwd || runtime.cwd || getSemanticDiffScratchCwd(runtime.dataDir);
   const effectiveRuntime = cwd === runtime.cwd ? runtime : { ...runtime, cwd };
   const resolved = await resolveSem(effectiveRuntime);
+
   if (!("command" in resolved)) return resolved;
 
   const fileExts = normalizeSemanticDiffFileExts(options.fileExts);
   const args = ["diff", "--patch", "--format", "json"];
+
   if (fileExts.length > 0) {
     args.push("--file-exts", ...fileExts);
   }

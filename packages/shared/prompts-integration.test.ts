@@ -13,11 +13,15 @@ import { join } from "path";
 import { FEEDBACK_DISCUSSION_INSTRUCTION } from "./feedback-templates";
 
 const TEST_HOME = join(tmpdir(), `prompts-integration-test-${Date.now()}`);
+
 const CONFIG_DIR = join(TEST_HOME, ".plannotator");
+
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+
 const PROJECT_ROOT = join(import.meta.dir, "../..");
 
 const WriteConfigSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 type WriteConfig = Schema.Schema.Type<typeof WriteConfigSchema>;
 
 function writeConfig(config: WriteConfig) {
@@ -127,6 +131,7 @@ describe("prompts integration (config from disk)", () => {
         fileHeader: "File", filePath: "x.ts", feedback: "fix",
       }));
     `);
+
     expect(pi).toBe(`Pi: x.ts — fix\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
 
     const opencode = await runScript(`
@@ -135,6 +140,7 @@ describe("prompts integration (config from disk)", () => {
         fileHeader: "File", filePath: "x.ts", feedback: "fix",
       }));
     `);
+
     expect(opencode).toBe(`Generic: fix\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
@@ -206,12 +212,14 @@ describe("prompts integration (config from disk)", () => {
       import { getReviewApprovedPrompt } from "./packages/shared/prompts";
       console.log(getReviewApprovedPrompt("pi"));
     `);
+
     expect(reviewApproved).toBe("Review approved");
 
     const annotateApproved = await runScript(`
       import { getAnnotateApprovedPrompt } from "./packages/shared/prompts";
       console.log(getAnnotateApprovedPrompt("pi"));
     `);
+
     expect(annotateApproved).toBe("Annotation approved");
   });
 

@@ -47,6 +47,7 @@ export async function fetchRef(
   options?: { cwd?: string },
 ): Promise<void> {
   const result = await runtime.runGit(["fetch", "origin", "--", ref], { cwd: options?.cwd });
+
   if (result.exitCode !== 0) {
     throw new Error(
       `git fetch origin ${ref} failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`,
@@ -65,14 +66,17 @@ export async function ensureObjectAvailable(
   options?: { cwd?: string },
 ): Promise<boolean> {
   const check = await runtime.runGit(["cat-file", "-t", sha], { cwd: options?.cwd });
+
   if (check.exitCode === 0) return true;
 
   // Object missing locally — try fetching it
   const fetch = await runtime.runGit(["fetch", "origin", "--", sha], { cwd: options?.cwd });
+
   if (fetch.exitCode !== 0) return false;
 
   // Verify it's now available
   const recheck = await runtime.runGit(["cat-file", "-t", sha], { cwd: options?.cwd });
+
   return recheck.exitCode === 0;
 }
 
@@ -86,10 +90,12 @@ export async function createWorktree(
   options: CreateWorktreeOptions,
 ): Promise<{ worktreePath: string }> {
   const args = ["worktree", "add"];
+
   if (options.detach) args.push("--detach");
   args.push(options.path, options.ref);
 
   const result = await runtime.runGit(args, { cwd: options.cwd });
+
   if (result.exitCode !== 0) {
     throw new Error(
       `git worktree add failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`,
@@ -109,11 +115,13 @@ export async function removeWorktree(
   options?: RemoveWorktreeOptions,
 ): Promise<void> {
   const args = ["worktree", "remove"];
+
   if (options?.force) args.push("--force");
   args.push(worktreePath);
 
   try {
     const result = await runtime.runGit(args, { cwd: options?.cwd });
+
     if (result.exitCode !== 0) {
       console.error(
         `Warning: git worktree remove failed for ${worktreePath}: ${result.stderr.trim()}`,

@@ -70,6 +70,7 @@ export function EditorLeftSidebarPane({
   readonly actions: EditorLeftSidebarActions;
 }) {
   if (model.isWideMode) return null;
+
   const fileBrowser: UseFileBrowserReturn = {
     dirs: model.fileBrowserDirectories,
     expandedFolders: model.expandedFolders,

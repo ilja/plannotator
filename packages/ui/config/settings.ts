@@ -20,6 +20,7 @@ import {
 } from "../utils/conventionalLabelDecoding";
 
 const RawConfigRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 type RawConfigRecord = Schema.Schema.Type<typeof RawConfigRecordSchema>;
 
 const UiServerConfigSchema = Schema.Struct({
@@ -29,6 +30,7 @@ const UiServerConfigSchema = Schema.Struct({
   conventionalComments: Schema.Unknown,
   conventionalLabels: Schema.Unknown,
 });
+
 export type UiServerConfig = Schema.Schema.Type<typeof UiServerConfigSchema>;
 
 const DefaultDiffTypeSchema = Schema.Literals([
@@ -39,19 +41,33 @@ const DefaultDiffTypeSchema = Schema.Literals([
   "all",
   "branch",
 ]);
+
 const DiffStyleSchema = Schema.Literals(["split", "unified"]);
+
 const DiffOverflowSchema = Schema.Literals(["scroll", "wrap"]);
+
 const DiffIndicatorsSchema = Schema.Literals(["bars", "classic", "none"]);
+
 const DiffLineTypeSchema = Schema.Literals(["word-alt", "word", "char", "none"]);
+
 const DiffLineBgIntensitySchema = Schema.Literals(["subtle", "normal", "strong"]);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
+
 const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
+
 const decodeDefaultDiffType = Schema.decodeUnknownOption(DefaultDiffTypeSchema);
+
 const decodeDiffStyle = Schema.decodeUnknownOption(DiffStyleSchema);
+
 const decodeDiffOverflow = Schema.decodeUnknownOption(DiffOverflowSchema);
+
 const decodeDiffIndicators = Schema.decodeUnknownOption(DiffIndicatorsSchema);
+
 const decodeDiffLineType = Schema.decodeUnknownOption(DiffLineTypeSchema);
+
 const decodeDiffLineBgIntensity = Schema.decodeUnknownOption(DiffLineBgIntensitySchema);
 
 function decodeRawConfigRecord<Input>(value: Input): RawConfigRecord {
@@ -60,6 +76,7 @@ function decodeRawConfigRecord<Input>(value: Input): RawConfigRecord {
 
 export function decodeUiServerConfig<Input>(value: Input): UiServerConfig {
   const root = decodeRawConfigRecord(value);
+
   return {
     displayName: root.displayName,
     diffOptions: decodeRawConfigRecord(root.diffOptions),
@@ -108,6 +125,7 @@ export const SETTINGS = {
     defaultValue: true as boolean,
     fromCookie: () => {
       const v = storage.getItem("plannotator-grid-enabled");
+
       return v === "true" ? true : v === "false" ? false : undefined;
     },
     toCookie: (v: boolean) => storage.setItem("plannotator-grid-enabled", String(v)),
@@ -128,7 +146,9 @@ export const SETTINGS = {
       | "all",
     fromCookie: () => {
       const v = storage.getItem("plannotator-default-diff-type");
+
       if (v === "branch") return "merge-base" as const;
+
       return v === "uncommitted" ||
         v === "unstaged" ||
         v === "staged" ||
@@ -141,6 +161,7 @@ export const SETTINGS = {
     serverKey: "diffOptions",
     fromServer: (sc) => {
       const value = Option.getOrUndefined(decodeDefaultDiffType(sc.diffOptions.defaultDiffType));
+
       return value === "branch" ? "merge-base" : value;
     },
     toServer: (v: "uncommitted" | "unstaged" | "staged" | "merge-base" | "all") => ({
@@ -153,6 +174,7 @@ export const SETTINGS = {
     defaultValue: "split" as "split" | "unified",
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-style") ?? storage.getItem("review-diff-style");
+
       return v === "split" || v === "unified" ? v : undefined;
     },
     toCookie: (v: string) => storage.setItem("plannotator-diff-style", v),
@@ -166,6 +188,7 @@ export const SETTINGS = {
     defaultValue: "scroll" as "scroll" | "wrap",
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-overflow");
+
       return v === "scroll" || v === "wrap" ? v : undefined;
     },
     toCookie: (v: string) => storage.setItem("plannotator-diff-overflow", v),
@@ -179,6 +202,7 @@ export const SETTINGS = {
     defaultValue: "bars" as "bars" | "classic" | "none",
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-indicators");
+
       return v === "bars" || v === "classic" || v === "none" ? v : undefined;
     },
     toCookie: (v: string) => storage.setItem("plannotator-diff-indicators", v),
@@ -192,6 +216,7 @@ export const SETTINGS = {
     defaultValue: "word-alt" as "word-alt" | "word" | "char" | "none",
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-line-diff-type");
+
       return v === "word-alt" || v === "word" || v === "char" || v === "none" ? v : undefined;
     },
     toCookie: (v: string) => storage.setItem("plannotator-diff-line-diff-type", v),
@@ -207,6 +232,7 @@ export const SETTINGS = {
     defaultValue: true as boolean,
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-show-line-numbers");
+
       return v === "true" ? true : v === "false" ? false : undefined;
     },
     toCookie: (v: boolean) => storage.setItem("plannotator-diff-show-line-numbers", String(v)),
@@ -220,6 +246,7 @@ export const SETTINGS = {
     defaultValue: true as boolean,
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-show-background");
+
       return v === "true" ? true : v === "false" ? false : undefined;
     },
     toCookie: (v: boolean) => storage.setItem("plannotator-diff-show-background", String(v)),
@@ -243,6 +270,7 @@ export const SETTINGS = {
     defaultValue: false as boolean,
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-hide-whitespace");
+
       return v === "true" ? true : v === "false" ? false : undefined;
     },
     toCookie: (v: boolean) => storage.setItem("plannotator-diff-hide-whitespace", String(v)),
@@ -256,6 +284,7 @@ export const SETTINGS = {
     defaultValue: DEFAULT_DIFF_OPTIONS.expandUnchanged as boolean,
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-expand-unchanged");
+
       return v === "true" ? true : v === "false" ? false : undefined;
     },
     toCookie: (v: boolean) => storage.setItem("plannotator-diff-expand-unchanged", String(v)),
@@ -322,12 +351,14 @@ export const SETTINGS = {
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-tab-size");
       const n = v ? parseInt(v, 10) : NaN;
+
       return Number.isFinite(n) && n >= 1 && n <= 8 ? n : undefined;
     },
     toCookie: (v: number) => storage.setItem("plannotator-diff-tab-size", String(v)),
     serverKey: "diffOptions",
     fromServer: (sc) => {
       const value = Option.getOrUndefined(decodeNumber(sc.diffOptions.tabSize));
+
       return value !== undefined && value >= 1 && value <= 8 ? value : undefined;
     },
     toServer: (v: number) => ({ diffOptions: { tabSize: v } }),
@@ -337,6 +368,7 @@ export const SETTINGS = {
     defaultValue: DEFAULT_DIFF_OPTIONS.lineBgIntensity as DiffLineBgIntensity,
     fromCookie: () => {
       const v = storage.getItem("plannotator-diff-line-bg-intensity");
+
       return readDiffLineBgIntensity(v);
     },
     toCookie: (v: DiffLineBgIntensity) => storage.setItem("plannotator-diff-line-bg-intensity", v),
@@ -349,6 +381,7 @@ export const SETTINGS = {
     defaultValue: false as boolean,
     fromCookie: () => {
       const v = storage.getItem("plannotator-conventional-comments");
+
       return v === "true" ? true : v === "false" ? false : undefined;
     },
     toCookie: (v: boolean) => storage.setItem("plannotator-conventional-comments", String(v)),
@@ -369,16 +402,20 @@ export const SETTINGS = {
     serverKey: "conventionalLabels",
     fromServer: (sc) => {
       const labels = decodeStrictConventionalLabels(sc.conventionalLabels);
+
       if (labels === undefined || labels === null) return labels;
+
       return JSON.stringify(labels);
     },
     toServer: (v: string | null) => {
       if (v === null) return { conventionalLabels: null };
       const labels = decodeStrictConventionalLabelsJson(v);
+
       return labels === undefined ? {} : { conventionalLabels: labels };
     },
   },
 } satisfies Record<string, SettingDef<unknown>>;
 
 export type SettingsMap = typeof SETTINGS;
+
 export type SettingName = keyof SettingsMap;

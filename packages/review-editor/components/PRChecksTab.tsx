@@ -117,36 +117,44 @@ export const PRChecksTab: React.FC<PRChecksTabProps> = ({ context }) => {
   // Group checks by workflow
   const groupedChecks = useMemo(() => {
     const groups = new Map<string, PRCheck[]>();
+
     for (const check of context.checks) {
       const workflow = check.workflowName || "Other";
       const existing = groups.get(workflow) || [];
       existing.push(check);
       groups.set(workflow, existing);
     }
+
     return groups;
   }, [context.checks]);
 
   const checkSummary = useMemo(() => {
     const total = context.checks.length;
     const passed = context.checks.filter((c) => c.conclusion === "SUCCESS").length;
+
     const failed = context.checks.filter(
       (c) => c.conclusion === "FAILURE" || c.conclusion === "TIMED_OUT",
     ).length;
+
     const pending = context.checks.filter((c) => c.status !== "COMPLETED").length;
+
     const skipped = context.checks.filter(
       (c) => c.conclusion === "SKIPPED" || c.conclusion === "NEUTRAL",
     ).length;
+
     return { total, passed, failed, pending, skipped };
   }, [context.checks]);
 
   const isMerged = context.state === "MERGED";
   const isClosed = context.state === "CLOSED";
   const decisionStyle = DECISION_STYLES[context.reviewDecision];
+
   const mergeStyle = isMerged
     ? { bg: "bg-violet-500/15", text: "text-violet-400", label: "Merged" }
     : isClosed
       ? { bg: "bg-destructive/15", text: "text-destructive", label: "Closed" }
       : (MERGE_STATUS_STYLES[context.mergeStateStatus] ?? MERGE_STATUS_STYLES["UNKNOWN"]);
+
   const mergeableConflict = !isMerged && !isClosed && context.mergeable === "CONFLICTING";
 
   return (

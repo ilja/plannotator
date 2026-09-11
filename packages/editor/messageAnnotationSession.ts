@@ -13,9 +13,11 @@ export type MessageAnnotationState = {
 
 function countLinkedDocSessionAnnotations(session: LinkedDocSessionState): number {
   let total = session.root.annotations.length + session.root.globalAttachments.length;
+
   for (const document of session.docs.values()) {
     total += document.annotations.length + document.globalAttachments.length;
   }
+
   return total;
 }
 
@@ -73,9 +75,12 @@ export function buildMessageAnnotationCounts(
   states: Map<string, MessageAnnotationState>,
 ): Map<string, number> {
   const counts = new Map<string, number>();
+
   for (const [messageId, state] of states) {
     const count = countMessageAnnotations(state);
+
     if (count > 0) counts.set(messageId, count);
   }
+
   return counts;
 }

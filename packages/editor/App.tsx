@@ -185,7 +185,9 @@ const buildSourceBackedDraftRestorePlan = (
   savedFileChanges: SourceBackedSavedFileChangeDraftData[],
 ): SourceBackedDraftRestorePlan => {
   const candidates = new Map<string, SourceBackedSavedFileChangeDraftData>();
+
   for (const change of savedFileChanges) candidates.set(change.key, change);
+
   for (const document of editedDocuments) {
     if (document.savedChange) candidates.set(document.savedChange.key, document.savedChange);
   }
@@ -239,6 +241,7 @@ const App: React.FC = () => {
     activeSourceDocumentKeyRef.current = activeSourceDocumentKey;
   }, [activeSourceDocumentKey]);
   const sourceBackedDocuments = useSourceBackedDocuments();
+
   const activeSourceBackedDocument = useMemo(
     () =>
       activeSourceDocumentKey
@@ -246,19 +249,24 @@ const App: React.FC = () => {
         : null,
     [activeSourceDocumentKey, sourceBackedDocuments, sourceBackedDocuments.version],
   );
+
   const displayedMarkdown = activeSourceBackedDocument?.currentText ?? markdown;
+
   const frontmatter = useMemo(
     () => extractFrontmatter(displayedMarkdown).frontmatter,
     [displayedMarkdown],
   );
+
   const blocks = useMemo(() => parseMarkdownToBlocks(displayedMarkdown), [displayedMarkdown]);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showFeedbackPrompt, setShowFeedbackPrompt] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
   const [showSourceFileEditWarning, setShowSourceFileEditWarning] = useState(false);
+
   const [sourceFileEditWarningAction, setSourceFileEditWarningAction] =
     useState<SourceFileEditWarningAction>("send-feedback");
+
   const sourceFileEditWarningContinuationRef = useRef<(() => void | Promise<void>) | null>(null);
   // When the warning dialog confirms, route to the handler matching the button that opened it.
   const [exitWarningAction, setExitWarningAction] = useState<"close" | "approve">("close");
@@ -272,20 +280,26 @@ const App: React.FC = () => {
   const annotationCodeFontSize = useConfigValue("annotationCodeFontSize");
   const annotationProseFontFamily = useConfigValue("annotationProseFontFamily");
   const annotationProseFontSize = useConfigValue("annotationProseFontSize");
+
   const annotationTypographyStyle = useMemo<AnnotationTypographyStyle>(() => {
     const style: AnnotationTypographyStyle = {};
+
     if (annotationProseFontFamily) {
       style["--annotation-prose-font-family"] = `'${annotationProseFontFamily}', var(--font-sans)`;
     }
+
     if (annotationProseFontSize) {
       style["--annotation-prose-font-size"] = annotationProseFontSize;
     }
+
     if (annotationCodeFontFamily) {
       style["--annotation-code-font-family"] = `'${annotationCodeFontFamily}', var(--font-mono)`;
     }
+
     if (annotationCodeFontSize) {
       style["--annotation-code-font-size"] = annotationCodeFontSize;
     }
+
     return style;
   }, [
     annotationCodeFontFamily,
@@ -293,6 +307,7 @@ const App: React.FC = () => {
     annotationProseFontFamily,
     annotationProseFontSize,
   ]);
+
   useEffect(() => {
     if (annotationProseFontFamily) loadProseFont(annotationProseFontFamily);
   }, [annotationProseFontFamily]);
@@ -343,9 +358,11 @@ const App: React.FC = () => {
   // What the current edit session mounted with, for live dirty tracking.
   const editSessionBaseRef = useRef<string>("");
   const markdownEditorHandleRef = useRef<MarkdownEditorHandle | null>(null);
+
   const handleMarkdownEditorReady = useCallback((handle: MarkdownEditorHandle | null) => {
     markdownEditorHandleRef.current = handle;
   }, []);
+
   const suspendedRootSourceBackedDocumentKeyRef = useRef<string | null>(null);
   const [globalAttachments, setGlobalAttachments] = useState<ImageAttachment[]>([]);
   const [annotateMode, setAnnotateMode] = useState(false);
@@ -354,9 +371,11 @@ const App: React.FC = () => {
   const [recentMessages, setRecentMessages] = useState<PickerMessage[]>([]);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const messageStateCacheRef = useRef<Map<string, MessageAnnotationState>>(new Map());
+
   const [cachedMessageAnnotationCounts, setCachedMessageAnnotationCounts] = useState<
     Map<string, number>
   >(new Map());
+
   const [sourceInfo, setSourceInfo] = useState<string | undefined>();
   const [sourceConverted, setSourceConverted] = useState(false);
   const [renderAs, setRenderAs] = useState<"markdown" | "html">("markdown");
@@ -378,20 +397,26 @@ const App: React.FC = () => {
   const [sharingEnabled, setSharingEnabled] = useState(true);
   const [shareBaseUrl, setShareBaseUrl] = useState<string | undefined>(undefined);
   const [pasteApiUrl, setPasteApiUrl] = useState<string | undefined>(undefined);
+
   const [repoInfo, setRepoInfo] = useState<{
     display: string;
     branch?: string;
     host?: string;
   } | null>(null);
+
   const [projectRoot, setProjectRoot] = useState<string | null>(null);
+
   const [agentTerminalCapability, setAgentTerminalCapability] =
     useState<AgentTerminalCapability | null>(null);
+
   const [isAgentTerminalOpen, setIsAgentTerminalOpen] = useState(false);
   const [isAgentTerminalRunning, setIsAgentTerminalRunning] = useState(false);
   const [isAgentTerminalReady, setIsAgentTerminalReady] = useState(false);
   const [agentTerminalSessionId, setAgentTerminalSessionId] = useState<number | null>(null);
+
   const [agentTerminalDelivery, setAgentTerminalDeliveryState] =
     useState<AgentTerminalDeliveryRecord | null>(null);
+
   const agentTerminalDeliveryRef = useRef<AgentTerminalDeliveryRecord | null>(null);
   const agentTerminalSessionSeqRef = useRef(0);
   const agentTerminalRef = useRef<AnnotateAgentTerminalPanelHandle>(null);
@@ -406,6 +431,7 @@ const App: React.FC = () => {
   const [initialExportTab, setInitialExportTab] = useState<EditorExportTab>();
   const [aiSessionEnabled, setAISessionEnabled] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
+
   const [aiProviders, setAiProviders] = useState<
     Array<{
       id: string;
@@ -414,26 +440,32 @@ const App: React.FC = () => {
       models?: Array<{ id: string; label: string; default?: boolean }>;
     }>
   >([]);
+
   type EditorAIConfig = {
     providerId: string | null;
     model: string | null;
     reasoningEffort: string | null;
   };
+
   const [aiConfig, setAIConfig] = useState<EditorAIConfig>(() => {
     const saved = getAIProviderSettings();
     const providerId = saved.providerId;
+
     return {
       providerId,
       model: providerId ? (saved.preferredModels[providerId] ?? null) : null,
       reasoningEffort: null,
     };
   });
+
   const [showLookAndFeelAnnouncement, setShowLookAndFeelAnnouncement] = useState(
     needsLookAndFeelAnnouncement,
   );
+
   const isMobile = useIsMobile();
 
   const viewerRef = useRef<ViewerHandle>(null);
+
   // containerRef + scrollViewport both point at the OverlayScrollbars
   // viewport element (the node that actually scrolls), not the <main>
   // host. Consumers: useActiveSection (IntersectionObserver root) and
@@ -458,6 +490,7 @@ const App: React.FC = () => {
     // so dragging never re-renders this (heavy) App.
     apply: (w) => document.documentElement.style.setProperty("--rpanel-w", `${w}px`),
   });
+
   const tocResize = useResizablePanel({
     storageKey: "plannotator-toc-width",
     defaultWidth: 240,
@@ -469,6 +502,7 @@ const App: React.FC = () => {
     // Render-free drag: write the live width to a :root var the panel reads.
     apply: (w) => document.documentElement.style.setProperty("--toc-w", `${w}px`),
   });
+
   const agentTerminalResize = useResizablePanel({
     storageKey: "plannotator-agent-terminal-width",
     defaultWidth: 360,
@@ -478,6 +512,7 @@ const App: React.FC = () => {
     onSnapClose: () => setIsAgentTerminalOpen(false),
     apply: (w) => document.documentElement.style.setProperty("--agent-terminal-w", `${w}px`),
   });
+
   // Whether the document has any TOC-eligible headings (level <= 3, matching
   // buildTocHierarchy). Drives the empty-doc auto-close behavior below — must
   // be declared before the effects that reference it (TDZ in dep arrays).
@@ -490,8 +525,10 @@ const App: React.FC = () => {
     (options?: { restore?: boolean; sidebarTab?: SidebarTab; panelOpen?: boolean }) => {
       if (wideModeType === null) {
         if (options?.sidebarTab) sidebar.open(options.sidebarTab);
+
         if (options?.panelOpen === true) setIsPanelOpen(true);
         else if (options?.panelOpen === false) setIsPanelOpen(false);
+
         return;
       }
 
@@ -518,8 +555,10 @@ const App: React.FC = () => {
     (tab: SidebarTab) => {
       if (wideModeType !== null) {
         exitWideMode({ restore: false, sidebarTab: tab, panelOpen: false });
+
         return;
       }
+
       sidebar.open(tab);
     },
     [exitWideMode, wideModeType, sidebar.open],
@@ -529,8 +568,10 @@ const App: React.FC = () => {
     (tab: SidebarTab) => {
       if (wideModeType !== null) {
         exitWideMode({ restore: false, sidebarTab: tab, panelOpen: false });
+
         return;
       }
+
       sidebar.toggleTab(tab);
     },
     [exitWideMode, wideModeType, sidebar.toggleTab],
@@ -540,8 +581,10 @@ const App: React.FC = () => {
     if (wideModeType !== null) {
       exitWideMode({ restore: false, panelOpen: true });
       setRightSidebarTab("annotations");
+
       return;
     }
+
     setRightSidebarTab("annotations");
     setIsPanelOpen((prev) => (rightSidebarTab === "annotations" ? !prev : true));
   }, [exitWideMode, rightSidebarTab, wideModeType]);
@@ -555,11 +598,14 @@ const App: React.FC = () => {
 
   const handleAIChatToggle = useCallback(() => {
     dismissAIAnnouncement();
+
     if (wideModeType !== null) {
       exitWideMode({ restore: false, panelOpen: true });
       setRightSidebarTab("ai");
+
       return;
     }
+
     setRightSidebarTab("ai");
     setIsPanelOpen((prev) => (rightSidebarTab === "ai" ? !prev : true));
   }, [dismissAIAnnouncement, exitWideMode, rightSidebarTab, wideModeType]);
@@ -580,8 +626,10 @@ const App: React.FC = () => {
   const closeAgentTerminal = useCallback(() => {
     if (agentTerminalRef.current) {
       agentTerminalRef.current.stop();
+
       return;
     }
+
     setIsAgentTerminalRunning(false);
     setIsAgentTerminalReady(false);
     setAgentTerminalSessionId(null);
@@ -593,10 +641,13 @@ const App: React.FC = () => {
     (ready: boolean) => {
       setIsAgentTerminalReady(ready);
       setAgentTerminalDelivery(null);
+
       if (!ready) {
         setAgentTerminalSessionId(null);
+
         return;
       }
+
       agentTerminalSessionSeqRef.current += 1;
       setAgentTerminalSessionId(agentTerminalSessionSeqRef.current);
     },
@@ -607,14 +658,17 @@ const App: React.FC = () => {
     if (wideModeType !== null) {
       exitWideMode({ restore: false, panelOpen: false });
     }
+
     setIsAgentTerminalOpen(true);
   }, [exitWideMode, wideModeType]);
 
   const toggleAgentTerminal = useCallback(() => {
     if (isAgentTerminalOpen) {
       hideAgentTerminal();
+
       return;
     }
+
     openAgentTerminal();
   }, [hideAgentTerminal, isAgentTerminalOpen, openAgentTerminal]);
 
@@ -629,8 +683,10 @@ const App: React.FC = () => {
   // user left it.
   useEffect(() => {
     if (wideModeType !== null) return;
+
     if (lastAppliedTocEnabledRef.current === uiPrefs.tocEnabled) return;
     lastAppliedTocEnabledRef.current = uiPrefs.tocEnabled;
+
     if (uiPrefs.tocEnabled && hasTocEntries) sidebar.open("toc");
     else if (!uiPrefs.tocEnabled) sidebar.close();
   }, [wideModeType, sidebar.close, sidebar.open, uiPrefs.tocEnabled, hasTocEntries]);
@@ -641,7 +697,9 @@ const App: React.FC = () => {
   // document changes again (e.g. picking a new file in annotate-folder).
   useEffect(() => {
     if (blocks.length === 0) return;
+
     if (hasTocEntries) return;
+
     if (sidebar.activeTab === "toc" && sidebar.isOpen) {
       sidebar.close();
     }
@@ -659,14 +717,18 @@ const App: React.FC = () => {
 
   const snapshotActiveSourceBackedDocument = useCallback(() => {
     if (!activeSourceBackedDocument) return;
+
     if (isEditingMarkdown) {
       const live = markdownEditorHandleRef.current?.getMarkdown();
+
       if (live != null)
         sourceBackedDocuments.updateSourceBackedDocumentText(activeSourceBackedDocument.key, live, {
           forceNotify: true,
         });
+
       return;
     }
+
     sourceBackedDocuments.updateSourceBackedDocumentText(
       activeSourceBackedDocument.key,
       displayedMarkdown,
@@ -677,6 +739,7 @@ const App: React.FC = () => {
   const getLinkedDocumentMarkdown = useCallback(
     (filepath: string, fallback?: string) => {
       const record = sourceBackedDocuments.getSourceBackedDocument(`file:${filepath}`);
+
       return record?.sourceSave?.enabled ? record.currentText : fallback;
     },
     [sourceBackedDocuments],
@@ -700,17 +763,21 @@ const App: React.FC = () => {
           suspendedRootSourceBackedDocumentKeyRef.current = activeSourceBackedDocument.key;
           setActiveSourceDocumentKey(null);
         }
+
         return undefined;
       }
 
       if (doc.renderAs === "html" || !doc.filepath || doc.markdown == null) {
         setActiveSourceDocumentKey(null);
+
         return undefined;
       }
 
       const key = sourceBackedLinkedDocumentKey(doc.sourceSave, doc.filepath);
+
       if (!key || !doc.sourceSave?.enabled) {
         setActiveSourceDocumentKey(null);
+
         return undefined;
       }
 
@@ -787,6 +854,7 @@ const App: React.FC = () => {
   const enterViewMode = useCallback(
     (type: WideModeType) => {
       if (!canUseWideMode) return;
+
       if (wideModeType === null) {
         wideModeSnapshotRef.current = {
           sidebarIsOpen: sidebar.isOpen,
@@ -794,6 +862,7 @@ const App: React.FC = () => {
           panelOpen: isPanelOpen,
         };
       }
+
       if (isAgentTerminalOpen) hideAgentTerminal();
       setWideModeType(type);
       sidebar.close();
@@ -830,17 +899,22 @@ const App: React.FC = () => {
 
   // Markdown file browser (also handles vault dirs via isVault flag)
   const fileBrowser = useFileBrowser();
+
   const vaultPath = useMemo(() => {
     if (!isVaultBrowserEnabled()) return "";
+
     return getEffectiveVaultPath(getObsidianSettings());
   }, [uiPrefs]);
+
   const showFilesTab = useMemo(
     () => !!projectRoot || isFileBrowserEnabled() || isVaultBrowserEnabled(),
     [projectRoot, uiPrefs],
   );
+
   const fileBrowserDirs = useMemo(() => {
     const projectDirs = projectRoot ? [projectRoot] : [];
     const userDirs = isFileBrowserEnabled() ? getFileBrowserSettings().directories : [];
+
     return [...new Set([...projectDirs, ...userDirs])];
   }, [projectRoot, uiPrefs]);
 
@@ -859,11 +933,14 @@ const App: React.FC = () => {
       // Load regular dirs
       if (fileBrowserDirs.length > 0) {
         const regularLoaded = fileBrowser.dirs.filter((d) => !d.isVault).map((d) => d.path);
+
         const needsRegular =
           fileBrowserDirs.some((d) => !regularLoaded.includes(d)) ||
           regularLoaded.some((d) => !fileBrowserDirs.includes(d));
+
         if (needsRegular) fileBrowser.fetchAll(fileBrowserDirs);
       }
+
       // Load vault dir; addVaultDir atomically replaces any existing vault entry so
       // switching vault paths never accumulates stale sections
       if (
@@ -878,8 +955,10 @@ const App: React.FC = () => {
   const buildCurrentMessageState = React.useCallback((): MessageAnnotationState | null => {
     if (annotateSource !== "message" || !selectedMessageId) return null;
     const msg = recentMessages.find((m) => m.messageId === selectedMessageId);
+
     if (!msg) return null;
     const snapshot = linkedDocHook.snapshotSession();
+
     return normalizeMessageAnnotationState(
       {
         messageId: msg.messageId,
@@ -903,7 +982,9 @@ const App: React.FC = () => {
   const getMessageStatesWithCurrent = React.useCallback((): Map<string, MessageAnnotationState> => {
     const states = new Map(messageStateCacheRef.current);
     const current = buildCurrentMessageState();
+
     if (current) states.set(current.messageId, current);
+
     return states;
   }, [buildCurrentMessageState]);
 
@@ -911,6 +992,7 @@ const App: React.FC = () => {
     const states = getMessageStatesWithCurrent();
     messageStateCacheRef.current = states;
     setCachedMessageAnnotationCounts(buildMessageAnnotationCounts(states));
+
     return states;
   }, [getMessageStatesWithCurrent]);
 
@@ -924,15 +1006,18 @@ const App: React.FC = () => {
     // returns the same merged data without the setState side effect; the cache
     // persistence happens in event handlers (handleSelectMessage) instead.
     const states = getMessageStatesWithCurrent();
+
     return recentMessages.map((msg) => {
       const state = states.get(msg.messageId) ?? createEmptyMessageAnnotationState(msg);
       const linkedDocs: Map<string, LinkedDocAnnotationEntry> = new Map();
+
       for (const [filepath, doc] of state.linkedDocSession.docs) {
         linkedDocs.set(filepath, {
           ...doc,
           blocks: doc.markdown ? parseMarkdownToBlocks(doc.markdown) : undefined,
         });
       }
+
       return {
         messageId: msg.messageId,
         text: msg.text,
@@ -949,11 +1034,14 @@ const App: React.FC = () => {
   const activeMessageAnnotationCounts = React.useMemo(() => {
     const counts = new Map(cachedMessageAnnotationCounts);
     const current = buildCurrentMessageState();
+
     if (current) {
       const count = countMessageAnnotations(current);
+
       if (count > 0) counts.set(current.messageId, count);
       else counts.delete(current.messageId);
     }
+
     return counts;
   }, [cachedMessageAnnotationCounts, buildCurrentMessageState]);
 
@@ -972,9 +1060,11 @@ const App: React.FC = () => {
   const handleSelectMessage = React.useCallback(
     (messageId: string) => {
       const msg = recentMessages.find((m) => m.messageId === messageId);
+
       if (!msg || messageId === selectedMessageId) return;
 
       const states = saveCurrentMessageState();
+
       const targetState = normalizeMessageAnnotationState(
         states.get(messageId) ?? createEmptyMessageAnnotationState(msg),
         msg,
@@ -993,24 +1083,29 @@ const App: React.FC = () => {
       const normalizedAbsolutePath = normalizeBrowserPath(absolutePath);
       const dirState = fileBrowser.dirs.find((d) => d.path === dirPath);
       const normalizedDirPath = normalizeBrowserPath(dirPath);
+
       const dirPrefix =
         normalizedDirPath === "/" || /^[A-Za-z]:\/$/.test(normalizedDirPath)
           ? normalizedDirPath
           : `${normalizedDirPath}/`;
+
       const relativePath =
         normalizedAbsolutePath === normalizedDirPath
           ? ""
           : normalizedAbsolutePath.startsWith(dirPrefix)
             ? normalizedAbsolutePath.slice(dirPrefix.length)
             : undefined;
+
       const sourceBackedStatus = getFileEditStatus(
         absolutePath,
         sourceBackedDocuments.fileEditStatuses,
         relativePath,
         dirState?.workspaceStatus,
       );
+
       const sourceBackedKey = sourceBackedStatus?.key ?? `file:${absolutePath}`;
       const sourceBackedRecord = sourceBackedDocuments.getSourceBackedDocument(sourceBackedKey);
+
       if (sourceBackedRecord?.missingOnDisk && sourceBackedRecord.sourceSave?.enabled) {
         linkedDocHook.openLoaded(
           {
@@ -1023,6 +1118,7 @@ const App: React.FC = () => {
           { notifyDocumentLoaded: false },
         );
         setActiveSourceDocumentKey(sourceBackedKey);
+
         if (isEditingMarkdown) {
           editSessionBaseRef.current = sourceBackedRecord.currentText;
           setEditorDirty(false);
@@ -1035,7 +1131,9 @@ const App: React.FC = () => {
               : null,
           );
         }
+
         fileBrowser.setActiveFile(absolutePath);
+
         return;
       }
 
@@ -1044,6 +1142,7 @@ const App: React.FC = () => {
             `/api/reference/obsidian/doc?vaultPath=${encodeURIComponent(dirPath)}&path=${encodeURIComponent(path)}`
         : (path: string) =>
             `/api/doc?path=${encodeURIComponent(path)}&base=${encodeURIComponent(dirPath)}${convertHtml ? "&convert=1" : ""}`;
+
       linkedDocHook.open(absolutePath, buildUrl, "files");
       fileBrowser.setActiveFile(absolutePath);
     },
@@ -1054,6 +1153,7 @@ const App: React.FC = () => {
   const handleOpenLinkedDoc = React.useCallback(
     (docPath: string) => {
       const activeDirState = fileBrowser.dirs.find((d) => d.path === fileBrowser.activeDirPath);
+
       if (activeDirState?.isVault && fileBrowser.activeDirPath) {
         linkedDocHook.open(
           docPath,
@@ -1064,6 +1164,7 @@ const App: React.FC = () => {
         // When viewing a file browser doc, resolve links relative to current file's directory
         const baseDir =
           linkedDocHook.filepath?.replace(/\/[^/]+$/, "") || fileBrowser.activeDirPath;
+
         linkedDocHook.open(
           docPath,
           (path) =>
@@ -1076,6 +1177,7 @@ const App: React.FC = () => {
           : imageBaseDir?.includes("/")
             ? imageBaseDir
             : undefined;
+
         if (baseDir) {
           linkedDocHook.open(
             docPath,
@@ -1100,34 +1202,42 @@ const App: React.FC = () => {
   // Wrap linked doc back to also clear file browser active file
   const handleLinkedDocBack = React.useCallback(() => {
     linkedDocHook.back();
+
     if (isEditingMarkdown) {
       setIsEditingMarkdown(false);
       setEditorDirty(false);
       setEditorDiffersFromBaseline(false);
     }
+
     fileBrowser.setActiveFile(null);
   }, [linkedDocHook, isEditingMarkdown, fileBrowser]);
 
   // Derive annotation counts per file from linked doc cache (includes active doc's live state)
   const allAnnotationCounts = useMemo(() => {
     const counts = new Map<string, number>();
+
     for (const [fp, cached] of linkedDocHook.getDocAnnotations()) {
       const count = cached.annotations.length + cached.globalAttachments.length;
+
       if (count > 0) counts.set(fp, count);
     }
+
     return counts;
   }, [linkedDocHook.getDocAnnotations, annotations, globalAttachments]);
 
   // FileBrowser counts: all files under any loaded dir (regular + vault)
   const fileAnnotationCounts = useMemo(() => {
     const allDirPaths = fileBrowser.dirs.map((d) => d.path);
+
     if (allDirPaths.length === 0) return allAnnotationCounts;
     const counts = new Map<string, number>();
+
     for (const [fp, count] of allAnnotationCounts) {
       if (allDirPaths.some((dir) => pathIsInsideDir(fp, dir))) {
         counts.set(fp, count);
       }
     }
+
     return counts;
   }, [allAnnotationCounts, fileBrowser.dirs]);
 
@@ -1138,25 +1248,31 @@ const App: React.FC = () => {
     const currentFile = linkedDocHook.filepath;
     let count = 0;
     let files = 0;
+
     for (const [fp, n] of allAnnotationCounts) {
       if (fp !== currentFile) {
         count += n;
         files++;
       }
     }
+
     return count > 0 ? { count, files } : undefined;
   }, [allAnnotationCounts, linkedDocHook.filepath]);
 
   // Flash highlight for annotated files in the sidebar
   const [highlightedFiles, setHighlightedFiles] = useState<Set<string> | undefined>();
   const flashTimerRef = React.useRef<ReturnType<typeof setTimeout>>();
+
   const handleFlashAnnotatedFiles = React.useCallback(() => {
     const filePaths = new Set(allAnnotationCounts.keys());
+
     if (filePaths.size === 0) return;
+
     // Open sidebar to the files tab so the flash is visible
     if (!sidebar.isOpen || sidebar.activeTab !== "files") {
       openSidebarTab("files");
     }
+
     // Cancel any pending clear from a previous flash
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     // Clear first so re-triggering restarts the CSS animation
@@ -1172,16 +1288,21 @@ const App: React.FC = () => {
   const activeSection = useActiveSection(containerRef, headingCount, scrollViewport);
 
   const { editorAnnotations, deleteEditorAnnotation } = useEditorAnnotations();
+
   const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } =
     useExternalAnnotations(decodeAnnotation, { enabled: isApiMode });
+
   const externalChoiceReconciliation = useMemo(
     () => reconcileDocumentChoiceAnnotations(externalAnnotations, blocks),
     [externalAnnotations, blocks],
   );
+
   const safeExternalAnnotations = externalChoiceReconciliation.retained;
   useEffect(() => {
     const invalidatedIds = new Set(externalChoiceReconciliation.invalidatedIds);
+
     for (const id of externalChoiceReconciliation.invalidatedIds) deleteExternalAnnotation(id);
+
     if (selectedAnnotationIdRef.current && invalidatedIds.has(selectedAnnotationIdRef.current)) {
       selectedAnnotationIdRef.current = null;
       setSelectedAnnotationId(null);
@@ -1207,6 +1328,7 @@ const App: React.FC = () => {
 
     const local = annotations.filter((a) => {
       if (!a.source) return true;
+
       return !safeExternalAnnotations.some(
         (ext) =>
           ext.source === a.source && ext.type === a.type && ext.originalText === a.originalText,
@@ -1221,27 +1343,34 @@ const App: React.FC = () => {
     () => allAnnotations.filter((a) => !!a.diffContext),
     [allAnnotations],
   );
+
   const viewerAnnotations = useMemo(
     () => allAnnotations.filter((a) => !a.diffContext),
     [allAnnotations],
   );
+
   const unsavedSourceBackedDocuments = useMemo(
     () => sourceBackedDocuments.getUnsavedSourceBackedDocuments(),
     [sourceBackedDocuments, sourceBackedDocuments.version],
   );
+
   const savedFileChanges = useMemo(
     () => sourceBackedDocuments.getSourceBackedSavedFileChanges(),
     [sourceBackedDocuments, sourceBackedDocuments.version],
   );
+
   const savedFileChangesForValidation = useMemo(
     () => sourceBackedDocuments.getSourceBackedSavedFileChangesForValidation(),
     [sourceBackedDocuments, sourceBackedDocuments.version],
   );
+
   const sourceBackedSavePresentation = buildAppSourceBackedSavePresentation({
     activeDocument: activeSourceBackedDocument,
     isEditingMarkdown,
   });
+
   const { activeSourceSave } = sourceBackedSavePresentation;
+
   const annotationEditSummary = useMemo(
     () =>
       buildAppAnnotationEditSummary({
@@ -1282,6 +1411,7 @@ const App: React.FC = () => {
       unsavedSourceBackedDocuments.length,
     ],
   );
+
   const {
     canShareCurrentSession,
     directEditsPanelInfo,
@@ -1298,19 +1428,24 @@ const App: React.FC = () => {
   const buildFullAnnotationsOutput = React.useCallback((): string => {
     if (messageMultiSelectMode) {
       let output = exportMessageAnnotations(buildMessageAnnotationEntries());
+
       if (editorAnnotations.length > 0) {
         output += `\n\n${exportEditorAnnotations(editorAnnotations)}`;
       }
+
       return output;
     }
+
     return "";
   }, [messageMultiSelectMode, buildMessageAnnotationEntries, editorAnnotations]);
 
   const annotationsOutput = useMemo(() => {
     const docAnnotations = linkedDocHook.getDocAnnotations();
+
     const hasDocAnnotations = Array.from(docAnnotations.values()).some(
       (d) => d.annotations.length > 0 || d.globalAttachments.length > 0,
     );
+
     const hasPlanAnnotations = allAnnotations.length > 0 || globalAttachments.length > 0;
     const hasEditorAnnotations = editorAnnotations.length > 0;
     const hasCodeAnnotations = codeAnnotations.length > 0;
@@ -1336,11 +1471,13 @@ const App: React.FC = () => {
 
     if (hasDocAnnotations) {
       const enriched: Map<string, LinkedDocAnnotationEntry> = new Map(docAnnotations);
+
       for (const [filepath, entry] of enriched) {
         if (entry.markdown) {
           enriched.set(filepath, { ...entry, blocks: parseMarkdownToBlocks(entry.markdown) });
         }
       }
+
       output += exportLinkedDocAnnotations(enriched);
     }
 
@@ -1368,19 +1505,25 @@ const App: React.FC = () => {
 
   const resolveRawHtmlForShare = useCallback(async (): Promise<string | null> => {
     if (renderAs !== "html" || !rawHtml) return null;
+
     if (shareHtml) return shareHtml;
+
     if (!isApiMode) return rawHtml;
 
     const params = new URLSearchParams();
     const activePath = linkedDocHook.filepath ?? sourceFilePath;
+
     if (activePath) params.set("path", activePath);
     const query = params.toString();
     const res = await fetch(`/api/share-html${query ? `?${query}` : ""}`);
     const data = parseShareHtmlResponse(await res.json().catch(() => ({})));
+
     if (!res.ok || data.error || data.shareHtml === undefined) {
       throw new Error(data.error || "Failed to prepare HTML for sharing");
     }
+
     setShareHtml(data.shareHtml);
+
     return data.shareHtml;
   }, [isApiMode, linkedDocHook.filepath, rawHtml, renderAs, shareHtml, sourceFilePath]);
 
@@ -1422,15 +1565,21 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (initialSidebarPreferenceAppliedRef.current) return;
+
     if (isLoading || isLoadingShared) return;
+
     if (wideModeType !== null) return;
 
     initialSidebarPreferenceAppliedRef.current = true;
+
     if (annotateSource === "folder") return;
+
     if (renderAs === "html") {
       sidebar.close();
+
       return;
     }
+
     if (uiPrefs.tocEnabled && hasTocEntries) {
       sidebar.open("toc");
     }
@@ -1448,8 +1597,11 @@ const App: React.FC = () => {
 
   const ensureShareLink = useCallback(async (): Promise<string | null> => {
     const existing = shortShareUrl || shareUrl;
+
     if (existing) return existing;
+
     if (!canShareCurrentSession) return null;
+
     return await generateShortUrl();
   }, [canShareCurrentSession, generateShortUrl, shareUrl, shortShareUrl]);
 
@@ -1461,13 +1613,17 @@ const App: React.FC = () => {
     if (isLoading && !isSharedSession) return;
 
     const el = planAreaRef.current;
+
     if (!el) return;
     setActionsLabelMode(getActionsLabelMode(el.getBoundingClientRect().width));
+
     const ro = new ResizeObserver(([entry]) => {
       const next = getActionsLabelMode(entry.contentRect.width);
       setActionsLabelMode((prev) => (prev === next ? prev : next));
     });
+
     ro.observe(el);
+
     return () => ro.disconnect();
   }, [isLoading, isSharedSession]);
 
@@ -1479,6 +1635,7 @@ const App: React.FC = () => {
   const getEditedMarkdown = useCallback((): string | null => {
     if (activeSourceBackedDocument?.sourceSave?.enabled) {
       const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
+
       return normalizeEditedMarkdown(
         activeSourceBackedDocument.diskBaseline,
         live ?? activeSourceBackedDocument.currentText,
@@ -1486,13 +1643,16 @@ const App: React.FC = () => {
     }
 
     const base = originalMarkdownRef.current;
+
     if (base === null) return null;
     const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
+
     return normalizeEditedMarkdown(base, live ?? editedMarkdownRef.current);
   }, [activeSourceBackedDocument, isEditingMarkdown]);
 
   const getDraftEditedMarkdown = useCallback((): string | null => {
     if (activeSourceBackedDocument?.sourceSave?.enabled) return null;
+
     return getEditedMarkdown();
   }, [activeSourceBackedDocument, getEditedMarkdown]);
 
@@ -1526,10 +1686,12 @@ const App: React.FC = () => {
         pendingSharedAnnotations,
         blocks,
       );
+
       const invalidatedPendingIds = new Set(pendingChoiceReconciliation.invalidatedIds);
       pendingChoiceReconciliation.invalidatedIds.forEach((id) =>
         viewerRef.current?.removeHighlight(id),
       );
+
       if (
         selectedAnnotationIdRef.current &&
         invalidatedPendingIds.has(selectedAnnotationIdRef.current)
@@ -1537,6 +1699,7 @@ const App: React.FC = () => {
         selectedAnnotationIdRef.current = null;
         setSelectedAnnotationId(null);
       }
+
       const safePendingAnnotations = pendingChoiceReconciliation.retained;
       setAnnotations(safePendingAnnotations);
 
@@ -1552,6 +1715,7 @@ const App: React.FC = () => {
         // tell the external-highlight bookkeeper to re-apply them.
         resetExternalHighlights();
       }, 100);
+
       return () => clearTimeout(timer);
     }
   }, [blocks, pendingSharedAnnotations, clearPendingSharedAnnotations, resetExternalHighlights]);
@@ -1568,13 +1732,16 @@ const App: React.FC = () => {
     const sourceAnnotations = list ?? annotationsRef.current;
     const newBlocks = parseMarkdownToBlocks(next);
     const choiceReconciliation = reconcileDocumentChoiceAnnotations(sourceAnnotations, newBlocks);
+
     const retainedChoices = new Map(
       choiceReconciliation.retained
         .filter(isChoiceAnnotation)
         .map((annotation) => [annotation.id, annotation]),
     );
+
     const invalidatedChoiceIds = new Set(choiceReconciliation.invalidatedIds);
     choiceReconciliation.invalidatedIds.forEach((id) => viewerRef.current?.removeHighlight(id));
+
     if (
       selectedAnnotationIdRef.current &&
       invalidatedChoiceIds.has(selectedAnnotationIdRef.current)
@@ -1586,8 +1753,10 @@ const App: React.FC = () => {
     const remapped = sourceAnnotations.flatMap((a) => {
       if (isChoiceAnnotation(a)) {
         const retainedChoice = retainedChoices.get(a.id);
+
         return retainedChoice ? [retainedChoice] : [];
       }
+
       if (
         a.diffContext ||
         a.type === AnnotationType.GLOBAL_COMMENT ||
@@ -1595,15 +1764,19 @@ const App: React.FC = () => {
       )
         return [a];
       const blk = newBlocks.find((b) => b.content.includes(a.originalText));
+
       if ((blk?.id ?? "") === a.blockId) return [a];
+
       // Block moved: also strip startMeta/endMeta — fromStore() anchors by
       // positional parent index without validating text. Text-search is safe.
       return [{ ...a, _blockId: blk?.id ?? "", startMeta: undefined, endMeta: undefined }];
     });
+
     setMarkdown(next);
     setEditGeneration((g) => g + 1);
     annotationsRef.current = remapped;
     setAnnotations(remapped);
+
     return remapped;
   }, []);
 
@@ -1615,20 +1788,24 @@ const App: React.FC = () => {
   const repaintHighlights = useCallback(
     (list: Annotation[]) => {
       resetExternalHighlights();
+
       const planAnnotations = list.filter(
         (a) =>
           !a.diffContext &&
           a.type !== AnnotationType.GLOBAL_COMMENT &&
           !a.id.startsWith("ann-checkbox-"),
       );
+
       if (planAnnotations.length === 0) return;
       setTimeout(() => {
         viewerRef.current?.applySharedAnnotations(planAnnotations);
+
         // web-highlighter restores use data-highlight-id; manual code-block
         // wraps use data-bind-id. Either counts as present.
         const missing = planAnnotations.filter(
           (a) => !document.querySelector(`[data-bind-id="${a.id}"], [data-highlight-id="${a.id}"]`),
         );
+
         if (missing.length > 0) {
           toast(
             `${missing.length} annotation${missing.length === 1 ? "" : "s"} no longer match the text`,
@@ -1653,6 +1830,7 @@ const App: React.FC = () => {
     setEditorDiffersFromBaseline(false);
 
     const base = originalMarkdownRef.current;
+
     if (edited != null) {
       if (activeSourceBackedDocument?.sourceSave?.enabled) {
         sourceBackedDocuments.updateSourceBackedDocumentText(
@@ -1660,16 +1838,19 @@ const App: React.FC = () => {
           edited,
           { forceNotify: true },
         );
+
         const sourceEdited = normalizeEditedMarkdown(
           activeSourceBackedDocument.diskBaseline,
           edited,
         );
+
         editedMarkdownRef.current = null;
         setEditStats(
           sourceEdited !== null
             ? computeEditStats(activeSourceBackedDocument.diskBaseline, sourceEdited)
             : null,
         );
+
         if (sourceEdited !== null && window.innerWidth >= 768) {
           setRightSidebarTab("annotations");
           setIsPanelOpen(true);
@@ -1682,6 +1863,7 @@ const App: React.FC = () => {
             ? computeEditStats(base, normalizedEdited)
             : null,
         );
+
         // Surface the Direct Edits card so the user sees where their changes went.
         if (base !== null && normalizedEdited !== null && window.innerWidth >= 768) {
           setRightSidebarTab("annotations");
@@ -1693,8 +1875,10 @@ const App: React.FC = () => {
     const renderedBaseline = activeSourceBackedDocument?.sourceSave?.enabled
       ? markdown
       : displayedMarkdown;
+
     const remapped =
       edited != null && edited !== renderedBaseline ? applyEditedDocument(edited) : annotations;
+
     repaintHighlights(remapped);
     scheduleDraftSave();
   }, [
@@ -1715,17 +1899,22 @@ const App: React.FC = () => {
     (sourceKey?: string) => {
       const targetKey = sourceKey ?? activeSourceBackedDocument?.key;
       const targetIsActive = activeSourceDocumentKey === targetKey;
+
       const targetRecord = targetKey
         ? sourceBackedDocuments.getSourceBackedDocument(targetKey)
         : null;
+
       if (sourceKey && !targetRecord?.sourceSave?.enabled) return;
 
       if (targetKey && targetRecord?.sourceSave?.enabled) {
         const outcome = sourceBackedDocuments.discardSourceBackedDocumentEdits(targetKey);
+
         if (outcome.type !== "document-discarded") return;
         const discarded = outcome.record;
+
         if (!targetIsActive) {
           scheduleDraftSave();
+
           return;
         }
 
@@ -1734,8 +1923,10 @@ const App: React.FC = () => {
         setEditorDiffersFromBaseline(false);
         editedMarkdownRef.current = null;
         setEditStats(null);
+
         if (discarded.missingOnDisk) {
           setActiveSourceDocumentKey(null);
+
           if (linkedDocHook.isActive) {
             linkedDocHook.back();
             fileBrowser.setActiveFile(null);
@@ -1744,19 +1935,25 @@ const App: React.FC = () => {
             repaintHighlights(remapped);
             originalMarkdownRef.current = "";
           }
+
           scheduleDraftSave();
+
           return;
         }
+
         const remapped =
           displayedMarkdown !== discarded.diskBaseline
             ? applyEditedDocument(discarded.diskBaseline)
             : annotations;
+
         repaintHighlights(remapped);
         scheduleDraftSave();
+
         return;
       }
 
       const base = originalMarkdownRef.current;
+
       if (base === null) return;
       setIsEditingMarkdown(false);
       setEditorDirty(false);
@@ -1796,6 +1993,7 @@ const App: React.FC = () => {
     }> => {
       if (changes.length === 0) return { kept: [], changedOrMissing: [], unverified: [] };
       const result = await sourceBackedDocuments.validateSourceBackedSavedFileChanges(changes);
+
       const changedOrMissing = result.dropped
         .filter((entry) => entry.reason === "changed" || entry.reason === "missing")
         .map((entry) => entry.change);
@@ -1806,6 +2004,7 @@ const App: React.FC = () => {
           duration: 5000,
         });
       }
+
       if (result.unverified.length > 0) {
         toast("Some saved edit context could not be verified", {
           description: "Plannotator kept it for now and will check again before sending feedback.",
@@ -1831,23 +2030,30 @@ const App: React.FC = () => {
       editedDocuments,
       savedFileChanges,
     } = restoreDraft();
+
     if (restoredCode.length > 0) setCodeAnnotations(restoredCode);
+
     if (restoredGlobal.length > 0) setGlobalAttachments(restoredGlobal);
 
     const sourceBackedRestorePlan = buildSourceBackedDraftRestorePlan(
       editedDocuments,
       savedFileChanges,
     );
+
     const validatedSaved = await validateDraftSavedFileChanges(
       sourceBackedRestorePlan.savedFileChangeCandidates,
     );
+
     const validSavedChangeByKey = new Map(
       validatedSaved.kept.map((change) => [change.key, change]),
     );
+
     const editedDocumentKeys = new Set(editedDocuments.map((doc) => doc.key));
+
     const cleanSavedFileChanges = validatedSaved.kept.filter(
       (change) => !editedDocumentKeys.has(change.key),
     );
+
     const editedDocumentsForRestore: SourceBackedDocumentDraftData[] =
       sourceBackedRestorePlan.editedDocuments.map((doc) =>
         doc.savedChange
@@ -1858,57 +2064,71 @@ const App: React.FC = () => {
     const restoreSourceBackedDrafts = (): boolean => {
       if (cleanSavedFileChanges.length > 0) {
         sourceBackedDocuments.restoreSourceBackedSavedFileChanges(cleanSavedFileChanges);
+
         if (window.innerWidth >= 768) {
           setRightSidebarTab("annotations");
           setIsPanelOpen(true);
         }
       }
+
       if (editedDocumentsForRestore.length === 0) return false;
+
       if (isEditingMarkdown) {
         toast("Draft file edits were not restored", {
           description: "You already have edits in this session — those take precedence.",
           duration: 5000,
         });
+
         return false;
       }
 
       const restoredDocumentKeys =
         sourceBackedDocuments.restoreSourceBackedDraftDocuments(editedDocumentsForRestore);
+
       if (restoredDocumentKeys.length < editedDocumentsForRestore.length) {
         toast("Some draft file edits were not restored", {
           description: "You already have edits in this session — those take precedence.",
           duration: 5000,
         });
       }
+
       const restoredSingleFileDraft = pickRestoredSingleFileDraftToDisplay(
         editedDocumentsForRestore,
         restoredDocumentKeys,
         activeSourceDocumentKeyRef.current,
       );
+
       const nextActiveSourceDocumentKey =
         restoredSingleFileDraft?.key ?? activeSourceDocumentKeyRef.current;
+
       if (restoredSingleFileDraft) setActiveSourceDocumentKey(restoredSingleFileDraft.key);
 
       const activeRestoredDocument = nextActiveSourceDocumentKey
         ? sourceBackedDocuments.getSourceBackedDocument(nextActiveSourceDocumentKey)
         : null;
+
       const isRestoredActiveDocument =
         activeRestoredDocument?.sourceSave?.enabled &&
         restoredDocumentKeys.includes(activeRestoredDocument.key);
+
       if (!isRestoredActiveDocument || !activeRestoredDocument) return false;
 
       const remapped = applyEditedDocument(activeRestoredDocument.currentText, restored);
       repaintHighlights(remapped);
+
       if (activeRestoredDocument.currentText !== activeRestoredDocument.diskBaseline) {
         setEditStats(
           computeEditStats(activeRestoredDocument.diskBaseline, activeRestoredDocument.currentText),
         );
+
         if (window.innerWidth >= 768) {
           setRightSidebarTab("annotations");
           setIsPanelOpen(true);
         }
       }
+
       scheduleDraftSave();
+
       return true;
     };
 
@@ -1918,6 +2138,7 @@ const App: React.FC = () => {
     // here would fabricate a whole-document diff against the LF baseline.
     const base = originalMarkdownRef.current;
     const edited = editedMarkdown !== null ? editedMarkdown.replace(/\r\n?/g, "\n") : null;
+
     // editStats/isEditingMarkdown guards are defensive: the restore dialog is
     // modal on load, so live edits can't exist yet — but if they ever do,
     // the user's current work wins over the draft.
@@ -1931,15 +2152,19 @@ const App: React.FC = () => {
       editedMarkdownRef.current = edited;
       setEditorDiffersFromBaseline(false);
       setEditStats(computeEditStats(base, edited));
+
       if (window.innerWidth >= 768) {
         setRightSidebarTab("annotations");
         setIsPanelOpen(true);
       }
+
       const remapped = applyEditedDocument(edited, restored);
       repaintHighlights(remapped);
       scheduleDraftSave();
+
       return;
     }
+
     if (edited !== null && (editStats !== null || isEditingMarkdown)) {
       // Skipped, not silently dropped: the user started editing before the
       // (late) draft banner was answered. Their live work wins.
@@ -1953,10 +2178,12 @@ const App: React.FC = () => {
       restored,
       parseMarkdownToBlocks(markdown),
     );
+
     const restoredInvalidatedIds = new Set(restoredChoiceReconciliation.invalidatedIds);
     restoredChoiceReconciliation.invalidatedIds.forEach((id) =>
       viewerRef.current?.removeHighlight(id),
     );
+
     if (
       selectedAnnotationIdRef.current &&
       restoredInvalidatedIds.has(selectedAnnotationIdRef.current)
@@ -1964,9 +2191,12 @@ const App: React.FC = () => {
       selectedAnnotationIdRef.current = null;
       setSelectedAnnotationId(null);
     }
+
     const restoredAnnotations = restoredChoiceReconciliation.retained;
+
     if (restored.length > 0) {
       setAnnotations(restoredAnnotations);
+
       if (restoredAnnotations.length > 0) {
         // Apply highlights to DOM after a tick
         setTimeout(() => {
@@ -1976,6 +2206,7 @@ const App: React.FC = () => {
         }, 100);
       }
     }
+
     scheduleDraftSave();
   }, [
     restoreDraft,
@@ -1993,13 +2224,16 @@ const App: React.FC = () => {
   const handleEditToggle = useCallback(() => {
     if (isEditingMarkdown) {
       commitMarkdownEdits();
+
       return;
     }
+
     // Normalize CRLF before it becomes a baseline (e.g. share-imported content) —
     // CM6 emits \n-joined text, and a CRLF baseline would fabricate a full diff.
     const normalized = displayedMarkdown.includes("\r")
       ? displayedMarkdown.replace(/\r\n?/g, "\n")
       : displayedMarkdown;
+
     if (normalized !== displayedMarkdown) {
       if (activeSourceBackedDocument?.sourceSave?.enabled) {
         sourceBackedDocuments.updateSourceBackedDocumentText(
@@ -2011,16 +2245,19 @@ const App: React.FC = () => {
         setMarkdown(normalized);
       }
     }
+
     // Safety net for paths that loaded content without setting the baseline.
     if (originalMarkdownRef.current === null) originalMarkdownRef.current = normalized;
     const base = originalMarkdownRef.current;
     editSessionBaseRef.current = normalized;
+
     if (activeSourceBackedDocument?.sourceSave?.enabled) {
       sourceBackedDocuments.beginSourceBackedDocumentEdit(
         activeSourceBackedDocument.key,
         normalized,
       );
     }
+
     setEditorDirty(false);
     setEditorDiffersFromBaseline(
       activeSourceBackedDocument?.sourceSave?.enabled
@@ -2041,6 +2278,7 @@ const App: React.FC = () => {
   const handleEditorChange = useCallback(
     (md: string) => {
       setEditorDirty(md !== editSessionBaseRef.current);
+
       if (activeSourceBackedDocument?.sourceSave?.enabled) {
         sourceBackedDocuments.updateSourceBackedDocumentText(activeSourceBackedDocument.key, md);
         setEditorDiffersFromBaseline(md !== activeSourceBackedDocument.diskBaseline);
@@ -2048,11 +2286,13 @@ const App: React.FC = () => {
         const base = originalMarkdownRef.current;
         setEditorDiffersFromBaseline(base !== null && md !== base);
       }
+
       // Mid-edit keystrokes persist too — a crash loses at most the debounce
       // window. The hook reads the live buffer via getDraftEditedMarkdown.
       if (agentTerminalDeliveryRef.current) {
         setAgentFeedbackRevision((version) => version + 1);
       }
+
       scheduleDraftSave();
     },
     [activeSourceBackedDocument, sourceBackedDocuments, scheduleDraftSave],
@@ -2071,21 +2311,27 @@ const App: React.FC = () => {
     hasUnsavedDiskChanges,
     saveFailed,
   } = sourceBackedSavePresentation;
+
   const handleEditExitClick = useCallback(() => {
     if (!isEditingMarkdown) {
       handleEditToggle();
+
       return;
     } // enter edit mode
+
     if (cancelMode) {
       // discard flow (two-step)
       if (confirmCancelEdits) {
         setConfirmCancelEdits(false);
         handleDiscardEdits();
       } else setConfirmCancelEdits(true);
+
       return;
     }
+
     handleEditToggle(); // commit edits + exit
   }, [isEditingMarkdown, cancelMode, confirmCancelEdits, handleEditToggle, handleDiscardEdits]);
+
   // Drop the discard confirmation once it no longer applies — exited the editor,
   // or the doc went clean (e.g. the user saved).
   useEffect(() => {
@@ -2103,6 +2349,7 @@ const App: React.FC = () => {
   const buildEditsSection = useCallback((): string => {
     if (activeSourceSave || hasUnsavedSourceFileBuffers) return "";
     const base = originalMarkdownRef.current;
+
     return buildDirectEditsSection(base, getEditedMarkdown(), sourceConverted);
   }, [activeSourceSave, getEditedMarkdown, hasUnsavedSourceFileBuffers, sourceConverted]);
 
@@ -2153,6 +2400,7 @@ const App: React.FC = () => {
   const withDraftGeneration = useCallback(
     (path: string): string => {
       const separator = path.includes("?") ? "&" : "?";
+
       return `${path}${separator}draftGeneration=${getDraftGeneration()}`;
     },
     [getDraftGeneration],
@@ -2162,9 +2410,11 @@ const App: React.FC = () => {
     SourceBackedSavedFileChangeDraftData[] | null
   > => {
     if (savedFileChangesForValidation.length === 0) return [];
+
     const result = await sourceBackedDocuments.validateSourceBackedSavedFileChanges(
       savedFileChangesForValidation,
     );
+
     const stale = result.dropped.filter(
       (entry) => entry.reason === "changed" || entry.reason === "missing",
     );
@@ -2177,6 +2427,7 @@ const App: React.FC = () => {
       toast.error("Saved edits changed on disk", {
         description: "Plannotator removed the stale edit context. Nothing was sent.",
       });
+
       return null;
     }
 
@@ -2184,6 +2435,7 @@ const App: React.FC = () => {
       toast.error("Saved edits could not be verified", {
         description: "Check the file tree and try sending feedback again.",
       });
+
       return null;
     }
 
@@ -2195,6 +2447,7 @@ const App: React.FC = () => {
       if (outcome.type === "missing-file") {
         if (!outcome.alreadyMissing && outcome.record.key === activeSourceDocumentKeyRef.current) {
           setEditorDiffersFromBaseline(outcome.record.currentText !== outcome.record.diskBaseline);
+
           if (isEditingMarkdownRef.current) {
             setEditorDirty(outcome.record.currentText !== editSessionBaseRef.current);
             setEditStats(
@@ -2203,11 +2456,13 @@ const App: React.FC = () => {
                 : null,
             );
           }
+
           toast("File no longer exists on disk", {
             description: `Save ${outcome.record.basename} to recreate it.`,
             duration: 5000,
           });
         }
+
         return;
       }
 
@@ -2220,11 +2475,13 @@ const App: React.FC = () => {
           setEditorDiffersFromBaseline(false);
           setEditStats(null);
         }
+
         if (outcome.clearedSavedChange) {
           toast("File updated from disk", {
             description: `${outcome.record.basename} changed outside Plannotator, so its old Edits card was cleared.`,
           });
         }
+
         return;
       }
 
@@ -2246,15 +2503,20 @@ const App: React.FC = () => {
   const runSourceBackedDocumentReconciliation = useCallback(
     async (changedDir?: string) => {
       const activeKey = activeSourceDocumentKeyRef.current;
+
       if (isEditingMarkdownRef.current && activeKey) {
         const live = markdownEditorHandleRef.current?.getMarkdown();
+
         if (live != null)
           sourceBackedDocuments.updateSourceBackedDocumentText(activeKey, live, {
             forceNotify: true,
           });
       }
+
       const outcomes = await sourceBackedDocuments.reconcileSourceBackedDocuments(changedDir);
+
       for (const outcome of outcomes) handleSourceBackedDocumentLifecycleOutcome(outcome);
+
       if (
         outcomes.some((outcome) =>
           [
@@ -2270,6 +2532,7 @@ const App: React.FC = () => {
     },
     [handleSourceBackedDocumentLifecycleOutcome, sourceBackedDocuments, scheduleDraftSave],
   );
+
   const sourceBackedDocumentReconciliationRef = useRef(runSourceBackedDocumentReconciliation);
   useEffect(() => {
     sourceBackedDocumentReconciliationRef.current = runSourceBackedDocumentReconciliation;
@@ -2277,12 +2540,15 @@ const App: React.FC = () => {
 
   const sourceWatchDirsKey = useMemo(() => {
     const dirs = new Set<string>();
+
     for (const doc of openSourceDocuments) dirs.add(dirnameBrowserPath(doc.sourceSave.path));
+
     return [...dirs].sort().join("\n");
   }, [openSourceDocuments]);
 
   useEffect(() => {
     if (!sourceWatchDirsKey) return;
+
     return createSourceDocumentWatch({
       directories: sourceWatchDirsKey.split("\n").filter(Boolean),
       onReconcile: (changedDir) => sourceBackedDocumentReconciliationRef.current(changedDir),
@@ -2311,18 +2577,23 @@ const App: React.FC = () => {
     setAISessionEnabled(true);
     // gitUser drives the "Use git name" button in Settings; stays undefined (button hidden) when unavailable
     setGitUser(data.serverConfig?.gitUser);
+
     if (data.renderAs === "html" && data.rawHtml) {
       setRenderAs("html");
       setRawHtml(data.rawHtml);
       setShareHtml(data.shareHtml ?? "");
       setMarkdown("");
+
       return;
     }
+
     if (data.mode === "annotate-folder") {
       // Folder annotation mode: clear demo content, let user pick a file
       setMarkdown("");
+
       return;
     }
+
     if (data.plan === null || data.plan === undefined) return;
 
     // CM6 joins lines with \n; CRLF input would make an untouched edit round-trip
@@ -2330,6 +2601,7 @@ const App: React.FC = () => {
     const normalizedPlan = data.plan.replace(/\r\n?/g, "\n");
     setMarkdown(normalizedPlan);
     originalMarkdownRef.current = normalizedPlan;
+
     if (data.mode === "annotate" && data.sourceSave?.enabled) {
       const key = sourceBackedDocumentKey(data.sourceSave, `file:${data.sourceSave.path}`);
       sourceBackedDocuments.openSourceBackedDocument({
@@ -2344,10 +2616,12 @@ const App: React.FC = () => {
   const initializeAnnotateSession = (data: PlanResponse) => {
     const isAnnotateSession =
       data.mode === "annotate" || data.mode === "annotate-last" || data.mode === "annotate-folder";
+
     if (!isAnnotateSession) return;
 
     setAnnotateMode(true);
     setGate(data.gate ?? false);
+
     if (data.mode === "annotate-folder") sidebar.open("files");
     setAnnotateSource(
       data.mode === "annotate-last"
@@ -2361,11 +2635,14 @@ const App: React.FC = () => {
   const initializeRecentMessages = (data: PlanResponse) => {
     messageStateCacheRef.current = new Map();
     setCachedMessageAnnotationCounts(new Map());
+
     if (data.mode === "annotate-last" && data.recentMessages && data.recentMessages.length > 0) {
       setRecentMessages(data.recentMessages);
       setSelectedMessageId(data.recentMessages[0].messageId);
+
       return;
     }
+
     setRecentMessages([]);
     setSelectedMessageId(null);
   };
@@ -2373,18 +2650,26 @@ const App: React.FC = () => {
   const initializeSourceSession = (data: PlanResponse) => {
     setSourceInfo(data.sourceInfo ?? undefined);
     setSourceConverted(!!data.sourceConverted);
+
     if (data.filePath) {
       setImageBaseDir(
         data.mode === "annotate-folder" ? data.filePath : data.filePath.replace(/\/[^/]+$/, ""),
       );
+
       if (data.mode === "annotate") setSourceFilePath(data.filePath);
     }
+
     if (data.sharingEnabled !== undefined) setSharingEnabled(data.sharingEnabled);
+
     if (data.shareBaseUrl) setShareBaseUrl(data.shareBaseUrl);
+
     if (data.pasteApiUrl) setPasteApiUrl(data.pasteApiUrl);
+
     if (data.repoInfo) setRepoInfo(data.repoInfo);
+
     if (data.projectRoot) setProjectRoot(data.projectRoot);
     setAgentTerminalCapability(data.agentTerminal ?? null);
+
     if (data.origin) setOrigin(data.origin);
   };
 
@@ -2392,11 +2677,13 @@ const App: React.FC = () => {
   // Skip if we loaded from a shared URL
   useEffect(() => {
     if (isLoadingShared) return; // Wait for share check to complete
+
     if (isSharedSession) return; // Already loaded from share
 
     fetch("/api/plan")
       .then((res) => {
         if (!res.ok) throw new Error("Not in API mode");
+
         return res.json().then((body) => parsePlanResponse(body));
       })
       .then((data) => {
@@ -2421,6 +2708,7 @@ const App: React.FC = () => {
     if (!aiSessionEnabled || !isApiMode || isSharedSession) {
       setAiAvailable(false);
       setAiProviders([]);
+
       return;
     }
 
@@ -2429,17 +2717,21 @@ const App: React.FC = () => {
       .then((res) => (res.ok ? res.json().then((body) => parseAICapabilitiesResponse(body)) : null))
       .then((data) => {
         if (cancelled) return;
+
         if (data?.available) {
           const providers = (data.providers ?? []).filter(isPiProvider);
+
           const defaultProvider =
             data.defaultProvider !== null &&
             providers.some((provider) => provider.id === data.defaultProvider)
               ? data.defaultProvider
               : null;
+
           setAiAvailable(providers.length > 0);
           setAiProviders(providers);
           setAIConfig((prev) => {
             const saved = getAIProviderSettings();
+
             const selection = resolveAIProviderSelection({
               providers,
               origin,
@@ -2485,14 +2777,17 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!isApiMode || !markdown || isSharedSession || annotateMode || false) return;
+
     if (autoSaveAttempted.current) return;
 
     const body: SaveNotesRequest = {};
     const targets: string[] = [];
 
     const obsSettings = getObsidianSettings();
+
     if (obsSettings.autoSave && obsSettings.enabled) {
       const vaultPath = getEffectiveVaultPath(obsSettings);
+
       if (vaultPath) {
         body.obsidian = {
           vaultPath,
@@ -2519,13 +2814,16 @@ const App: React.FC = () => {
       .then((res) => res.json().then((data) => parseSaveNotesResponse(data)))
       .then((data) => {
         const results: NoteAutoSaveResults = {};
+
         if (body.obsidian) results.obsidian = Boolean(data.results?.obsidian?.success);
         autoSaveResultsRef.current = results;
 
         const didSave = (target: string): boolean => {
           return target === "Obsidian" && data.results?.obsidian?.success === true;
         };
+
         const failed = targets.filter((target) => !didSave(target));
+
         if (failed.length === 0) {
           toast.success(`Auto-saved to ${targets.join(" & ")}`);
         } else {
@@ -2537,8 +2835,10 @@ const App: React.FC = () => {
       .catch(() => {
         autoSaveResultsRef.current = {};
         toast.error("Auto-save failed");
+
         return {};
       });
+
     autoSavePromiseRef.current = autoSavePromise;
   }, [isApiMode, markdown, isSharedSession, annotateMode]);
 
@@ -2546,27 +2846,32 @@ const App: React.FC = () => {
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
+
       if (!items) return;
 
       for (const item of items) {
         if (item.type.startsWith("image/")) {
           e.preventDefault();
           const file = item.getAsFile();
+
           if (file) {
             // Derive name before showing annotator so user sees it immediately
             const initialName = deriveImageName(
               file.name,
               globalAttachments.map((g) => g.name),
             );
+
             const blobUrl = URL.createObjectURL(file);
             setPendingPasteImage({ file, blobUrl, initialName });
           }
+
           break;
         }
       }
     };
 
     document.addEventListener("paste", handlePaste);
+
     return () => document.removeEventListener("paste", handlePaste);
   }, [globalAttachments]);
 
@@ -2576,13 +2881,16 @@ const App: React.FC = () => {
 
     try {
       const formData = new FormData();
+
       const fileToUpload = hasDrawings
         ? new File([blob], "annotated.png", { type: "image/png" })
         : pendingPasteImage.file;
+
       formData.append("file", fileToUpload);
 
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const attachment = await decodeGlobalPasteUploadResponse(res, name);
+
       if (attachment) setGlobalAttachments((prev) => [...prev, attachment]);
     } catch {
       // Upload failed silently
@@ -2602,8 +2910,10 @@ const App: React.FC = () => {
   const sendToAgentTerminal = useCallback(
     (message: string) => {
       const sent = agentTerminalRef.current?.sendMessage(message) ?? false;
+
       if (!sent) return false;
       openAgentTerminal();
+
       return true;
     },
     [openAgentTerminal],
@@ -2613,18 +2923,22 @@ const App: React.FC = () => {
     if (linkedDocHook.isActive && linkedDocHook.filepath) {
       return { fileHeader: "File", filePath: linkedDocHook.filepath };
     }
+
     if (sourceFilePath) {
       return { fileHeader: "File", filePath: sourceFilePath };
     }
+
     if (fileBrowser.activeFile) {
       return { fileHeader: "File", filePath: fileBrowser.activeFile };
     }
+
     if (annotateSource === "folder") {
       return {
         fileHeader: "Folder",
         filePath: fileBrowser.activeDirPath ?? projectRoot ?? "selected folder",
       };
     }
+
     return { fileHeader: "File", filePath: "current file" };
   }, [
     annotateSource,
@@ -2657,12 +2971,15 @@ const App: React.FC = () => {
       savedFileChanges,
     ],
   );
+
   const currentAgentFeedbackTarget = useMemo(
     () => getAnnotateFeedbackTarget(),
     [getAnnotateFeedbackTarget],
   );
+
   const currentAgentFeedbackDelivery = useMemo(() => {
     if (agentTerminalSessionId === null) return null;
+
     return buildAgentTerminalDeliveryRecord({
       terminalSessionId: agentTerminalSessionId,
       feedback: currentFeedbackPayload,
@@ -2674,6 +2991,7 @@ const App: React.FC = () => {
     currentFeedbackPayload,
     currentAgentFeedbackTarget.filePath,
   ]);
+
   const { showAgentTerminalDeliveryStatus, hasFeedbackToSend } =
     buildAppTerminalFeedbackPresentation({
       annotateMode,
@@ -2686,14 +3004,19 @@ const App: React.FC = () => {
   // available, otherwise through the original server feedback channel.
   const handleAnnotateFeedback = async () => {
     setIsSubmitting(true);
+
     try {
       snapshotActiveSourceBackedDocument();
       const checkedSavedFileChanges = await validateSavedFileChangesBeforeSubmit();
+
       if (checkedSavedFileChanges === null) {
         setIsSubmitting(false);
+
         return;
       }
+
       const feedback = getCurrentFeedbackPayload(checkedSavedFileChanges);
+
       const agentFeedbackDelivery =
         agentTerminalSessionId === null
           ? null
@@ -2703,21 +3026,27 @@ const App: React.FC = () => {
               targetPath:
                 annotateSource === "message" ? null : getAnnotateFeedbackTarget().filePath,
             });
+
       if (isAgentTerminalReady) {
         if (
           !shouldSendAgentTerminalFeedback(agentTerminalDeliveryRef.current, agentFeedbackDelivery)
         ) {
           dismissDraft();
           setIsSubmitting(false);
+
           return;
         }
+
         const agentFeedback = buildAnnotateAgentFeedback(feedback);
+
         if (agentFeedbackDelivery && sendToAgentTerminal(agentFeedback)) {
           setAgentTerminalDelivery(agentFeedbackDelivery);
           dismissDraft();
           setIsSubmitting(false);
+
           return;
         }
+
         handleAgentTerminalReadyChange(false);
         toast.error("Agent terminal is not ready. Sending through the original session.");
       }
@@ -2731,11 +3060,13 @@ const App: React.FC = () => {
         annotatedMessageIds,
         selectedMessageId,
       });
+
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(feedbackRequest),
       });
+
       if (!res.ok) throw new Error("Failed to send feedback");
       dismissDraft();
       setSubmitted("denied"); // reuse 'denied' state for "feedback sent" overlay
@@ -2748,6 +3079,7 @@ const App: React.FC = () => {
   // Annotate gate-mode handler — approves the artifact without feedback
   const handleAnnotateApprove = async () => {
     setIsSubmitting(true);
+
     try {
       await fetch(withDraftGeneration("/api/approve"), { method: "POST" });
       setSubmitted("approved");
@@ -2759,8 +3091,10 @@ const App: React.FC = () => {
   // Exit annotation session without sending feedback
   const handleAnnotateExit = useCallback(async () => {
     setIsExiting(true);
+
     try {
       const res = await fetch(withDraftGeneration("/api/exit"), { method: "POST" });
+
       if (res.ok) {
         setSubmitted("exited");
       } else {
@@ -2784,6 +3118,7 @@ const App: React.FC = () => {
     (action: SourceFileEditWarningAction, continueAction: () => void | Promise<void>): boolean => {
       if (!hasUnsavedSourceFileBuffers) return false;
       confirmUnsavedSourceFileEdits(action, continueAction);
+
       return true;
     },
     [confirmUnsavedSourceFileEdits, hasUnsavedSourceFileBuffers],
@@ -2818,11 +3153,15 @@ const App: React.FC = () => {
 
     // Let active confirmation dialogs own Cmd/Ctrl+Enter and Escape.
     if (document.querySelector('[data-plannotator-confirm-dialog="true"]')) return true;
+
     if (hasOpenSubmitShortcutModal()) return true;
+
     if (submitted || isSubmitting || isExiting || !isApiMode || isEditingMarkdown) return true;
+
     // Folder files are the active review target; normal linked docs are side
     // references and should not submit the root plan.
     if (linkedDocHook.isActive && annotateSource !== "folder") return true;
+
     return isTextField;
   };
 
@@ -2839,16 +3178,20 @@ const App: React.FC = () => {
         if (gate && !hasFeedbackToSend) {
           if (maybeConfirmUnsavedSourceFileEdits("approve", () => handleAnnotateApprove())) return;
           handleAnnotateApprove();
+
           return;
         }
+
         if (maybeConfirmUnsavedSourceFileEdits("send-feedback", () => handleAnnotateFeedback()))
           return;
         handleAnnotateFeedback();
+
         return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     annotateMode,
@@ -2860,6 +3203,7 @@ const App: React.FC = () => {
 
   const handleAddAnnotation = (ann: Annotation) => {
     const safeAnnotation = reconcileDocumentChoiceAnnotations([ann], blocks).retained[0];
+
     if (!safeAnnotation) return;
     setAnnotations((prev) => [...prev, safeAnnotation]);
     setSelectedAnnotationId(safeAnnotation.id);
@@ -2870,7 +3214,9 @@ const App: React.FC = () => {
   const handleSelectAnnotation = React.useCallback(
     (id: string | null) => {
       setSelectedAnnotationId(id);
+
       if (id) setSelectedCodeAnnotationId(null);
+
       if (id && isMobile && wideModeType === null) setIsPanelOpen(true);
     },
     [isMobile, wideModeType],
@@ -2891,6 +3237,7 @@ const App: React.FC = () => {
       createdAt: Date.now(),
       author: configStore.get("displayName") || undefined,
     };
+
     setCodeAnnotations((prev) => [...prev, annotation]);
     setSelectedAnnotationId(null);
     setSelectedCodeAnnotationId(annotation.id);
@@ -2907,10 +3254,12 @@ const App: React.FC = () => {
   const handleSelectCodeAnnotation = React.useCallback(
     (id: string) => {
       const annotation = codeAnnotations.find((a) => a.id === id);
+
       if (!annotation) return;
       setSelectedAnnotationId(null);
       setSelectedCodeAnnotationId(id);
       codeFilePopout.open(annotation.filePath);
+
       if (isMobile && wideModeType === null) setIsPanelOpen(true);
     },
     [codeAnnotations, codeFilePopout.open, isMobile, wideModeType],
@@ -2919,6 +3268,7 @@ const App: React.FC = () => {
   const handleDeleteCodeAnnotation = React.useCallback(
     (id: string) => {
       setCodeAnnotations((prev) => prev.filter((a) => a.id !== id));
+
       if (selectedCodeAnnotationId === id) setSelectedCodeAnnotationId(null);
     },
     [selectedCodeAnnotationId],
@@ -2934,11 +3284,13 @@ const App: React.FC = () => {
   // Core annotation removal — highlight cleanup + state filter + selection clear
   const removeAnnotation = (id: string) => {
     viewerRef.current?.removeHighlight(id);
+
     if (externalAnnotations.some((annotation) => annotation.id === id)) {
       deleteExternalAnnotation(id);
     } else {
       setAnnotations((prev) => prev.filter((a) => a.id !== id));
     }
+
     if (selectedAnnotationId === id) setSelectedAnnotationId(null);
   };
 
@@ -2952,29 +3304,37 @@ const App: React.FC = () => {
 
   const handleDeleteAnnotation = (id: string) => {
     const ann = allAnnotations.find((a) => a.id === id);
+
     // External annotations (live in SSE hook) route to the SSE hook, not local state.
     // Check membership by ID — source alone is insufficient because share-imported
     // and draft-restored annotations also carry source but live in local state.
     if (ann?.source && externalAnnotations.some((e) => e.id === id)) {
       deleteExternalAnnotation(id);
+
       if (selectedAnnotationId === id) setSelectedAnnotationId(null);
+
       return;
     }
+
     // If this is a checkbox annotation, revert the visual override
     if (id.startsWith("ann-checkbox-")) {
       if (ann) {
         checkbox.revertOverride(ann.blockId);
       }
     }
+
     removeAnnotation(id);
   };
 
   const handleEditAnnotation = (id: string, updates: Partial<Annotation>) => {
     const ann = allAnnotations.find((a) => a.id === id);
+
     if (ann?.source && externalAnnotations.some((e) => e.id === id)) {
       updateExternalAnnotation(id, updates);
+
       return;
     }
+
     setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
   };
 
@@ -3018,6 +3378,7 @@ const App: React.FC = () => {
     sourceInfo,
     sourceConverted,
   });
+
   const {
     aiDocumentPath,
     aiSourceConverted,
@@ -3025,6 +3386,7 @@ const App: React.FC = () => {
     hasAIDocumentContext,
     terminalAskReadableFilePath,
   } = terminalDocumentPresentation;
+
   // renderAs now tracks the active file (plan, linked doc, or folder file), so the AI
   // sees the current surface's mode — raw HTML for an .html file, markdown otherwise.
   const aiRenderAs = renderAs;
@@ -3062,6 +3424,7 @@ const App: React.FC = () => {
     reasoningEffort: aiConfig.reasoningEffort,
     threadTitle: "Document chat",
   });
+
   const {
     messages: aiMessages,
     isCreatingSession: aiIsCreatingSession,
@@ -3073,6 +3436,7 @@ const App: React.FC = () => {
     resetThread: resetAIThread,
     sessionId: aiSessionId,
   } = aiChat;
+
   const layoutPresentation = buildAppLayoutPresentation({
     isAgentTerminalResizing: agentTerminalResize.isDragging,
     isLeftSidebarResizing: tocResize.isDragging,
@@ -3089,7 +3453,9 @@ const App: React.FC = () => {
     aiMessages,
     aiConfig,
   });
+
   const { aiSidebar: layoutAISidebar } = layoutPresentation;
+
   const {
     canUseAI,
     canUseAskAI,
@@ -3097,7 +3463,9 @@ const App: React.FC = () => {
     visibleConfig: visibleAIConfig,
     visibleMessages: visibleAIMessages,
   } = layoutAISidebar;
+
   const canUseDocumentAskAI = canUseAskAI;
+
   const visibleAIProviders = useMemo<AIProviderOption[]>(
     () => (isAgentTerminalReady ? [{ id: "agent-terminal", name: "Agent terminal" }] : aiProviders),
     [aiProviders, isAgentTerminalReady],
@@ -3113,10 +3481,12 @@ const App: React.FC = () => {
             sourcePath: context.sourcePath ?? aiDocumentPath,
           }
         : undefined;
+
       const scopedQuestion = buildDefaultPrompt({
         prompt: question,
         scope,
       });
+
       return buildTerminalAskPrompt({
         scopedQuestion,
         documentPath: aiDocumentPath,
@@ -3144,9 +3514,11 @@ const App: React.FC = () => {
   const previousAIDocumentKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!aiSessionEnabled) return;
+
     if (previousAIDocumentKeyRef.current && previousAIDocumentKeyRef.current !== aiDocumentKey) {
       resetAIThread();
     }
+
     previousAIDocumentKeyRef.current = aiDocumentKey;
   }, [aiDocumentKey, aiSessionEnabled, resetAIThread]);
 
@@ -3159,9 +3531,12 @@ const App: React.FC = () => {
       setAIConfig((prev) => {
         const saved = getAIProviderSettings();
         const providerId = config.providerId !== undefined ? config.providerId : prev.providerId;
+
         const providerChanged =
           config.providerId !== undefined && config.providerId !== prev.providerId;
+
         const provider = aiProviders.find((p) => p.id === providerId) ?? null;
+
         const model = providerChanged
           ? config.model !== undefined
             ? config.model
@@ -3169,6 +3544,7 @@ const App: React.FC = () => {
           : config.model !== undefined
             ? config.model
             : prev.model;
+
         const next = { ...prev, ...config, providerId, model };
         saveAIProviderSelection({
           providerId: next.providerId,
@@ -3176,6 +3552,7 @@ const App: React.FC = () => {
           origin,
           settings: saved,
         });
+
         return next;
       });
       resetAISession();
@@ -3187,6 +3564,7 @@ const App: React.FC = () => {
     if (wideModeType !== null) {
       exitWideMode({ restore: false, panelOpen: true });
     }
+
     setRightSidebarTab("ai");
     setIsPanelOpen(true);
   }, [exitWideMode, wideModeType]);
@@ -3201,19 +3579,25 @@ const App: React.FC = () => {
       if (isAgentTerminalReady) {
         if (sendToAgentTerminal(buildAgentAskPrompt(question, context))) {
           dismissAIAnnouncement();
+
           return true;
         }
+
         handleAgentTerminalReadyChange(false);
+
         if (!canUseAI) {
           toast.error("Agent terminal is not ready");
+
           return false;
         }
       }
 
       if (!canUseAI) {
         toast.error("Ask AI is unavailable");
+
         return false;
       }
+
       dismissAIAnnouncement();
       openAIChat();
       askAI({
@@ -3228,6 +3612,7 @@ const App: React.FC = () => {
           : undefined,
         contextUpdate: aiSessionId ? aiAnnotationsContext : undefined,
       });
+
       return true;
     },
     [
@@ -3262,13 +3647,18 @@ const App: React.FC = () => {
     async (action: CallbackAction) => {
       if (!callbackConfig || isSubmitting) return;
       setIsSubmitting(true);
+
       try {
         const callbackShareUrl = await ensureShareLink();
+
         if (!callbackShareUrl) {
           toast.error("Failed to create share link");
+
           return;
         }
+
         const result = await executeCallback(action, callbackConfig, callbackShareUrl);
+
         if (result) {
           if (result.type === "success") {
             toast.success(result.message);
@@ -3288,6 +3678,7 @@ const App: React.FC = () => {
     () => callCallback(CallbackAction.Approve),
     [callCallback],
   );
+
   const handleCallbackFeedback = React.useCallback(
     () => callCallback(CallbackAction.Feedback),
     [callCallback],
@@ -3308,6 +3699,7 @@ const App: React.FC = () => {
 
   const handleQuickSaveToNotes = async () => {
     const body: SaveNotesRequest = {};
+
     // Mid-edit saves describe the live buffer, matching handleApprove.
     const quickSaveMarkdown = isEditingMarkdown
       ? (markdownEditorHandleRef.current?.getMarkdown() ?? displayedMarkdown)
@@ -3315,6 +3707,7 @@ const App: React.FC = () => {
 
     const s = getObsidianSettings();
     const vaultPath = getEffectiveVaultPath(s);
+
     if (vaultPath) {
       body.obsidian = {
         vaultPath,
@@ -3327,14 +3720,17 @@ const App: React.FC = () => {
     }
 
     const targetName = "Obsidian";
+
     try {
       const res = await fetch("/api/save-notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       const data = parseSaveNotesResponse(await res.json());
       const result = data.results?.obsidian;
+
       if (result?.success) {
         toast.success(`Saved to ${targetName}`);
       } else {
@@ -3349,31 +3745,38 @@ const App: React.FC = () => {
     async (options?: { overwriteDiskConflict?: boolean }): Promise<boolean> => {
       const activeDocument = activeSourceBackedDocument;
       const activeSourceSave = activeDocument?.sourceSave;
+
       if (!activeDocument || !activeSourceSave?.enabled) {
         toast.error("This document cannot be saved to a file");
+
         return true;
       }
 
       const edited = isEditingMarkdown
         ? markdownEditorHandleRef.current?.getMarkdown()
         : activeDocument.currentText;
+
       if (edited == null) {
         toast.error("Editor is not ready");
+
         return true;
       }
 
       const savedChangedFromOpen =
         edited.replace(/\r\n?/g, "\n") !== activeDocument.sessionOpenText;
+
       try {
         const outcome = await sourceBackedDocuments.saveSourceBackedDocument({
           key: activeDocument.key,
           text: edited,
           overwriteDiskConflict: options?.overwriteDiskConflict,
         });
+
         if (!outcome || outcome.type === "save-blocked-conflict") {
           toast.error("Resolve the disk conflict first", {
             description: "Choose Overwrite disk or Reload from disk.",
           });
+
           return true;
         }
 
@@ -3385,10 +3788,12 @@ const App: React.FC = () => {
             setEditorDiffersFromBaseline(true);
             setEditStats(computeEditStats(result.record.diskBaseline, result.record.currentText));
           }
+
           scheduleDraftSave();
           toast.error("File changed on disk", {
             description: "Choose whether to overwrite disk or reload the file.",
           });
+
           return true;
         };
 
@@ -3406,10 +3811,12 @@ const App: React.FC = () => {
             setEditorDiffersFromBaseline(false);
             setEditStats(null);
           }
+
           scheduleDraftSave();
           toast("File updated from disk", {
             description: `${result.record.basename} changed outside Plannotator, so it was reloaded instead of saved.`,
           });
+
           return true;
         };
 
@@ -3420,9 +3827,12 @@ const App: React.FC = () => {
             toast.error("File changed on disk", {
               description: "Plannotator could not load the latest disk version. Try saving again.",
             });
+
             return true;
           }
+
           toast.error(result.message);
+
           return true;
         };
 
@@ -3431,14 +3841,17 @@ const App: React.FC = () => {
         ): boolean => {
           const normalizedEdited = edited.replace(/\r\n?/g, "\n");
           editedMarkdownRef.current = null;
+
           if (activeSourceDocumentKeyRef.current === activeDocument.key) {
             const live = isEditingMarkdown ? markdownEditorHandleRef.current?.getMarkdown() : null;
             const normalizedLive = live?.replace(/\r\n?/g, "\n");
             editSessionBaseRef.current = normalizedEdited;
+
             const currentText =
               normalizedLive ??
               sourceBackedDocuments.getSourceBackedDocument(activeDocument.key)?.currentText ??
               normalizedEdited;
+
             if (currentText === normalizedEdited) {
               setEditorDirty(false);
               setEditorDiffersFromBaseline(false);
@@ -3456,22 +3869,30 @@ const App: React.FC = () => {
               setEditStats(computeEditStats(normalizedEdited, currentText));
             }
           }
+
           if (savedChangedFromOpen && window.innerWidth >= 768) {
             setRightSidebarTab("annotations");
             setIsPanelOpen(true);
           }
+
           scheduleDraftSave();
           toast.success(`Saved ${result.record.basename}`);
+
           return true;
         };
 
         if (outcome.type === "save-conflict") return applySaveConflict(outcome);
+
         if (outcome.type === "save-disk-update-applied") return applyDiskUpdate(outcome);
+
         if (outcome.type === "save-error") return applySaveError(outcome);
+
         if (outcome.type === "save-succeeded") return applySaveSuccess(outcome);
+
         return true;
       } catch {
         toast.error("Save failed");
+
         return true;
       }
     },
@@ -3499,8 +3920,10 @@ const App: React.FC = () => {
 
   const handleReloadDiskConflict = useCallback(() => {
     const activeDocument = activeSourceBackedDocument;
+
     if (!activeDocument?.diskConflict) return;
     const outcome = sourceBackedDocuments.reloadSourceBackedDocument(activeDocument.key);
+
     if (outcome.type !== "document-reloaded") return;
     const remapped = applyEditedDocument(outcome.record.currentText);
     repaintHighlights(remapped);
@@ -3520,12 +3943,15 @@ const App: React.FC = () => {
 
   const handleCopyShareLink = async () => {
     const url = await ensureShareLink();
+
     if (!url) {
       setInitialExportTab("share");
       setShowExport(true);
       toast.error("Failed to create share link");
+
       return;
     }
+
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Share link copied");
@@ -3539,14 +3965,19 @@ const App: React.FC = () => {
   const saveCurrentAnnotations = () => {
     const defaultApp = getDefaultNotesApp();
     const obsOk = isObsidianConfigured();
+
     if (defaultApp === "download") {
       handleDownloadAnnotations();
+
       return;
     }
+
     if (defaultApp === "obsidian" && obsOk) {
       handleQuickSaveToNotes();
+
       return;
     }
+
     setInitialExportTab("notes");
     setShowExport(true);
   };
@@ -3556,6 +3987,7 @@ const App: React.FC = () => {
       if (e.key !== "s" || !(e.metaKey || e.ctrlKey)) return;
 
       const tag = getHTMLElementTarget(e.target)?.tagName;
+
       if (tag === "INPUT" || tag === "TEXTAREA") return;
 
       if (
@@ -3572,6 +4004,7 @@ const App: React.FC = () => {
       if (isEditingMarkdown && activeSourceBackedDocument?.sourceSave?.enabled) {
         e.preventDefault();
         void handleSaveEditedSourceFile();
+
         return;
       }
 
@@ -3581,6 +4014,7 @@ const App: React.FC = () => {
     };
 
     window.addEventListener("keydown", handleSaveShortcut);
+
     return () => window.removeEventListener("keydown", handleSaveShortcut);
   }, [
     showExport,
@@ -3602,6 +4036,7 @@ const App: React.FC = () => {
       if (e.key !== "p" || !(e.metaKey || e.ctrlKey)) return;
 
       const tag = getHTMLElementTarget(e.target)?.tagName;
+
       if (tag === "INPUT" || tag === "TEXTAREA") return;
 
       if (
@@ -3620,6 +4055,7 @@ const App: React.FC = () => {
     };
 
     window.addEventListener("keydown", handlePrintShortcut);
+
     return () => window.removeEventListener("keydown", handlePrintShortcut);
   }, [
     showExport,
@@ -3644,6 +4080,7 @@ const App: React.FC = () => {
     handleCopyShareLink,
     getDocAnnotations: linkedDocHook.getDocAnnotations,
   });
+
   headerHandlersRef.current = {
     handleAnnotateApprove,
     handleAnnotateFeedback,
@@ -3663,91 +4100,115 @@ const App: React.FC = () => {
         headerHandlersRef.current.handleAnnotateExit();
       }
     };
+
     if (maybeConfirmUnsavedSourceFileEdits("close", close)) return;
     close();
   }, [hasFeedbackToSend, maybeConfirmUnsavedSourceFileEdits]);
 
   const handleHeaderAnnotateFeedback = useCallback(() => {
     const sendFeedback = () => headerHandlersRef.current.handleAnnotateFeedback();
+
     if (maybeConfirmUnsavedSourceFileEdits("send-feedback", sendFeedback)) return;
     sendFeedback();
   }, [maybeConfirmUnsavedSourceFileEdits]);
 
   const handleHeaderAnnotateApprove = useCallback(() => {
     const approve = () => headerHandlersRef.current.handleAnnotateApprove();
+
     if (maybeConfirmUnsavedSourceFileEdits("approve", approve)) return;
     approve();
   }, [maybeConfirmUnsavedSourceFileEdits]);
+
   const handleHeaderDownloadAnnotations = useCallback(
     () => headerHandlersRef.current.handleDownloadAnnotations(),
     [],
   );
+
   const handleHeaderCopyShareLink = useCallback(
     () => headerHandlersRef.current.handleCopyShareLink(),
     [],
   );
+
   const handleToggleHtmlTools = useCallback(() => {
     setHtmlToolsHidden((hidden) => !hidden);
   }, []);
+
   const handleCopyAgentInstructions = useCallback(() => {}, []);
   const handleOpenSettings = useCallback(() => setMobileSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setMobileSettingsOpen(false), []);
   const handleOpenMessagePicker = useCallback(() => sidebar.open("messages"), [sidebar.open]);
   const handleCloseRightSidebar = useCallback(() => setIsPanelOpen(false), []);
+
   const handleSelectSidebarFile = useCallback(
     (absolutePath: string, dirPath: string) => {
       if (isEditingMarkdown && annotateSource !== "folder") {
         toast("Finish editing first", { description: 'Use "Done editing" before opening files.' });
+
         return;
       }
+
       if (isEditingMarkdown && !/\.(mdx?|txt)$/i.test(absolutePath)) {
         toast("Finish editing first", {
           description: 'Use "Done editing" before opening non-editable files.',
         });
+
         return;
       }
+
       handleFileBrowserSelect(absolutePath, dirPath);
     },
     [annotateSource, handleFileBrowserSelect, isEditingMarkdown],
   );
+
   const handleFetchAllSidebarFiles = useCallback(() => {
     fileBrowser.fetchAll(fileBrowserDirs);
   }, [fileBrowser, fileBrowserDirs]);
+
   const handleRetrySidebarVaultDirectory = useCallback(
     (vaultPath: string) => fileBrowser.addVaultDir(vaultPath),
     [fileBrowser],
   );
+
   const handleQuickCopyFeedback = useCallback(async () => {
     const output = getCurrentFeedbackPayload();
     await navigator.clipboard.writeText(wrapFeedbackForAgent(output));
   }, [getCurrentFeedbackPayload]);
+
   const handleOpenShareExport = useCallback(() => {
     setIsPanelOpen(false);
     setInitialExportTab("share");
     setShowExport(true);
   }, []);
+
   const handleDiscardPlanEdits = useCallback(() => handleDiscardEdits(), [handleDiscardEdits]);
+
   const handleOpenExport = useCallback(() => {
     setInitialExportTab(undefined);
     setShowExport(true);
   }, []);
+
   const handleCloseExport = useCallback(() => {
     setShowExport(false);
     setInitialExportTab(undefined);
   }, []);
+
   const handlePrint = useCallback(() => window.print(), []);
   const handleOpenImport = useCallback(() => setShowImport(true), []);
   const handleCloseImport = useCallback(() => setShowImport(false), []);
   const handleCloseFeedbackPrompt = useCallback(() => setShowFeedbackPrompt(false), []);
   const handleCloseExitWarning = useCallback(() => setShowExitWarning(false), []);
+
   const handleConfirmExitWarning = useCallback(() => {
     setShowExitWarning(false);
+
     if (exitWarningAction === "approve") handleAnnotateApprove();
     else handleAnnotateExit();
   }, [exitWarningAction, handleAnnotateApprove, handleAnnotateExit]);
+
   const handleToggleGrid = useCallback((enabled: boolean) => {
     configStore.set("gridEnabled", enabled);
   }, []);
+
   const handleSaveToObsidian = useCallback(
     () => headerHandlersRef.current.handleQuickSaveToNotes(),
     [],
@@ -3767,6 +4228,7 @@ const App: React.FC = () => {
     hasDirectEdits,
     hasSavedFileChanges,
   });
+
   const { callbackShareUrlReady, completion, hasHeaderFeedback, isSubmitted } =
     submissionCompletionPresentation;
 
@@ -3796,6 +4258,7 @@ const App: React.FC = () => {
         ?.isVault === true,
     hasActiveFile: fileBrowser.activeFile !== null,
   });
+
   const {
     annotateReaderMaxWidth,
     backLabel,
@@ -3810,8 +4273,10 @@ const App: React.FC = () => {
     viewerCopyLabel,
     viewerOpenInAppPath,
   } = documentPresentation;
+
   const _selectedAIProvider =
     aiProviders.find((provider) => provider.id === aiConfig.providerId) ?? null;
+
   const screenPresentation = buildAppScreenPresentation({
     activeSourceDocument: activeSourceBackedDocument,
     activeSourceSave,
@@ -3833,6 +4298,7 @@ const App: React.FC = () => {
     recentMessages,
     selectedMessageId,
   });
+
   const { leftSidebar: layoutLeftSidebar, rightSidebar: layoutRightSidebar } = layoutPresentation;
 
   // SAFETY: sonner style tokens are custom CSS properties (--normal-bg & friends)

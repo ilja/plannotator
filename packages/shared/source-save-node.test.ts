@@ -28,6 +28,7 @@ const tempDirs: string[] = [];
 function tempRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), "plannotator-source-save-"));
   tempDirs.push(dir);
+
   return dir;
 }
 
@@ -46,6 +47,7 @@ describe("source-save node helpers", () => {
     const capability = createSourceSaveCapability("single-file", filePath);
 
     expect(capability.enabled).toBe(true);
+
     if (capability.enabled) {
       expect(capability.kind).toBe("local-text-file");
       expect(capability.language).toBe("text");
@@ -64,6 +66,7 @@ describe("source-save node helpers", () => {
     const capability = createSourceSaveCapabilityFromSnapshot("single-file", filePath, snapshot);
 
     expect(capability.enabled).toBe(true);
+
     if (!capability.enabled) throw new Error("expected source-save capability");
     expect(capability.hash).toBe(snapshot.hash);
     expect(capability.size).toBe(snapshot.size);
@@ -76,6 +79,7 @@ describe("source-save node helpers", () => {
     const capability = createSourceSaveCapabilityFromText("single-file", filePath, "Recovered\r\n");
 
     expect(capability.enabled).toBe(true);
+
     if (!capability.enabled) throw new Error("expected source-save capability");
     expect(capability.path).toBe(join(realpathSync(root), "missing.md"));
     expect(capability.hash).toMatch(/^sha256:/);
@@ -117,8 +121,10 @@ describe("source-save node helpers", () => {
     const result = saveSourceFileAtomic(filePath, "My change\n", before.hash);
 
     expect(result.ok).toBe(false);
+
     if (!result.ok) {
       expect(result.code).toBe("conflict");
+
       if (result.code !== "conflict") throw new Error("expected conflict");
       expect(result.currentText).toBe("External change\n");
       expect(result.currentHash).toMatch(/^sha256:/);
@@ -126,6 +132,7 @@ describe("source-save node helpers", () => {
       expect(result.currentSize).toBe("External change\n".length);
       expect(result.currentEol).toBe("lf");
     }
+
     expect(readFileSync(filePath, "utf8")).toBe("External change\n");
   });
 
@@ -161,15 +168,18 @@ describe("source-save node helpers", () => {
     const existing = saveSourceFileAtomic(existingPath, "After\n", before.hash, {
       allowedRoot: root,
     });
+
     const missing = saveSourceFileAtomic(missingPath, "After\n", "sha256:missing-base", {
       allowMissingBase: true,
       allowedRoot: root,
     });
 
     expect(existing.ok).toBe(false);
+
     if (!existing.ok) expect(existing.code).toBe("not-writable");
     expect(readFileSync(existingPath, "utf8")).toBe("Before\n");
     expect(missing.ok).toBe(false);
+
     if (!missing.ok) expect(missing.code).toBe("not-writable");
     expect(() => readFileSync(missingPath, "utf8")).toThrow();
   });
@@ -202,12 +212,14 @@ describe("source-save node helpers", () => {
 
       try {
         chmodSync(filePath, 0o000);
+
         const result = saveSourceFileAtomic(filePath, "After\n", before.hash, {
           allowMissingBase: true,
           missingBaseEol: before.eol,
         });
 
         expect(result.ok).toBe(false);
+
         if (!result.ok) expect(result.code).toBe("not-writable");
       } finally {
         chmodSync(filePath, 0o600);

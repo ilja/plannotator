@@ -197,6 +197,7 @@ describe("buildReviewWorkspaceViewModel", () => {
 
   it("withholds file tree actions that are unavailable in pull request review", () => {
     const noop = () => {};
+
     const actions = buildReviewFileTreeActions(
       true,
       false,

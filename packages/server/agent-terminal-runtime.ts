@@ -29,7 +29,9 @@ import nodeAgentTerminalSidecarSource from "./agent-terminal-node-sidecar.mjs" w
 export const AGENT_TERMINAL_WEBTUI_VERSION = "0.1.0";
 
 const NODE_VERSION_TIMEOUT_MS = 3_000;
+
 const NODE_IMPORT_TIMEOUT_MS = 5_000;
+
 const NPM_INSTALL_TIMEOUT_MS = 120_000;
 
 export type ResolvedAgentTerminalRuntime = {
@@ -86,6 +88,7 @@ export async function resolveAgentTerminalRuntime(): Promise<
   ResolvedAgentTerminalRuntime | UnresolvedAgentTerminalRuntime
 > {
   const nodePath = Bun.which("node");
+
   if (!nodePath) {
     return {
       ok: false,
@@ -95,6 +98,7 @@ export async function resolveAgentTerminalRuntime(): Promise<
   }
 
   const nodeCheck = await checkNodeVersion(nodePath);
+
   if (!nodeCheck.ok) return nodeCheck;
 
   // Prefer the bundled (dev) sidecar when it's on real disk; fall back to the
@@ -104,8 +108,10 @@ export async function resolveAgentTerminalRuntime(): Promise<
   // build. Bundled resolution can also fail its preflight (e.g. webtui not in
   // the repo node_modules), in which case we still try the managed runtime.
   const bundledSidecarPath = resolveBundledAgentTerminalSidecarPath();
+
   if (bundledSidecarPath) {
     const bundledRuntime = await resolveBundledAgentTerminalRuntime(nodePath, bundledSidecarPath);
+
     if (bundledRuntime.ok) return bundledRuntime;
   }
 
@@ -114,7 +120,9 @@ export async function resolveAgentTerminalRuntime(): Promise<
 
 export function resolveBundledAgentTerminalSidecarPath(moduleUrl = import.meta.url): string | null {
   const bundledSidecarPath = fileURLToPath(new URL("./agent-terminal-node-sidecar.mjs", moduleUrl));
+
   if (isBunVirtualPath(bundledSidecarPath)) return null;
+
   return existsSync(bundledSidecarPath) ? bundledSidecarPath : null;
 }
 
@@ -124,12 +132,15 @@ async function resolveBundledAgentTerminalRuntime(
 ): Promise<ResolvedAgentTerminalRuntime | UnresolvedAgentTerminalRuntime> {
   const webtuiCoreUrl = resolveImportUrl("@plannotator/webtui/core");
   const webtuiServerUrl = resolveImportUrl("@plannotator/webtui/server");
+
   const preflight = await preflightNodeImports(nodePath, {
     cwd: process.cwd(),
     webtuiCoreUrl,
     webtuiServerUrl,
   });
+
   if (!preflight.ok) return preflight;
+
   return {
     ok: true,
     nodePath,
@@ -145,6 +156,7 @@ async function resolveManagedAgentTerminalRuntime(
 ): Promise<ResolvedAgentTerminalRuntime | UnresolvedAgentTerminalRuntime> {
   const runtimeDir = getAgentTerminalManagedRuntimeDir();
   const installedVersion = readInstalledWebTuiVersion(runtimeDir);
+
   if (installedVersion !== AGENT_TERMINAL_WEBTUI_VERSION) {
     return {
       ok: false,
@@ -156,12 +168,15 @@ async function resolveManagedAgentTerminalRuntime(
   }
 
   const sidecarPath = tryMaterializeAgentTerminalSidecar(runtimeDir);
+
   if (!sidecarPath.ok) return sidecarPath;
+
   const preflight = await preflightNodeImports(nodePath, {
     cwd: runtimeDir,
     webtuiCoreUrl: "@plannotator/webtui/core",
     webtuiServerUrl: "@plannotator/webtui/server",
   });
+
   if (!preflight.ok) return preflight;
 
   return {
@@ -188,6 +203,7 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
   }
 
   const nodePath = Bun.which("node");
+
   if (!nodePath) {
     return fail(
       runtimeDir,
@@ -196,10 +212,12 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
   }
 
   const nodeCheck = await checkNodeVersion(nodePath);
+
   if (!nodeCheck.ok)
     return fail(runtimeDir, `Skipping agent terminal runtime install (${nodeCheck.message})`);
 
   const npmPath = Bun.which("npm");
+
   if (!npmPath) {
     return fail(runtimeDir, "Skipping agent terminal runtime install (npm was not found).");
   }
@@ -221,6 +239,7 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
       webtuiCoreUrl: "@plannotator/webtui/core",
       webtuiServerUrl: "@plannotator/webtui/server",
     });
+
     if (preflight.ok) {
       return {
         ok: true,
@@ -242,6 +261,7 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
     ],
     { cwd: runtimeDir, timeoutMs: NPM_INSTALL_TIMEOUT_MS },
   );
+
   if (install.exitCode !== 0) {
     return fail(
       runtimeDir,
@@ -254,6 +274,7 @@ export async function installAgentTerminalRuntime(): Promise<AgentTerminalRuntim
     webtuiCoreUrl: "@plannotator/webtui/core",
     webtuiServerUrl: "@plannotator/webtui/server",
   });
+
   if (!preflight.ok)
     return fail(runtimeDir, `Skipping agent terminal runtime install (${preflight.message})`);
 
@@ -269,6 +290,7 @@ function materializeAgentTerminalSidecar(runtimeDir: string): string {
   mkdirSync(runtimeDir, { recursive: true });
   const sidecarPath = join(runtimeDir, "agent-terminal-node-sidecar.mjs");
   writeFileSync(sidecarPath, nodeAgentTerminalSidecarSource, "utf8");
+
   return sidecarPath;
 }
 
@@ -288,6 +310,7 @@ function tryMaterializeAgentTerminalSidecar(
 
 function writeRuntimePackageJson(runtimeDir: string): void {
   const packageJsonPath = join(runtimeDir, "package.json");
+
   const packageJson = {
     private: true,
     type: "module",
@@ -295,6 +318,7 @@ function writeRuntimePackageJson(runtimeDir: string): void {
       "@plannotator/webtui": AGENT_TERMINAL_WEBTUI_VERSION,
     },
   };
+
   writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
 
@@ -310,13 +334,16 @@ function readInstalledWebTuiVersion(runtimeDir: string): string | null {
     "webtui",
     "package.json",
   );
+
   if (!existsSync(packageJsonPath)) return null;
+
   try {
     const parsed = Option.getOrUndefined(
       Schema.decodeUnknownOption(VersionInfoSchema)(
         JSON.parse(readFileSync(packageJsonPath, "utf8")),
       ),
     );
+
     return parsed?.version ?? null;
   } catch {
     return null;
@@ -334,7 +361,9 @@ async function checkNodeVersion(
     ],
     { timeoutMs: NODE_VERSION_TIMEOUT_MS },
   );
+
   if (result.exitCode === 0) return { ok: true };
+
   return {
     ok: false,
     reason: "pty-unavailable",
@@ -354,11 +383,14 @@ async function preflightNodeImports(
     `await import(${JSON.stringify(args.webtuiCoreUrl)});`,
     `await import(${JSON.stringify(args.webtuiServerUrl)});`,
   ].join(" ");
+
   const result = await runCommand(nodePath, ["--input-type=module", "-e", script], {
     cwd: args.cwd,
     timeoutMs: NODE_IMPORT_TIMEOUT_MS,
   });
+
   if (result.exitCode === 0) return { ok: true };
+
   return {
     ok: false,
     reason: "runtime-unavailable",
@@ -375,6 +407,7 @@ async function runCommand(
   },
 ): Promise<CommandResult> {
   let proc: Bun.Subprocess<"pipe", "pipe", "pipe">;
+
   try {
     proc = Bun.spawn([command, ...args], {
       cwd: options.cwd,
@@ -392,6 +425,7 @@ async function runCommand(
 
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+
   const timeout = new Promise<number>((resolve) => {
     timer = setTimeout(() => {
       timedOut = true;
@@ -405,6 +439,7 @@ async function runCommand(
     readStream(proc.stdout),
     readStream(proc.stderr),
   ]);
+
   if (timer) clearTimeout(timer);
 
   return {
@@ -417,15 +452,18 @@ async function runCommand(
 
 async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
   if (!stream) return "";
+
   return new Response(stream).text();
 }
 
 function summarizeCommandFailure(result: CommandResult): string {
   if (result.timedOut) return "timed out";
   const text = (result.stderr || result.stdout).trim();
+
   if (text) {
     return text.split(/\r?\n/).slice(-3).join(" ").trim();
   }
+
   return `exit ${result.exitCode}`;
 }
 
@@ -448,6 +486,7 @@ function resolveImportUrl(specifier: string): string {
 
 function isBunVirtualPath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/");
+
   return (
     normalized.startsWith("/$bunfs/") ||
     /^[A-Za-z]:\/(?:\$bunfs|~BUN)\//i.test(normalized) ||

@@ -8,7 +8,9 @@ import { transformReviewInput, type ExternalFields } from "./external-annotation
 
 function ok(body: ExternalFields) {
   const r = transformReviewInput(body);
+
   if ("error" in r) throw new Error(`expected ok, got error: ${r.error}`);
+
   return r.annotations;
 }
 
@@ -40,6 +42,7 @@ describe("transformReviewInput — scope-aware location requirements", () => {
       lineEnd: 5,
       text: "x",
     });
+
     expect(a.scope).toBe("line");
     expect(a.lineStart).toBe(3);
 
@@ -49,6 +52,7 @@ describe("transformReviewInput — scope-aware location requirements", () => {
       filePath: "src/a.ts",
       text: "x",
     });
+
     expect("error" in noLine && noLine.error).toContain("lineStart");
   });
 

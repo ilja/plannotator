@@ -11,12 +11,19 @@ import { storage } from "./storage";
 
 // Storage keys
 const STORAGE_KEY_ENABLED = "plannotator-obsidian-enabled";
+
 const STORAGE_KEY_VAULT = "plannotator-obsidian-vault";
+
 const STORAGE_KEY_FOLDER = "plannotator-obsidian-folder";
+
 const STORAGE_KEY_CUSTOM_PATH = "plannotator-obsidian-custom-path";
+
 const STORAGE_KEY_FILENAME_FORMAT = "plannotator-obsidian-filename-format";
+
 const STORAGE_KEY_VAULT_BROWSER = "plannotator-obsidian-vault-browser";
+
 const STORAGE_KEY_AUTOSAVE = "plannotator-obsidian-autosave";
+
 const STORAGE_KEY_FILENAME_SEPARATOR = "plannotator-obsidian-filename-separator";
 
 // Sentinel value for custom path selection
@@ -88,6 +95,7 @@ export function getEffectiveVaultPath(settings: ObsidianSettings): string {
   if (settings.vaultPath === CUSTOM_PATH_SENTINEL) {
     return settings.customPath || "";
   }
+
   return settings.vaultPath;
 }
 
@@ -97,6 +105,7 @@ export function getEffectiveVaultPath(settings: ObsidianSettings): string {
 export function isObsidianConfigured(): boolean {
   const settings = getObsidianSettings();
   const effectivePath = getEffectiveVaultPath(settings);
+
   return settings.enabled && effectivePath.trim().length > 0;
 }
 
@@ -106,6 +115,7 @@ export function isObsidianConfigured(): boolean {
 export function isVaultBrowserEnabled(): boolean {
   const settings = getObsidianSettings();
   const effectivePath = getEffectiveVaultPath(settings);
+
   return settings.enabled && settings.vaultBrowserEnabled && effectivePath.trim().length > 0;
 }
 
@@ -144,6 +154,7 @@ export function extractTags(markdown: string): string[] {
   // 1. Extract from first H1 title
   // Matches: "# Title" or "# Implementation Plan: Title" or "# Plan: Title"
   const h1Match = markdown.match(/^#\s+(?:Implementation\s+Plan:|Plan:)?\s*(.+)$/im);
+
   if (h1Match) {
     const titleWords = h1Match[1]
       .toLowerCase()
@@ -162,6 +173,7 @@ export function extractTags(markdown: string): string[] {
 
   for (const [, lang] of langMatches) {
     const normalizedLang = lang.toLowerCase();
+
     // Skip generic/config languages and duplicates
     if (
       !seenLangs.has(normalizedLang) &&
@@ -201,6 +213,7 @@ tags: [${tagList}]
  */
 export function generateFilename(): string {
   const now = new Date();
+
   const timestamp = now
     .toISOString()
     .slice(0, 16) // "2026-01-02T14:30"

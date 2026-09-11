@@ -23,9 +23,11 @@ export function getAnnotationCountBySection(
 
     // Find the end of this section (next heading of same/higher level)
     let endLine = Infinity;
+
     for (let j = i + 1; j < headings.length; j++) {
       const nextHeading = headings[j];
       const nextLevel = nextHeading.level ?? 1;
+
       if (nextLevel <= currentLevel) {
         endLine = nextHeading.startLine;
         break;
@@ -34,6 +36,7 @@ export function getAnnotationCountBySection(
 
     // Count annotations in blocks within this section
     let count = 0;
+
     for (const block of blocks) {
       if (block.startLine >= startLine && block.startLine < endLine) {
         // Count annotations that belong to this block

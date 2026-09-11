@@ -17,6 +17,7 @@ export function formatConventionalPrefix(
 ): string {
   if (!label) return "";
   const decs = decorations?.length ? ` (${decorations.join(", ")})` : "";
+
   return `**${label}${decs}:** `;
 }
 
@@ -35,6 +36,7 @@ export interface FeedbackDiffContext {
 function describeDiff(ctx: FeedbackDiffContext): string {
   const { mode, base, worktreePath } = ctx;
   let label: string;
+
   switch (mode) {
     case "uncommitted":
       label = "Uncommitted changes";
@@ -72,6 +74,7 @@ function describeDiff(ctx: FeedbackDiffContext): string {
     default:
       label = mode;
   }
+
   return worktreePath ? `${label} _(worktree: ${worktreePath})_` : label;
 }
 
@@ -91,9 +94,11 @@ function formatFileAnnotations(fileAnnotations: CodeAnnotation[], headingLevel =
   const sorted = [...fileAnnotations].sort((a, b) => {
     const aScope = a.scope ?? "line";
     const bScope = b.scope ?? "line";
+
     if (aScope !== bScope) {
       return aScope === "file" ? -1 : 1;
     }
+
     return a.lineStart - b.lineStart;
   });
 
@@ -103,14 +108,17 @@ function formatFileAnnotations(fileAnnotations: CodeAnnotation[], headingLevel =
 
     if (scope === "file") {
       output += `${headingLevel} File Comment\n`;
+
       if (ann.text) {
         output += `${prefix}${ann.text}\n`;
       } else if (prefix) {
         output += `${prefix.trimEnd()}\n`;
       }
+
       if (ann.suggestedCode) {
         output += `\n**Suggested code:**\n\`\`\`\n${ann.suggestedCode}\n\`\`\`\n`;
       }
+
       output += "\n";
       continue;
     }
@@ -119,9 +127,11 @@ function formatFileAnnotations(fileAnnotations: CodeAnnotation[], headingLevel =
       ann.lineStart === ann.lineEnd
         ? `Line ${ann.lineStart}`
         : `Lines ${ann.lineStart}-${ann.lineEnd}`;
+
     const tokenSuffix = ann.tokenText
       ? ` — \`\`${ann.tokenText.replace(/`/g, "\\`")}\`\`${ann.charStart != null ? ` (chars ${ann.charStart}-${ann.charEnd})` : ""}`
       : "";
+
     output += `${headingLevel} ${lineRange} (${ann.side})${tokenSuffix}\n`;
 
     if (ann.text) {
@@ -129,12 +139,15 @@ function formatFileAnnotations(fileAnnotations: CodeAnnotation[], headingLevel =
     } else if (prefix) {
       output += `${prefix.trimEnd()}\n`;
     }
+
     if (ann.reasoning) {
       output += `\n**Reasoning:** ${ann.reasoning}\n`;
     }
+
     if (ann.suggestedCode) {
       output += `\n**Suggested code:**\n\`\`\`\n${ann.suggestedCode}\n\`\`\`\n`;
     }
+
     output += "\n";
   }
 
@@ -143,65 +156,77 @@ function formatFileAnnotations(fileAnnotations: CodeAnnotation[], headingLevel =
 
 function renderGeneralComments(annotations: CodeAnnotation[]): string {
   let output = "## General\n\n";
+
   for (const ann of annotations) {
     const prefix = formatConventionalPrefix(ann.conventionalLabel, ann.decorations);
+
     if (ann.text) {
       output += `${prefix}${ann.text}\n`;
     } else if (prefix) {
       output += `${prefix.trimEnd()}\n`;
     }
+
     if (ann.reasoning) {
       output += `\n**Reasoning:** ${ann.reasoning}\n`;
     }
+
     output += "\n";
   }
+
   return output;
 }
 
 function groupByFile(annotations: CodeAnnotation[]): Map<string, CodeAnnotation[]> {
   const grouped = new Map<string, CodeAnnotation[]>();
+
   for (const ann of annotations) {
     const existing = grouped.get(ann.filePath) || [];
     existing.push(ann);
     grouped.set(ann.filePath, existing);
   }
+
   return grouped;
 }
 
 function renderFileGroups(grouped: Map<string, CodeAnnotation[]>, headingLevel: string): string {
   const annotationHeading = headingLevel + "#";
   let output = "";
+
   for (const [filePath, fileAnnotations] of grouped) {
     output += `${headingLevel} ${filePath}\n\n`;
     output += formatFileAnnotations(fileAnnotations, annotationHeading);
   }
+
   return output;
 }
 
 function scopeDisplayLabel(scope: string): string {
   if (scope === "layer") return "Layer";
+
   if (scope === "full-stack") return "Full-stack";
+
   return scope;
 }
 
 function renderScopedGroups(annotations: CodeAnnotation[], headingLevel: string): string {
-  const scopes = new Set(
-    annotations
-      .map((a) => a.diffScope)
-      .filter((scope): scope is NonNullable<CodeAnnotation["diffScope"]> => Boolean(scope)),
-  );
+  const scopes = new Set(annotations.flatMap((a) => (a.diffScope ? [a.diffScope] : [])));
+
   if (scopes.size <= 1) return renderFileGroups(groupByFile(annotations), headingLevel);
 
   let output = "";
+
   for (const scope of scopes) {
     const scopeAnns = annotations.filter((a) => a.diffScope === scope);
     output += `${headingLevel} ${scopeDisplayLabel(scope)}\n\n`;
     output += renderFileGroups(groupByFile(scopeAnns), headingLevel + "#");
   }
+
   const unscopedAnns = annotations.filter((a) => !a.diffScope);
+
   if (unscopedAnns.length > 0) {
     output += renderFileGroups(groupByFile(unscopedAnns), headingLevel);
   }
+
   return output;
 }
 
@@ -213,9 +238,10 @@ function renderSingleReviewFeedback(
   diffContext: FeedbackDiffContext | undefined,
   prReviewScope: string | undefined,
 ): string {
-  const scopes = new Set(annotations.map((a) => a.diffScope).filter(Boolean));
+  const scopes = new Set(annotations.flatMap((a) => (a.diffScope ? [a.diffScope] : [])));
   const derivedScope = scopes.size === 1 ? [...scopes][0] : undefined;
   const scopeLabel = derivedScope ?? (scopes.size === 0 ? prReviewScope : undefined);
+
   let output = prMeta
     ? `# PR Review: ${getDisplayRepo(prMeta)}#${prMeta.number}\n\n` +
       `**${prMeta.title}**\n` +
@@ -226,14 +252,16 @@ function renderSingleReviewFeedback(
 
   output += renderScopedGroups(placed, "##");
   output += generalSection;
+
   return output;
 }
 
 function renderGroupedPRFeedback(placed: CodeAnnotation[], generalSection: string): string {
-  const prUrls = new Set(placed.map((a) => a.prUrl).filter(Boolean));
+  const prUrls = new Set(placed.flatMap((a) => (a.prUrl ? [a.prUrl] : [])));
   let output = prUrls.size > 1 ? "# Multi-PR Review\n\n" : "# Code Review\n\n";
 
   const byPR = new Map<string, CodeAnnotation[]>();
+
   for (const ann of placed) {
     const key = ann.prUrl ?? "_none";
     const existing = byPR.get(key) || [];
@@ -243,6 +271,7 @@ function renderGroupedPRFeedback(placed: CodeAnnotation[], generalSection: strin
 
   for (const [prUrl, prAnnotations] of byPR) {
     const [sample] = prAnnotations;
+
     if (!sample) continue;
 
     if (prUrl === "_none") {
@@ -254,8 +283,9 @@ function renderGroupedPRFeedback(placed: CodeAnnotation[], generalSection: strin
       output += `## ${repo}${num}${title ? ` — ${title}` : ""}\n\n`;
     }
 
-    const scopes = new Set(prAnnotations.map((a) => a.diffScope).filter(Boolean));
+    const scopes = new Set(prAnnotations.flatMap((a) => (a.diffScope ? [a.diffScope] : [])));
     const [scope] = scopes;
+
     if (scopes.size === 1 && scope !== undefined) {
       output += `Review scope: ${scope}\n\n`;
     }
@@ -270,10 +300,12 @@ function requiresGroupedPRFeedback(
   placed: CodeAnnotation[],
   prMeta: PRMetadata | null | undefined,
 ): boolean {
-  const prUrls = new Set(placed.map((a) => a.prUrl).filter(Boolean));
+  const prUrls = new Set(placed.flatMap((a) => (a.prUrl ? [a.prUrl] : [])));
+
   if (prUrls.size > 1) return true;
 
   const [singlePrUrl] = prUrls;
+
   return (
     singlePrUrl !== undefined &&
     prMeta !== undefined &&

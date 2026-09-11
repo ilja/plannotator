@@ -49,6 +49,7 @@ export function buildForkPreamble(ctx: AIContext): string {
       if (ctx.review.filePath) {
         lines.push(`## Reviewing: ${ctx.review.filePath}`);
       }
+
       if (ctx.review.selectedCode) {
         lines.push("");
         lines.push("### Selected Code");
@@ -56,42 +57,53 @@ export function buildForkPreamble(ctx: AIContext): string {
         lines.push(ctx.review.selectedCode);
         lines.push("```");
       }
+
       if (ctx.review.lineRange) {
         const { start, end, side } = ctx.review.lineRange;
         lines.push(`Lines ${start}-${end} (${side} side)`);
       }
+
       lines.push("");
       lines.push("## Diff Patch");
       lines.push("```diff");
       lines.push(truncate(ctx.review.patch, MAX_DIFF_CHARS));
       lines.push("```");
+
       if (ctx.review.annotations) {
         lines.push("");
         lines.push("## User Annotations So Far");
         lines.push(ctx.review.annotations);
       }
+
       break;
     }
+
     case "annotate": {
       lines.push(`## Annotating: ${ctx.annotate.filePath}`);
+
       if (ctx.annotate.sourceInfo) {
         lines.push(`Source: ${ctx.annotate.sourceInfo}`);
       }
+
       if (ctx.annotate.renderAs) {
         lines.push(`Render mode: ${ctx.annotate.renderAs}`);
       }
+
       if (ctx.annotate.sourceConverted) {
         lines.push(
           "Note: this content was converted before annotation, so source line numbers may not match the original document.",
         );
       }
+
       lines.push("");
       lines.push(truncate(ctx.annotate.content, MAX_DOCUMENT_CHARS));
+
       if (ctx.annotate.annotations) {
         lines.push("");
         lines.push("## User Annotations So Far");
         lines.push(ctx.annotate.annotations);
       }
+
       break;
     }
   }
@@ -111,6 +123,7 @@ export function buildEffectivePrompt(
   if (!firstQuerySent && preamble) {
     return `${preamble}\n\n---\n\nUser question: ${userPrompt}`;
   }
+
   return userPrompt;
 }
 
@@ -119,10 +132,12 @@ export function buildEffectivePrompt(
 // ---------------------------------------------------------------------------
 
 const MAX_DOCUMENT_CHARS = 60_000;
+
 const MAX_DIFF_CHARS = 40_000;
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
+
   return `${text.slice(0, max)}\n\n... [truncated for context window]`;
 }
 

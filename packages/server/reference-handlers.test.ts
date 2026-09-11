@@ -27,6 +27,7 @@ interface DocExistsTestResponse {
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
+
   return dir;
 }
 
@@ -34,11 +35,13 @@ function writeTempFile(root: string, relativePath: string, content = "x"): strin
   const full = join(root, relativePath);
   mkdirSync(join(full, ".."), { recursive: true });
   writeFileSync(full, content);
+
   return full;
 }
 
 function git(cwd: string, ...args: string[]): void {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+
   if (result.status !== 0) {
     throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
   }
@@ -46,10 +49,12 @@ function git(cwd: string, ...args: string[]): void {
 
 function flattenTree(nodes: VaultNode[]): string[] {
   const paths: string[] = [];
+
   for (const node of nodes) {
     if (node.type === "file") paths.push(node.path);
     else paths.push(...flattenTree(node.children ?? []));
   }
+
   return paths;
 }
 
@@ -64,7 +69,9 @@ async function postDocExists(
     }),
     options,
   );
+
   const data: DocExistsTestResponse = await res.json();
+
   return data;
 }
 
@@ -74,7 +81,9 @@ async function getDoc(
 ) {
   const url = new URL("http://localhost/api/doc");
   url.searchParams.set("path", path);
+
   if (options.base) url.searchParams.set("base", options.base);
+
   return handleDoc(new Request(url.toString()), {
     rootPaths: options.rootPaths,
     sourceSaveFilePath: options.sourceSaveFilePath,
@@ -177,6 +186,7 @@ describe("handleDocExists", () => {
       rootPaths: [root],
       sourceSaveFilePath: source,
     });
+
     const data: {
       markdown?: string;
       sourceSave?: { enabled: boolean; scope?: string; path?: string; hash?: string };
@@ -199,6 +209,7 @@ describe("handleDocExists", () => {
       rootPaths: [root],
       sourceSaveFilePath: source,
     });
+
     const data: { markdown?: string; sourceSave?: unknown } = await res.json();
 
     expect(res.status).toBe(200);

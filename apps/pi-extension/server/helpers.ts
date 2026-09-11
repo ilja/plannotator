@@ -13,6 +13,7 @@ import { Option, Schema } from "effect";
  * decodes this into a typed request schema at its boundary.
  */
 const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
+
 export type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
 
 /** Parse a JSON request body and return null for malformed or non-object payloads. */
@@ -75,8 +76,10 @@ export function requestUrl(req: IncomingMessage): URL {
 
 export function toWebRequest(req: IncomingMessage): Request {
   const headers = new Headers();
+
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue;
+
     if (Array.isArray(value)) {
       for (const item of value) headers.append(key, item);
     } else {

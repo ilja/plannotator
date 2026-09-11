@@ -18,6 +18,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fad
 
   const update = useCallback(() => {
     const el = scrollRef.current;
+
     if (!el) return;
     setShowTop(el.scrollTop > 2);
     setShowBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
@@ -26,9 +27,11 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fad
   useEffect(() => {
     update();
     const el = scrollRef.current;
+
     if (!el) return;
     const observer = new ResizeObserver(update);
     observer.observe(el);
+
     return () => observer.disconnect();
   }, [update]);
 

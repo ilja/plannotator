@@ -13,6 +13,7 @@ import {
  */
 
 let runtime: ManagedRuntime.ManagedRuntime<CodeHighlightingService, unknown> | null = null;
+
 let layer: Layer.Layer<CodeHighlightingService, unknown, never> | null = null;
 
 function getLayer(): Layer.Layer<CodeHighlightingService, unknown, never> {
@@ -20,6 +21,7 @@ function getLayer(): Layer.Layer<CodeHighlightingService, unknown, never> {
     // SAFETY: CodeHighlightingLive error channel widens from HighlightProviderError to unknown at runtime boundary
     layer = CodeHighlightingLive as Layer.Layer<CodeHighlightingService, unknown, never>;
   }
+
   return layer;
 }
 
@@ -30,6 +32,7 @@ export function getCodeHighlightingRuntime(): ManagedRuntime.ManagedRuntime<
   if (!runtime) {
     runtime = ManagedRuntime.make(getLayer());
   }
+
   return runtime;
 }
 
@@ -42,6 +45,7 @@ export function setCodeHighlightingRuntimeForTest(
 ): ManagedRuntime.ManagedRuntime<CodeHighlightingService, unknown> | null {
   const prev = runtime;
   runtime = testRuntime;
+
   return prev;
 }
 
@@ -50,12 +54,14 @@ export function setCodeHighlightingLayerForTest(
 ): Layer.Layer<CodeHighlightingService, unknown, never> | null {
   const prev = layer;
   layer = testLayer;
+
   // Invalidate runtime so next get creates from new layer
   if (runtime) {
     // fire and forget dispose – tests should dispose manually if needed
     void runtime.dispose();
     runtime = null;
   }
+
   return prev;
 }
 
@@ -65,6 +71,7 @@ export async function disposeCodeHighlightingRuntime(): Promise<void> {
     runtime = null;
     await r.dispose();
   }
+
   if (layer) {
     layer = null;
   }
@@ -81,6 +88,7 @@ export function runHighlightFork(input: {
 }): Effect.Effect<Fiber.Fiber<HighlightResult, never>, never, CodeHighlightingService> {
   return Effect.gen(function* () {
     const svc = yield* CodeHighlightingService;
+
     return yield* svc.highlight(input).pipe(Effect.forkChild);
   });
 }

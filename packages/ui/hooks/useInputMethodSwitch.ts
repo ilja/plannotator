@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import type { InputMethod } from "../types";
 
 const DOUBLE_TAP_WINDOW = 300; // ms — max gap between taps for double-tap
+
 const HOLD_THRESHOLD = 300; // ms — hold longer than this = temporary switch
 
 /**
@@ -36,9 +37,11 @@ export function useInputMethodSwitch(
       // Don't interfere when user is typing
       // SAFETY: cast is safe — HTMLElement is expected shape
       const tag = (e.target as HTMLElement)?.tagName;
+
       // SAFETY: cast is safe — HTMLElement is expected shape
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable)
         return;
+
       // Don't interfere when a quick label picker is open (it uses Alt+N shortcuts)
       if (document.querySelector("[data-quick-label-picker]")) return;
 

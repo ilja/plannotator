@@ -10,6 +10,7 @@ interface Loc {
 
 function loc(url: string): Loc {
   const parsed = new URL(url);
+
   return { search: parsed.search, hash: parsed.hash };
 }
 
@@ -24,6 +25,7 @@ describe("getCallbackConfig", () => {
         "https://share.plannotator.ai/?cb=https%3A%2F%2Flocalhost%3A9456%2Fplannotator-cb&ct=tok-123#abc",
       ),
     );
+
     expect(result).not.toBeNull();
     expect(result!.callbackUrl).toBe("https://localhost:9456/plannotator-cb");
     expect(result!.token).toBe("tok-123");
@@ -35,6 +37,7 @@ describe("getCallbackConfig", () => {
         "https://share.plannotator.ai/#abc?cb=https%3A%2F%2Flocalhost%3A9456%2Fplannotator-cb&ct=tok-456",
       ),
     );
+
     expect(result).not.toBeNull();
     expect(result!.callbackUrl).toBe("https://localhost:9456/plannotator-cb");
     expect(result!.token).toBe("tok-456");
@@ -54,9 +57,11 @@ describe("getCallbackConfig", () => {
 
   test("decodes encoded callback URL", () => {
     const encoded = encodeURIComponent("https://bot.internal/plannotator-cb");
+
     const result = getCallbackConfig(
       loc(`https://share.plannotator.ai/?cb=${encoded}&ct=tok-abc#hash`),
     );
+
     expect(result!.callbackUrl).toBe("https://bot.internal/plannotator-cb");
   });
 
@@ -74,9 +79,11 @@ describe("getCallbackConfig", () => {
 
   test("K8s cluster URL (http) is accepted", () => {
     const k8sUrl = "http://plannotator-cb.svc.cluster.local:9456/callback";
+
     const result = getCallbackConfig(
       loc(`https://share.plannotator.ai/?cb=${encodeURIComponent(k8sUrl)}&ct=k8s-tok-xyz`),
     );
+
     expect(result!.callbackUrl).toBe(k8sUrl);
     expect(result!.token).toBe("k8s-tok-xyz");
   });
@@ -96,9 +103,11 @@ describe("getCallbackConfig", () => {
 
   test("preserves percent-encoded chars in callback URL query params", () => {
     const presignedUrl = "https://s3.amazonaws.com/bucket/cb?X-Amz-Signature=abc%2Bdef%2Fghi%3D";
+
     const result = getCallbackConfig(
       loc(`https://share.plannotator.ai/?cb=${encodeURIComponent(presignedUrl)}&ct=tok-presigned`),
     );
+
     expect(result).not.toBeNull();
     expect(result!.callbackUrl).toBe(presignedUrl);
     expect(result!.token).toBe("tok-presigned");
@@ -112,12 +121,15 @@ describe("getCallbackConfig", () => {
 // --- executeCallback ---
 
 const mockConfig = { callbackUrl: "https://localhost:9456/plannotator-cb", token: "tok-test" };
+
 const mockAnnotatedUrl = "https://share.plannotator.ai/#abc123";
 
 let originalFetch: typeof globalThis.fetch;
+
 beforeEach(() => {
   originalFetch = globalThis.fetch;
 });
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
@@ -171,6 +183,7 @@ describe("executeCallback", () => {
     globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
       // SAFETY: init.body is string from fetch init — cast to string
       capturedBody = init.body as string;
+
       return new Response("{}", { status: 200 });
     }) as any;
     await executeCallback(CallbackAction.Approve, mockConfig, mockAnnotatedUrl);
@@ -186,6 +199,7 @@ describe("executeCallback", () => {
     globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
       // SAFETY: init.body is string from fetch init — cast to string
       capturedBody = init.body as string;
+
       return new Response("{}", { status: 200 });
     }) as any;
     await executeCallback(CallbackAction.Feedback, mockConfig, mockAnnotatedUrl);

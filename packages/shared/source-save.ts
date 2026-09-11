@@ -166,6 +166,7 @@ export function hasSourceSaveConflictSnapshot(
   if (!("code" in response) || response.code !== "conflict") return false;
   // SAFETY: guarded by response.code === "conflict" above
   const conflict = response as SourceSaveConflictResponse;
+
   return (
     Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(conflict.currentText)) !==
       undefined &&
@@ -187,14 +188,19 @@ export function isSourceSaveFilePath(filePath: string): boolean {
 
 export function getSourceSaveLanguage(filePath: string): SourceSaveLanguage | null {
   const lower = filePath.toLowerCase();
+
   if (lower.endsWith(".mdx")) return "mdx";
+
   if (lower.endsWith(".md")) return "markdown";
+
   if (lower.endsWith(".txt")) return "text";
+
   return null;
 }
 
 export function basenameFromPath(filePath: string): string {
   const normalized = filePath.replace(/\\/g, "/");
+
   return normalized.split("/").pop() || filePath;
 }
 
@@ -208,7 +214,9 @@ export function enabledSourceSave(
   snapshot: SourceFileSnapshot,
 ): SourceSaveCapability {
   const language = getSourceSaveLanguage(filePath);
+
   if (!language) return disabledSourceSave("unsupported-extension");
+
   return {
     enabled: true,
     kind: "local-text-file",

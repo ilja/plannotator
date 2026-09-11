@@ -33,11 +33,13 @@ export const ChoiceQuestionBlock: React.FC<ChoiceQuestionBlockProps> = ({
   onNavigateAnchor,
 }) => {
   const options = block.choiceOptions ?? [];
+
   const recommendationLine = block.sourceText
     ?.split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .at(-1);
+
   const inlineProps = {
     imageBaseDir,
     onImageClick,

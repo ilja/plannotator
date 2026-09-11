@@ -25,6 +25,7 @@ import {
 
 function mockSession(id: string, parentSessionId: string | null = null): AISession {
   let active = false;
+
   return {
     get id() {
       return id;
@@ -65,6 +66,7 @@ function mockProvider(name = "mock"): TestProvider {
     },
     async forkSession(opts) {
       const parent = opts.context.parent;
+
       return mockSession(`forked-${++sessionCounter}`, parent?.sessionId ?? null);
     },
     async resumeSession(sessionId) {
@@ -88,6 +90,7 @@ describe("command path helpers", () => {
 
   test("resolveCommandFromWhichOutput skips extensionless Windows shims", () => {
     const raw = String.raw`C:\Users\Andrew\AppData\Roaming\npm\pi`;
+
     const resolved = resolveCommandFromWhichOutput(
       `${raw}\r\n${raw}.cmd\r\n`,
       "win32",
@@ -144,8 +147,10 @@ describe("command path helpers", () => {
       args: string[];
       options: { stdio: "ignore"; windowsHide: boolean };
     }> = [];
+
     const killed = killWindowsProcessTree(1234, "win32", (command, args, options) => {
       calls.push({ command, args, options });
+
       return { status: 0 };
     });
 
@@ -161,8 +166,10 @@ describe("command path helpers", () => {
 
   test("killWindowsProcessTree skips non-Windows platforms", () => {
     let called = false;
+
     const killed = killWindowsProcessTree(1234, "darwin", () => {
       called = true;
+
       return { status: 0 };
     });
 
@@ -176,6 +183,7 @@ describe("command path helpers", () => {
       expect(
         killWindowsProcessTree(pid, "win32", () => {
           called = true;
+
           return { status: 0 };
         }),
       ).toBe(false);
@@ -320,6 +328,7 @@ describe("Context builders", () => {
       mode: "code-review",
       review: { patch: "diff --git a/foo.ts b/foo.ts\n+hello" },
     };
+
     const prompt = buildSystemPrompt(ctx);
     expect(prompt).toContain("Plannotator");
     expect(prompt).toContain("diff --git");
@@ -336,6 +345,7 @@ describe("Context builders", () => {
         renderAs: "html",
       },
     };
+
     const prompt = buildSystemPrompt(ctx);
     expect(prompt).toContain("Plannotator");
     expect(prompt).toContain("/tmp/test.md");
@@ -354,6 +364,7 @@ describe("Context builders", () => {
       },
       parent: { sessionId: "parent-123", cwd: "/project" },
     };
+
     const preamble = buildForkPreamble(ctx);
     expect(preamble).toContain("reviewing your work in Plannotator");
     expect(preamble).toContain("# Doc");
@@ -371,6 +382,7 @@ describe("Context builders", () => {
       },
       parent: { sessionId: "p", cwd: "/proj" },
     };
+
     const preamble = buildForkPreamble(ctx);
     expect(preamble).toContain("src/auth.ts");
     expect(preamble).toContain("function verify()");
@@ -379,10 +391,12 @@ describe("Context builders", () => {
 
   test("truncates very long documents", () => {
     const longDocument = "x".repeat(100_000);
+
     const ctx: AIContext = {
       mode: "annotate",
       annotate: { content: longDocument, filePath: "/tmp/doc.md" },
     };
+
     const prompt = buildSystemPrompt(ctx);
     expect(prompt).toContain("[truncated for context window]");
     expect(prompt.length).toBeLessThan(longDocument.length);
@@ -480,6 +494,7 @@ describe("AI endpoints", () => {
     const reg = new ProviderRegistry();
     const sm = new SessionManager();
     const endpoints = createAIEndpoints({ registry: reg, sessionManager: sm });
+
     return { reg, sm, endpoints };
   }
 
@@ -492,6 +507,7 @@ describe("AI endpoints", () => {
         body: JSON.stringify({ context: { mode: "code-review" } }),
       }),
     );
+
     expect(sessionResponse.status).toBe(400);
 
     const queryResponse = await endpoints["/api/ai/query"](
@@ -500,6 +516,7 @@ describe("AI endpoints", () => {
         body: JSON.stringify({ sessionId: 42, prompt: "hello" }),
       }),
     );
+
     expect(queryResponse.status).toBe(400);
 
     const permissionResponse = await endpoints["/api/ai/permission"](
@@ -508,6 +525,7 @@ describe("AI endpoints", () => {
         body: JSON.stringify({ sessionId: "session", requestId: "request", allow: "yes" }),
       }),
     );
+
     expect(permissionResponse.status).toBe(400);
   });
 
@@ -517,6 +535,7 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities"),
     );
+
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(false);
   });
@@ -528,6 +547,7 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities"),
     );
+
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.available).toBe(true);
     expect(data.providers[0].id).toBe("mock");
@@ -541,6 +561,7 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities"),
     );
+
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.defaultProvider).toBe("pi-fast");
   });
@@ -550,6 +571,7 @@ describe("AI endpoints", () => {
     const sm = new SessionManager();
     const provider = mockProvider("pi-sdk");
     reg.register(provider);
+
     const endpoints = createAIEndpoints({
       registry: reg,
       sessionManager: sm,
@@ -561,6 +583,7 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities"),
     );
+
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     expect(data.providers[0].models).toEqual([
       { id: "pi/model", label: "Pi Model", default: true },
@@ -575,6 +598,7 @@ describe("AI endpoints", () => {
     const res = await endpoints["/api/ai/capabilities"](
       new Request("http://localhost/api/ai/capabilities"),
     );
+
     const data = Schema.decodeUnknownSync(AICapabilitiesResponseSchema)(await res.json());
     const ids = data.providers.map((p: { id: string }) => p.id);
     expect(ids).toContain("pi-1");
@@ -595,9 +619,11 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     const createData = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
       await createRes.json(),
     );
+
     expect(createData.sessionId).toBeDefined();
     expect(sm.size).toBe(1);
 
@@ -612,6 +638,7 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     expect(queryRes.headers.get("Content-Type")).toBe("text/event-stream");
 
     const text = await queryRes.text();
@@ -634,6 +661,7 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     expect(createRes.status).toBe(200);
   });
 
@@ -644,6 +672,7 @@ describe("AI endpoints", () => {
       ...mockProvider("mock"),
       async createSession(opts) {
         seenOptions = opts;
+
         return mockSession(`session-${++sessionCounter}`, null);
       },
     });
@@ -679,6 +708,7 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     expect(createRes.status).toBe(503);
     const data = await createRes.json();
     expect(data.error).toContain("nonexistent");
@@ -697,6 +727,7 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
       await createRes.json(),
     );
@@ -712,6 +743,7 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     const text = await queryRes.text();
     expect(text).toContain("Context update");
     expect(text).toContain("section 3 flagged");
@@ -731,6 +763,7 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
       await createRes.json(),
     );
@@ -764,6 +797,7 @@ describe("AI endpoints", () => {
         }),
       }),
     );
+
     const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
       await createRes.json(),
     );
@@ -775,6 +809,7 @@ describe("AI endpoints", () => {
         body: JSON.stringify({ sessionId }),
       }),
     );
+
     const abortData = Schema.decodeUnknownSync(AbortResponseSchema)(await abortRes.json());
     expect(abortData.ok).toBe(true);
   });
@@ -805,6 +840,7 @@ describe("AI endpoints", () => {
     const listRes = await endpoints["/api/ai/sessions"](
       new Request("http://localhost/api/ai/sessions"),
     );
+
     const sessions = Schema.decodeUnknownSync(SessionListResponseSchema)(await listRes.json());
     expect(sessions.length).toBe(2);
   });
@@ -850,6 +886,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([{ type: "text_delta", delta: "Hello" }]);
   });
 
@@ -866,6 +903,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([
       {
         type: "tool_use",
@@ -887,6 +925,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([
       {
         type: "tool_result",
@@ -907,6 +946,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([
       {
         type: "tool_result",
@@ -924,6 +964,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([
       {
         type: "result",
@@ -971,6 +1012,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([]);
   });
 
@@ -982,6 +1024,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([]);
   });
 
@@ -996,6 +1039,7 @@ describe("mapPiEvent", () => {
       },
       SESSION_ID,
     );
+
     expect(result).toEqual([
       {
         type: "tool_result",

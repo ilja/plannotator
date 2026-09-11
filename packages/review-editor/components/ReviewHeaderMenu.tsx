@@ -29,6 +29,7 @@ export const ReviewHeaderMenu: React.FC<ReviewHeaderMenuProps> = ({
   appVersion,
 }) => {
   const { theme, resolvedMode, setTheme } = useTheme();
+
   const activeTheme = useMemo<"light" | "dark">(() => {
     return theme === "system" ? resolvedMode : theme;
   }, [resolvedMode, theme]);

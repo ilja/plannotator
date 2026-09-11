@@ -38,8 +38,10 @@ export function useValidatedCodePaths(
     setReady(false);
 
     const candidates = extractCandidateCodePaths(markdown);
+
     if (candidates.length === 0) {
       setReady(true);
+
       return;
     }
 
@@ -53,12 +55,17 @@ export function useValidatedCodePaths(
             baseDir ? { paths: candidates, base: baseDir } : { paths: candidates },
           ),
         });
+
         if (cancelled) return;
+
         if (!res.ok) {
           setReady(true);
+
           return;
         }
+
         const data: unknown = await res.json();
+
         if (cancelled) return;
         setValidated(decodeCodePathValidationResponse(data));
         setReady(true);

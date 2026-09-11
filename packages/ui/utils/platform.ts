@@ -6,7 +6,11 @@
  */
 export const isMac =
   globalThis.navigator !== undefined && /Mac|iPhone|iPad/.test(navigator.platform);
+
 export const modKey = isMac ? "⌘" : "Ctrl";
+
 export const altKey = isMac ? "⌥" : "Alt";
+
 export const submitHint = isMac ? "⌘↵" : "Ctrl+Enter";
+
 export const isWindows = globalThis.navigator !== undefined && navigator.platform.startsWith("Win");

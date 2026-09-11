@@ -14,22 +14,27 @@ const ExternalAnnotationPollingEnvelopeSchema = Schema.Struct({
   annotations: Schema.optionalKey(Schema.Array(Schema.Unknown)),
   version: Schema.optionalKey(Schema.Unknown),
 });
+
 const ExternalAnnotationValueSchema = Schema.Unknown;
 
 /** Decodes the structural envelope of an untrusted real-time annotation event. */
 export const decodeExternalAnnotationEventEnvelope = Schema.decodeUnknownOption(
   ExternalAnnotationEventEnvelopeSchema,
 );
+
 /** Decodes the structural envelope of an untrusted annotation polling response. */
 export const decodeExternalAnnotationPollingEnvelope = Schema.decodeUnknownOption(
   ExternalAnnotationPollingEnvelopeSchema,
 );
+
 const decodeAnnotationId = Schema.decodeUnknownOption(Schema.String);
+
 const decodeVersion = Schema.decodeUnknownOption(Schema.Natural);
 
 type ExternalAnnotationEventEnvelope = Schema.Schema.Type<
   typeof ExternalAnnotationEventEnvelopeSchema
 >;
+
 type ExternalAnnotationPollingEnvelope = Schema.Schema.Type<
   typeof ExternalAnnotationPollingEnvelopeSchema
 >;
@@ -50,19 +55,25 @@ function decodeAnnotationSiblings<T>(
   decodeAnnotation: ExternalAnnotationDecoder<T>,
 ): T[] {
   const annotations: T[] = [];
+
   for (const value of values) {
     const decoded = decodeAnnotation(value);
+
     if (Option.isSome(decoded)) annotations.push(decoded.value);
   }
+
   return annotations;
 }
 
 function decodeAnnotationIdSiblings(values: ReadonlyArray<unknown>): string[] {
   const ids: string[] = [];
+
   for (const value of values) {
     const decoded = decodeAnnotationId(value);
+
     if (Option.isSome(decoded)) ids.push(decoded.value);
   }
+
   return ids;
 }
 
@@ -78,12 +89,14 @@ export function parseExternalAnnotationEvent<T extends { id: string; source?: st
     case "snapshot":
     case "add":
       if (!envelope.annotations) return null;
+
       return {
         type: envelope.type,
         annotations: decodeAnnotationSiblings(envelope.annotations, decodeAnnotation),
       };
     case "remove":
       if (!envelope.ids) return null;
+
       return { type: "remove", ids: decodeAnnotationIdSiblings(envelope.ids) };
     case "clear":
       return envelope.source === undefined
@@ -92,9 +105,12 @@ export function parseExternalAnnotationEvent<T extends { id: string; source?: st
     case "update": {
       if (!envelope.id || envelope.annotation === undefined) return null;
       const annotation = decodeAnnotation(envelope.annotation);
+
       if (Option.isNone(annotation) || annotation.value.id !== envelope.id) return null;
+
       return { type: "update", id: envelope.id, annotation: annotation.value };
     }
+
     default:
       return null;
   }

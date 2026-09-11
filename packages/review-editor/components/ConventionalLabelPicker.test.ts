@@ -23,6 +23,7 @@ describe("getEnabledLabels", () => {
     const labels = getEnabledLabels(
       JSON.stringify([{ label: "suggestion", display: "suggestion", blocking: true }]),
     );
+
     expect(labels).toHaveLength(1);
     expect(labels[0]).toEqual({
       label: "suggestion",
@@ -37,6 +38,7 @@ describe("getEnabledLabels", () => {
     const labels = getEnabledLabels(
       JSON.stringify([{ label: "issue", display: "issue", blocking: "true" }]),
     );
+
     expect(labels[0]?.showBlockingToggle).toBe(true);
   });
 
@@ -64,6 +66,7 @@ describe("getEnabledLabels", () => {
     const labels = getEnabledLabels(
       JSON.stringify([{ label: "typo", display: "typo", blocking: false }]),
     );
+
     expect(labels[0]?.tone).toBe("neutral");
     expect(labels[0]?.hint).toBe("typo");
   });
@@ -100,6 +103,7 @@ describe("getEnabledLabels", () => {
         { label: "note", display: "note" },
       ]),
     );
+
     expect(labels.map((l) => l.label)).toEqual(["question", "note"]);
   });
 });

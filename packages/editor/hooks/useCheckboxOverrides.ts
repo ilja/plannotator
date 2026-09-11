@@ -44,10 +44,12 @@ export function useCheckboxOverrides({
     if (overrides.size === 0) return;
     const blockIds = new Set(blocks.map((b) => b.id));
     const stale = [...overrides.keys()].filter((id) => !blockIds.has(id));
+
     if (stale.length > 0) {
       setOverrides((prev) => {
         const next = new Map(prev);
         stale.forEach((id) => next.delete(id));
+
         return next;
       });
     }
@@ -65,28 +67,35 @@ export function useCheckboxOverrides({
         setOverrides((prev) => {
           const next = new Map(prev);
           next.delete(blockId);
+
           return next;
         });
+
         const toDelete = annotations.filter(
           (a) => a.blockId === blockId && a.id.startsWith("ann-checkbox-"),
         );
+
         toDelete.forEach((a) => removeAnnotation(a.id));
       } else {
         // Toggle: remove any existing checkbox annotations for this block first (prevents duplicates from rapid clicks)
         const existing = annotations.filter(
           (a) => a.blockId === blockId && a.id.startsWith("ann-checkbox-"),
         );
+
         existing.forEach((a) => removeAnnotation(a.id));
 
         setOverrides((prev) => {
           const next = new Map(prev);
           next.set(blockId, checked);
+
           return next;
         });
+
         if (block) {
           // Find the nearest heading above this block for section context
           const blockIdx = blocks.indexOf(block);
           let sectionHeading = "";
+
           for (let i = blockIdx - 1; i >= 0; i--) {
             if (blocks[i].type === "heading") {
               sectionHeading = blocks[i].content;
@@ -95,9 +104,11 @@ export function useCheckboxOverrides({
           }
 
           const action = checked ? "Mark as completed" : "Mark as not completed";
+
           const context = sectionHeading
             ? ` (under "${sectionHeading}")`
             : ` (line ${block.startLine})`;
+
           const ann: Annotation = {
             id: `ann-checkbox-${blockId}-${Date.now()}`,
             blockId,
@@ -108,6 +119,7 @@ export function useCheckboxOverrides({
             originalText: block.content,
             createdA: Date.now(),
           };
+
           addAnnotation(ann);
         }
       }
@@ -119,6 +131,7 @@ export function useCheckboxOverrides({
     setOverrides((prev) => {
       const next = new Map(prev);
       next.delete(blockId);
+
       return next;
     });
   }, []);

@@ -11,13 +11,16 @@ const TestAnnotationSchema = Schema.Struct({
   id: Schema.String,
   source: Schema.optionalKey(Schema.String),
 });
+
 const decodeTestAnnotation = Schema.decodeUnknownOption(TestAnnotationSchema);
 
 const firstAnnotation = { id: "annotation-1", source: "agent" };
+
 const secondAnnotation = { id: "annotation-2" };
 
 function parseEvent(value: Parameters<typeof decodeExternalAnnotationEventEnvelope>[0]) {
   const envelope = Option.getOrNull(decodeExternalAnnotationEventEnvelope(value));
+
   return envelope ? parseExternalAnnotationEvent(envelope, decodeTestAnnotation) : null;
 }
 
@@ -25,6 +28,7 @@ function parsePollingSnapshot(
   value: Parameters<typeof decodeExternalAnnotationPollingEnvelope>[0],
 ) {
   const envelope = Option.getOrNull(decodeExternalAnnotationPollingEnvelope(value));
+
   return envelope ? parseExternalAnnotationPollingSnapshot(envelope, decodeTestAnnotation) : null;
 }
 

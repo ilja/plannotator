@@ -35,7 +35,9 @@ const FILE_BROWSER_EXCLUDED_NAMES = new Set(
 
 export function isFileBrowserExcludedPath(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+
   if (!normalized) return false;
+
   return normalized
     .split("/")
     .filter(Boolean)
@@ -67,15 +69,18 @@ export function buildFileTree(relativePaths: string[]): VaultNode[] {
       const isFile = i === parts.length - 1;
 
       let node = current.find((n) => n.name === part && n.type === (isFile ? "file" : "folder"));
+
       if (!node) {
         node = {
           name: part,
           path: pathSoFar,
           type: isFile ? "file" : "folder",
         };
+
         if (!isFile) node.children = [];
         current.push(node);
       }
+
       if (!isFile) {
         current = node.children!;
       }
@@ -86,12 +91,15 @@ export function buildFileTree(relativePaths: string[]): VaultNode[] {
   const sortNodes = (nodes: VaultNode[]) => {
     nodes.sort((a, b) => {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+
       return a.name.localeCompare(b.name);
     });
+
     for (const node of nodes) {
       if (node.children) sortNodes(node.children);
     }
   };
+
   sortNodes(root);
 
   return root;

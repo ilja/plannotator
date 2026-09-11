@@ -40,14 +40,19 @@ export function detectSourceEol(text: string): SourceFileEol {
   const lf = loneLf + loneCr;
 
   if (crlf === 0 && lf === 0) return "none";
+
   if (crlf > 0 && lf === 0) return "crlf";
+
   if (crlf === 0 && lf > 0) return "lf";
+
   return "mixed";
 }
 
 export function applySourceEolPolicy(text: string, eol: SourceFileEol): string {
   const normalized = text.replace(/\r\n?/g, "\n");
+
   if (eol === "crlf") return normalized.replace(/\n/g, "\r\n");
+
   return normalized;
 }
 
@@ -55,6 +60,7 @@ export function readSourceFileSnapshot(filePath: string): SourceFileSnapshot {
   const bytes = readFileSync(filePath);
   const stat = statSync(filePath);
   const text = bytes.toString("utf8");
+
   return {
     text,
     hash: hashSourceBytes(bytes),
@@ -66,6 +72,7 @@ export function readSourceFileSnapshot(filePath: string): SourceFileSnapshot {
 
 export function sourceFileSnapshotFromText(text: string): SourceFileSnapshot {
   const bytes = Buffer.from(text, "utf8");
+
   return {
     text,
     hash: hashSourceBytes(bytes),
@@ -80,9 +87,11 @@ export function resolveFolderSourceFile(filePath: string, folderPath: string): s
 
   let root: string;
   let candidate: string;
+
   try {
     root = realpathSync(resolveUserPath(folderPath));
     candidate = resolveUserPath(filePath, root);
+
     if (!existsSync(candidate)) return null;
     candidate = realpathSync(candidate);
   } catch {
@@ -90,6 +99,7 @@ export function resolveFolderSourceFile(filePath: string, folderPath: string): s
   }
 
   if (!isWithinProjectRoot(candidate, root)) return null;
+
   return candidate;
 }
 
@@ -101,6 +111,7 @@ export function resolveFolderSourceFileForSave(
 
   let root: string;
   let candidate: string;
+
   try {
     root = realpathSync(resolveUserPath(folderPath));
     candidate = resolveUserPath(filePath, root);
@@ -112,9 +123,12 @@ export function resolveFolderSourceFileForSave(
     if (existsSync(candidate)) return resolveFolderSourceFile(candidate, root);
 
     const realParent = realpathSync(dirname(candidate));
+
     if (!isWithinProjectRoot(realParent, root)) return null;
     const resolvedMissingLeaf = join(realParent, basename(candidate));
+
     if (!isWithinProjectRoot(resolvedMissingLeaf, root)) return null;
+
     return resolvedMissingLeaf;
   } catch {
     return null;
@@ -134,16 +148,22 @@ export function resolveExistingSourceSaveFile(
       : resolveUserPath(filePath);
 
   if (!resolved) return null;
+
   if (!existsSync(resolved)) return null;
 
   try {
     const real = realpathSync(resolved);
+
     if (scope === "folder-file" && folderPath) {
       const root = realpathSync(resolveUserPath(folderPath));
+
       if (!isWithinProjectRoot(real, root)) return null;
     }
+
     const stat = statSync(real);
+
     if (!stat.isFile()) return null;
+
     return real;
   } catch {
     return null;
@@ -161,7 +181,9 @@ export function createSourceSaveCapabilityFromSnapshot(
   }
 
   const resolved = resolveExistingSourceSaveFile(scope, filePath, folderPath);
+
   if (!resolved) return disabledSourceSave("not-local-file");
+
   return enabledSourceSave(scope, resolved, snapshot);
 }
 
@@ -181,20 +203,26 @@ export function createSourceSaveCapabilityFromText(
   if (scope === "folder-file") {
     if (!folderPath) return disabledSourceSave("not-local-file");
     const resolved = resolveFolderSourceFileForSave(filePath, folderPath);
+
     if (!resolved) return disabledSourceSave("not-local-file");
+
     return enabledSourceSave(scope, resolved, sourceFileSnapshotFromText(text));
   }
 
   const resolved = resolveUserPath(filePath);
+
   try {
     if (existsSync(resolved)) {
       const real = realpathSync(resolved);
       const stat = statSync(real);
+
       if (!stat.isFile()) return disabledSourceSave("unsupported-extension");
+
       return enabledSourceSave(scope, real, sourceFileSnapshotFromText(text));
     }
 
     const realParent = realpathSync(dirname(resolved));
+
     return enabledSourceSave(
       scope,
       join(realParent, basename(resolved)),
@@ -220,19 +248,25 @@ export function createSourceSaveCapability(
       : resolveUserPath(filePath);
 
   if (!resolved) return disabledSourceSave("not-local-file");
+
   if (!existsSync(resolved)) return disabledSourceSave("missing-file");
 
   try {
     const real = realpathSync(resolved);
+
     if (scope === "folder-file" && folderPath) {
       const root = realpathSync(resolveUserPath(folderPath));
+
       if (!isWithinProjectRoot(real, root)) {
         return disabledSourceSave("not-local-file");
       }
     }
+
     const stat = statSync(real);
+
     if (!stat.isFile()) return disabledSourceSave("unsupported-extension");
     const snapshot = readSourceFileSnapshot(real);
+
     return enabledSourceSave(scope, real, snapshot);
   } catch {
     return disabledSourceSave("unreadable-file");
@@ -243,6 +277,7 @@ function resolveAllowedSourceSaveRoot(
   allowedRootPath: string | undefined,
 ): string | null | undefined {
   if (!allowedRootPath) return undefined;
+
   try {
     return realpathSync(resolveUserPath(allowedRootPath));
   } catch {
@@ -267,6 +302,7 @@ function prepareSourceSaveTarget(
 ): PreparedSourceSaveTarget | SourceSaveResponse {
   try {
     const real = realpathSync(filePath);
+
     if (allowedRoot && !isWithinProjectRoot(real, allowedRoot)) {
       return {
         ok: false,
@@ -274,7 +310,9 @@ function prepareSourceSaveTarget(
         message: "This file cannot be saved outside the allowed folder.",
       };
     }
+
     const stat = statSync(real);
+
     if (!stat.isFile()) {
       return {
         ok: false,
@@ -282,7 +320,9 @@ function prepareSourceSaveTarget(
         message: "This path is not a writable file.",
       };
     }
+
     const before = readSourceFileSnapshot(real);
+
     return {
       filePath: real,
       before,
@@ -298,9 +338,11 @@ function prepareSourceSaveTarget(
         message: "This file is missing or cannot be read.",
       };
     }
+
     try {
       const realParent = realpathSync(dirname(filePath));
       const resolvedFilePath = join(realParent, basename(filePath));
+
       if (allowedRoot && !isWithinProjectRoot(resolvedFilePath, allowedRoot)) {
         return {
           ok: false,
@@ -308,6 +350,7 @@ function prepareSourceSaveTarget(
           message: "This file cannot be saved outside the allowed folder.",
         };
       }
+
       const before: SourceFileSnapshot = {
         text: "",
         hash: baseHash,
@@ -315,6 +358,7 @@ function prepareSourceSaveTarget(
         size: 0,
         eol: isSourceFileEol(missingBaseEol) ? missingBaseEol : "lf",
       };
+
       return {
         filePath: resolvedFilePath,
         before,
@@ -351,6 +395,7 @@ export function saveSourceFileAtomic(
   }
 
   const allowedRoot = resolveAllowedSourceSaveRoot(options.allowedRoot);
+
   if (allowedRoot === null) {
     return {
       ok: false,
@@ -358,6 +403,7 @@ export function saveSourceFileAtomic(
       message: "This file cannot be saved outside the allowed folder.",
     };
   }
+
   const target = prepareSourceSaveTarget(
     filePath,
     baseHash,
@@ -365,6 +411,7 @@ export function saveSourceFileAtomic(
     options.missingBaseEol,
     allowedRoot,
   );
+
   if ("ok" in target) return target;
   const { before, mode, outputEol, recreateMissingBase } = target;
   filePath = target.filePath;
@@ -384,6 +431,7 @@ export function saveSourceFileAtomic(
 
   const output = applySourceEolPolicy(text, outputEol);
   const dir = dirname(filePath);
+
   const tmp = join(
     dir,
     `.plannotator-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`,
@@ -391,7 +439,9 @@ export function saveSourceFileAtomic(
 
   try {
     writeFileSync(tmp, output, { encoding: "utf8", mode });
+
     if (mode !== undefined) chmodSync(tmp, mode);
+
     if (recreateMissingBase) {
       try {
         // Create the final path only if it is still absent. A plain rename
@@ -401,11 +451,13 @@ export function saveSourceFileAtomic(
       } catch (error) {
         if (error instanceof Error && isFileExistsError(error)) {
           const current = readSourceFileSnapshot(filePath);
+
           try {
             unlinkSync(tmp);
           } catch {
             /* best effort */
           }
+
           return {
             ok: false,
             code: "conflict",
@@ -417,8 +469,10 @@ export function saveSourceFileAtomic(
             currentEol: current.eol,
           };
         }
+
         throw error;
       }
+
       try {
         unlinkSync(tmp);
       } catch {
@@ -427,7 +481,9 @@ export function saveSourceFileAtomic(
     } else {
       renameSync(tmp, filePath);
     }
+
     const after = readSourceFileSnapshot(filePath);
+
     return {
       ok: true,
       hash: after.hash,
@@ -441,6 +497,7 @@ export function saveSourceFileAtomic(
     } catch {
       /* best effort */
     }
+
     return {
       ok: false,
       code: "write-failed",

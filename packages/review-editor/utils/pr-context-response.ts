@@ -85,30 +85,46 @@ const PRLinkedIssueSchema = Schema.Struct({
 });
 
 const decodeContextEnvelope = Schema.decodeUnknownResult(PRContextEnvelopeSchema);
+
 const decodeArray = Schema.decodeUnknownOption(Schema.Array(Schema.Json));
+
 const decodeLabel = Schema.decodeUnknownOption(PRLabelSchema);
+
 const decodeComment = Schema.decodeUnknownOption(PRCommentSchema);
+
 const decodeReview = Schema.decodeUnknownOption(PRReviewSchema);
+
 const decodeThreadComment = Schema.decodeUnknownOption(PRThreadCommentSchema);
+
 const decodeReviewThread = Schema.decodeUnknownOption(PRReviewThreadSchema);
+
 const decodeCheck = Schema.decodeUnknownOption(PRCheckSchema);
+
 const decodeLinkedIssue = Schema.decodeUnknownOption(PRLinkedIssueSchema);
+
 const decodeErrorEnvelope = Schema.decodeUnknownOption(
   Schema.Struct({
     error: Schema.optionalKey(Schema.Json),
   }),
 );
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeLabelItem = (value: PRContextJsonValue): PRContext["labels"][number] | undefined =>
   Option.getOrUndefined(decodeLabel(value));
+
 const decodeCommentItem = (value: PRContextJsonValue): PRComment | undefined =>
   Option.getOrUndefined(decodeComment(value));
+
 const decodeReviewItem = (value: PRContextJsonValue): PRReview | undefined =>
   Option.getOrUndefined(decodeReview(value));
+
 const decodeThreadCommentItem = (value: PRContextJsonValue): PRThreadComment | undefined =>
   Option.getOrUndefined(decodeThreadComment(value));
+
 const decodeCheckItem = (value: PRContextJsonValue): PRCheck | undefined =>
   Option.getOrUndefined(decodeCheck(value));
+
 const decodeLinkedIssueItem = (value: PRContextJsonValue): PRLinkedIssue | undefined =>
   Option.getOrUndefined(decodeLinkedIssue(value));
 
@@ -117,16 +133,19 @@ function decodeArrayItems<T>(
   decodeItem: (item: PRContextJsonValue) => T | undefined,
 ): T[] {
   const items = Option.getOrUndefined(decodeArray(value));
+
   if (items === undefined) return [];
 
   return items.flatMap((item) => {
     const decoded = decodeItem(item);
+
     return decoded === undefined ? [] : [decoded];
   });
 }
 
 function decodeThread(value: PRContextJsonValue): PRReviewThread | undefined {
   const thread = Option.getOrUndefined(decodeReviewThread(value));
+
   if (thread === undefined) return undefined;
 
   return {
@@ -138,9 +157,11 @@ function decodeThread(value: PRContextJsonValue): PRReviewThread | undefined {
 /** Decode the successful `/api/pr-context` response, retaining valid array siblings. */
 export function decodePRContextResponse<Input>(value: Input): PRContext {
   const decoded = decodeContextEnvelope(value);
+
   if (Result.isFailure(decoded)) throw decoded.failure;
 
   const data: PRContextEnvelope = decoded.success;
+
   return {
     body: data.body,
     state: data.state,
@@ -160,6 +181,8 @@ export function decodePRContextResponse<Input>(value: Input): PRContext {
 /** Read only a string `error` from a non-OK `/api/pr-context` response body. */
 export function decodePRContextError<Input>(value: Input): string | undefined {
   const envelope = Option.getOrUndefined(decodeErrorEnvelope(value));
+
   if (envelope === undefined) return undefined;
+
   return Option.getOrUndefined(decodeString(envelope.error));
 }

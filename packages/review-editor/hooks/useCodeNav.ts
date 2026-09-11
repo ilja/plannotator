@@ -30,6 +30,7 @@ export function useCodeNav() {
         body: JSON.stringify(request),
         signal: controller.signal,
       });
+
       if (!res.ok) throw new Error("Failed");
       const data = Option.getOrThrow(decodeCodeNavResponse(await res.json()));
       setResult(data);

@@ -19,6 +19,7 @@ export type { CodeNavRequest, CodeNavResponse };
 const bunCodeNavRuntime: CodeNavRuntime = {
   async runCommand(command, args, options) {
     let proc;
+
     try {
       proc = Bun.spawn([command, ...args], {
         cwd: options?.cwd,
@@ -30,6 +31,7 @@ const bunCodeNavRuntime: CodeNavRuntime = {
     }
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     if (options?.timeoutMs) {
       timer = setTimeout(() => proc.kill(), options.timeoutMs);
     }
@@ -41,6 +43,7 @@ const bunCodeNavRuntime: CodeNavRuntime = {
     ]);
 
     if (timer) clearTimeout(timer);
+
     return { stdout, stderr, exitCode };
   },
 };
@@ -51,6 +54,7 @@ export async function handleCodeNavResolve(
   changedFiles: string[],
 ): Promise<Response> {
   let body: unknown;
+
   try {
     body = await req.json();
   } catch {
@@ -58,14 +62,17 @@ export async function handleCodeNavResolve(
   }
 
   const decodedRequest = Option.getOrUndefined(decodeCodeNavRequest(body));
+
   if (!decodedRequest) {
     const error = Predicate.isObject(body) ? validateCodeNavRequest(body) : "Invalid request body";
+
     return Response.json({ error: error ?? "Invalid request body" }, { status: 400 });
   }
 
   const language = Option.getOrUndefined(
     Schema.decodeUnknownOption(Schema.String)(decodedRequest.language),
   );
+
   const resolveRequest: CodeNavResolveRequest =
     language === undefined
       ? {

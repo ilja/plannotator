@@ -35,9 +35,12 @@ interface DraftBodyCarrier {
 export function readDraftGenerationFromUrl(req: Request): number | undefined {
   const url = new URL(req.url);
   const raw = url.searchParams.get("generation") ?? url.searchParams.get("draftGeneration");
+
   if (raw === null) return undefined;
   const value = Number(raw);
+
   if (Number.isNaN(value)) return undefined;
+
   return normalizeDraftGeneration(value);
 }
 
@@ -51,31 +54,41 @@ export function readDraftGenerationFromBody(body: DraftBodyCarrier): number | un
 export async function handleImage(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const imagePath = url.searchParams.get("path");
+
   if (!imagePath) {
     return new Response("Missing path parameter", { status: 400 });
   }
+
   const validation = validateImagePath(imagePath);
+
   if (!validation.valid) {
     return new Response(validation.error!, { status: 403 });
   }
+
   try {
     const file = Bun.file(validation.resolved);
+
     if (await file.exists()) {
       return new Response(file);
     }
+
     // If not found and a base directory is provided, try resolving relative to it
     const base = url.searchParams.get("base");
+
     if (base && !imagePath.startsWith("/")) {
       const { resolve: resolvePath } = await import("path");
       const fromBase = resolvePath(base, imagePath);
       const baseValidation = validateImagePath(fromBase);
+
       if (baseValidation.valid) {
         const baseFile = Bun.file(baseValidation.resolved);
+
         if (await baseFile.exists()) {
           return new Response(baseFile);
         }
       }
     }
+
     return new Response("File not found", { status: 404 });
   } catch {
     return new Response("Failed to read file", { status: 500 });
@@ -91,21 +104,26 @@ export async function handleUpload(req: Request): Promise<Response> {
   try {
     const formData = await req.formData();
     const file = formData.get("file");
+
     if (!isUploadFile(file)) {
       return new Response("No file provided", { status: 400 });
     }
 
     const extResult = validateUploadExtension(file.name);
+
     if (!extResult.valid) {
       return Response.json({ error: extResult.error }, { status: 400 });
     }
+
     mkdirSync(UPLOAD_DIR, { recursive: true });
     const tempPath = `${UPLOAD_DIR}/${crypto.randomUUID()}.${extResult.ext}`;
 
     await Bun.write(tempPath, file);
+
     return Response.json({ path: tempPath, originalName: file.name });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upload failed";
+
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -118,10 +136,13 @@ const OpencodeAgentSchema = Schema.Struct({
   mode: Schema.String,
   hidden: Schema.optionalKey(Schema.Boolean),
 });
+
 const OpencodeAgentsResponseSchema = Schema.Struct({
   data: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.Json))),
 });
+
 const decodeOpencodeAgent = Schema.decodeUnknownOption(OpencodeAgentSchema);
+
 const decodeOpencodeAgentsResponse = Schema.decodeUnknownOption(OpencodeAgentsResponseSchema);
 
 /** OpenCode agent client interface (subset of OpenCode SDK) */
@@ -142,12 +163,16 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
   try {
     const result = await opencodeClient.app.agents({});
     const response = Option.getOrUndefined(decodeOpencodeAgentsResponse(result));
+
     if (!response) {
       return Response.json({ agents: [], error: "Failed to fetch agents" });
     }
+
     const agents = (response.data ?? []).flatMap((rawAgent) => {
       const agent = Option.getOrUndefined(decodeOpencodeAgent(rawAgent));
+
       if (!agent || agent.mode !== "primary" || agent.hidden) return [];
+
       return [{ id: agent.name, name: agent.name, description: agent.description }];
     });
 
@@ -161,14 +186,18 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
 export async function handleDraftSave(req: Request, contentKey: string): Promise<Response> {
   try {
     const body = decodeDraftEnvelope(await req.json());
+
     if (body === null) {
       return Response.json({ error: "Invalid draft" }, { status: 400 });
     }
+
     saveDraft(contentKey, body);
+
     return Response.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to save draft";
     console.error(`[draft] save failed: ${message}`);
+
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -181,18 +210,23 @@ interface DraftNotFoundBody {
 /** Load annotation draft. Used by all 3 servers. */
 export function handleDraftLoad(contentKey: string): Response {
   const draft = loadDraft(contentKey);
+
   if (!draft) {
     const draftGeneration = getDraftGeneration(contentKey);
     const notFoundBody: DraftNotFoundBody = { found: false };
+
     if (draftGeneration !== null) notFoundBody.draftGeneration = draftGeneration;
+
     return Response.json(notFoundBody, { status: 404 });
   }
+
   return Response.json(draft);
 }
 
 /** Delete annotation draft. Used by all 3 servers. */
 export function handleDraftDelete(contentKey: string, req?: Request): Response {
   deleteDraft(contentKey, req ? readDraftGenerationFromUrl(req) : undefined);
+
   return Response.json({ ok: true });
 }
 
@@ -232,6 +266,7 @@ export async function handleServerReady(
   options: ServerReadyOptions = {},
 ): Promise<void> {
   const readyFile = options.readyFile ?? process.env.PLANNOTATOR_READY_FILE;
+
   if (readyFile) {
     try {
       writeServerReadyMetadata(readyFile, { url, isRemote, port });
@@ -256,6 +291,7 @@ export async function handleServerReady(
 
   const skipBrowserOpen =
     options.skipBrowserOpen ?? process.env.PLANNOTATOR_SKIP_BROWSER_OPEN === "1";
+
   if (skipBrowserOpen) return;
 
   const opened = await (options.openBrowser ?? openBrowserImpl)(url, {
@@ -293,16 +329,20 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
   try {
     const rawBody: unknown = await req.json();
     const body = Schema.decodeUnknownOption(SaveNotesBodySchema)(rawBody);
+
     if (Option.isNone(body)) {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
+
     if (Object.keys(body.value).some((target) => target !== "obsidian")) {
       return Response.json({ error: "Unsupported save target" }, { status: 400 });
     }
 
     const promises: Promise<void>[] = [];
+
     if (Object.hasOwn(body.value, "obsidian")) {
       const config = Schema.decodeUnknownOption(ObsidianConfigSchema)(body.value.obsidian);
+
       if (Option.isNone(config)) {
         results.obsidian = { success: false, error: "Invalid Obsidian save configuration" };
       } else if (config.value.vaultPath && config.value.plan) {
@@ -313,6 +353,7 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
         );
       }
     }
+
     await Promise.allSettled(promises);
 
     for (const [name, result] of Object.entries(results)) {
@@ -322,6 +363,7 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
     }
   } catch (err) {
     console.error(`[Save Notes] Error:`, err);
+
     return Response.json({ error: "Save failed" }, { status: 500 });
   }
 

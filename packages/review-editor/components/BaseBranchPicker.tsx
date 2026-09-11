@@ -23,6 +23,7 @@ type Tab = "branches" | "commits";
 // a usable commit-ish even if it isn't in `recentCommits`. We require ≥ 4 hex
 // chars for SHAs to avoid offering "abc" (which is more likely a branch name).
 const SHA_PATTERN = /^[0-9a-f]{4,40}$/i;
+
 const HEAD_REL_PATTERN = /^HEAD(?:[~^]\d+)?$/i;
 
 function isCommitishQuery(q: string): boolean {
@@ -58,7 +59,9 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+
     if (!q) return { local, remote, commits };
+
     return {
       local: local.filter((b) => b.toLowerCase().includes(q)),
       remote: remote.filter((b) => b.toLowerCase().includes(q)),
@@ -75,6 +78,7 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
   // already an exact match in any group, offer to use it verbatim. Powers the
   // "manual commit hash entry" leg of #709 without adding a separate input.
   const trimmedQuery = query.trim();
+
   const showUseAsBase =
     trimmedQuery.length > 0 &&
     isCommitishQuery(trimmedQuery) &&
@@ -154,6 +158,7 @@ export const BaseBranchPicker: React.FC<BaseBranchPickerProps> = ({
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
+
         if (!v) {
           setQuery("");
           setTab("branches");
@@ -305,6 +310,7 @@ const BranchGroup: React.FC<BranchGroupProps> = ({
     {branches.map((branch) => {
       const isSelected = branch === selectedBase;
       const isDetected = branch === detectedBase;
+
       return (
         <button
           key={branch}
@@ -349,6 +355,7 @@ const CommitList: React.FC<CommitListProps> = ({ commits, selectedBase, onSelect
   <div className="py-1">
     {commits.map((c) => {
       const isSelected = c.sha === selectedBase || c.shortSha === selectedBase;
+
       return (
         <button
           key={c.sha}

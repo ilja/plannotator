@@ -35,6 +35,7 @@ export function usePinpoint({
     if (!isActive) {
       setHoverTarget((prev) => {
         if (prev) prev.element.removeAttribute("data-pinpoint-hover");
+
         return null;
       });
     }
@@ -43,6 +44,7 @@ export function usePinpoint({
   // Mousemove / touchstart — resolve target and update hover state
   useEffect(() => {
     const container = containerRef.current;
+
     if (!isActive || !container) return;
 
     let prevElement: HTMLElement | null = null;
@@ -76,6 +78,7 @@ export function usePinpoint({
       const touch = e.touches[0];
       // SAFETY: cast is safe — HTMLElement is expected shape
       const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+
       if (target) updateHover(touch.clientX, touch.clientY, target);
     };
 
@@ -100,6 +103,7 @@ export function usePinpoint({
   // Click — create Range and trigger web-highlighter
   useEffect(() => {
     const container = containerRef.current;
+
     if (!isActive || !container) return;
 
     const handleClick = (e: MouseEvent) => {
@@ -108,19 +112,23 @@ export function usePinpoint({
       // may not have run yet when this effect sets up, but it will be ready by
       // the time the user clicks.
       const highlighter = highlighterRef.current;
+
       if (!highlighter) return;
 
       // SAFETY: cast is safe — HTMLElement is expected shape
       const target = e.target as HTMLElement;
+
       const resolved = resolvePinpointTarget(target, container, {
         clientX: e.clientX,
         clientY: e.clientY,
       });
+
       if (!resolved) return;
 
       // Prevent link navigation in pinpoint mode
       // SAFETY: cast is safe — HTMLAnchorElement is expected shape
       const link = target.closest("a") as HTMLAnchorElement | null;
+
       if (link && container.contains(link)) {
         e.preventDefault();
       }
@@ -135,15 +143,18 @@ export function usePinpoint({
         const codeBlockContainer = container.querySelector(
           `[data-block-id="${resolved.blockId}"]`,
         ) as HTMLElement;
+
         if (codeBlockContainer) {
           onCodeBlockClick(resolved.blockId, codeBlockContainer);
         }
+
         return;
       }
 
       // Create a text-level Range spanning the target element's content.
       // web-highlighter needs ranges anchored to text nodes, not elements.
       const range = createTextRange(resolved.element);
+
       if (!range) return;
 
       // Set browser selection so web-highlighter's mouseup handler picks it up
@@ -180,6 +191,7 @@ function createTextRange(element: HTMLElement): Range | null {
   let lastNode: Text | null = null;
 
   let node: Text | null;
+
   // SAFETY: cast is safe — Text is expected shape
   while ((node = walker.nextNode() as Text | null)) {
     if (!firstNode) firstNode = node;
@@ -191,5 +203,6 @@ function createTextRange(element: HTMLElement): Range | null {
   const range = document.createRange();
   range.setStart(firstNode, 0);
   range.setEnd(lastNode, lastNode.length);
+
   return range;
 }

@@ -109,9 +109,11 @@ describe("getReviewDeniedSuffix", () => {
       "gemini-cli",
       "kiro-cli",
     ] as const;
+
     for (const runtime of runtimes) {
       expect(getReviewDeniedSuffix(runtime, {})).toBe(EXPECTED_REVIEW_DENIED_SUFFIX);
     }
+
     expect(DEFAULT_REVIEW_DENIED_SUFFIX).toBe(EXPECTED_REVIEW_DENIED_SUFFIX);
     expect(DEFAULT_REVIEW_DENIED_SUFFIX).not.toContain(FEEDBACK_DISCUSSION_INSTRUCTION);
 
@@ -153,6 +155,7 @@ describe("getAnnotateFileFeedbackPrompt", () => {
         feedback: "Fix line 5",
       },
     );
+
     expect(result).toContain("File: /src/app.ts");
     expect(result).toContain("Fix line 5");
     expect(result).toContain("Please address");
@@ -168,6 +171,7 @@ describe("getAnnotateFileFeedbackPrompt", () => {
         feedback: "Check all files",
       },
     );
+
     expect(result).toContain("Folder: /src/");
   });
 
@@ -179,6 +183,7 @@ describe("getAnnotateFileFeedbackPrompt", () => {
       },
       { filePath: "x.ts", feedback: "fix it" },
     );
+
     expect(result).toBe(`Review x.ts: fix it\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 
@@ -195,6 +200,7 @@ describe("getAnnotateFileFeedbackPrompt", () => {
       },
       { feedback: "note" },
     );
+
     expect(result).toBe(`Pi: note\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 });
@@ -219,6 +225,7 @@ describe("getAnnotateMessageFeedbackPrompt", () => {
       },
       { feedback: "fix" },
     );
+
     expect(result).toBe(`Notes: fix\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`);
   });
 });
@@ -245,6 +252,7 @@ describe("mergePromptConfig", () => {
       { annotate: { approved: "A" } },
       { annotate: { fileFeedback: "F" } },
     );
+
     expect(merged?.annotate?.approved).toBe("A");
     expect(merged?.annotate?.fileFeedback).toBe("F");
   });

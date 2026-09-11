@@ -20,6 +20,7 @@ import { sanitizeTag } from "../generated/project.js";
 import { resolveUserPath } from "../generated/resolve-file.js";
 
 export type { ObsidianConfig, IntegrationResult };
+
 export { extractTitle, generateFrontmatter, generateFilename, detectObsidianVaults };
 
 /** Detect project name from git or cwd (sync). Used by extractTags for note integrations. */
@@ -29,13 +30,16 @@ function detectProjectNameSync(): string | null {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
+
     if (toplevel) {
       const name = sanitizeTag(basename(toplevel));
+
       if (name) return name;
     }
   } catch {
     /* not in a git repo */
   }
+
   try {
     return sanitizeTag(basename(process.cwd())) ?? null;
   } catch {
@@ -46,7 +50,9 @@ function detectProjectNameSync(): string | null {
 export async function extractTags(markdown: string): Promise<string[]> {
   const tags = new Set<string>(["plannotator"]);
   const projectName = detectProjectNameSync();
+
   if (projectName) tags.add(projectName);
+
   const stopWords = new Set([
     "the",
     "and",
@@ -63,7 +69,9 @@ export async function extractTags(markdown: string): Promise<string[]> {
     "step",
     "steps",
   ]);
+
   const h1Match = markdown.match(/^#\s+(?:Implementation\s+Plan:|Plan:)?\s*(.+)$/im);
+
   if (h1Match) {
     h1Match[1]
       .toLowerCase()
@@ -73,12 +81,15 @@ export async function extractTags(markdown: string): Promise<string[]> {
       .slice(0, 3)
       .forEach((w) => tags.add(w));
   }
+
   const seenLangs = new Set<string>();
   let langMatch: RegExpExecArray | null;
   const langRegex = /```(\w+)/g;
+
   while ((langMatch = langRegex.exec(markdown)) !== null) {
     const lang = langMatch[1];
     const n = lang.toLowerCase();
+
     if (
       !seenLangs.has(n) &&
       !["json", "yaml", "yml", "text", "txt", "markdown", "md"].includes(n)
@@ -87,21 +98,26 @@ export async function extractTags(markdown: string): Promise<string[]> {
       tags.add(n);
     }
   }
+
   return Array.from(tags).slice(0, 7);
 }
 
 export async function saveToObsidian(config: ObsidianConfig): Promise<IntegrationResult> {
   try {
     const { vaultPath, folder, plan } = config;
+
     if (!vaultPath?.trim()) {
       return { success: false, error: "Vault path is required" };
     }
+
     const normalizedVault = resolveUserPath(vaultPath);
+
     if (!existsSync(normalizedVault))
       return {
         success: false,
         error: `Vault path does not exist: ${normalizedVault}`,
       };
+
     if (!statSync(normalizedVault).isDirectory())
       return {
         success: false,
@@ -109,6 +125,7 @@ export async function saveToObsidian(config: ObsidianConfig): Promise<Integratio
       };
     const folderName = folder.trim() || "plannotator";
     const targetFolder = join(normalizedVault, folderName);
+
     if (!existsSync(targetFolder)) mkdirSync(targetFolder, { recursive: true });
     const filename = generateFilename(plan, config.filenameFormat, config.filenameSeparator);
     const filePath = join(targetFolder, filename);
@@ -116,6 +133,7 @@ export async function saveToObsidian(config: ObsidianConfig): Promise<Integratio
     const frontmatter = generateFrontmatter(tags);
     const content = `${frontmatter}\n\n[[Plannotator Plans]]\n\n${plan}`;
     writeFileSync(filePath, content);
+
     return { success: true, path: filePath };
   } catch (err) {
     return {

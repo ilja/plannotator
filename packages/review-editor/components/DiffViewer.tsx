@@ -304,32 +304,40 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   // render as a single column even in split mode.
   const isSplitLayout = useMemo(() => {
     if (diffStyle !== "split") return false;
+
     let hasAdd = false,
       hasDel = false;
+
     for (const line of patch.split("\n")) {
       if (line[0] === "+" && !line.startsWith("+++")) hasAdd = true;
       else if (line[0] === "-" && !line.startsWith("---")) hasDel = true;
+
       if (hasAdd && hasDel) return true;
     }
+
     return false;
   }, [patch, diffStyle]);
 
   const [splitRatio, setSplitRatio] = useState(() => {
     const saved = storage.getItem("review-split-ratio");
     const n = saved ? Number(saved) : NaN;
+
     return !Number.isNaN(n) && n >= 0.2 && n <= 0.8 ? n : 0.5;
   });
+
   const splitRatioRef = useRef(splitRatio);
   splitRatioRef.current = splitRatio;
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
 
   const handleSplitDragStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+
     if (!splitSurfaceRef.current) return;
     setIsDraggingSplit(true);
 
     const onMove = (moveEvent: PointerEvent) => {
       const rect = splitSurfaceRef.current?.getBoundingClientRect();
+
       if (!rect || rect.width <= 0) return;
       const ratio = (moveEvent.clientX - rect.left) / rect.width;
       setSplitRatio(Math.min(0.8, Math.max(0.2, ratio)));
@@ -367,7 +375,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     const controller = new AbortController();
     setFileContents(null);
     const params = new URLSearchParams({ path: filePath });
+
     if (oldPath) params.set("oldPath", oldPath);
+
     if (reviewBase) params.set("base", reviewBase);
     fetch(`/api/file-content?${params}`, { signal: controller.signal })
       .then(loadFileContentResponse)
@@ -377,6 +387,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         }
       })
       .catch(() => {}); // Silent fallback — no expansion in demo mode
+
     return () => controller.abort();
   }, [filePath, oldPath, reviewBase]);
 
@@ -389,6 +400,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       (fileContents.old == null && fileContents.new == null)
     )
       return fileDiff;
+
     // Stale-content guard (same as AllFilesCodeView): the file may have
     // changed on disk since the diff was captured — augmenting with contents
     // that don't reconcile with the patch breaks Pierre's line math. Fall back
@@ -397,8 +409,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       console.warn(
         `DiffViewer: skipping full-content expansion for ${filePath} — file changed since the diff was captured`,
       );
+
       return fileDiff;
     }
+
     try {
       const result = processFile(patch, {
         oldFile:
@@ -408,6 +422,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         newFile:
           fileContents.new != null ? { name: filePath, contents: fileContents.new } : undefined,
       });
+
       return result || fileDiff;
     } catch {
       return fileDiff;
@@ -417,6 +432,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const previousScrollFilePathRef = useRef(filePath);
   useLayoutEffect(() => {
     if (previousScrollFilePathRef.current === filePath) return;
+
     // A new file should start from the top-left of the diff viewport.
     // Only advance the tracking ref once the scroll actually executed —
     // otherwise a file switch landing before the OverlayScrollbars viewport
@@ -450,12 +466,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     if (!viewport) return;
     const ua = navigator.userAgent;
     const isWebKit = ua.includes("Safari") && !ua.includes("Chrome");
+
     if (!isWebKit) return;
 
     let lastGoodST = 0;
 
     const onScroll = () => {
       const st = viewport.scrollTop;
+
       if (st > 0) {
         lastGoodST = st;
       } else if (lastGoodST > 200) {
@@ -472,6 +490,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     };
 
     viewport.addEventListener("scroll", onScroll, { passive: true });
+
     return () => viewport.removeEventListener("scroll", onScroll);
   }, [viewport, filePath]);
 
@@ -486,6 +505,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       const annotationEl = containerRef.current?.querySelector(
         `[data-annotation-id="${targetId}"]`,
       );
+
       if (annotationEl) {
         annotationEl.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -506,6 +526,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     if (!query.trim() || matches.length === 0) {
       const roots = getSearchRoots(containerRef.current);
       roots.forEach((root) => clearSearchHighlights(root));
+
       return;
     }
 
@@ -536,6 +557,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   // Scroll to active search match (with retry for lazy-rendered content)
   useEffect(() => {
     if (!activeSearchMatch || !containerRef.current) return;
+
     return retryScrollToSearchMatch(containerRef.current, activeSearchMatch);
   }, [
     activeSearchMatch,
@@ -568,23 +590,30 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
     const tryScroll = () => {
       if (cancelled) return;
+
       const target = getSearchRoots(container)
         .map((root) => root.querySelector?.("[data-selected-line]") ?? null)
         .find((el): el is Element => el != null);
+
       if (target) {
         const targetRect = target.getBoundingClientRect();
         const viewRect = container.getBoundingClientRect();
         const fullyVisible = targetRect.top >= viewRect.top && targetRect.bottom <= viewRect.bottom;
+
         if (!fullyVisible) {
           target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
         }
+
         return;
       }
+
       attempts += 1;
+
       if (attempts < MAX_ATTEMPTS) requestAnimationFrame(tryScroll);
     };
 
     const raf = requestAnimationFrame(tryScroll);
+
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
@@ -611,6 +640,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   // Derive AI markers for the current file's lines
   const aiLineAnnotations = useMemo(() => {
     if (!aiMessages.length) return [];
+
     return aiMessages
       .filter((m) => m.question.lineStart != null && m.question.lineEnd != null)
       .map(({ question, response }): AiLineAnnotation => ({
@@ -637,6 +667,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const handleEdit = useCallback(
     (id: string) => {
       const ann = annotations.find((a) => a.id === id);
+
       if (ann) toolbarHostRef.current?.startEdit(ann);
     },
     [annotations],
@@ -694,14 +725,19 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
   useEffect(() => {
     const root = diffContentRef.current;
+
     if (!root) return;
+
     const handler = () => {
       requestAnimationFrame(() => {
         const selection = getDiffSelection(root);
+
         if (!selection || selection.isCollapsed || !selection.toString().trim()) return;
         const anchorLine = getLineNumberFromNode(selection.anchorNode);
         const focusLine = getLineNumberFromNode(selection.focusNode);
+
         if (anchorLine == null || focusLine == null) return;
+
         if (anchorLine === focusLine) return;
         const side = getSideFromNode(selection.anchorNode);
         toolbarHostRef.current?.handleLineSelectionEnd({
@@ -712,7 +748,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         selection.removeAllRanges();
       });
     };
+
     root.addEventListener("mouseup", handler, true);
+
     return () => root.removeEventListener("mouseup", handler, true);
   }, []);
 
@@ -725,8 +763,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     (props: DiffTokenEventBaseProps, event: MouseEvent) => {
       if ((event.metaKey || event.ctrlKey) && onCodeNavRequest) {
         onCodeNavRequest(buildCodeNavRequest(props, filePath));
+
         return;
       }
+
       toolbarHostRef.current?.handleTokenClick(props, event);
     },
     [filePath, onCodeNavRequest],
@@ -735,6 +775,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const handleTokenEnter = useCallback(
     (props: DiffTokenEventBaseProps, event: PointerEvent) => {
       props.tokenElement.classList.add("pn-token-hover");
+
       if ((event.metaKey || event.ctrlKey) && onCodeNavRequest) {
         props.tokenElement.classList.add("pn-token-nav");
       }
@@ -749,6 +790,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
   const splitGridStyle = useMemo((): React.CSSProperties | undefined => {
     if (!isSplitLayout || diffOverflow === "wrap") return undefined;
+
     return {
       "--split-left": `${splitRatio}fr`,
       "--split-right": `${1 - splitRatio}fr`,
@@ -766,7 +808,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const selectedAnnotationRange = useMemo<SelectedLineRange | null>(() => {
     if (!selectedAnnotationId) return null;
     const ann = annotations.find((a) => a.id === selectedAnnotationId);
+
     if (!ann || isFileScopedAnnotation(ann)) return null;
+
     return lineRangeForAnnotation(ann);
   }, [selectedAnnotationId, annotations]);
 

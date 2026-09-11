@@ -25,6 +25,7 @@ export const QuickLabelDropdown: React.FC<{
       )}
       {labels.map((label, index) => {
         const colors = getLabelColors(label.color);
+
         return (
           <button
             key={label.id}

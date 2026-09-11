@@ -29,6 +29,7 @@ function runCommand(
     });
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     if (options?.timeoutMs) timer = setTimeout(() => proc.kill(), options.timeoutMs);
 
     const stdoutChunks: Buffer[] = [];
@@ -64,6 +65,7 @@ export const reviewRuntime: ReviewGitRuntime = {
 
 export async function isGitRepository(cwd?: string): Promise<boolean> {
   const result = await reviewRuntime.runGit(["rev-parse", "--is-inside-work-tree"], { cwd });
+
   return result.exitCode === 0 && result.stdout.trim() === "true";
 }
 

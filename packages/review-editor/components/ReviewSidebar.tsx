@@ -108,6 +108,7 @@ function useAnnotationGroups(annotations: CodeAnnotation[]): AnnotationGroups {
     generalAnnotations.sort((a, b) => b.createdAt - a.createdAt);
 
     const groupedAnnotations = groupAnnotationsByFile(placedAnnotations);
+
     const prGroups = hasMultiplePRs(placedAnnotations)
       ? groupAnnotationsByPR(placedAnnotations)
       : null;
@@ -138,7 +139,15 @@ function groupAnnotationsByFile(annotations: CodeAnnotation[]): Map<string, Code
 }
 
 function hasMultiplePRs(annotations: CodeAnnotation[]): boolean {
-  return new Set(annotations.map((annotation) => annotation.prUrl).filter(Boolean)).size > 1;
+  return (
+    new Set(
+      annotations.flatMap((annotation) => {
+        const prUrl = annotation.prUrl;
+
+        return prUrl ? [prUrl] : [];
+      }),
+    ).size > 1
+  );
 }
 
 function groupAnnotationsByPR(
@@ -343,6 +352,7 @@ function getPRLabel(prUrl: string, fileAnnotations: Map<string, CodeAnnotation[]
   if (prUrl === "_none") return "Local Changes";
 
   const sample = Array.from(fileAnnotations.values())[0]?.[0];
+
   return `${sample?.prRepo ? `${sample.prRepo}` : ""}#${sample?.prNumber ?? "?"} ${sample?.prTitle ?? ""}`;
 }
 

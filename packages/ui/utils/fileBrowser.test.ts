@@ -3,7 +3,9 @@ import { getFileBrowserSettings } from "./fileBrowser";
 import { storage } from "./storage";
 
 const hasDom = process.env.DOM_TESTS === "1";
+
 const STORAGE_KEY_ENABLED = "plannotator-filebrowser-enabled";
+
 const STORAGE_KEY_DIRS = "plannotator-filebrowser-dirs";
 
 if (hasDom) window.location.href = "http://localhost";

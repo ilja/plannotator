@@ -85,15 +85,18 @@ function addAnnotationTypeClass(highlighter: Highlighter, annotation: Annotation
 
 function getNextTextNode(walker: TreeWalker): Text | null {
   const node = walker.nextNode();
+
   return node instanceof Text ? node : null;
 }
 
 function findRangeTextNodes(range: Range): RangeTextNode[] {
   const commonAncestor = range.commonAncestorContainer;
+
   const root =
     commonAncestor.nodeType === Node.TEXT_NODE
       ? (commonAncestor.parentNode ?? commonAncestor)
       : commonAncestor;
+
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
   const textNodes: RangeTextNode[] = [];
   let node: Text | null;
@@ -104,7 +107,9 @@ function findRangeTextNodes(range: Range): RangeTextNode[] {
       inRange = true;
       const start = range.startOffset;
       const end = node === range.endContainer ? range.endOffset : node.length;
+
       if (end > start) textNodes.push({ node, start, end });
+
       if (node === range.endContainer) break;
       continue;
     }
@@ -113,6 +118,7 @@ function findRangeTextNodes(range: Range): RangeTextNode[] {
       if (inRange && range.endOffset > 0) {
         textNodes.push({ node, start: 0, end: range.endOffset });
       }
+
       break;
     }
 
@@ -142,6 +148,7 @@ function wrapAnnotationTextNode({
   const mark = document.createElement("mark");
   mark.className = "annotation-highlight";
   mark.dataset.bindId = annotation.id;
+
   if (annotation.type === AnnotationType.DELETION) {
     mark.classList.add("deletion");
   } else if (annotation.type === AnnotationType.COMMENT) {
@@ -189,7 +196,9 @@ export function useAnnotationHighlighter({
     const track = (e: MouseEvent) => {
       lastMousePosRef.current = { x: e.clientX, y: e.clientY };
     };
+
     document.addEventListener("mouseup", track, true);
+
     return () => document.removeEventListener("mouseup", track, true);
   }, []);
 
@@ -235,6 +244,7 @@ export function useAnnotationHighlighter({
           const range = document.createRange();
           range.setStart(startNode, startOffset);
           range.setEnd(endNode, endOffset);
+
           return range;
         }
 
@@ -245,6 +255,7 @@ export function useAnnotationHighlighter({
         text: string;
         map: number[];
       }
+
       const normalizeWithMap = (text: string): NormalizedTextMap => {
         let normalized = "";
         const map: number[] = [];
@@ -252,6 +263,7 @@ export function useAnnotationHighlighter({
 
         for (let i = 0; i < text.length; i++) {
           const ch = text[i];
+
           if (/\s/.test(ch)) {
             if (!inWhitespace) {
               normalized += " ";
@@ -267,7 +279,9 @@ export function useAnnotationHighlighter({
 
         let start = 0;
         let end = normalized.length;
+
         while (start < end && normalized[start] === " ") start++;
+
         while (end > start && normalized[end - 1] === " ") end--;
 
         return {
@@ -279,20 +293,24 @@ export function useAnnotationHighlighter({
       const walker = document.createTreeWalker(containerRef.current, NodeFilter.SHOW_TEXT, null);
 
       let node: Text | null;
+
       // SAFETY: TreeWalker with SHOW_TEXT yields Text nodes — cast from Node
       while ((node = walker.nextNode() as Text | null)) {
         const text = node.textContent || "";
         const index = text.indexOf(needle);
+
         if (index !== -1) {
           const range = document.createRange();
           range.setStart(node, index);
           range.setEnd(node, index + needle.length);
+
           return range;
         }
       }
 
       const fullText = containerRef.current.textContent || "";
       const searchIndex = fullText.indexOf(needle);
+
       if (searchIndex !== -1) {
         return rangeFromTextOffsets(searchIndex, searchIndex + needle.length);
       }
@@ -300,9 +318,11 @@ export function useAnnotationHighlighter({
       const haystack = normalizeWithMap(fullText);
       const normalizedNeedle = normalizeWithMap(needle).text;
       const normalizedIndex = haystack.text.indexOf(normalizedNeedle);
+
       if (normalizedNeedle && normalizedIndex !== -1) {
         const originalStart = haystack.map[normalizedIndex];
         const originalEnd = haystack.map[normalizedIndex + normalizedNeedle.length - 1] + 1;
+
         return rangeFromTextOffsets(originalStart, originalEnd);
       }
 
@@ -314,9 +334,11 @@ export function useAnnotationHighlighter({
     // smart punctuation) so annotations made before those transforms
     // shipped can still re-bind to their target after reload.
     const direct = searchOnce(searchText);
+
     if (direct) return direct;
 
     const transformed = transformPlainText(searchText);
+
     if (transformed !== searchText) {
       return searchOnce(transformed);
     }
@@ -326,17 +348,20 @@ export function useAnnotationHighlighter({
 
   const findChoiceTarget = useCallback((ann: Annotation): HTMLElement | null => {
     const root = containerRef.current;
+
     if (!root || !ann.blockId) return null;
 
     const blockEl = root.querySelector<HTMLElement>(
       `[data-block-id="${CSS.escape(ann.blockId)}"][data-choice-question="true"]`,
     );
+
     if (!blockEl) return null;
 
     if (ann.choiceOptionLabel) {
       const optionEl = blockEl.querySelector<HTMLElement>(
         `[data-choice-option-label="${CSS.escape(ann.choiceOptionLabel)}"]`,
       );
+
       if (optionEl) return optionEl;
     }
 
@@ -346,6 +371,7 @@ export function useAnnotationHighlighter({
   const applyChoiceHighlight = useCallback(
     (ann: Annotation): boolean => {
       const target = findChoiceTarget(ann);
+
       if (!target) return false;
 
       target.classList.add("annotation-highlight", "comment");
@@ -356,6 +382,7 @@ export function useAnnotationHighlighter({
         target.addEventListener("click", (event) => {
           // SAFETY: click listener bound to HTMLElement — currentTarget is HTMLElement
           const annotationId = (event.currentTarget as HTMLElement).dataset.choiceAnnotationId;
+
           if (annotationId) onSelectAnnotationRef.current?.(annotationId);
         });
       }
@@ -369,6 +396,7 @@ export function useAnnotationHighlighter({
     const nodes = containerRef.current?.querySelectorAll<HTMLElement>(
       `[data-choice-annotation-id="${CSS.escape(id)}"]`,
     );
+
     nodes?.forEach((node) => {
       node.classList.remove("annotation-highlight", "comment", "focused");
       node.removeAttribute("data-choice-annotation-id");
@@ -392,9 +420,11 @@ export function useAnnotationHighlighter({
       // SAFETY: getDoms returns HTMLElements for this highlighter — cast to HTMLElement
       const el = doms[0] as HTMLElement;
       let parent = el.parentElement;
+
       while (parent && !parent.dataset.blockId) {
         parent = parent.parentElement;
       }
+
       if (parent?.dataset.blockId) {
         blockId = parent.dataset.blockId;
         const blockText = parent.textContent || "";
@@ -417,7 +447,9 @@ export function useAnnotationHighlighter({
       endMeta: source.endMeta,
       images,
     };
+
     if (isQuickLabel) newAnnotation.isQuickLabel = true;
+
     if (quickLabelTip) newAnnotation.quickLabelTip = quickLabelTip;
 
     if (type === AnnotationType.DELETION) {
@@ -435,6 +467,7 @@ export function useAnnotationHighlighter({
   const applyAnnotationsInternal = useCallback(
     (anns: Annotation[]) => {
       const highlighter = highlighterRef.current;
+
       if (!highlighter || !containerRef.current) return;
 
       anns.forEach((ann) => {
@@ -442,33 +475,41 @@ export function useAnnotationHighlighter({
 
         if (isChoiceAnnotation(ann)) {
           applyChoiceHighlight(ann);
+
           return;
         }
 
         // Skip if already highlighted
         try {
           const existingDoms = highlighter.getDoms(ann.id);
+
           if (existingDoms && existingDoms.length > 0) return;
         } catch {}
+
         const existingManual = containerRef.current?.querySelector(`[data-bind-id="${ann.id}"]`);
+
         if (existingManual) return;
 
         if (ann.startMeta && ann.endMeta) {
           try {
             highlighter.fromStore(ann.startMeta, ann.endMeta, ann.originalText, ann.id);
             const restoredDoms = highlighter.getDoms(ann.id);
+
             if (restoredDoms && restoredDoms.length > 0) {
               addAnnotationTypeClass(highlighter, ann);
+
               return;
             }
           } catch {}
         }
 
         const range = findTextInDOM(ann.originalText);
+
         if (!range) {
           console.warn(
             `Could not find text for annotation ${ann.id}: "${ann.originalText.slice(0, 50)}..."`,
           );
+
           return;
         }
 
@@ -477,6 +518,7 @@ export function useAnnotationHighlighter({
 
           if (textNodes.length === 0) {
             console.warn(`No text nodes found for annotation ${ann.id}`);
+
             return;
           }
 
@@ -507,9 +549,11 @@ export function useAnnotationHighlighter({
       const manualHighlights = containerRef.current?.querySelectorAll(`[data-bind-id="${id}"]`);
       manualHighlights?.forEach((el) => {
         const parent = el.parentNode;
+
         while (el.firstChild) {
           parent?.insertBefore(el.firstChild, el);
         }
+
         el.remove();
       });
     },
@@ -526,18 +570,22 @@ export function useAnnotationHighlighter({
     const manualHighlights = containerRef.current?.querySelectorAll("[data-bind-id]");
     manualHighlights?.forEach((el) => {
       const parent = el.parentNode;
+
       while (el.firstChild) {
         parent?.insertBefore(el.firstChild, el);
       }
+
       el.remove();
     });
 
     const webHighlights = containerRef.current?.querySelectorAll(".annotation-highlight");
     webHighlights?.forEach((el) => {
       const parent = el.parentNode;
+
       while (el.firstChild) {
         parent?.insertBefore(el.firstChild, el);
       }
+
       el.remove();
     });
   }, []);
@@ -561,15 +609,18 @@ export function useAnnotationHighlighter({
       Highlighter.event.CREATE,
       ({ sources, type }: { sources: any[]; type?: string }) => {
         if (type === "from-store") return;
+
         if (sources.length > 0) {
           const source = sources[0];
           const doms = highlighter.getDoms(source.id);
+
           if (doms?.length > 0) {
             // Clean up previous pending
             if (pendingSourceRef.current) {
               highlighter.remove(pendingSourceRef.current.id);
               pendingSourceRef.current = null;
             }
+
             setCommentPopover(null);
             setQuickLabelPicker(null);
 
@@ -617,12 +668,15 @@ export function useAnnotationHighlighter({
     // Mobile bridge
     const isTouchPrimary = window.matchMedia("(pointer: coarse)").matches;
     let selectionTimer: ReturnType<typeof setTimeout>;
+
     const handleSelectionChange = isTouchPrimary
       ? () => {
           clearTimeout(selectionTimer);
           selectionTimer = setTimeout(() => {
             const sel = window.getSelection();
+
             if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+
             if (!containerRef.current?.contains(sel.anchorNode)) return;
             highlighter.fromRange(sel.getRangeAt(0));
           }, 400);
@@ -638,6 +692,7 @@ export function useAnnotationHighlighter({
         clearTimeout(selectionTimer);
         document.removeEventListener("selectionchange", handleSelectionChange);
       }
+
       highlighter.dispose();
     };
   }, [enabled]);
@@ -645,11 +700,13 @@ export function useAnnotationHighlighter({
   // Apply CSS classes to existing annotations
   useEffect(() => {
     const highlighter = highlighterRef.current;
+
     if (!highlighter) return;
 
     annotations.forEach((ann) => {
       try {
         const doms = highlighter.getDoms(ann.id);
+
         if (doms && doms.length > 0) {
           if (ann.type === AnnotationType.DELETION) {
             highlighter.addClass("deletion", ann.id);
@@ -675,6 +732,7 @@ export function useAnnotationHighlighter({
     // Skip scroll if we just created this annotation
     if (justCreatedIdRef.current === selectedAnnotationId) {
       justCreatedIdRef.current = null;
+
       return;
     }
 
@@ -684,6 +742,7 @@ export function useAnnotationHighlighter({
     if (highlighter) {
       try {
         const doms = highlighter.getDoms(selectedAnnotationId);
+
         if (doms && doms.length > 0) targetElements = Array.from(doms);
       } catch {}
     }
@@ -692,6 +751,7 @@ export function useAnnotationHighlighter({
       const manualMarks = containerRef.current.querySelectorAll(
         `[data-bind-id="${selectedAnnotationId}"]`,
       );
+
       if (manualMarks.length > 0) targetElements = Array.from(manualMarks);
     }
 
@@ -699,6 +759,7 @@ export function useAnnotationHighlighter({
       const choiceMarks = containerRef.current.querySelectorAll(
         `[data-choice-annotation-id="${CSS.escape(selectedAnnotationId)}"]`,
       );
+
       if (choiceMarks.length > 0) targetElements = Array.from(choiceMarks);
     }
 
@@ -710,6 +771,7 @@ export function useAnnotationHighlighter({
     const timer = setTimeout(() => {
       targetElements.forEach((el) => el.classList.remove("focused"));
     }, 2000);
+
     return () => clearTimeout(timer);
   }, [selectedAnnotationId]);
 
@@ -717,6 +779,7 @@ export function useAnnotationHighlighter({
 
   const handleAnnotate = (type: AnnotationType) => {
     const highlighter = highlighterRef.current;
+
     if (!toolbarState || !highlighter) return;
     createAnnotationFromSource(highlighter, toolbarState.source, type);
     pendingSourceRef.current = null;
@@ -726,6 +789,7 @@ export function useAnnotationHighlighter({
 
   const handleQuickLabel = (label: QuickLabel) => {
     const highlighter = highlighterRef.current;
+
     if (!toolbarState || !highlighter) return;
     createAnnotationFromSource(
       highlighter,
@@ -745,6 +809,7 @@ export function useAnnotationHighlighter({
     if (toolbarState && highlighterRef.current) {
       highlighterRef.current.remove(toolbarState.source.id);
     }
+
     pendingSourceRef.current = null;
     setToolbarState(null);
     window.getSelection()?.removeAllRanges();
@@ -764,6 +829,7 @@ export function useAnnotationHighlighter({
 
   const handleCommentSubmit = (text: string, images?: ImageAttachment[]) => {
     if (!commentPopover) return;
+
     if (commentPopover.source && highlighterRef.current) {
       createAnnotationFromSource(
         highlighterRef.current,
@@ -775,6 +841,7 @@ export function useAnnotationHighlighter({
       pendingSourceRef.current = null;
       window.getSelection()?.removeAllRanges();
     }
+
     setCommentPopover(null);
   };
 
@@ -784,6 +851,7 @@ export function useAnnotationHighlighter({
         highlighterRef.current.remove(prev.source.id);
         pendingSourceRef.current = null;
       }
+
       return null;
     });
     window.getSelection()?.removeAllRanges();
@@ -813,6 +881,7 @@ export function useAnnotationHighlighter({
       highlighterRef.current.remove(quickLabelPicker.source.id);
       pendingSourceRef.current = null;
     }
+
     setQuickLabelPicker(null);
     window.getSelection()?.removeAllRanges();
   }, [quickLabelPicker]);

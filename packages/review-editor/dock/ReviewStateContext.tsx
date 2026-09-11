@@ -165,7 +165,9 @@ export function ReviewStateProvider({
 
 export function useReviewState(): ReviewState {
   const ctx = useContext(ReviewStateContext);
+
   if (!ctx) throw new Error("useReviewState must be used within ReviewStateProvider");
+
   return ctx;
 }
 

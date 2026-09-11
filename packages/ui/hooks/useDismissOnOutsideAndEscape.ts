@@ -27,10 +27,13 @@ export function useDismissOnOutsideAndEscape({
 
       // SAFETY: event.target is EventTarget | null — cast to Node for contains check
       const target = event.target as Node | null;
+
       if (!target) return;
+
       if (ref.current && ref.current.contains(target)) {
         return;
       }
+
       onDismiss();
     };
 

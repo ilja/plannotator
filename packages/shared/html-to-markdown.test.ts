@@ -11,6 +11,7 @@ describe("htmlToMarkdown", () => {
   test("converts tables with explicit thead", () => {
     const html =
       "<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>";
+
     const md = htmlToMarkdown(html);
     expect(md).toContain("| A");
     expect(md).toContain("| ---");
@@ -20,6 +21,7 @@ describe("htmlToMarkdown", () => {
   test("converts tables WITHOUT thead (common HTML pattern)", () => {
     const html =
       "<table><tr><th>Name</th><th>Value</th></tr><tr><td>foo</td><td>bar</td></tr></table>";
+
     const md = htmlToMarkdown(html);
     expect(md).toContain("| Name");
     expect(md).toContain("| ---");
@@ -29,6 +31,7 @@ describe("htmlToMarkdown", () => {
   test("strips script, style, and noscript tags", () => {
     const html =
       '<p>Visible</p><script>alert("xss")</script><style>.x{}</style><noscript>Hidden</noscript>';
+
     const md = htmlToMarkdown(html);
     expect(md).toContain("Visible");
     expect(md).not.toContain("alert");

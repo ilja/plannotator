@@ -9,10 +9,12 @@
  */
 
 const DEFAULT_REMOTE_PORT = 19432;
+
 const LOOPBACK_HOST = "127.0.0.1";
 
 function getRemoteOverride(): boolean | null {
   const remote = process.env.PLANNOTATOR_REMOTE;
+
   if (remote === undefined) {
     return null;
   }
@@ -33,6 +35,7 @@ function getRemoteOverride(): boolean | null {
  */
 export function isRemoteSession(): boolean {
   const remoteOverride = getRemoteOverride();
+
   if (remoteOverride !== null) {
     return remoteOverride;
   }
@@ -51,11 +54,14 @@ export function isRemoteSession(): boolean {
 export function getServerPort(): number {
   // Explicit port from environment takes precedence
   const envPort = process.env.PLANNOTATOR_PORT;
+
   if (envPort) {
     const parsed = parseInt(envPort, 10);
+
     if (!isNaN(parsed) && parsed >= 0 && parsed < 65536) {
       return parsed;
     }
+
     console.error(`[Plannotator] Warning: Invalid PLANNOTATOR_PORT "${envPort}", using default`);
   }
 

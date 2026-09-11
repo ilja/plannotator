@@ -11,8 +11,11 @@ import { storage } from "../utils/storage";
 import { parseCCLabels, Settings } from "./Settings";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
+
 const OBSIDIAN_STORAGE_KEYS = [
   "plannotator-obsidian-enabled",
   "plannotator-obsidian-vault",
@@ -31,10 +34,12 @@ function installVaultFetch<Body>(body: Body): string[] {
   // SAFETY: fetch shim implements the request shape Settings uses in these browser tests.
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
+
     return new Response(JSON.stringify(body), {
       headers: { "Content-Type": "application/json" },
     });
   }) as typeof fetch;
+
   return calls;
 }
 
@@ -50,7 +55,9 @@ function buttonWithText(label: string): HTMLButtonElement {
   const button = Array.from(document.querySelectorAll("button")).find(
     (candidate) => candidate.textContent?.trim() === label,
   );
+
   if (button === undefined) throw new Error(`Settings test button not found: ${label}`);
+
   return button;
 }
 
@@ -71,6 +78,7 @@ async function openObsidianSettings(): Promise<void> {
   });
 
   const settingsButton = host.querySelector<HTMLButtonElement>('button[title="Settings"]');
+
   if (settingsButton === null) throw new Error("Settings test button not found: Settings");
 
   await act(async () => {
@@ -106,6 +114,7 @@ afterEach(async () => {
 
   if (hasDom) {
     document.body.innerHTML = "";
+
     for (const key of OBSIDIAN_STORAGE_KEYS) storage.removeItem(key);
   }
 });
@@ -144,6 +153,7 @@ describe("Settings Obsidian vault discovery", () => {
     "auto-selects the first decoded vault and renders every valid sibling",
     async () => {
       saveObsidianSettings(enabledObsidianSettings(""));
+
       const calls = installVaultFetch({
         vaults: [42, "/notes", null, "", { path: "/invalid" }, "/projects", "/notes"],
       });
@@ -181,6 +191,7 @@ describe("Settings Obsidian vault discovery", () => {
       const vaultInput = Array.from(document.querySelectorAll("input")).find(
         (input) => input.placeholder === "/path/to/vault",
       );
+
       expect(vaultInput?.value).toBe("/already-selected");
     },
   );

@@ -32,6 +32,7 @@ const AICapabilitiesRootSchema = Schema.Struct({
 });
 
 type AIProviderCapabilities = Schema.Schema.Type<typeof AIProviderCapabilitiesSchema>;
+
 type UnknownValue = Schema.Schema.Type<typeof Schema.Unknown>;
 
 /** A validated provider entry from the review server's AI capabilities response. */
@@ -48,16 +49,21 @@ export interface ReviewAICapabilitiesState {
 }
 
 const decodeRoot = Schema.decodeUnknownOption(AICapabilitiesRootSchema);
+
 const decodeProviderFields = Schema.decodeUnknownOption(AIProviderFieldsSchema);
+
 const decodeModelFields = Schema.decodeUnknownOption(AIModelFieldsSchema);
+
 const decodeDefaultProvider = Schema.decodeUnknownOption(Schema.NullOr(Schema.String));
 
 function decodeProvider(value: UnknownValue): ReviewAICapabilitiesProvider | undefined {
   const fields = Option.getOrUndefined(decodeProviderFields(value));
+
   if (!fields) return undefined;
 
   const models = fields.models.flatMap((model) => {
     const decoded = Option.getOrUndefined(decodeModelFields(model));
+
     return decoded ? [decoded] : [];
   });
 
@@ -74,12 +80,15 @@ export function decodeReviewAICapabilitiesResponse(
   value: UnknownValue,
 ): ReviewAICapabilitiesState | undefined {
   const root = Option.getOrUndefined(decodeRoot(value));
+
   if (!root) return undefined;
 
   const providers = root.providers.flatMap((provider) => {
     const decoded = decodeProvider(provider);
+
     return decoded ? [decoded] : [];
   });
+
   const defaultProvider = Option.getOrNull(decodeDefaultProvider(root.defaultProvider));
 
   return { available: root.available, providers, defaultProvider };
@@ -93,12 +102,15 @@ export async function loadReviewAICapabilitiesState(
 
   try {
     const decoded = decodeReviewAICapabilitiesResponse(await response.json());
+
     if (!decoded) return undefined;
+
     if (!decoded.available) {
       return { available: false, providers: [], defaultProvider: null };
     }
 
     const providers = decoded.providers.filter(isPiProvider);
+
     const defaultProvider =
       decoded.defaultProvider !== null &&
       providers.some((provider) => provider.id === decoded.defaultProvider)

@@ -35,7 +35,9 @@ interface ExportModalProps {
 }
 
 type Tab = "share" | "annotations" | "notes";
+
 type CopyTarget = "short" | "full" | "annotations";
+
 type SaveStatus = "idle" | "saving" | "success" | "error";
 
 interface TabStripProps {
@@ -422,6 +424,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const handleSelectNotesTab = () => setActiveTab("notes");
   const handleCopyShort = () => handleCopy(shortShareUrl, "short");
   const handleCopyFull = () => handleCopy(shareUrl, "full");
+
   const handleCopyAnnotations = () =>
     handleCopy(wrapFeedbackForAgent(annotationsOutput), "annotations");
 
@@ -442,12 +445,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setSaveErrors((previousErrors) => {
       const nextErrors = { ...previousErrors };
       delete nextErrors.obsidian;
+
       return nextErrors;
     });
 
     interface ExportBody {
       obsidian?: object;
     }
+
     const body: ExportBody = {
       obsidian: {
         vaultPath: effectiveVaultPath,
@@ -467,6 +472,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       const data: unknown = await response.json();
       const decoded = decodeSaveNotesResponse(data);
       const result = Result.isSuccess(decoded) ? decoded.success.obsidian : undefined;

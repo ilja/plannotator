@@ -22,10 +22,15 @@ export interface ReviewDiffPanelParams {
 }
 
 export const REVIEW_PR_SUMMARY_PANEL_ID = "review-pr-summary";
+
 export const REVIEW_PR_COMMENTS_PANEL_ID = "review-pr-comments";
+
 export const REVIEW_PR_CHECKS_PANEL_ID = "review-pr-checks";
+
 export const REVIEW_ALL_FILES_PANEL_ID = "review-all-files";
+
 export const REVIEW_CODE_NAV_PANEL_ID = "review-code-nav";
+
 export const REVIEW_SEMANTIC_DIFF_PANEL_ID = "review-semantic-diff";
 
 export function isReviewDiffPanelId(panelId: string): boolean {
@@ -37,5 +42,6 @@ export function getReviewDiffPanelFilePath(
 ): string | null {
   if (!params) return null;
   const filePath = params.filePath;
+
   return filePath === String(filePath) ? filePath : null;
 }

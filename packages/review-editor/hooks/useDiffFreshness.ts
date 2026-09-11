@@ -14,7 +14,7 @@ export interface DiffFreshness {
 
 /**
  * Polls `GET /api/diff/fresh` while the review is open. The server compares a
-  * cheap Git fingerprint captured when the diff snapshot was computed against
+ * cheap Git fingerprint captured when the diff snapshot was computed against
  * the repo's state NOW — files changing mid-review (the normal agent-editing-
  * while-you-review workflow) flips `fresh` to false.
  *
@@ -61,20 +61,25 @@ export function useDiffFreshness({
     };
 
     const tick = async () => {
-       // Nobody is looking — don't burn Git commands on a hidden window.
+      // Nobody is looking — don't burn Git commands on a hidden window.
       if (document.hidden) {
         schedule();
+
         return;
       }
+
       try {
         const res = await fetch("/api/diff/fresh");
+
         if (!cancelled && res.ok) {
           const data = decodeDiffFreshnessResponse(await res.json());
+
           if (!cancelled && data) {
             // Keep polling even while stale: a reverted edit flips back to
             // fresh, and a FURTHER change updates the fingerprint so a
             // dismissed notice can reappear.
             setStaleFingerprint(data.fresh ? null : (data.fingerprint ?? "stale"));
+
             // PR mode re-advertises the live local checkout each probe; non-PR
             // probes omit the field entirely (leave agentCwd untouched).
             if ("agentCwd" in data) onAgentCwdRef.current?.(data.agentCwd ?? null);
@@ -83,12 +88,15 @@ export function useDiffFreshness({
       } catch {
         // Transient/network/server-gone: ignore — staleness is best-effort.
       }
+
       schedule();
     };
 
     schedule();
+
     return () => {
       cancelled = true;
+
       if (timer) clearTimeout(timer);
     };
   }, [enabled, resetKey]);

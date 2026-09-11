@@ -11,18 +11,22 @@ interface ViewBox {
 }
 
 const ZOOM_STEP = 0.25;
+
 const MIN_ZOOM = 0.25;
+
 const MAX_ZOOM = 8;
 
 let vizInstancePromise: ReturnType<typeof instance> | null = null;
 
 function getVizInstance() {
   vizInstancePromise ??= instance();
+
   return vizInstancePromise;
 }
 
 function parseViewBox(svgEl: SVGSVGElement): ViewBox | null {
   const raw = svgEl.getAttribute("viewBox");
+
   if (!raw) return null;
 
   const values = raw
@@ -35,12 +39,15 @@ function parseViewBox(svgEl: SVGSVGElement): ViewBox | null {
   }
 
   const [x, y, width, height] = values;
+
   if (width <= 0 || height <= 0) return null;
+
   return { x, y, width, height };
 }
 
 function parseViewBoxFromMarkup(markup: string): ViewBox | null {
   const viewBoxMatch = markup.match(/viewBox\s*=\s*"([^"]+)"/i);
+
   if (viewBoxMatch?.[1]) {
     const values = viewBoxMatch[1]
       .trim()
@@ -49,6 +56,7 @@ function parseViewBoxFromMarkup(markup: string): ViewBox | null {
 
     if (values.length === 4 && values.every((value) => Number.isFinite(value))) {
       const [x, y, width, height] = values;
+
       if (width > 0 && height > 0) {
         return { x, y, width, height };
       }
@@ -59,6 +67,7 @@ function parseViewBoxFromMarkup(markup: string): ViewBox | null {
   const heightMatch = markup.match(/\bheight\s*=\s*"([0-9.]+)(?:px|pt)?"/i);
   const width = widthMatch?.[1] ? Number.parseFloat(widthMatch[1]) : NaN;
   const height = heightMatch?.[1] ? Number.parseFloat(heightMatch[1]) : NaN;
+
   if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
     return { x: 0, y: 0, width, height };
   }
@@ -90,6 +99,7 @@ function fitBoundsToContainer(bounds: ViewBox, containerRect: DOMRect): ViewBox 
   if (contentRatio > containerRatio) {
     const targetHeight = bounds.width / containerRatio;
     const extra = (targetHeight - bounds.height) / 2;
+
     return {
       x: bounds.x,
       y: bounds.y - extra,
@@ -100,6 +110,7 @@ function fitBoundsToContainer(bounds: ViewBox, containerRect: DOMRect): ViewBox 
 
   const targetWidth = bounds.height * containerRatio;
   const extra = (targetWidth - bounds.width) / 2;
+
   return {
     x: bounds.x - extra,
     y: bounds.y,
@@ -115,6 +126,7 @@ function getDiagramNaturalHeight(bounds: ViewBox | null): string {
     36 * 16,
     Math.max(4 * 16, Math.round(bounds.height * (800 / bounds.width))),
   );
+
   return `min(65vh, ${height}px)`;
 }
 
@@ -150,13 +162,16 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
 
     if (containerRef.current && baseViewBoxRef.current) {
       const svgEl = containerRef.current.querySelector("svg");
+
       if (svgEl instanceof SVGSVGElement) {
         applyView(svgEl, baseViewBoxRef.current, newZoom, panOffsetRef.current);
       }
     }
 
     if (zoomInBtnRef.current) zoomInBtnRef.current.disabled = newZoom >= MAX_ZOOM;
+
     if (zoomOutBtnRef.current) zoomOutBtnRef.current.disabled = newZoom <= MIN_ZOOM;
+
     if (zoomDisplayRef.current) {
       const show = Math.abs(newZoom - 1) > 0.001;
       zoomDisplayRef.current.textContent = show ? `${Math.round(newZoom * 100)}%` : "";
@@ -168,12 +183,14 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     if (!containerRef.current || !naturalBoundsRef.current) return;
 
     const svgEl = containerRef.current.querySelector("svg");
+
     if (!(svgEl instanceof SVGSVGElement)) return;
 
     const fitted = fitBoundsToContainer(
       naturalBoundsRef.current,
       containerRef.current.getBoundingClientRect(),
     );
+
     baseViewBoxRef.current = fitted;
     panOffsetRef.current = { x: 0, y: 0 };
     updateZoom(1);
@@ -187,6 +204,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
       try {
         const viz = await getVizInstance();
         const renderedSvg = await viz.renderString(block.content, { format: "svg" });
+
         const cleaned = renderedSvg
           .replace(/ width="[^"]*"/, ' width="100%"')
           .replace(/ height="[^"]*"/, ' height="100%"')
@@ -230,6 +248,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
   useEffect(() => {
     if (showSource) {
       setIsExpanded(false);
+
       return;
     }
 
@@ -262,6 +281,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     if (!svg || showSource || !containerRef.current) return;
 
     const svgEl = containerRef.current.querySelector("svg");
+
     if (!(svgEl instanceof SVGSVGElement)) return;
 
     svgEl.style.maxWidth = "none";
@@ -306,6 +326,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     if (showSource || !containerRef.current) return;
 
     const container = containerRef.current;
+
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
@@ -314,6 +335,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
+
     return () => container.removeEventListener("wheel", handleWheel);
   }, [showSource, isExpanded, updateZoom]);
 
@@ -331,6 +353,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
 
   useEffect(() => {
     if (showSource || !containerRef.current || !naturalBoundsRef.current) return;
+
     if (globalThis.ResizeObserver === undefined) return;
 
     const observer = new ResizeObserver(() => {
@@ -339,6 +362,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     });
 
     observer.observe(containerRef.current);
+
     return () => observer.disconnect();
   }, [fitToCurrentViewport, isExpanded, showSource, svg]);
 
@@ -348,6 +372,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     isDraggingRef.current = true;
     dragStartRef.current = { x: event.clientX, y: event.clientY };
     panStartRef.current = { ...panOffsetRef.current };
+
     if (containerRef.current) containerRef.current.style.cursor = "grabbing";
   }, []);
 
@@ -355,6 +380,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
     if (!isDraggingRef.current || !containerRef.current || !baseViewBoxRef.current) return;
 
     const svgEl = containerRef.current.querySelector("svg");
+
     if (!(svgEl instanceof SVGSVGElement)) return;
 
     const rect = svgEl.getBoundingClientRect();
@@ -377,6 +403,7 @@ export const GraphvizBlock: React.FC<{ block: Block }> = ({ block }) => {
   const stopDragging = useCallback(() => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
+
     if (containerRef.current) containerRef.current.style.cursor = "grab";
   }, []);
 

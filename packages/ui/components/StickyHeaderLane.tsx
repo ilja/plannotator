@@ -50,8 +50,11 @@ const snap = (n: number) => Math.floor(n / 16) * 16;
 // Below MIN, even the icon-only bar can't fit beside the (likely also
 // icon-only) action cluster — stack as the final fallback.
 const LEFT_OFFSET = 20;
+
 const GAP = 16;
+
 const WIDE_BAR_WIDTH = 460;
+
 const MIN_BAR_WIDTH = 300;
 
 interface StickyHeaderLaneProps {
@@ -109,11 +112,14 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
 
   useEffect(() => {
     if (!wrapperRef.current) return;
+
     const ro = new ResizeObserver(([entry]) => {
       const next = snap(entry.contentRect.width);
       setWrapperWidth((prev) => (prev === next ? prev : next));
     });
+
     ro.observe(wrapperRef.current);
+
     return () => ro.disconnect();
   }, []);
 
@@ -131,12 +137,16 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
     // and the new observer firing its first callback.
     setActionsWidth(0);
     const el = document.querySelector<HTMLElement>("[data-sticky-actions]");
+
     if (!el) return;
+
     const ro = new ResizeObserver(([entry]) => {
       const next = snap(entry.contentRect.width);
       setActionsWidth((prev) => (prev === next ? prev : next));
     });
+
     ro.observe(el);
+
     return () => ro.disconnect();
   }, [remountToken]);
 
@@ -150,12 +160,15 @@ export const StickyHeaderLane: React.FC<StickyHeaderLaneProps> = ({
   // viewport from context, NOT <main> (which doesn't actually scroll).
   useEffect(() => {
     if (!sentinelRef.current || !scrollViewport) return;
+
     const observer = new IntersectionObserver(([entry]) => setIsStuck(!entry.isIntersecting), {
       root: scrollViewport,
       rootMargin: "80px 0px 0px 0px",
       threshold: 0,
     });
+
     observer.observe(sentinelRef.current);
+
     return () => observer.disconnect();
   }, [scrollViewport]);
 

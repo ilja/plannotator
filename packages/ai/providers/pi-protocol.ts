@@ -5,6 +5,7 @@ const CommandIdSchema = {
 };
 
 export const PiJsonObjectSchema = Schema.Record(Schema.String, Schema.Json);
+
 export type PiJsonObject = Schema.Schema.Type<typeof PiJsonObjectSchema>;
 
 export const PiCommandSchema = Schema.Union([
@@ -32,6 +33,7 @@ export const PiCommandSchema = Schema.Union([
     type: Schema.Literal("get_available_models"),
   }),
 ]);
+
 export type PiCommand = Schema.Schema.Type<typeof PiCommandSchema>;
 
 export const PiResponseEnvelopeSchema = Schema.Struct({
@@ -46,6 +48,7 @@ export const PiResponseSchema = Schema.Struct({
   error: Schema.optionalKey(Schema.String),
   data: Schema.optionalKey(Schema.Union([PiJsonObjectSchema, Schema.Null])),
 });
+
 export type PiResponse = Schema.Schema.Type<typeof PiResponseSchema>;
 
 export const PiStateResponseSchema = Schema.Struct({

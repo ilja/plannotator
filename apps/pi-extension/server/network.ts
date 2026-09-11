@@ -12,11 +12,14 @@ import { delimiter, join } from "node:path";
 import { loadConfig, resolveUseGlimpse } from "../generated/config.js";
 
 const DEFAULT_REMOTE_PORT = 19432;
+
 const LOOPBACK_HOST = "127.0.0.1";
+
 const NOOP_BROWSER_VALUES = new Set(["true", "false", "none", ":", "0", "1"]);
 
 export function isNoOpBrowserSentinel(value: string | undefined): boolean {
   if (!value) return false;
+
   return NOOP_BROWSER_VALUES.has(value.trim().toLowerCase());
 }
 
@@ -26,6 +29,7 @@ export function isNoOpBrowserSentinel(value: string | undefined): boolean {
  */
 function getRemoteOverride(): boolean | null {
   const remote = process.env.PLANNOTATOR_REMOTE;
+
   if (remote === undefined) {
     return null;
   }
@@ -43,13 +47,16 @@ function getRemoteOverride(): boolean | null {
 
 export function isRemoteSession(): boolean {
   const remoteOverride = getRemoteOverride();
+
   if (remoteOverride !== null) {
     return remoteOverride;
   }
+
   // Legacy SSH detection
   if (process.env.SSH_TTY || process.env.SSH_CONNECTION) {
     return true;
   }
+
   return false;
 }
 
@@ -67,16 +74,20 @@ export interface ServerPortInfo {
 
 export function getServerPort(): ServerPortInfo {
   const envPort = process.env.PLANNOTATOR_PORT;
+
   if (envPort) {
     const parsed = parseInt(envPort, 10);
+
     if (!Number.isNaN(parsed) && parsed >= 0 && parsed < 65536) {
       return { port: parsed, portSource: "env" };
     }
     // Invalid port - fall back silently, caller can check env var themselves
   }
+
   if (isRemoteSession()) {
     return { port: DEFAULT_REMOTE_PORT, portSource: "remote-default" };
   }
+
   return { port: 0, portSource: "random" };
 }
 
@@ -85,6 +96,7 @@ export function getServerHostname(): string {
 }
 
 const MAX_RETRIES = 5;
+
 const RETRY_DELAY_MS = 500;
 
 export async function listenOnPort(server: Server): Promise<ServerPortInfo> {
@@ -100,24 +112,30 @@ export async function listenOnPort(server: Server): Promise<ServerPortInfo> {
         });
       });
       const address = server.address();
+
       if (!address) {
         throw new Error("Failed to resolve bound server address");
       }
+
       // SAFETY: this is the TCP listen callback (host from getServerHostname),
       // so `server.address()` is the AddressInfo form, never the unix-socket
       // path string.
       const addr = address as AddressInfo;
+
       return { port: addr.port, portSource: result.portSource };
     } catch (err: unknown) {
       const isAddressInUse = err instanceof Error && err.message.includes("EADDRINUSE");
+
       if (isAddressInUse && attempt < MAX_RETRIES) {
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
         continue;
       }
+
       if (isAddressInUse) {
         const hint = isRemoteSession() ? " (set PLANNOTATOR_PORT to use a different port)" : "";
         throw new Error(`Port ${result.port} in use after ${MAX_RETRIES} retries${hint}`);
       }
+
       throw err;
     }
   }
@@ -133,18 +151,23 @@ export async function listenOnPort(server: Server): Promise<ServerPortInfo> {
  */
 function findCommandOnPath(command: string): string | null {
   const extensions = process.platform === "win32" ? [".cmd", ".exe", ".bat", ""] : [""];
+
   for (const dir of (process.env.PATH || "").split(delimiter)) {
     if (!dir) continue;
+
     for (const ext of extensions) {
       const candidate = join(dir, `${command}${ext}`);
+
       if (existsSync(candidate)) return candidate;
     }
   }
+
   return null;
 }
 
 function buildGlimpseHtml(url: string): string {
   const encodedUrl = JSON.stringify(url);
+
   return `<!doctype html>
 <html>
 	<head>
@@ -165,6 +188,7 @@ function buildGlimpseHtml(url: string): string {
 
 async function openGlimpse(url: string): Promise<boolean> {
   const glimpseCli = findCommandOnPath("glimpseui");
+
   if (!glimpseCli) return false;
 
   const args = [
@@ -176,14 +200,17 @@ async function openGlimpse(url: string): Promise<boolean> {
     "Plannotator",
     "--open-links",
   ];
+
   const html = buildGlimpseHtml(url);
 
   return await new Promise<boolean>((resolve) => {
     let settled = false;
     let successTimer: ReturnType<typeof setTimeout> | undefined;
+
     const finish = (opened: boolean) => {
       if (settled) return;
       settled = true;
+
       if (successTimer) clearTimeout(successTimer);
       resolve(opened);
     };
@@ -192,6 +219,7 @@ async function openGlimpse(url: string): Promise<boolean> {
       detached: true,
       stdio: ["pipe", "ignore", "ignore"],
     });
+
     successTimer = setTimeout(() => {
       child.unref();
       finish(true);
@@ -211,17 +239,21 @@ export async function openBrowser(url: string): Promise<{
 }> {
   const rawPlannotatorBrowser = process.env.PLANNOTATOR_BROWSER;
   const rawBrowser = process.env.BROWSER;
+
   const plannotatorBrowser = isNoOpBrowserSentinel(rawPlannotatorBrowser)
     ? undefined
     : rawPlannotatorBrowser;
+
   const envBrowser = isNoOpBrowserSentinel(rawBrowser) ? undefined : rawBrowser;
   const browser = plannotatorBrowser || envBrowser;
+
   if (isRemoteSession() && !browser) {
     return { opened: false, isRemote: true, url };
   }
 
   if (!browser && resolveUseGlimpse(loadConfig())) {
     const openedViaGlimpse = await openGlimpse(url);
+
     if (openedViaGlimpse) {
       return { opened: true };
     }
@@ -259,6 +291,7 @@ export async function openBrowser(url: string): Promise<{
     const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
     child.once("error", () => {});
     child.unref();
+
     return { opened: true };
   } catch {
     return { opened: false };

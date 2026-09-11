@@ -49,6 +49,7 @@ const loaded = new Set<string>();
 export function loadCodeFont(fontFamily: string, datasetKey = "codeFont"): void {
   if (!fontFamily || loaded.has(fontFamily)) return;
   const url = FONT_URLS[fontFamily];
+
   if (!url) return;
 
   const link = document.createElement("link");
@@ -66,6 +67,7 @@ export function loadDiffFont(fontFamily: string): void {
 export function loadProseFont(fontFamily: string): void {
   if (!fontFamily || loaded.has(fontFamily)) return;
   const url = PROSE_FONT_URLS[fontFamily];
+
   if (!url) return;
 
   const link = document.createElement("link");

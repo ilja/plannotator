@@ -47,6 +47,7 @@ export function extractDirName(path: string): string | null {
   if (!path) return null;
 
   const trimmed = path.trim().replace(/\/+$/, "");
+
   if (trimmed === "" || trimmed === "/") return null;
 
   const parts = trimmed.split("/");
@@ -54,6 +55,7 @@ export function extractDirName(path: string): string | null {
 
   // Skip generic names
   const skipNames = new Set(["home", "users", "user", "root", "tmp", "var"]);
+
   if (skipNames.has(name.toLowerCase())) return null;
 
   return sanitizeTag(name);

@@ -16,6 +16,7 @@ describe("Pi RPC protocol schemas", () => {
       success: true,
       data: { sessionId: "session-1" },
     });
+
     const nullData = Schema.decodeUnknownSync(PiResponseSchema)({
       type: "response",
       id: "request-2",

@@ -29,12 +29,17 @@ function sourceSave(hash: string, text: string): EnabledSourceSaveCapability {
 }
 
 const KEY = "file:/repo/docs/a.md";
+
 const SOURCE_A = sourceSave("sha256:a", "a\n");
+
 const SOURCE_B = sourceSave("sha256:b", "b\n");
+
 const SOURCE_EXTERNAL = sourceSave("sha256:external", "external\n");
+
 const SOURCE_OVERWRITE = sourceSave("sha256:overwrite", "local\n");
 
 let roots: Root[] = [];
+
 let containers: HTMLElement[] = [];
 
 async function mountSourceBackedDocuments(
@@ -52,10 +57,12 @@ async function mountSourceBackedDocuments(
 
   let latest: SourceBackedDocumentsApi | null = null;
   let selectKey: ((key: string | null) => void) | null = null;
+
   function Harness() {
     const [, setSelectedKey] = React.useState<string | null>(null);
     selectKey = setSelectedKey;
     latest = useSourceBackedDocuments(options);
+
     return null;
   }
 
@@ -66,6 +73,7 @@ async function mountSourceBackedDocuments(
   return {
     current: () => {
       if (!latest) throw new Error("hook was not mounted");
+
       return latest;
     },
     select: async (key) => {
@@ -91,6 +99,7 @@ afterEach(async () => {
       root.unmount();
     });
   }
+
   for (const container of containers.splice(0)) container.remove();
 });
 
@@ -120,6 +129,7 @@ describe("useSourceBackedDocuments lifecycle actions", () => {
         snapshot: { markdown: "external\n", sourceSave: SOURCE_EXTERNAL },
       }),
     });
+
     const initialSource = { ...SOURCE_A };
 
     await act(async () => {
@@ -131,6 +141,7 @@ describe("useSourceBackedDocuments lifecycle actions", () => {
     });
 
     const snapshot = session.current().getSourceBackedDocument(KEY);
+
     if (!snapshot?.diskConflict || !snapshot.sourceSave?.enabled)
       throw new Error("expected a conflict snapshot");
     snapshot.currentText = "mutated\n";
@@ -188,6 +199,7 @@ describe("useSourceBackedDocuments lifecycle actions", () => {
     });
 
     expect(discarded.type).toBe("document-discarded");
+
     if (discarded.type !== "document-discarded") throw new Error("expected discarded document");
     expect(discarded.record.currentText).toBe("a\n");
     expect(discarded.record.diskBaseline).toBe("a\n");
@@ -452,9 +464,11 @@ interface Deferred<T> {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
+
   const promise = new Promise<T>((nextResolve) => {
     resolve = nextResolve;
   });
+
   return { promise, resolve };
 }
 
@@ -474,6 +488,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
       sourceSave: SOURCE_A,
       ...overrides,
     });
+
     const refreshedSource = { ...SOURCE_A, mtimeMs: 4000, size: 7 };
     const externalSource = { ...SOURCE_A, hash: "sha256:external", mtimeMs: 5000 };
     const fresh = change("fresh", "/repo/docs/fresh.md", { afterHash: undefined });
@@ -482,13 +497,19 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
     const noop = change("noop", "/repo/docs/noop.md", { beforeText: "after\n" });
     const unavailable = change("unavailable", "/repo/docs/unavailable.md");
     const probed: string[] = [];
+
     const session = await mountSourceBackedDocuments({
       probeSourceSave: async (path) => {
         probed.push(path);
+
         if (path.endsWith("fresh.md")) return { status: "ok", sourceSave: refreshedSource };
+
         if (path.endsWith("stale.md")) return { status: "ok", sourceSave: externalSource };
+
         if (path.endsWith("missing.md")) return { status: "missing" };
+
         if (path.endsWith("unavailable.md")) return { status: "unavailable" };
+
         return { status: "ok", sourceSave: SOURCE_A };
       },
     });
@@ -496,6 +517,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
     let result: Awaited<
       ReturnType<SourceBackedDocumentsApi["validateSourceBackedSavedFileChanges"]>
     >;
+
     await act(async () => {
       result = await session
         .current()
@@ -521,6 +543,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
       deferred<
         Awaited<ReturnType<NonNullable<SourceBackedDocumentLifecycleOptions["readSourceDocument"]>>>
       >();
+
     const reads = [
       firstRead.promise,
       Promise.resolve({
@@ -528,6 +551,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
         snapshot: { markdown: "external\n", sourceSave: SOURCE_EXTERNAL },
       }),
     ];
+
     const session = await mountSourceBackedDocuments({
       readSourceDocument: () =>
         reads.shift() ?? Promise.resolve({ status: "unavailable" as const }),
@@ -573,6 +597,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
       deferred<
         Awaited<ReturnType<NonNullable<SourceBackedDocumentLifecycleOptions["readSourceDocument"]>>>
       >();
+
     reads.push(staleRead.promise);
     const staleReconcile = session.current().reconcileSourceBackedDocuments();
     await act(async () => {
@@ -606,6 +631,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
       }),
       Promise.resolve({ status: "missing" as const }),
     ];
+
     const session = await mountSourceBackedDocuments({
       readSourceDocument: () =>
         reads.shift() ?? Promise.resolve({ status: "unavailable" as const }),
@@ -615,8 +641,10 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
       session.current().openSourceBackedDocument({ key: KEY, text: "a\n", sourceSave: SOURCE_A });
       session.current().updateSourceBackedDocumentText(KEY, "local\n");
     });
+
     let conflict: Awaited<ReturnType<SourceBackedDocumentsApi["reconcileSourceBackedDocuments"]>> =
       [];
+
     await act(async () => {
       conflict = await session.current().reconcileSourceBackedDocuments();
     });
@@ -625,6 +653,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
 
     let missing: Awaited<ReturnType<SourceBackedDocumentsApi["reconcileSourceBackedDocuments"]>> =
       [];
+
     await act(async () => {
       missing = await session.current().reconcileSourceBackedDocuments();
     });
@@ -641,15 +670,18 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
       const saveRequests: Array<
         Parameters<NonNullable<SourceBackedDocumentLifecycleOptions["saveSourceDocument"]>>[0]
       > = [];
+
       let saveResult: Awaited<
         ReturnType<NonNullable<SourceBackedDocumentLifecycleOptions["saveSourceDocument"]>>
       > = {
         status: "saved",
         sourceSave: { hash: "sha256:saved", mtimeMs: 4000, size: 6, eol: "lf" },
       };
+
       const session = await mountSourceBackedDocuments({
         saveSourceDocument: async (input) => {
           saveRequests.push(input);
+
           return saveResult;
         },
       });
@@ -725,14 +757,18 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
     type AdapterSaveResult = Awaited<
       NonNullable<SourceBackedDocumentLifecycleOptions["saveSourceDocument"]>
     >;
+
     let resolveSave!: (result: AdapterSaveResult) => void;
     const saveRequests: string[] = [];
+
     const pendingSave = new Promise<AdapterSaveResult>((resolve) => {
       resolveSave = resolve;
     });
+
     const session = await mountSourceBackedDocuments({
       saveSourceDocument: async (input) => {
         saveRequests.push(input.text);
+
         return pendingSave;
       },
     });
@@ -778,9 +814,11 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
         status: "conflict-incomplete",
         message: "changed",
       };
+
       const session = await mountSourceBackedDocuments({
         saveSourceDocument: async () => saveResult,
       });
+
       await act(async () => {
         session.current().openSourceBackedDocument({ key: KEY, text: "a\n", sourceSave: SOURCE_A });
         session.current().updateSourceBackedDocumentText(KEY, "local\n");
@@ -831,6 +869,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
           },
         }),
       });
+
       await act(async () => {
         session.current().openSourceBackedDocument({ key: KEY, text: "a\n", sourceSave: SOURCE_A });
       });
@@ -853,9 +892,11 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
     "uses the Save conflict snapshot without reading the document again",
     async () => {
       let readCount = 0;
+
       const session = await mountSourceBackedDocuments({
         readSourceDocument: async () => {
           readCount += 1;
+
           return { status: "unavailable" };
         },
         saveSourceDocument: async () => ({
@@ -896,6 +937,7 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
         snapshot: { markdown: "external\n", sourceSave: SOURCE_EXTERNAL },
       }),
     });
+
     await act(async () => {
       session.current().openSourceBackedDocument({ key: KEY, text: "a\n", sourceSave: SOURCE_A });
       session.current().updateSourceBackedDocumentText(KEY, "local\n");
@@ -914,9 +956,11 @@ describe("useSourceBackedDocuments lifecycle commands", () => {
     await act(async () => {
       session.current().updateSourceBackedDocumentText(KEY, "local again\n");
     });
+
     let discarded: Awaited<
       ReturnType<SourceBackedDocumentsApi["discardSourceBackedDocumentEdits"]>
     >;
+
     await act(async () => {
       discarded = session.current().discardSourceBackedDocumentEdits(KEY);
     });

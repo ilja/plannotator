@@ -16,6 +16,7 @@ export function extractLinesFromPatch(
   for (const line of lines) {
     // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
     const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+
     if (hunkMatch) {
       oldLine = parseInt(hunkMatch[1], 10) - 1;
       newLine = parseInt(hunkMatch[2], 10) - 1;
@@ -40,18 +41,21 @@ export function extractLinesFromPatch(
       oldLine++;
       newLine++;
       const lineNum = side === "old" ? oldLine : newLine;
+
       if (lineNum >= lineStart && lineNum <= lineEnd) {
         result.push(content);
       }
     } else if (prefix === "-") {
       // Deletion — old side only
       oldLine++;
+
       if (side === "old" && oldLine >= lineStart && oldLine <= lineEnd) {
         result.push(content);
       }
     } else if (prefix === "+") {
       // Addition — new side only
       newLine++;
+
       if (side === "new" && newLine >= lineStart && newLine <= lineEnd) {
         result.push(content);
       }

@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { PRSelector } from "./PRSelector";
 
 const hasDom = globalThis.document !== undefined;
+
 const originalFetch = globalThis.fetch;
 
 const validPullRequest = {
@@ -55,6 +56,7 @@ async function mountPRSelector() {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 

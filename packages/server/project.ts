@@ -10,6 +10,7 @@
 
 import { $ } from "bun";
 import { extractRepoName, extractDirName } from "@plannotator/shared/project";
+
 export { sanitizeTag, extractRepoName, extractDirName } from "@plannotator/shared/project";
 
 /**
@@ -24,8 +25,10 @@ export async function detectProjectName(): Promise<string | null> {
   // Try git repo name first
   try {
     const result = await $`git rev-parse --show-toplevel`.quiet().nothrow();
+
     if (result.exitCode === 0) {
       const repoName = extractRepoName(result.stdout.toString());
+
       if (repoName) return repoName;
     }
   } catch {
@@ -36,6 +39,7 @@ export async function detectProjectName(): Promise<string | null> {
   try {
     const cwd = process.cwd();
     const dirName = extractDirName(cwd);
+
     if (dirName) return dirName;
   } catch {
     // process.cwd() failed (rare)

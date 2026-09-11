@@ -37,7 +37,9 @@ describe("review request schemas", () => {
       "p4-default",
       "p4-changelist:123",
     ]) {
-      expect(Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(diffType))).toBeUndefined();
+      expect(
+        Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(diffType)),
+      ).toBeUndefined();
     }
   });
 
@@ -60,6 +62,7 @@ describe("review request schemas", () => {
         base: "main",
       }),
     );
+
     expect(valid?.diffType).toBe("uncommitted");
     expect(valid?.hideWhitespace).toBe(true);
     expect(valid?.base).toBe("main");
@@ -68,6 +71,7 @@ describe("review request schemas", () => {
     const emptyBase = Option.getOrUndefined(
       Schema.decodeUnknownOption(DiffSwitchRequestSchema)({ diffType: "uncommitted", base: "" }),
     );
+
     expect(emptyBase?.base).toBe("");
 
     // missing diffType -> malformed
@@ -141,9 +145,11 @@ describe("review request schemas", () => {
     expect(
       Option.getOrUndefined(Schema.decodeUnknownOption(GitAddRequestSchema)({ filePath: 123 })),
     ).toBeUndefined();
+
     const withUndo = Option.getOrUndefined(
       Schema.decodeUnknownOption(GitAddRequestSchema)({ filePath: "src/app.ts", undo: true }),
     );
+
     expect(withUndo?.undo).toBe(true);
     expect(
       Option.getOrUndefined(
@@ -160,6 +166,7 @@ describe("review request schemas", () => {
         approved: true,
       }),
     );
+
     expect(valid?.feedback).toBe("looks good");
     // empty object is valid (all fields optional, defaults handled by handler)
     expect(
@@ -184,6 +191,7 @@ describe("review request schemas", () => {
         fileComments: [],
       }),
     );
+
     expect(valid?.action).toBe("approve");
     // missing fileComments -> malformed (required on Bun)
     expect(

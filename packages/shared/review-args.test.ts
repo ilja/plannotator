@@ -17,9 +17,7 @@ describe("parseReviewArgs", () => {
   });
 
   test("accepts argv arrays from the compiled CLI", () => {
-    expect(
-      parseReviewArgs(["--no-local", "https://github.com/acme/repo/pull/12"]),
-    ).toEqual({
+    expect(parseReviewArgs(["--no-local", "https://github.com/acme/repo/pull/12"])).toEqual({
       prUrl: "https://github.com/acme/repo/pull/12",
       useLocal: false,
     });

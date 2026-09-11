@@ -20,7 +20,9 @@ import type {
 } from "@plannotator/webtui/core";
 
 type WebTuiCore = typeof import("@plannotator/webtui/core");
+
 type WebTuiServer = typeof import("@plannotator/webtui/server");
+
 type BuildAgentLaunchPlan = WebTuiCore["buildAgentLaunchPlan"];
 
 export type NodeAgentTerminalBridge = {
@@ -51,6 +53,7 @@ export async function createNodeAgentTerminalBridge(args: {
 
   let core: WebTuiCore;
   let serverModule: WebTuiServer;
+
   try {
     [core, serverModule] = await Promise.all([
       import("@plannotator/webtui/core"),
@@ -65,6 +68,7 @@ export async function createNodeAgentTerminalBridge(args: {
   }
 
   let baseBackend: PtyBackend;
+
   try {
     baseBackend = new serverModule.NodePtyBackend();
   } catch (err) {
@@ -79,29 +83,35 @@ export async function createNodeAgentTerminalBridge(args: {
   const sessions = new Set<PtySession>();
   let spawnInFlight = false;
   const wsPath = buildAgentTerminalWsPath(randomBytes(18).toString("hex"));
+
   const backend: PtyBackend = {
     async spawn(options: PtySpawnOptions): Promise<PtySession> {
       if (spawnInFlight || sessions.size > 0) {
         throw new Error("An agent terminal is already running.");
       }
+
       const normalized = normalizeSpawnOptions(
         options,
         args.cwd,
         allowedAgents,
         core.buildAgentLaunchPlan,
       );
+
       if (!normalized.ok) throw new Error(normalized.message);
       spawnInFlight = true;
+
       try {
         const session = wrapPtySession(await baseBackend.spawn(normalized.value));
         sessions.add(session);
         session.onExit(() => sessions.delete(session));
+
         return session;
       } finally {
         spawnInFlight = false;
       }
     },
   };
+
   const ptyServer = serverModule.createNodePtyWebSocketServer({
     server: args.server,
     path: wsPath,
@@ -138,6 +148,7 @@ function wrapPtySession(session: PtySession): PtySession {
   function markExited(exit: PtyExit): void {
     if (exited) return;
     exited = true;
+
     for (const listener of exitListeners) listener(exit);
     exitListeners.clear();
     underlyingExitUnsubscribe?.();
@@ -152,6 +163,7 @@ function wrapPtySession(session: PtySession): PtySession {
     id: session.id,
     write(data) {
       if (exited) return;
+
       try {
         session.write(data);
       } catch {
@@ -161,6 +173,7 @@ function wrapPtySession(session: PtySession): PtySession {
     },
     resize(cols, rows) {
       if (exited) return;
+
       try {
         session.resize(cols, rows);
       } catch {
@@ -170,6 +183,7 @@ function wrapPtySession(session: PtySession): PtySession {
     },
     kill(signal) {
       if (exited) return;
+
       try {
         session.kill(signal);
       } catch {
@@ -182,14 +196,17 @@ function wrapPtySession(session: PtySession): PtySession {
     },
     onExit(callback) {
       exitListeners.add(callback);
+
       if (!underlyingExitUnsubscribe) {
         underlyingExitUnsubscribe = session.onExit(markExited);
       }
+
       return () => exitListeners.delete(callback);
     },
     getForegroundProcess: session.getForegroundProcess
       ? async () => {
           if (exited || !session.getForegroundProcess) return null;
+
           try {
             return await session.getForegroundProcess();
           } catch {
@@ -200,6 +217,7 @@ function wrapPtySession(session: PtySession): PtySession {
     hasChildProcesses: session.hasChildProcesses
       ? async () => {
           if (exited || !session.hasChildProcesses) return false;
+
           try {
             return await session.hasChildProcesses();
           } catch {
@@ -219,25 +237,34 @@ export function normalizeSpawnOptions(
   if (!options.agent) {
     return { ok: false, message: "Agent terminal requires a built-in WebTUI agent." };
   }
+
   if (!allowedAgents.has(options.agent)) {
     return { ok: false, message: `Unknown WebTUI agent: ${options.agent}` };
   }
+
   const launch = buildAgentLaunchPlan({
     agent: options.agent,
     allowEmptyPromptLaunch: true,
   });
+
   const value: PtySpawnOptions = {
     agent: launch.agent,
     command: launch.command,
     cwd,
     startupCommandMode: "shell-ready",
   };
+
   const cols = Option.getOrUndefined(Schema.decodeUnknownOption(TerminalDimension)(options.cols));
+
   if (cols !== undefined) value.cols = cols;
   const rows = Option.getOrUndefined(Schema.decodeUnknownOption(TerminalDimension)(options.rows));
+
   if (rows !== undefined) value.rows = rows;
+
   if (Object.keys(launch.env).length > 0) value.env = launch.env;
+
   if (launch.preflightTrust) value.preflightTrust = launch.preflightTrust;
+
   return {
     ok: true,
     value,
@@ -265,6 +292,7 @@ function isAgentTerminalRemoteEnabled(env: NodeJS.ProcessEnv = process.env): boo
 function listAgents(core: WebTuiCore): AgentTerminalAgent[] {
   return core.listBuiltInAgents().map((id) => {
     const config = core.BUILT_IN_AGENTS[id];
+
     return {
       id,
       name: formatAgentName(id),
@@ -275,13 +303,16 @@ function listAgents(core: WebTuiCore): AgentTerminalAgent[] {
 
 function commandExists(command: string): boolean {
   const pathValue = process.env.PATH;
+
   if (!pathValue) return false;
+
   const extensions =
     process.platform === "win32" ? (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";") : [""];
 
   for (const dir of pathValue.split(delimiter)) {
     for (const ext of extensions) {
       const candidate = join(dir, process.platform === "win32" ? command + ext : command);
+
       try {
         if (existsSync(candidate) && !statSync(candidate).isDirectory()) return true;
       } catch {
@@ -289,6 +320,7 @@ function commandExists(command: string): boolean {
       }
     }
   }
+
   return false;
 }
 
@@ -306,7 +338,9 @@ function formatAgentName(id: string): string {
     opencode: "OpenCode",
     pi: "Pi",
   };
+
   if (overrides[id]) return overrides[id];
+
   return id
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

@@ -8,6 +8,7 @@ interface StderrCapture {
   writes: string[];
   restore: () => void;
 }
+
 import {
   handleAgents,
   handleDraftLoad,
@@ -34,11 +35,15 @@ type StderrChunk = string | Uint8Array;
 function captureStderrWrites(): StderrCapture {
   const writes: string[] = [];
   const original = process.stderr.write;
+
   const writeMock: typeof process.stderr.write = (chunk: StderrChunk) => {
     writes.push(String(chunk));
+
     return true;
   };
+
   process.stderr.write = writeMock;
+
   return {
     writes,
     restore: () => {
@@ -136,6 +141,7 @@ describe("handleDraftSave", () => {
         }),
         "draft-boundary",
       );
+
       expect(initial.status).toBe(200);
 
       const malformed = await handleDraftSave(
@@ -145,6 +151,7 @@ describe("handleDraftSave", () => {
         }),
         "draft-boundary",
       );
+
       expect(malformed.status).toBe(400);
       expect(await malformed.json()).toEqual({ error: "Invalid draft" });
       expect(await handleDraftLoad("draft-boundary").json()).toEqual({
@@ -158,6 +165,7 @@ describe("handleDraftSave", () => {
         }),
         "draft-boundary",
       );
+
       expect(valid.status).toBe(200);
       expect(await handleDraftLoad("draft-boundary").json()).toEqual({
         annotations: [{ id: "updated" }],
@@ -173,6 +181,7 @@ describe("handleDraftSave", () => {
 describe("handleSaveNotes", () => {
   test("saves to an Obsidian vault and returns JSON success", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "plannotator-save-notes-"));
+
     try {
       const response = await handleSaveNotes(
         saveNotesRequest({
@@ -339,6 +348,7 @@ describe("handleServerReady", () => {
   // with no URL and the agent hangs waiting on the review.
   test("prints the reachable URL to stderr for a remote session", async () => {
     const { writes, restore } = captureStderrWrites();
+
     try {
       await handleServerReady("http://localhost:19432", true, 19432, {
         skipBrowserOpen: true,
@@ -346,6 +356,7 @@ describe("handleServerReady", () => {
     } finally {
       restore();
     }
+
     expect(writes.join("")).toContain("http://localhost:19432");
   });
 
@@ -354,21 +365,25 @@ describe("handleServerReady", () => {
     process.env.__CFBundleIdentifier = "com.apple.Terminal";
     const { writes, restore } = captureStderrWrites();
     let opened = "";
+
     try {
       await handleServerReady("http://localhost:3000", false, 3000, {
         openBrowser: async (u: string) => {
           opened = u;
+
           return true;
         },
       });
     } finally {
       restore();
+
       if (originalBundleIdentifier === undefined) {
         delete process.env.__CFBundleIdentifier;
       } else {
         process.env.__CFBundleIdentifier = originalBundleIdentifier;
       }
     }
+
     expect(writes.join("")).not.toContain("http://localhost:3000");
     expect(opened).toBe("http://localhost:3000");
   });
@@ -377,18 +392,21 @@ describe("handleServerReady", () => {
     const originalBundleIdentifier = process.env.__CFBundleIdentifier;
     process.env.__CFBundleIdentifier = "com.openai.codex";
     const { writes, restore } = captureStderrWrites();
+
     try {
       await handleServerReady("http://localhost:3000", false, 3000, {
         openBrowser: async () => true,
       });
     } finally {
       restore();
+
       if (originalBundleIdentifier === undefined) {
         delete process.env.__CFBundleIdentifier;
       } else {
         process.env.__CFBundleIdentifier = originalBundleIdentifier;
       }
     }
+
     expect(writes.join("")).toContain("http://localhost:3000");
   });
 
@@ -397,6 +415,7 @@ describe("handleServerReady", () => {
   // hangs at waitForDecision with the user having no link to visit.
   test("prints the URL for a local session when the browser fails to open", async () => {
     const { writes, restore } = captureStderrWrites();
+
     try {
       await handleServerReady("http://localhost:4000", false, 4000, {
         openBrowser: async () => false,
@@ -404,6 +423,7 @@ describe("handleServerReady", () => {
     } finally {
       restore();
     }
+
     expect(writes.join("")).toContain("http://localhost:4000");
   });
 });

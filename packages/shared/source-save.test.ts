@@ -50,6 +50,7 @@ describe("SourceSaveRequestSchema", () => {
         allowMissingBase: true,
       }),
     );
+
     expect(request).toEqual({
       text: "new content",
       baseHash: "sha256:base",
@@ -62,11 +63,13 @@ describe("SourceSaveRequestSchema", () => {
     const missingText = Option.getOrUndefined(
       Schema.decodeUnknownOption(SourceSaveRequestSchema)({ baseHash: "sha256:base" }),
     );
+
     expect(missingText).toBeUndefined();
 
     const missingBaseHash = Option.getOrUndefined(
       Schema.decodeUnknownOption(SourceSaveRequestSchema)({ text: "content" }),
     );
+
     expect(missingBaseHash).toBeUndefined();
   });
 
@@ -77,6 +80,7 @@ describe("SourceSaveRequestSchema", () => {
         baseHash: 12345,
       }),
     );
+
     expect(request).toBeUndefined();
   });
 });

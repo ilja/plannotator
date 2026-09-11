@@ -144,6 +144,7 @@ export const DocBadges: React.FC<DocBadgesProps> = ({
   if (layout === "row") return null;
 
   const canOpenInApp = !!openInAppPath && !/^https?:\/\//i.test(openInAppPath);
+
   const openInButton = canOpenInApp ? (
     <OpenInAppButton filePath={openInAppPath} base={null} />
   ) : null;

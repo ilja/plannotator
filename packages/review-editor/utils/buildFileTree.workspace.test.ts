@@ -31,6 +31,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
       diffFile("repo-a/src/utils/helper.ts", { additions: 5, deletions: 2 }),
       diffFile("repo-b/src/utils/helper.ts", { additions: 3, deletions: 1 }),
     ];
+
     const tree = buildFileTree(files);
 
     // After collapseSingleChild: repo-a/src/utils becomes a single folder node
@@ -59,6 +60,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
       diffFile("apps/api/src/server.ts"),
       diffFile("apps/web/src/app.ts"),
     ];
+
     const tree = buildFileTree(files);
 
     // All under single "apps" root, with children for each sub-repo
@@ -77,6 +79,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
       diffFile("packages/shared/utils/helpers/string.ts"),
       diffFile("packages/core/src/index.ts"),
     ];
+
     const tree = buildFileTree(files);
 
     expect(tree).toHaveLength(1);
@@ -108,6 +111,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
       diffFile("repo-a/src/utils.ts", { additions: 5, deletions: 2 }),
       diffFile("repo-b/src/index.ts", { additions: 8, deletions: 3 }),
     ];
+
     const tree = buildFileTree(files);
 
     // After collapseSingleChild: repo-a/src contains both files
@@ -165,6 +169,7 @@ describe("buildFileTree - workspace mode with repo-prefixed paths", () => {
       diffFile("repo-a/src/app.ts"),
       diffFile("repo-a/lib/helpers.ts"),
     ];
+
     const tree = buildFileTree(files);
 
     // repo-a has two children: src (with 2 files) and lib (with 1 file)

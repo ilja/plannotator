@@ -20,15 +20,21 @@ const changeSymbols: ChangeSymbolMap = {
 
 export function getChangeSymbol(changeType: string): string {
   if (changeType.includes("renamed") || changeType.includes("moved")) return "↻";
+
   return changeSymbols[changeType] ?? "∆";
 }
 
 export function getChangeClass(changeType: string): string {
   if (changeType.includes("added")) return "added";
+
   if (changeType.includes("deleted")) return "deleted";
+
   if (changeType.includes("renamed")) return "renamed";
+
   if (changeType.includes("moved")) return "moved";
+
   if (changeType.includes("reordered")) return "reordered";
+
   return "modified";
 }
 
@@ -36,6 +42,7 @@ export function getDisplayName(change: SemanticDiffChange): string {
   if (change.oldEntityName && change.oldEntityName !== change.entityName) {
     return `${change.oldEntityName} -> ${change.entityName}`;
   }
+
   return change.entityName;
 }
 
@@ -43,6 +50,7 @@ export function getBinaryDisplayName(change: SemanticDiffBinaryChange): string {
   if (change.oldFilePath && change.oldFilePath !== change.filePath) {
     return `${change.oldFilePath} -> ${change.filePath}`;
   }
+
   return "file";
 }
 
@@ -54,6 +62,7 @@ export function lineSelectionForChange(change: SemanticDiffChange): SelectedLine
   const deleted = change.changeType === "deleted";
   const start = deleted ? change.oldStartLine : change.startLine;
   const end = deleted ? change.oldEndLine : change.endLine;
+
   if (!start || start < 1) return null;
 
   return {
@@ -84,13 +93,16 @@ export function groupSemanticChangesByFile(
 ): SemanticDiffGroup[] {
   const groups: SemanticDiffGroup[] = [];
   const byPath = new Map<string, SemanticDiffGroup>();
+
   const getGroup = (filePath: string) => {
     const existing = byPath.get(filePath);
+
     if (existing) return existing;
 
     const next: SemanticDiffGroup = { filePath, changes: [], binaryChanges: [] };
     byPath.set(filePath, next);
     groups.push(next);
+
     return next;
   };
 
@@ -98,6 +110,7 @@ export function groupSemanticChangesByFile(
     if (isOrphanChange(change)) continue;
     getGroup(change.filePath).changes.push(change);
   }
+
   for (const change of binaryChanges) {
     getGroup(change.filePath).binaryChanges.push(change);
   }
@@ -142,6 +155,7 @@ export function SemanticDiffRows({
       ))}
       {binaryChanges.map((change, index) => {
         const status = getBinaryStatus(change);
+
         return (
           <button
             type="button"

@@ -26,6 +26,7 @@ describe("parseMarkdownToBlocks — code fences", () => {
 
 save_order_line(order_line)
   .and_then { |value| apply_invoice_correction_after_commit(transaction, value) }`;
+
     const md = "```ruby\n" + fragment + "\n```";
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
@@ -205,6 +206,7 @@ describe("parseMarkdownToBlocks — tables", () => {
   test("real-world plan: prose with union types is not a table", () => {
     const md =
       "`@pierre/diffs` supports `overflow: 'scroll' | 'wrap'` plus options, but Plannotator doesn't expose any of them.";
+
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("paragraph");
@@ -225,6 +227,7 @@ describe("parseMarkdownToBlocks — real-world plan regression", () => {
       "",
       "### 6. Update DiffViewer",
     ].join("\n");
+
     const blocks = parseMarkdownToBlocks(md);
     const types = blocks.map((b) => b.type);
     expect(types).toEqual([
@@ -868,6 +871,7 @@ describe("parseMarkdownToBlocks — blockquotes", () => {
     // paragraph wrapped across multiple source lines. Must still merge.
     const md =
       "> This is a long quoted paragraph\n> that wraps across several\n> source lines for readability.";
+
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("blockquote");
@@ -917,6 +921,7 @@ describe("parseMarkdownToBlocks — GitHub alerts", () => {
         kind.toLowerCase() as "note" | "tip" | "warning" | "caution" | "important",
       );
     }
+
     const lower = parseMarkdownToBlocks("> [!note]\n> body");
     expect(lower[0].alertKind).toBe("note");
   });
@@ -1061,6 +1066,7 @@ describe("parseMarkdownToBlocks — raw HTML blocks", () => {
   test("nested tags stay in one block", () => {
     const md =
       "<details>\n<summary>Outer</summary>\n<details>\n<summary>Inner</summary>\nnested\n</details>\n</details>";
+
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("html");
@@ -1077,6 +1083,7 @@ describe("parseMarkdownToBlocks — raw HTML blocks", () => {
   test("multiple HTML blocks separated by blank lines produce multiple blocks", () => {
     const md =
       "<details>\n<summary>A</summary>\n</details>\n\n<details>\n<summary>B</summary>\n</details>";
+
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(2);
     expect(blocks[0].type).toBe("html");
@@ -1109,6 +1116,7 @@ describe("parseMarkdownToBlocks — raw HTML blocks", () => {
   test("nested same-tag open/close is balanced (not terminated by first close)", () => {
     const md =
       "<details>\n<summary>Outer</summary>\n<details>\n<summary>Inner</summary>\n</details>\nouter tail\n</details>";
+
     const blocks = parseMarkdownToBlocks(md);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].type).toBe("html");
@@ -1276,12 +1284,14 @@ describe("exportAnnotations — line labels", () => {
         startOffset: 0,
       },
     ];
+
     const output = exportAnnotations(blocks, anns);
     expect(output).toContain("(line 1)");
   });
 
   test("multi-line code block shows line range", () => {
     const codeBlock = blocks.find((b) => b.type === "code")!;
+
     const anns = [
       {
         blockId: codeBlock.id,
@@ -1291,6 +1301,7 @@ describe("exportAnnotations — line labels", () => {
         startOffset: 0,
       },
     ];
+
     const output = exportAnnotations(blocks, anns);
     expect(output).toMatch(/\(lines 5–9\)/);
   });
@@ -1305,6 +1316,7 @@ describe("exportAnnotations — line labels", () => {
         startOffset: 0,
       },
     ];
+
     const output = exportAnnotations(blocks, anns);
     expect(output).not.toMatch(/\(line/);
   });
@@ -1320,6 +1332,7 @@ describe("exportAnnotations — line labels", () => {
         diffContext: "added",
       },
     ];
+
     const output = exportAnnotations(blocks, anns);
     expect(output).not.toMatch(/\(line/);
     expect(output).toContain("[In diff content]");
@@ -1342,6 +1355,7 @@ describe("exportAnnotations — line labels", () => {
       "plan",
       { sourceConverted: true },
     );
+
     expect(output).toContain("converted markdown");
   });
 
@@ -1355,6 +1369,7 @@ describe("exportAnnotations — line labels", () => {
         startOffset: 0,
       },
     ]);
+
     expect(output).not.toContain("converted markdown");
   });
 
@@ -1365,6 +1380,7 @@ describe("exportAnnotations — line labels", () => {
 - Option B: Beta
 
 Recommendation: Option B.`);
+
     const output = exportAnnotations(choiceBlocks, [
       {
         blockId: choiceBlocks[0].id,
@@ -1387,6 +1403,7 @@ Recommendation: Option B.`);
 - Option B: Beta
 
 Recommendation: Option B.`);
+
     const docs = new Map([
       [
         "docs/a.md",

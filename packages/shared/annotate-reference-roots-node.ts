@@ -11,12 +11,16 @@ export interface AnnotateReferenceRootOptions {
 
 export function getAnnotateReferenceRootPaths(options: AnnotateReferenceRootOptions): string[] {
   const roots: string[] = [];
+
   const addRoot = (root: string | null | undefined) => {
     if (!root) return;
     const resolved = resolveUserPath(root);
+
     if (!roots.includes(resolved)) roots.push(resolved);
+
     try {
       const real = realpathSync(resolved);
+
       if (!roots.includes(real)) roots.push(real);
     } catch {
       /* Missing source paths still contribute their lexical parent. */
@@ -25,10 +29,12 @@ export function getAnnotateReferenceRootPaths(options: AnnotateReferenceRootOpti
 
   if (options.mode === "annotate-folder" && options.folderPath) {
     addRoot(options.folderPath);
+
     return roots;
   }
 
   addRoot(process.cwd());
+
   if (/^https?:\/\//i.test(options.filePath)) {
     return roots;
   }
@@ -37,5 +43,6 @@ export function getAnnotateReferenceRootPaths(options: AnnotateReferenceRootOpti
   addRoot(
     options.initialSingleFileSourcePath ? dirname(options.initialSingleFileSourcePath) : null,
   );
+
   return roots;
 }

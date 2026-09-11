@@ -28,6 +28,7 @@ export function parseReviewArgs(input: string | string[]): ParsedReviewArgs {
   }
 
   const target = positional[0];
+
   return {
     prUrl: target && isReviewUrl(target) ? target : undefined,
     useLocal,
@@ -40,6 +41,7 @@ function isReviewUrl(value: string): boolean {
 
 function tokenizeReviewArgs(input: string): string[] {
   const raw = input.trim();
+
   if (!raw) return [];
 
   const tokens: string[] = [];
@@ -48,12 +50,14 @@ function tokenizeReviewArgs(input: string): string[] {
 
   for (let i = 0; i < raw.length; i++) {
     const char = raw[i];
+
     if (quote) {
       if (char === quote) {
         quote = undefined;
       } else {
         current += char;
       }
+
       continue;
     }
 
@@ -67,6 +71,7 @@ function tokenizeReviewArgs(input: string): string[] {
         tokens.push(current);
         current = "";
       }
+
       continue;
     }
 
@@ -74,5 +79,10 @@ function tokenizeReviewArgs(input: string): string[] {
   }
 
   if (current) tokens.push(current);
-  return tokens.map((token) => stripWrappingQuotes(token.trim())).filter(Boolean);
+
+  return tokens.flatMap((token) => {
+    const stripped = stripWrappingQuotes(token.trim());
+
+    return stripped ? [stripped] : [];
+  });
 }

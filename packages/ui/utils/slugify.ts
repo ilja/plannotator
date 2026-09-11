@@ -24,14 +24,17 @@ export function buildHeadingSlugMap(
 ): Map<string, string> {
   const map = new Map<string, string>();
   const counts = new Map<string, number>();
+
   for (const block of blocks) {
     if (block.type !== "heading") continue;
     const base = slugifyHeading(block.content);
+
     if (!base) continue;
     const n = counts.get(base) ?? 0;
     const slug = n === 0 ? base : `${base}-${n}`;
     counts.set(base, n + 1);
     map.set(block.id, slug);
   }
+
   return map;
 }

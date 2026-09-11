@@ -70,6 +70,7 @@ describe("decodePRContextResponse", () => {
 
     const reviewWithoutUrl = (() => {
       const { url: _url, ...review } = validReview;
+
       return review;
     })();
 
@@ -98,6 +99,7 @@ describe("decodePRContextResponse", () => {
 
   test("preserves empty label colors and nullable checks", () => {
     const { url: _url, ...reviewWithoutUrl } = validReview;
+
     const context = {
       ...validContext,
       labels: [{ name: "bug", color: "" }],
@@ -177,6 +179,7 @@ describe("decodePRContextResponse", () => {
 
   test("normalizes malformed array containers independently", () => {
     const { reviews: _reviews, ...contextWithoutReviews } = validContext;
+
     const decoded = decodePRContextResponse({
       ...contextWithoutReviews,
       labels: null,

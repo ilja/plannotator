@@ -7,7 +7,9 @@ import type { ViewerHandle } from "../components/Viewer";
 import { type LinkedDocLoadData, useLinkedDoc } from "./useLinkedDoc";
 
 const hasDom = globalThis.document !== undefined;
+
 const unsupportedSourceSave = disabledSourceSave("unsupported-extension");
+
 const originalFetch = globalThis.fetch;
 
 const annotation = (id: string, originalText: string): Annotation => ({
@@ -57,6 +59,7 @@ type Session = {
 };
 
 let roots: Root[] = [];
+
 let containers: HTMLElement[] = [];
 
 async function mountLinkedDoc(): Promise<Session> {
@@ -68,6 +71,7 @@ async function mountLinkedDoc(): Promise<Session> {
 
   const loadedDocuments: LinkedDocLoadData[] = [];
   let latest: Session["current"] extends () => infer T ? T : never;
+
   function Harness() {
     const [markdown, setMarkdown] = useState("root markdown");
     const [renderAs, setRenderAs] = useState<"markdown" | "html">("markdown");
@@ -77,6 +81,7 @@ async function mountLinkedDoc(): Promise<Session> {
     const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
     const [globalAttachments, setGlobalAttachments] = useState<ImageAttachment[]>([]);
     const viewerRef = useRef<ViewerHandle | null>(null);
+
     const hook = useLinkedDoc({
       markdown,
       annotations,
@@ -96,9 +101,11 @@ async function mountLinkedDoc(): Promise<Session> {
       sidebar: { open: () => undefined },
       onDocumentLoaded: (doc) => {
         loadedDocuments.push(doc);
+
         return undefined;
       },
     });
+
     latest = {
       hook,
       markdown,
@@ -111,6 +118,7 @@ async function mountLinkedDoc(): Promise<Session> {
       setAnnotations,
       setSelectedAnnotationId,
     };
+
     return null;
   }
 
@@ -135,9 +143,11 @@ afterEach(async () => {
     writable: true,
     value: originalFetch,
   });
+
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   for (const container of containers.splice(0)) container.remove();
 });
 
@@ -147,6 +157,7 @@ function mockFetch(response: Response | Error): void {
     writable: true,
     value: async () => {
       if (response instanceof Error) throw response;
+
       return response;
     },
   });
@@ -173,6 +184,7 @@ const linkedMarkdownResponse = (overrides: LinkedMarkdownResponseOverrides = {})
 describe("useLinkedDoc /api/doc response validation", () => {
   test.skipIf(!hasDom)("opens valid markdown and passes source-save data to the host", async () => {
     const session = await mountLinkedDoc();
+
     const sourceSave = {
       enabled: true,
       kind: "local-text-file",
@@ -185,6 +197,7 @@ describe("useLinkedDoc /api/doc response validation", () => {
       size: 16,
       eol: "lf",
     } as const;
+
     mockFetch(linkedMarkdownResponse({ sourceSave }));
 
     await act(async () => {

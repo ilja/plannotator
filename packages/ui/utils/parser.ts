@@ -29,12 +29,14 @@ export interface ExtractFrontmatterResult {
 
 export function extractFrontmatter(markdown: string): ExtractFrontmatterResult {
   const trimmed = markdown.trimStart();
+
   if (!trimmed.startsWith("---")) {
     return { frontmatter: null, content: markdown, contentStartLine: 1 };
   }
 
   // Find the closing ---
   const endIndex = trimmed.indexOf("\n---", 3);
+
   if (endIndex === -1) {
     return { frontmatter: null, content: markdown, contentStartLine: 1 };
   }
@@ -63,16 +65,19 @@ export function extractFrontmatter(markdown: string): ExtractFrontmatterResult {
     // Array item (- value)
     if (trimmedLine.startsWith("- ") && currentKey) {
       const value = trimmedLine.slice(2).trim();
+
       if (!currentArray) {
         currentArray = [];
         frontmatter[currentKey] = currentArray;
       }
+
       currentArray.push(value);
       continue;
     }
 
     // Key: value pair
     const colonIndex = trimmedLine.indexOf(":");
+
     if (colonIndex > 0) {
       currentKey = trimmedLine.slice(0, colonIndex).trim();
       const value = trimmedLine.slice(colonIndex + 1).trim();
@@ -150,6 +155,7 @@ interface ListItemCheckbox {
 }
 
 const BLOCKQUOTE_MARKER_RE = /^(?:(?:\*|-|\d+\.)\s|#|```|>)/;
+
 const ALERT_KINDS: readonly NonNullable<Block["alertKind"]>[] = [
   "note",
   "tip",
@@ -162,6 +168,7 @@ const ALERT_KINDS: readonly NonNullable<Block["alertKind"]>[] = [
 export const parseMarkdownToBlocks = (markdown: string): Block[] => {
   const { content: cleanMarkdown, contentStartLine } = extractFrontmatter(markdown);
   const lines = cleanMarkdown.split("\n");
+
   const state: MarkdownParserState = {
     blocks: [],
     buffer: [],
@@ -175,10 +182,12 @@ export const parseMarkdownToBlocks = (markdown: string): Block[] => {
   for (let index = 0; index < lines.length; index += 1) {
     const parsedLine = createMarkdownLine(lines[index], index, contentStartLine, state);
     const consumedIndex = parseMarkdownLine(state, lines, parsedLine, contentStartLine);
+
     if (consumedIndex !== null) index = consumedIndex;
   }
 
   flushMarkdownBuffer(state);
+
   return state.blocks;
 };
 
@@ -190,6 +199,7 @@ function createMarkdownLine(
 ): MarkdownLine {
   const previousLineWasBlank = state.lastLineWasBlank;
   state.lastLineWasBlank = false;
+
   return {
     value,
     trimmed: value.trim(),
@@ -206,22 +216,29 @@ function parseMarkdownLine(
   contentStartLine: number,
 ): number | null {
   if (parseHeadingBlock(state, line) || parseHorizontalRuleBlock(state, line)) return line.index;
+
   if (parseListItemBlock(state, line) || parseBlockquoteBlock(state, line)) return line.index;
 
   const codeBlockEnd = parseCodeBlock(state, lines, line);
+
   if (codeBlockEnd !== null) return codeBlockEnd;
   const tableBlockEnd = parseTableBlock(state, lines, line);
+
   if (tableBlockEnd !== null) return tableBlockEnd;
   const directiveBlockEnd = parseDirectiveBlock(state, lines, line);
+
   if (directiveBlockEnd !== null) return directiveBlockEnd;
   const htmlBlockEnd = parseHtmlBlock(state, lines, line);
+
   if (htmlBlockEnd !== null) return htmlBlockEnd;
 
   const blankOrContinuationEnd = parseBlankOrListContinuation(state, lines, line, contentStartLine);
+
   if (blankOrContinuationEnd !== null) return blankOrContinuationEnd;
 
   if (state.buffer.length === 0) state.bufferStartLine = line.sourceLine;
   state.buffer.push(line.value);
+
   return null;
 }
 
@@ -230,6 +247,7 @@ function appendBlock(state: MarkdownParserState, block: Omit<Block, "id" | "orde
   state.currentId += 1;
   const createdBlock = { ...block, id: `block-${currentId}`, order: state.currentId };
   state.blocks.push(createdBlock);
+
   return createdBlock;
 }
 
@@ -254,6 +272,7 @@ function parseHeadingBlock(state: MarkdownParserState, line: MarkdownLine): bool
     level: marker ? marker[0].length : 1,
     startLine: line.sourceLine,
   });
+
   return true;
 }
 
@@ -261,11 +280,13 @@ function parseHorizontalRuleBlock(state: MarkdownParserState, line: MarkdownLine
   if (line.trimmed !== "---" && line.trimmed !== "***") return false;
   flushMarkdownBuffer(state);
   appendBlock(state, { type: "hr", content: "", startLine: line.sourceLine });
+
   return true;
 }
 
 function parseListItemBlock(state: MarkdownParserState, line: MarkdownLine): boolean {
   const listMatch = line.trimmed.match(/^(\*|-|(\d+)\.)\s/);
+
   if (!listMatch) return false;
 
   flushMarkdownBuffer(state);
@@ -273,8 +294,10 @@ function parseListItemBlock(state: MarkdownParserState, line: MarkdownLine): boo
   const indentation = leadingWhitespace ? leadingWhitespace[1] : "";
   const listLevel = Math.floor(indentation.replace(/\t/g, "  ").length / 2);
   const orderedStartText = listMatch[2];
+
   const orderedStart =
     orderedStartText === undefined ? undefined : Number.parseInt(orderedStartText, 10);
+
   const checkbox = parseListItemCheckbox(line.trimmed.slice(listMatch[0].length));
 
   appendBlock(state, {
@@ -286,12 +309,15 @@ function parseListItemBlock(state: MarkdownParserState, line: MarkdownLine): boo
     orderedStart,
     startLine: line.sourceLine,
   });
+
   return true;
 }
 
 function parseListItemCheckbox(content: string): ListItemCheckbox {
   const checkboxMatch = content.match(/^\[([ xX])\]\s*/);
+
   if (!checkboxMatch) return { content, checked: undefined };
+
   return {
     content: content.replace(/^\[([ xX])\]\s*/, ""),
     checked: checkboxMatch[1]?.toLowerCase() === "x",
@@ -303,12 +329,14 @@ function parseBlockquoteBlock(state: MarkdownParserState, line: MarkdownLine): b
   flushMarkdownBuffer(state);
   const stripped = line.trimmed.replace(/^>\s*/, "");
   const previousBlock = state.blocks.at(-1);
+
   if (shouldMergeBlockquote(previousBlock, stripped, line.previousLineWasBlank)) {
     if (previousBlock) {
       previousBlock.content = previousBlock.content
         ? `${previousBlock.content}\n${stripped}`
         : stripped;
     }
+
     return true;
   }
 
@@ -319,6 +347,7 @@ function parseBlockquoteBlock(state: MarkdownParserState, line: MarkdownLine): b
     alertKind,
     startLine: line.sourceLine,
   });
+
   return true;
 }
 
@@ -328,13 +357,16 @@ function shouldMergeBlockquote(
   previousLineWasBlank: boolean,
 ): boolean {
   if (previousLineWasBlank || previousBlock?.type !== "blockquote") return false;
+
   if (previousBlock.alertKind) return true;
+
   return !BLOCKQUOTE_MARKER_RE.test(stripped) && !BLOCKQUOTE_MARKER_RE.test(previousBlock.content);
 }
 
 function parseAlertKind(stripped: string): Block["alertKind"] {
   const alertMatch = stripped.match(/^\[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\]\s*$/i);
   const candidate = alertMatch?.[1]?.toLowerCase();
+
   return ALERT_KINDS.find((kind) => kind === candidate);
 }
 
@@ -350,6 +382,7 @@ function parseCodeBlock(
   const closingFence = new RegExp("^\\s*`{" + fenceLength + ",}");
   const codeLines: string[] = [];
   let index = line.index + 1;
+
   while (index < lines.length && !closingFence.test(lines[index])) {
     codeLines.push(lines[index]);
     index += 1;
@@ -361,6 +394,7 @@ function parseCodeBlock(
     language: line.trimmed.slice(fenceLength).trim() || undefined,
     startLine: line.sourceLine,
   });
+
   return index;
 }
 
@@ -373,6 +407,7 @@ function parseTableBlock(
   flushMarkdownBuffer(state);
   const tableLines = [line.value];
   let index = line.index;
+
   while (index + 1 < lines.length && lines[index + 1].trim().startsWith("|")) {
     index += 1;
     tableLines.push(lines[index]);
@@ -383,6 +418,7 @@ function parseTableBlock(
     content: tableLines.join("\n"),
     startLine: line.sourceLine,
   });
+
   return index;
 }
 
@@ -393,22 +429,27 @@ function parseDirectiveBlock(
 ): number | null {
   const directiveOpen = line.trimmed.match(/^:::\s*([a-zA-Z][a-zA-Z0-9-]*)\s*$/);
   const kind = directiveOpen?.[1];
+
   if (!kind) return null;
 
   flushMarkdownBuffer(state);
   const bodyLines: string[] = [];
   let index = line.index;
+
   while (index + 1 < lines.length) {
     index += 1;
+
     if (lines[index].trim() === ":::") break;
     bodyLines.push(lines[index]);
   }
+
   appendBlock(state, {
     type: "directive",
     content: bodyLines.join("\n"),
     directiveKind: kind.toLowerCase(),
     startLine: line.sourceLine,
   });
+
   return index;
 }
 
@@ -419,18 +460,22 @@ function parseHtmlBlock(
 ): number | null {
   const htmlTagMatch = line.trimmed.match(HTML_BLOCK_OPEN_RE);
   const tagName = htmlTagMatch?.[1]?.toLowerCase();
+
   if (!tagName || !HTML_BLOCK_TAGS.has(tagName)) return null;
 
   flushMarkdownBuffer(state);
   const htmlLines = [line.value];
+
   const endIndex = line.trimmed.startsWith("</")
     ? collectClosingHtmlBlock(lines, line.index, htmlLines)
     : collectBalancedHtmlBlock(lines, line.index, line.value, tagName, htmlLines);
+
   appendBlock(state, {
     type: "html",
     content: htmlLines.join("\n"),
     startLine: line.sourceLine,
   });
+
   return endIndex;
 }
 
@@ -440,10 +485,12 @@ function collectClosingHtmlBlock(
   htmlLines: string[],
 ): number {
   let index = startIndex;
+
   while (index + 1 < lines.length && lines[index + 1].trim() !== "") {
     index += 1;
     htmlLines.push(lines[index]);
   }
+
   return index;
 }
 
@@ -458,12 +505,14 @@ function collectBalancedHtmlBlock(
   const closeRe = new RegExp(`</${tagName}\\s*>`, "gi");
   let depth = countHtmlTags(firstLine, openRe) - countHtmlTags(firstLine, closeRe);
   let index = startIndex;
+
   while (depth > 0 && index + 1 < lines.length) {
     index += 1;
     const nextLine = lines[index];
     htmlLines.push(nextLine);
     depth += countHtmlTags(nextLine, openRe) - countHtmlTags(nextLine, closeRe);
   }
+
   return index;
 }
 
@@ -480,10 +529,13 @@ function parseBlankOrListContinuation(
   if (line.trimmed === "") return parseBlankLine(state, lines, line, contentStartLine);
   const previousBlock = state.blocks.at(-1);
   const continuationPattern = line.previousLineWasBlank ? /^\s{2,}/ : /^\s+/;
+
   if (!previousBlock || state.buffer.length > 0 || previousBlock.type !== "list-item") return null;
+
   if (!continuationPattern.test(line.value)) return null;
 
   previousBlock.content += `${line.previousLineWasBlank ? "\n\n" : "\n"}${line.trimmed}`;
+
   return line.index;
 }
 
@@ -494,10 +546,12 @@ function parseBlankLine(
   contentStartLine: number,
 ): number {
   const candidateStartIndex = state.bufferStartLine - contentStartLine;
+
   const choice =
     state.buffer.length > 0
       ? parseChoiceQuestion(lines.slice(candidateStartIndex).join("\n"))
       : null;
+
   if (choice) {
     appendBlock(state, {
       type: "choice-question",
@@ -511,12 +565,14 @@ function parseBlankLine(
     state.buffer = [];
     state.currentType = "paragraph";
     state.lastLineWasBlank = false;
+
     return candidateStartIndex + choice.sourceLineCount - 1;
   }
 
   flushMarkdownBuffer(state);
   state.currentType = "paragraph";
   state.lastLineWasBlank = true;
+
   return line.index;
 }
 
@@ -550,6 +606,7 @@ export const computeListIndices = (blocks: Block[]): (number | null)[] => {
 
     if (!block.ordered) {
       lastOrderedAtLevel[lvl] = false;
+
       return null;
     }
 
@@ -558,7 +615,9 @@ export const computeListIndices = (blocks: Block[]): (number | null)[] => {
     } else {
       counters[lvl] = block.orderedStart ?? 1;
     }
+
     lastOrderedAtLevel[lvl] = true;
+
     return counters[lvl];
   });
 };
@@ -574,13 +633,19 @@ export interface ExportAnnotationsOptions {
 const blockEndLine = (block: Block): number => {
   if (block.type === "choice-question") {
     const lineCount = block.sourceLineCount ?? block.sourceText?.split("\n").length ?? 1;
+
     return block.startLine + lineCount - 1;
   }
+
   if (!block.content) return block.startLine;
   const contentLines = block.content.split("\n").length;
+
   if (block.type === "code") return block.startLine + contentLines + 1;
+
   if (block.type === "directive") return block.startLine + contentLines + 1;
+
   if (block.alertKind) return block.startLine + contentLines;
+
   return block.startLine + contentLines - 1;
 };
 
@@ -588,15 +653,19 @@ const blockEndLine = (block: Block): number => {
  *  Returns null for global comments, diff-view annotations, or missing blocks. */
 const lineLabelForAnnotation = (blocks: Block[], ann: any): string | null => {
   if (!ann.blockId || ann.type === "GLOBAL_COMMENT") return null;
+
   if (
     Object.prototype.toString.call(ann.blockId) === "[object String]" &&
     ann.blockId.startsWith("diff-block-")
   )
     return null;
   const block = blocks.find((b) => b.id === ann.blockId);
+
   if (!block || Object.prototype.toString.call(block.startLine) !== "[object Number]") return null;
   const end = blockEndLine(block);
+
   if (end <= block.startLine) return `line ${block.startLine}`;
+
   return `lines ${block.startLine}–${end}`;
 };
 
@@ -616,7 +685,9 @@ export const exportAnnotations = (
   const sortedAnns = [...annotations].sort((a, b) => {
     const blockA = blocks.findIndex((blk) => blk.id === a.blockId);
     const blockB = blocks.findIndex((blk) => blk.id === b.blockId);
+
     if (blockA !== blockB) return blockA - blockB;
+
     return a.startOffset - b.startOffset;
   });
 
@@ -648,6 +719,7 @@ export const exportAnnotations = (
       output += `[In diff content] `;
     } else {
       const lineLabel = lineLabelForAnnotation(blocks, ann);
+
       if (lineLabel) output += `(${lineLabel}) `;
     }
 
@@ -661,6 +733,7 @@ export const exportAnnotations = (
       case "COMMENT":
         if (ann.isQuickLabel) {
           output += `[${ann.text}] Feedback on: "${ann.originalText}"\n`;
+
           if (ann.quickLabelTip) {
             output += `> ${ann.quickLabelTip}\n`;
           }
@@ -668,6 +741,7 @@ export const exportAnnotations = (
           output += `Feedback on: "${ann.originalText}"\n`;
           output += `> ${ann.text}\n`;
         }
+
         break;
 
       case "GLOBAL_COMMENT":
@@ -691,6 +765,7 @@ export const exportAnnotations = (
 
   // Quick Label Summary
   const labeledAnns = sortedAnns.filter((a: any) => a.isQuickLabel && a.text);
+
   if (labeledAnns.length > 0) {
     const grouped = new Map<string, number>();
     labeledAnns.forEach((a: any) => {
@@ -698,9 +773,11 @@ export const exportAnnotations = (
     });
 
     output += `\n## Label Summary\n\n`;
+
     for (const [text, count] of grouped) {
       output += `- **${text}**: ${count}\n`;
     }
+
     output += "\n";
   }
 
@@ -740,6 +817,7 @@ export const exportLinkedDocAnnotations = (
     // Sort annotations by block and offset
     const sortedAnns = [...annotations].sort((a, b) => {
       if (a.blockId !== b.blockId) return a.blockId.localeCompare(b.blockId);
+
       return a.startOffset - b.startOffset;
     });
 
@@ -749,6 +827,7 @@ export const exportLinkedDocAnnotations = (
       output += `### ${index + 1}. `;
 
       const lineLabel = docBlocks ? lineLabelForAnnotation(docBlocks, ann) : null;
+
       if (lineLabel) output += `(${lineLabel}) `;
 
       switch (ann.type) {
@@ -761,6 +840,7 @@ export const exportLinkedDocAnnotations = (
         case "COMMENT":
           if (ann.isQuickLabel) {
             output += `[${ann.text}] Feedback on: "${ann.originalText}"\n`;
+
             if (ann.quickLabelTip) {
               output += `> ${ann.quickLabelTip}\n`;
             }
@@ -768,6 +848,7 @@ export const exportLinkedDocAnnotations = (
             output += `Feedback on: "${ann.originalText}"\n`;
             output += `> ${ann.text}\n`;
           }
+
           break;
 
         case "GLOBAL_COMMENT":
@@ -788,6 +869,7 @@ export const exportLinkedDocAnnotations = (
   }
 
   output += `---\n`;
+
   return output;
 };
 
@@ -813,6 +895,7 @@ export const exportEditorAnnotations = (editorAnnotations: EditorAnnotation[]): 
   });
 
   output += `---\n`;
+
   return output;
 };
 
@@ -820,9 +903,12 @@ export const exportCodeFileAnnotations = (annotations: CodeAnnotation[]): string
   if (annotations.length === 0) return "";
 
   let output = `\n# Code File Feedback\n\nThe following feedback is on code files referenced from the reviewed document.\n\n`;
+
   const sorted = [...annotations].sort((a, b) => {
     if (a.filePath !== b.filePath) return a.filePath.localeCompare(b.filePath);
+
     if (a.lineStart !== b.lineStart) return a.lineStart - b.lineStart;
+
     return a.createdAt - b.createdAt;
   });
 
@@ -833,22 +919,27 @@ export const exportCodeFileAnnotations = (annotations: CodeAnnotation[]): string
         : `lines ${ann.lineStart}-${ann.lineEnd}`;
 
     output += `## ${index + 1}. ${ann.filePath} (${lineRange})\n`;
+
     if (ann.originalCode) {
       output += `\`\`\`\n${ann.originalCode}\n\`\`\`\n`;
     }
+
     if (ann.text) {
       output += `> ${ann.text}\n`;
     }
+
     if (ann.images && ann.images.length > 0) {
       output += `**Attached images:**\n`;
       ann.images.forEach((img) => {
         output += `- [${img.name}] \`${img.path}\`\n`;
       });
     }
+
     output += "\n";
   });
 
   output += `---\n`;
+
   return output;
 };
 
@@ -867,13 +958,17 @@ const MESSAGE_EXCERPT_MAX_CHARS = 1200;
 
 const excerptMessageText = (text: string): string => {
   const trimmed = text.trim();
+
   if (trimmed.length <= MESSAGE_EXCERPT_MAX_CHARS) return trimmed;
+
   return `${trimmed.slice(0, MESSAGE_EXCERPT_MAX_CHARS).trimEnd()}...`;
 };
 
 const fencedBlock = (text: string, language = ""): string => {
   let fence = "```";
+
   while (text.includes(fence)) fence += "`";
+
   return `${fence}${language}\n${text}\n${fence}\n`;
 };
 
@@ -885,6 +980,7 @@ export const exportMessageAnnotations = (entries: MessageAnnotationEntry[]): str
           0,
         )
       : 0;
+
     return (
       entry.annotations.length > 0 ||
       entry.globalAttachments.length > 0 ||
@@ -922,6 +1018,7 @@ export const exportMessageAnnotations = (entries: MessageAnnotationEntry[]): str
           (doc) => doc.annotations.length > 0 || doc.globalAttachments.length > 0,
         )
       : false;
+
     if (entry.linkedDocs && hasLinkedDocFeedback) {
       output += exportLinkedDocAnnotations(entry.linkedDocs);
       output += "\n";

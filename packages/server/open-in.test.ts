@@ -10,11 +10,14 @@ import { handleOpenIn } from "./open-in";
 // used so the realpath-based symlink containment (isWithinDirectory) actually runs.
 
 const tempDirs: string[] = [];
+
 function makeDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "open-in-test-"));
   tempDirs.push(dir);
+
   return dir;
 }
+
 afterAll(() => {
   for (const dir of tempDirs) {
     try {
@@ -72,11 +75,13 @@ describe("resolveOpenInTarget — /api/open-in containment", () => {
     const root = makeDir();
     const outside = makeDir();
     writeFileSync(join(outside, "secret.txt"), "x");
+
     try {
       symlinkSync(join(outside, "secret.txt"), join(root, "link.txt"));
     } catch {
       return; // platform without symlink permission (e.g. Windows CI) — skip
     }
+
     expect(resolveOpenInTarget("link.txt", null, () => root)).toBeNull();
   });
 

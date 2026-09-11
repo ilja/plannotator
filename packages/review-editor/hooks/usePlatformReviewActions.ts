@@ -16,6 +16,7 @@ import {
 } from "../utils/platformReviewSubmission";
 
 export type ReviewDestination = "agent" | "platform";
+
 export type { PlatformReviewAction } from "../utils/platformReviewSubmission";
 
 interface PlatformReviewDialog {
@@ -64,23 +65,31 @@ export function usePlatformReviewActions({
 }: UsePlatformReviewActionsOptions): PlatformReviewActions {
   const [reviewDestination, setReviewDestination] = useState<ReviewDestination>(() => {
     const stored = storage.getItem("plannotator-review-dest");
+
     return stored === "agent" ? "agent" : "platform";
   });
+
   const [showDestinationMenu, setShowDestinationMenu] = useState(false);
   const [isPlatformActioning, setIsPlatformActioning] = useState(false);
   const [platformActionError, setPlatformActionError] = useState<string | null>(null);
   const [platformUser, setPlatformUser] = useState<string | null>(null);
+
   const [platformCommentDialog, setPlatformCommentDialog] = useState<PlatformReviewDialog | null>(
     null,
   );
+
   const [platformGeneralComment, setPlatformGeneralComment] = useState("");
+
   const [platformOpenPR, setPlatformOpenPRState] = useState(() => {
     const platformSetting = storage.getItem("plannotator-platform-open-pr");
+
     if (platformSetting !== null) return platformSetting !== "false";
 
     const legacyGitHubSetting = storage.getItem("plannotator-github-open-pr");
+
     if (legacyGitHubSetting !== null) {
       storage.setItem("plannotator-platform-open-pr", legacyGitHubSetting);
+
       return legacyGitHubSetting !== "false";
     }
 
@@ -110,9 +119,11 @@ export function usePlatformReviewActions({
       try {
         const targets = selectPlatformReviewTargets(action, plan, generalComment, prMetadata);
         const openUrls: string[] = [];
+
         const results = await Promise.allSettled(
           targets.map(async (target): Promise<SubmissionTarget> => {
             if (target.status === "success") return target;
+
             try {
               const prRes = await fetch("/api/pr-action", {
                 method: "POST",
@@ -124,11 +135,15 @@ export function usePlatformReviewActions({
                   targetPrUrl: target.prUrl || undefined,
                 }),
               });
+
               const prResult = await readPRActionResponse(prRes);
+
               if (!prResult.ok) {
                 return { ...target, status: "failed", error: prResult.error };
               }
+
               if (prResult.prUrl) openUrls.push(prResult.prUrl);
+
               return { ...target, status: "success" };
             } catch (error) {
               return {
@@ -139,11 +154,13 @@ export function usePlatformReviewActions({
             }
           }),
         );
+
         const updatedTargets = results.map((result, index) =>
           result.status === "fulfilled"
             ? result.value
             : { ...targets[index], status: "failed" as const, error: "Unexpected error" },
         );
+
         const allSucceeded = updatedTargets.every((target) => target.status === "success");
 
         if (!allSucceeded) {
@@ -155,6 +172,7 @@ export function usePlatformReviewActions({
                 }
               : null,
           );
+
           return;
         }
 
@@ -166,10 +184,12 @@ export function usePlatformReviewActions({
         }
 
         const prLinks = openUrls.join(", ");
+
         const statusMessage =
           action === "approve"
             ? `Pull request approved on GitHub${prLinks ? ": " + prLinks : ""}`
             : `Pull request reviewed on GitHub${prLinks ? ": " + prLinks : ""}`;
+
         fetch("/api/feedback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -192,6 +212,7 @@ export function usePlatformReviewActions({
   const openPlatformDialog = useCallback(
     (action: PlatformReviewAction) => {
       const diffPaths = new Set(files.map((file) => file.path));
+
       const prMeta = prMetadata
         ? {
             number: prMetadata.number,
@@ -199,6 +220,7 @@ export function usePlatformReviewActions({
             repo: getDisplayRepo(prMetadata),
           }
         : undefined;
+
       const plan = buildReviewSubmission(
         allAnnotations,
         editorAnnotations,
@@ -206,6 +228,7 @@ export function usePlatformReviewActions({
         diffPaths,
         prMeta,
       );
+
       setPlatformGeneralComment("");
       setPlatformCommentDialog({ action, plan });
     },
@@ -224,17 +247,20 @@ export function usePlatformReviewActions({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Alt" || event.repeat) return;
       const tag = event.target instanceof HTMLElement ? event.target.tagName : undefined;
+
       if (tag === "INPUT" || tag === "TEXTAREA") return;
     };
 
     const handleKeyUp = (event: KeyboardEvent): void => {
       if (event.key !== "Alt") return;
       const now = Date.now();
+
       if (now - lastAltUp < DOUBLE_TAP_WINDOW) {
         setReviewDestination((previous) => {
           const next = previous === "platform" ? "agent" : "platform";
           storage.setItem("plannotator-review-dest", next);
           setPlatformActionError(null);
+
           return next;
         });
         lastAltUp = 0;
@@ -245,6 +271,7 @@ export function usePlatformReviewActions({
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);

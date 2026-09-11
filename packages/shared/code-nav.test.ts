@@ -231,21 +231,25 @@ describe("rankLocations", () => {
       loc({ filePath: "src/other.ts", line: 10 }),
       loc({ filePath: "src/main.ts", line: 5 }),
     ];
+
     const result = rankLocations(locations, {
       sourceFilePath: "src/main.ts",
       changedFiles: [],
       isTestFile: false,
     });
+
     expect(result.references[0].filePath).toBe("src/main.ts");
   });
 
   test("changed files rank above non-changed", () => {
     const locations = [loc({ filePath: "lib/utils.ts" }), loc({ filePath: "src/changed.ts" })];
+
     const result = rankLocations(locations, {
       sourceFilePath: "src/main.ts",
       changedFiles: ["src/changed.ts"],
       isTestFile: false,
     });
+
     expect(result.references[0].filePath).toBe("src/changed.ts");
   });
 
@@ -254,11 +258,13 @@ describe("rankLocations", () => {
       loc({ filePath: "src/a.ts", kind: "reference" }),
       loc({ filePath: "src/a.ts", kind: "definition", confidence: "likely" }),
     ];
+
     const result = rankLocations(locations, {
       sourceFilePath: "src/main.ts",
       changedFiles: [],
       isTestFile: false,
     });
+
     expect(result.definitions).toHaveLength(1);
     expect(result.references).toHaveLength(1);
   });
@@ -268,11 +274,13 @@ describe("rankLocations", () => {
       loc({ filePath: "src/__tests__/main.test.ts", kind: "reference" }),
       loc({ filePath: "src/utils.ts", kind: "reference" }),
     ];
+
     const result = rankLocations(locations, {
       sourceFilePath: "src/main.ts",
       changedFiles: [],
       isTestFile: false,
     });
+
     expect(result.references[0].filePath).toBe("src/utils.ts");
   });
 
@@ -281,11 +289,13 @@ describe("rankLocations", () => {
       loc({ filePath: "src/__tests__/main.test.ts", kind: "reference" }),
       loc({ filePath: "src/utils.ts", kind: "reference" }),
     ];
+
     const result = rankLocations(locations, {
       sourceFilePath: "src/__tests__/other.test.ts",
       changedFiles: [],
       isTestFile: true,
     });
+
     expect(result.references[0].filePath).toBe("src/__tests__/main.test.ts");
   });
 
@@ -293,6 +303,7 @@ describe("rankLocations", () => {
     const locations = Array.from({ length: 100 }, (_, i) =>
       loc({ filePath: `src/file${i}.ts`, line: i }),
     );
+
     const result = rankLocations(
       locations,
       {
@@ -302,17 +313,20 @@ describe("rankLocations", () => {
       },
       10,
     );
+
     expect(result.references).toHaveLength(10);
     expect(result.capped).toBe(true);
   });
 
   test("not capped when under limit", () => {
     const locations = [loc({}), loc({})];
+
     const result = rankLocations(locations, {
       sourceFilePath: "src/main.ts",
       changedFiles: [],
       isTestFile: false,
     });
+
     expect(result.capped).toBe(false);
   });
 });
@@ -407,6 +421,7 @@ describe("parseRgJsonOutput", () => {
     type TestSubmatches =
       | ReadonlyArray<{ readonly start: number | string }>
       | { readonly start: number };
+
     interface TestRgMatchData {
       path: { text: string };
       lines: { text: string };
@@ -420,10 +435,12 @@ describe("parseRgJsonOutput", () => {
         lines: { text: `  startServer(); // ${path}\n` },
         line_number: lineNumber,
       };
+
       if (submatches !== undefined) data.submatches = submatches;
 
       return JSON.stringify({ type: "match", data });
     };
+
     const lines = [
       validMatch("./src/before.ts", 1, [{ start: 2 }]),
       "not JSON",
@@ -492,6 +509,7 @@ describe("parseRgJsonOutput", () => {
         submatches: [{ start: 2, end: 13, match: { text: "startServer" } }],
       },
     });
+
     const result = parseRgJsonOutput(line, "startServer");
     expect(result[0].filePath).toBe("src/server.ts");
   });
@@ -504,6 +522,7 @@ describe("parseRgJsonOutput", () => {
 
   test("truncates long snippets", () => {
     const longLine = "x".repeat(300);
+
     const line = JSON.stringify({
       type: "match",
       data: {
@@ -513,6 +532,7 @@ describe("parseRgJsonOutput", () => {
         submatches: [{ start: 0, end: 1 }],
       },
     });
+
     const result = parseRgJsonOutput(line, "x");
     expect(result[0].snippet.length).toBeLessThanOrEqual(201);
   });

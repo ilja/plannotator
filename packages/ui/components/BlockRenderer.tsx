@@ -48,6 +48,7 @@ const HeadingBlockRenderer: React.FC<BlockRendererProps> = ({
 }) => {
   // SAFETY: block.level is 1-3 heading level, so the template produces a valid h1/h2/h3 tag.
   const Tag = `h${block.level || 1}` as React.ElementType;
+
   const styles =
     {
       1: "text-2xl font-bold mb-4 mt-6 first:mt-0 tracking-tight",
@@ -102,6 +103,7 @@ const BlockquoteRenderer: React.FC<BlockRendererProps> = ({
   }
 
   const paragraphs = block.content.split(/\n\n+/);
+
   return (
     <blockquote
       className="border-l-2 border-primary/50 pl-4 my-4 text-muted-foreground italic"
@@ -139,11 +141,14 @@ const ListItemBlockRenderer: React.FC<BlockRendererProps> = ({
 }) => {
   const indent = (block.level || 0) * 1.25;
   const isCheckbox = block.checked !== undefined;
+
   const isChecked = checkboxOverrides?.has(block.id)
     ? checkboxOverrides.get(block.id)!
     : block.checked;
+
   const isInteractive = isCheckbox && !!onToggleCheckbox;
   const textClass = `leading-relaxed ${isCheckbox && isChecked ? "text-muted-foreground line-through" : "text-foreground/90"}`;
+
   const inlineProps = {
     imageBaseDir,
     onImageClick,
@@ -187,6 +192,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = (props) => {
     annotations,
     onSelectChoice,
   } = props;
+
   const selectedChoiceAnnotation = annotations?.find((ann) =>
     isChoiceAnnotationForBlock(ann, block.id),
   );
@@ -233,6 +239,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = (props) => {
 
     case "directive": {
       const kind = block.directiveKind || "note";
+
       return (
         <Callout
           blockId={block.id}

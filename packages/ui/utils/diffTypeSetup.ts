@@ -8,6 +8,7 @@
 import { storage } from "./storage";
 
 const STORAGE_KEY = "plannotator-diff-type-setup-done";
+
 const CURRENT_VERSION = "2";
 
 export function needsDiffTypeSetup(): boolean {

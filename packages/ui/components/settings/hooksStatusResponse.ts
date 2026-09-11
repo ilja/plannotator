@@ -24,8 +24,11 @@ const HooksStatusEnvelopeSchema = Schema.Struct({
 });
 
 const decodeHooksStatusEnvelope = Schema.decodeUnknownResult(HooksStatusEnvelopeSchema);
+
 const decodePfmReminder = Schema.decodeUnknownOption(PfmReminderSchema);
+
 const decodeImprovementHook = Schema.decodeUnknownOption(ImprovementHookSchema);
+
 const decodeComposedLength = Schema.decodeUnknownOption(Schema.NullOr(Schema.Number));
 
 const defaultPfmReminder: Schema.Schema.Type<typeof PfmReminderSchema> = {
@@ -50,6 +53,7 @@ export function decodeHooksStatusResponse<Input>(
   value: Input,
 ): Result.Result<HooksStatusResponse, Schema.SchemaError> {
   const envelope = decodeHooksStatusEnvelope(value);
+
   if (Result.isFailure(envelope)) return Result.fail(envelope.failure);
 
   return Result.succeed({

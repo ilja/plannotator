@@ -29,7 +29,9 @@ describe("review diff type schemas", () => {
       "p4-default",
       "p4-changelist:123",
     ]) {
-      expect(Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(diffType))).toBeUndefined();
+      expect(
+        Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(diffType)),
+      ).toBeUndefined();
     }
   });
 });
@@ -45,6 +47,7 @@ describe("code navigation request schema", () => {
         side: "new",
       }),
     );
+
     expect(request?.symbol).toBe("render");
     expect(
       Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavRequestSchema)({ symbol: 42 })),

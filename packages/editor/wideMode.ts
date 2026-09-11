@@ -1,4 +1,5 @@
 import type { SidebarTab } from "@plannotator/ui/hooks/useSidebar";
+
 export type { WideModeType } from "@plannotator/ui/types";
 
 export type WideModeLayoutSnapshot = {

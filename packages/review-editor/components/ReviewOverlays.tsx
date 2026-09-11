@@ -102,6 +102,7 @@ function ReviewExportCloseIcon() {
 
 function ReviewCompletionOverlay({ model }: { readonly model: ReviewOverlaysModel }) {
   const agentName = getAgentName(model.origin);
+
   return (
     <CompletionOverlay
       submitted={model.submitted}
@@ -114,7 +115,9 @@ function ReviewCompletionOverlay({ model }: { readonly model: ReviewOverlaysMode
 
 function getReviewCompletionTitle(submitted: ReviewSubmissionStatus): string {
   if (submitted === "approved") return "Changes Approved";
+
   if (submitted === "exited") return "Session Closed";
+
   return "Feedback Sent";
 }
 
@@ -124,11 +127,13 @@ function getReviewCompletionSubtitle(
   agentName: string,
 ): string {
   if (submitted === "exited") return "Review session closed without feedback.";
+
   if (platformMode) {
     return submitted === "approved"
       ? "Your approval was submitted to GitHub."
       : "Your feedback was submitted to GitHub.";
   }
+
   return submitted === "approved"
     ? `${agentName} will proceed with the changes.`
     : `${agentName} will address your review feedback.`;

@@ -42,6 +42,7 @@ function whichBin(bin: string): boolean {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
+
     return true;
   } catch {
     return false;
@@ -57,6 +58,7 @@ function macAppExists(appName: string): boolean {
     // Terminal.app and other built-ins live in the Utilities subfolder.
     `/System/Applications/Utilities/${appName}.app`,
   ];
+
   return candidates.some((p) => existsSync(p));
 }
 
@@ -66,14 +68,17 @@ function isAppAvailable(app: OpenInApp): boolean {
   if (app.id === "reveal") return true;
 
   const platform = currentPlatform();
+
   if (platform === "mac") {
     // We launch via `open -a "<appName>"`, so availability must mean the .app
     // bundle exists — matching the Bun runtime.
     return !!app.mac?.appName && macAppExists(app.mac.appName);
   }
+
   if (platform === "win") {
     return app.win?.bin ? whichBin(app.win.bin) : false;
   }
+
   // linux
   return app.linux?.bin ? whichBin(app.linux.bin) : false;
 }
@@ -90,6 +95,7 @@ export function getAvailableOpenInApps(): Array<{
   icon: string;
 }> {
   const platform = currentPlatform();
+
   return OPEN_IN_APPS.filter(isAppAvailable).map((app) => {
     if (app.id === "reveal") {
       return {
@@ -99,6 +105,7 @@ export function getAvailableOpenInApps(): Array<{
         icon: resolveRevealIcon(platform),
       };
     }
+
     return { id: app.id, label: app.label, kind: app.kind, icon: app.icon };
   });
 }
@@ -114,15 +121,19 @@ function run(
     const proc = execFile(cmd, args, opts?.cwd ? { cwd: opts.cwd } : {}, (err) => {
       if (!err) {
         resolve({ ok: true });
+
         return;
       }
+
       const code = err.code;
+
       if (code === "ENOENT" || /ENOENT|not found/i.test(err.message)) {
         resolve({ ok: false, error: `${notFoundLabel} was not found on this system.` });
       } else {
         resolve({ ok: false, error: err.message });
       }
     });
+
     // Detach: we don't care about the child's lifetime once launched.
     proc.unref?.();
   });
@@ -142,6 +153,7 @@ function spawnDetached(
     const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
     child.on("error", () => {}); // fire-and-forget; ignore async spawn failure
     child.unref();
+
     return Promise.resolve({ ok: true });
   } catch (err) {
     return Promise.resolve({ ok: false, error: err instanceof Error ? err.message : String(err) });
@@ -159,32 +171,39 @@ function unavailableApp(app: OpenInApp): OpenInResult {
 
 function openWithDefaultApp(absPath: string, platform: OpenInPlatform): OpenInResult {
   if (platform === "mac") return run("open", [absPath], "Default app");
+
   if (platform === "win") {
     return run("cmd", ["/c", "start", "", basename(absPath)], "Default app", {
       cwd: dirname(absPath),
     });
   }
+
   return run("xdg-open", [absPath], "Default app");
 }
 
 function revealFile(absPath: string, platform: OpenInPlatform): OpenInResult {
   if (platform === "mac") return run("open", ["-R", absPath], "Finder");
+
   if (platform === "win") return spawnDetached("explorer", [`/select,${absPath}`]);
+
   return run("xdg-open", [dirname(absPath)], "File manager");
 }
 
 function openTerminal(absPath: string, app: OpenInApp, platform: OpenInPlatform): OpenInResult {
   const dir = dirname(absPath);
+
   if (platform === "mac") {
     return app.mac?.appName
       ? run("open", ["-a", app.mac.appName, dir], app.label)
       : unavailableApp(app);
   }
+
   if (platform === "win") {
     return app.win?.bin
       ? run("cmd", ["/c", "start", "", app.win.bin], app.label, { cwd: dir })
       : unavailableApp(app);
   }
+
   return app.linux?.bin ? run(app.linux.bin, [dir], app.label) : unavailableApp(app);
 }
 
@@ -194,9 +213,11 @@ function openEditor(absPath: string, app: OpenInApp, platform: OpenInPlatform): 
       ? run("open", ["-a", app.mac.appName, absPath], app.label)
       : unavailableApp(app);
   }
+
   if (platform === "win") {
     return app.win?.bin ? run(app.win.bin, [absPath], app.label) : unavailableApp(app);
   }
+
   return app.linux?.bin ? run(app.linux.bin, [absPath], app.label) : unavailableApp(app);
 }
 
@@ -215,6 +236,8 @@ export function openFileInApp(
   if (!app) return openWithDefaultApp(absPath, platform);
 
   if (app.kind === "file-manager") return revealFile(absPath, platform);
+
   if (app.kind === "terminal") return openTerminal(absPath, app, platform);
+
   return openEditor(absPath, app, platform);
 }

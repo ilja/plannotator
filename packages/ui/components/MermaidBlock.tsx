@@ -37,11 +37,14 @@ interface ViewBox {
 }
 
 const ZOOM_STEP = 0.25;
+
 const MIN_ZOOM = 0.25;
+
 const MAX_ZOOM = 8;
 
 function parseViewBox(svgEl: SVGSVGElement): ViewBox | null {
   const raw = svgEl.getAttribute("viewBox");
+
   if (!raw) return null;
 
   const values = raw
@@ -54,13 +57,16 @@ function parseViewBox(svgEl: SVGSVGElement): ViewBox | null {
   }
 
   const [x, y, width, height] = values;
+
   if (width <= 0 || height <= 0) return null;
+
   return { x, y, width, height };
 }
 
 // Parse base viewBox from Mermaid SVG markup before DOM mount
 function parseViewBoxFromMarkup(markup: string): ViewBox | null {
   const viewBoxMatch = markup.match(/viewBox\s*=\s*"([^"]+)"/i);
+
   if (viewBoxMatch?.[1]) {
     const values = viewBoxMatch[1]
       .trim()
@@ -69,6 +75,7 @@ function parseViewBoxFromMarkup(markup: string): ViewBox | null {
 
     if (values.length === 4 && values.every((value) => Number.isFinite(value))) {
       const [x, y, width, height] = values;
+
       if (width > 0 && height > 0) {
         return { x, y, width, height };
       }
@@ -79,6 +86,7 @@ function parseViewBoxFromMarkup(markup: string): ViewBox | null {
   const heightMatch = markup.match(/\bheight\s*=\s*"([0-9.]+)(?:px)?"/i);
   const width = widthMatch?.[1] ? Number.parseFloat(widthMatch[1]) : NaN;
   const height = heightMatch?.[1] ? Number.parseFloat(heightMatch[1]) : NaN;
+
   if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
     return { x: 0, y: 0, width, height };
   }
@@ -112,6 +120,7 @@ function fitBoundsToContainer(bounds: ViewBox, containerRect: DOMRect): ViewBox 
   if (contentRatio > containerRatio) {
     const targetHeight = bounds.width / containerRatio;
     const extra = (targetHeight - bounds.height) / 2;
+
     return {
       x: bounds.x,
       y: bounds.y - extra,
@@ -122,6 +131,7 @@ function fitBoundsToContainer(bounds: ViewBox, containerRect: DOMRect): ViewBox 
 
   const targetWidth = bounds.height * containerRatio;
   const extra = (targetWidth - bounds.width) / 2;
+
   return {
     x: bounds.x - extra,
     y: bounds.y,
@@ -161,13 +171,16 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
 
     if (containerRef.current && baseViewBoxRef.current) {
       const svgEl = containerRef.current.querySelector("svg");
+
       if (svgEl instanceof SVGSVGElement) {
         applyView(svgEl, baseViewBoxRef.current, newZoom, panOffsetRef.current);
       }
     }
 
     if (zoomInBtnRef.current) zoomInBtnRef.current.disabled = newZoom >= MAX_ZOOM;
+
     if (zoomOutBtnRef.current) zoomOutBtnRef.current.disabled = newZoom <= MIN_ZOOM;
+
     if (zoomDisplayRef.current) {
       const show = Math.abs(newZoom - 1) > 0.001;
       zoomDisplayRef.current.textContent = show ? `${Math.round(newZoom * 100)}%` : "";
@@ -179,12 +192,14 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
     if (!containerRef.current || !naturalBoundsRef.current) return;
 
     const svgEl = containerRef.current.querySelector("svg");
+
     if (!(svgEl instanceof SVGSVGElement)) return;
 
     const fitted = fitBoundsToContainer(
       naturalBoundsRef.current,
       containerRef.current.getBoundingClientRect(),
     );
+
     baseViewBoxRef.current = fitted;
     panOffsetRef.current = { x: 0, y: 0 };
     updateZoom(1);
@@ -199,6 +214,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
       try {
         const id = `mermaid-${block.id}`;
         const { svg: renderedSvg } = await mermaid.render(id, block.content);
+
         if (!cancelled) {
           const normalizedSvg = normalizeMermaidSvgMarkup(renderedSvg);
           naturalBoundsRef.current = parseViewBoxFromMarkup(normalizedSvg);
@@ -233,6 +249,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
   useEffect(() => {
     if (showSource) {
       setIsExpanded(false);
+
       return;
     }
 
@@ -266,6 +283,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
     if (!svg || showSource || !containerRef.current) return;
 
     const svgEl = containerRef.current.querySelector("svg");
+
     if (!(svgEl instanceof SVGSVGElement)) return;
 
     svgEl.style.maxWidth = "none";
@@ -323,6 +341,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
     if (showSource || !containerRef.current) return;
 
     const container = containerRef.current;
+
     const handleWheel = (event: WheelEvent) => {
       if (Math.abs(event.deltaY) < 0.1) return;
       event.preventDefault();
@@ -341,9 +360,11 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
 
     const handleExpandedPinchWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return;
+
       if (!expandedOverlayRef.current) return;
 
       const eventTarget = event.target;
+
       if (!(eventTarget instanceof Node) || !expandedOverlayRef.current.contains(eventTarget))
         return;
 
@@ -373,6 +394,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
 
   useEffect(() => {
     if (showSource || !containerRef.current || !naturalBoundsRef.current) return;
+
     if (globalThis.ResizeObserver === undefined) return;
 
     const observer = new ResizeObserver(() => {
@@ -381,6 +403,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
     });
 
     observer.observe(containerRef.current);
+
     return () => observer.disconnect();
   }, [fitToCurrentViewport, isExpanded, showSource, svg]);
 
@@ -391,6 +414,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
     isDraggingRef.current = true;
     dragStartRef.current = { x: event.clientX, y: event.clientY };
     panStartRef.current = { ...panOffsetRef.current };
+
     if (containerRef.current) containerRef.current.style.cursor = "grabbing";
   }, []);
 
@@ -398,6 +422,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
     if (!isDraggingRef.current || !containerRef.current || !baseViewBoxRef.current) return;
 
     const svgEl = containerRef.current.querySelector("svg");
+
     if (!(svgEl instanceof SVGSVGElement)) return;
 
     const rect = svgEl.getBoundingClientRect();
@@ -420,6 +445,7 @@ const MermaidBlockImpl: React.FC<{ block: Block }> = ({ block }) => {
   const stopDragging = useCallback(() => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
+
     if (containerRef.current) containerRef.current.style.cursor = "grab";
   }, []);
 

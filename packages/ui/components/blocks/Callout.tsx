@@ -34,6 +34,7 @@ export const Callout: React.FC<CalloutProps> = ({
     blockType === "alert"
       ? { "data-alert-kind": kindAttribute }
       : { "data-directive-kind": kindAttribute };
+
   return (
     <div
       className={containerClassName}

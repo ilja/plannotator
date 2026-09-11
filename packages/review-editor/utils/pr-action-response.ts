@@ -31,17 +31,23 @@ export interface PRActionErrorResponse {
 export type PRActionResponse = PRActionSuccessResponse | PRActionErrorResponse;
 
 const PR_ACTION_FALLBACK_ERROR = "Failed to submit";
+
 const decodeSuccess = Schema.decodeUnknownOption(PRActionSuccessSchema);
+
 const decodeErrorEnvelope = Schema.decodeUnknownOption(PRActionErrorEnvelopeSchema);
+
 const decodeSuccessMarker = Schema.decodeUnknownOption(PRActionSuccessMarkerSchema);
 
 /** Decode the unknown JSON envelope returned by `/api/pr-action`. */
 export function decodePRActionResponse(value: UnknownValue): PRActionResponse | undefined {
   const success = Option.getOrUndefined(decodeSuccess(value));
+
   if (success) return success;
+
   if (Option.isSome(decodeSuccessMarker(value))) return undefined;
 
   const errorEnvelope = Option.getOrUndefined(decodeErrorEnvelope(value));
+
   if (errorEnvelope) return { ok: false, error: errorEnvelope.error };
 
   return undefined;
@@ -50,6 +56,7 @@ export function decodePRActionResponse(value: UnknownValue): PRActionResponse | 
 /** Read and validate one `/api/pr-action` response, using a safe target fallback on malformed data. */
 export async function readPRActionResponse(response: Response): Promise<PRActionResponse> {
   let decoded: PRActionResponse | undefined;
+
   try {
     decoded = decodePRActionResponse(await response.json());
   } catch {

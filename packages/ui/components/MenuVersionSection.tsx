@@ -1,4 +1,5 @@
 import React from "react";
+
 interface MenuVersionSectionProps {
   appVersion: string;
   closeMenu: () => void;

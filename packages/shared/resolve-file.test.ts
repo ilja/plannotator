@@ -27,6 +27,7 @@ describe("resolveCodeFile", () => {
   test("resolves an exact relative path", async () => {
     const r = await resolveCodeFile("packages/editor/App.tsx", root);
     expect(r.kind).toBe("found");
+
     if (r.kind === "found") {
       expect(r.path).toBe(join(root, "packages/editor/App.tsx"));
     }
@@ -35,6 +36,7 @@ describe("resolveCodeFile", () => {
   test("resolves an abbreviated path via suffix match", async () => {
     const r = await resolveCodeFile("editor/App.tsx", root);
     expect(r.kind).toBe("found");
+
     if (r.kind === "found") {
       expect(r.path).toBe(join(root, "packages/editor/App.tsx"));
     }
@@ -43,6 +45,7 @@ describe("resolveCodeFile", () => {
   test("returns ambiguous when basename matches multiple files", async () => {
     const r = await resolveCodeFile("App.tsx", root);
     expect(r.kind).toBe("ambiguous");
+
     if (r.kind === "ambiguous") {
       expect(r.matches).toHaveLength(2);
     }
@@ -68,6 +71,7 @@ describe("resolveCodeFile", () => {
     // `index.ts` is bare basename; only one in tree.
     const r = await resolveCodeFile("index.ts", root);
     expect(r.kind).toBe("found");
+
     if (r.kind === "found") {
       expect(r.path).toBe(join(root, "packages/ui/index.ts"));
     }
@@ -78,6 +82,7 @@ describe("resolveCodeFile", () => {
     // and never matched any real file. The cleanup makes it work.
     const r = await resolveCodeFile("./editor/App.tsx", root);
     expect(r.kind).toBe("found");
+
     if (r.kind === "found") {
       expect(r.path).toBe(join(root, "packages/editor/App.tsx"));
     }
@@ -96,6 +101,7 @@ describe("resolveCodeFile", () => {
     const baseDir = join(root, "packages/review-editor");
     const r = await resolveCodeFile("../editor/App.tsx", root, baseDir);
     expect(r.kind).toBe("found");
+
     if (r.kind === "found") {
       expect(r.path).toBe(join(root, "packages/editor/App.tsx"));
     }
@@ -106,6 +112,7 @@ describe("resolveCodeFile", () => {
     const baseDir = join(root, "packages/review-editor");
     const r = await resolveCodeFile("ui/components/Button.tsx", root, baseDir);
     expect(r.kind).toBe("found");
+
     if (r.kind === "found") {
       expect(r.path).toBe(join(root, "packages/ui/components/Button.tsx"));
     }

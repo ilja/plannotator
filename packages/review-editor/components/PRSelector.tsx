@@ -69,10 +69,12 @@ export function PRSelector({
         fetch("/api/pr-list")
           .then((res) => {
             if (!res.ok) throw new Error("Failed to fetch");
+
             return res.json();
           })
           .then((data) => {
             const decoded = decodePRListResponse(data);
+
             if (Result.isFailure(decoded)) throw decoded.failure;
             setPrs(decoded.success);
             setFetched(true);
@@ -95,6 +97,7 @@ export function PRSelector({
       }}
       filterFn={(item, q) => {
         const lower = q.toLowerCase();
+
         return (
           item.title.toLowerCase().includes(lower) ||
           String(item.number).includes(lower) ||

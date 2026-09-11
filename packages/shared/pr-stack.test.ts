@@ -25,15 +25,19 @@ const metadata: PRMetadata = {
 describe("runPRFullStackDiff", () => {
   test("uses origin default branch when it is available", async () => {
     const calls: string[][] = [];
+
     const runtime: ReviewGitRuntime = {
       async runGit(args) {
         calls.push(args);
+
         if (args[0] === "show-ref" && args[3] === "refs/remotes/origin/main") {
           return result();
         }
+
         if (args[0] === "diff") {
           return result("diff --git a/src/auth.ts b/src/auth.ts\n");
         }
+
         return result("", "unexpected", 1);
       },
       async readTextFile() {
@@ -63,12 +67,15 @@ describe("runPRFullStackDiff", () => {
         if (args[0] === "show-ref" && args[3] === "refs/remotes/origin/main") {
           return result("", "", 1);
         }
+
         if (args[0] === "show-ref" && args[3] === "refs/heads/main") {
           return result();
         }
+
         if (args[0] === "diff") {
           return result("local branch patch");
         }
+
         return result("", "unexpected", 1);
       },
       async readTextFile() {
@@ -106,6 +113,7 @@ describe("runPRLayerLocalDiff", () => {
   const MERGE_BASE = "a".repeat(40);
   const BASE = "b".repeat(40);
   const HEAD = "c".repeat(40);
+
   const layerMetadata: PRMetadata = {
     ...metadata,
     baseSha: BASE,
@@ -128,20 +136,27 @@ describe("runPRLayerLocalDiff", () => {
   }): LayerRuntimeResult {
     const calls: string[][] = [];
     const missing = new Set(opts.missingObjects ?? []);
+
     return {
       calls,
       runtime: {
         async runGit(args) {
           calls.push(args);
+
           if (args[0] === "cat-file") {
             const sha = args.at(-1)!;
+
             return missing.has(sha) ? result("", "missing", 1) : result("commit");
           }
+
           if (args[0] === "fetch") {
             const sha = args.at(-1)!;
+
             if (opts.fetchable?.has(sha)) missing.delete(sha);
+
             return result();
           }
+
           if (args[0] === "diff") {
             return result(
               opts.diffStdout ?? "diff --git a/x.ts b/x.ts\n",
@@ -149,6 +164,7 @@ describe("runPRLayerLocalDiff", () => {
               opts.diffExitCode ?? 0,
             );
           }
+
           return result("", "unexpected", 1);
         },
         async readTextFile() {
@@ -182,6 +198,7 @@ describe("runPRLayerLocalDiff", () => {
       missingObjects: new Set([MERGE_BASE]),
       fetchable: new Set([MERGE_BASE]),
     });
+
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
     expect(diff.error).toBeUndefined();
@@ -199,9 +216,11 @@ describe("runPRLayerLocalDiff", () => {
 
   test("falls back to three-dot when no merge-base SHA is reported", async () => {
     const { runtime, calls } = layerRuntime({});
+
     const noMergeBase: Omit<PRMetadata, "mergeBaseSha"> & { mergeBaseSha?: string } = {
       ...layerMetadata,
     };
+
     delete noMergeBase.mergeBaseSha;
     const diff = await runPRLayerLocalDiff(runtime, noMergeBase, "/tmp/checkout");
 

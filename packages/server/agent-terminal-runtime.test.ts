@@ -54,6 +54,7 @@ describe("agent terminal runtime", () => {
     writeFileSync(dataFile, "not a directory");
     const previousDataDir = process.env.PLANNOTATOR_DATA_DIR;
     process.env.PLANNOTATOR_DATA_DIR = dataFile;
+
     try {
       const result = await installAgentTerminalRuntime();
       expect(result.ok).toBe(false);
@@ -66,6 +67,7 @@ describe("agent terminal runtime", () => {
 
   test("WebTUI vendor version is pinned consistently", () => {
     const repoRoot = join(import.meta.dir, "..", "..");
+
     const manifests = [
       "packages/server/package.json",
       "packages/editor/package.json",
@@ -76,6 +78,7 @@ describe("agent terminal runtime", () => {
       const parsed: { dependencies?: Record<string, string> } = JSON.parse(
         readFileSync(join(repoRoot, manifest), "utf8"),
       );
+
       expect(parsed.dependencies?.["@plannotator/webtui"]).toBe(AGENT_TERMINAL_WEBTUI_VERSION);
     }
   });

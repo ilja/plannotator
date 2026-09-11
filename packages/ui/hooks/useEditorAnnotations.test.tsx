@@ -3,11 +3,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const hasDom = globalThis.document !== undefined;
+
 if (hasDom)
   Object.defineProperty(window, "__PLANNOTATOR_VSCODE", { configurable: true, value: true });
+
 const { useEditorAnnotations } = await import("./useEditorAnnotations");
 
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 function installFetch(responses: Response[]): void {
@@ -20,6 +23,7 @@ function installFetch(responses: Response[]): void {
 
 function HookHarness(): React.JSX.Element {
   const { editorAnnotations } = useEditorAnnotations();
+
   return (
     <output
       data-ids={editorAnnotations.map(({ id }) => id).join("|")}
@@ -43,6 +47,7 @@ async function mountHarness(): Promise<HTMLDivElement> {
     root.render(<HookHarness />);
     await flushAsyncWork();
   });
+
   return host;
 }
 
@@ -57,7 +62,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) {
     document.body.innerHTML = "";
     Reflect.deleteProperty(window, "__PLANNOTATOR_VSCODE");

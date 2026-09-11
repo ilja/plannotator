@@ -4,7 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { useCodeNavPreview } from "./useCodeNavPreview";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 function installFetch(
@@ -18,7 +20,9 @@ function installFetch(
       requests.push(input);
       const responseIndex = index++;
       const error = fetchErrors[responseIndex];
+
       if (error) return Promise.reject(error);
+
       return responses[responseIndex] ?? new Response(null, { status: 500 });
     },
     { preconnect: (): void => {} },
@@ -83,6 +87,7 @@ async function mountHarness(): Promise<HTMLDivElement> {
 async function selectLocation(host: HTMLDivElement, filePath: string): Promise<HTMLOutputElement> {
   const button = host.querySelector(`button[data-path="${filePath}"]`);
   const output = host.querySelector("output");
+
   if (!(button instanceof HTMLButtonElement) || !(output instanceof HTMLOutputElement)) {
     throw new Error("Hook harness did not render");
   }
@@ -99,7 +104,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 

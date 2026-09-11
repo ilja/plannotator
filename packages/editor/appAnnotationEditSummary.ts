@@ -57,8 +57,11 @@ function buildDirectEditsPanelInfo(
   if (input.savedFileChanges.length > 0) {
     return buildSavedFileChangePanelItems([...input.savedFileChanges]);
   }
+
   if (input.activeSourceSaveEnabled || !input.hasEditStats) return null;
+
   if (input.originalMarkdown === null || input.editedMarkdown === null) return null;
+
   return [buildPlanEditPanelItem(input.originalMarkdown, input.editedMarkdown)];
 }
 
@@ -74,21 +77,26 @@ export function buildAppAnnotationEditSummary(
   input: BuildAppAnnotationEditSummaryInput,
 ): AppAnnotationEditSummary {
   const messageMultiSelectMode = input.annotateSource === "message" && input.recentMessageCount > 1;
+
   const documentAnnotationCount =
     input.annotationCount +
     input.codeAnnotationCount +
     input.editorAnnotationCount +
     input.linkedDocumentAnnotationCount +
     input.globalAttachmentCount;
+
   const feedbackAnnotationCount = messageMultiSelectMode
     ? input.messageFeedbackAnnotationCount + input.editorAnnotationCount
     : documentAnnotationCount;
+
   const hasAnyAnnotations = feedbackAnnotationCount > 0;
   const hasUnsavedSourceFileBuffers = input.unsavedSourceFileBufferCount > 0;
+
   const hasDirectEdits =
     !input.activeSourceSaveEnabled &&
     !hasUnsavedSourceFileBuffers &&
     (input.isEditingMarkdown ? input.editorDiffersFromBaseline : input.hasCommittedPlanEdit);
+
   const hasSavedFileChanges = input.savedFileChanges.length > 0;
 
   return {

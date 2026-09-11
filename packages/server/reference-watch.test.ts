@@ -9,6 +9,7 @@ const tempDirs: string[] = [];
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
+
   return dir;
 }
 
@@ -17,6 +18,7 @@ async function readSSEEvents(
   count: number,
 ): Promise<Array<{ type?: string; dirPath?: string }>> {
   const reader = response.body?.getReader();
+
   if (!reader) throw new Error("Missing response body");
   const decoder = new TextDecoder();
   const events: Array<{ type?: string; dirPath?: string }> = [];
@@ -25,23 +27,29 @@ async function readSSEEvents(
   try {
     while (events.length < count) {
       let timeout: ReturnType<typeof setTimeout> | null = null;
+
       const result = await Promise.race([
         reader.read(),
         new Promise<never>((_, reject) => {
           timeout = setTimeout(() => reject(new Error("Timed out waiting for SSE event")), 1000);
         }),
       ]);
+
       if (timeout) clearTimeout(timeout);
+
       if (result.done) break;
       pending += decoder.decode(result.value, { stream: true });
       const blocks = pending.split("\n\n");
       pending = blocks.pop() ?? "";
+
       for (const block of blocks) {
         const line = block.split("\n").find((item) => item.startsWith("data: "));
+
         if (!line) continue;
         events.push(JSON.parse(line.slice("data: ".length)));
       }
     }
+
     return events;
   } finally {
     await reader.cancel();

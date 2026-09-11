@@ -114,14 +114,17 @@ function getReviewDraftRecoveryMessage(draftRecovery: ReviewDraftRecovery | null
   if (!draftRecovery) return "";
 
   const parts: string[] = [];
+
   if (draftRecovery.count > 0) {
     parts.push(`${draftRecovery.count} annotation${draftRecovery.count !== 1 ? "s" : ""}`);
   }
+
   if (draftRecovery.viewedCount > 0) {
     parts.push(
       `${draftRecovery.viewedCount} viewed file${draftRecovery.viewedCount !== 1 ? "s" : ""}`,
     );
   }
+
   return `Found ${parts.join(" and ")} from ${draftRecovery.timeAgo}. Would you like to restore them?`;
 }
 
@@ -294,6 +297,7 @@ function PlatformReviewSubmissionDialog({
   readonly actions: ReviewDialogsActions;
 }) {
   const submission = model.platformSubmission;
+
   return (
     <ReviewSubmissionDialog
       isOpen={submission !== null}

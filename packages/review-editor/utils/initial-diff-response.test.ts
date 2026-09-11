@@ -114,6 +114,7 @@ describe("decodeInitialDiffResponse", () => {
     const decoded = decodeInitialDiffResponse(validResponse);
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual(validResponse);
     }
@@ -155,6 +156,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         rawPatch: validResponse.rawPatch,
@@ -178,6 +180,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.serverConfig).toEqual({
         diffOptions: { defaultDiffType: "merge-base" },
@@ -237,6 +240,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.gitContext).toMatchObject({
         diffOptions: [{ ...validResponse.gitContext.diffOptions[0], optionExtra: "option" }],
@@ -301,6 +305,7 @@ describe("decodeInitialDiffResponse", () => {
         ],
       });
       const decodedDiffOptions = decoded.success.serverConfig?.diffOptions;
+
       if (decodedDiffOptions) {
         expect(Object.prototype.hasOwnProperty.call(decodedDiffOptions, "__proto__")).toBeTrue();
         expect(Object.getPrototypeOf(decodedDiffOptions)).toBe(Object.prototype);
@@ -333,6 +338,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.rawPatch).toBe(validResponse.rawPatch);
       expect(decoded.success.gitRef).toBe(validResponse.gitRef);
@@ -379,6 +385,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.gitContext).toEqual({
         currentBranch: validResponse.gitContext.currentBranch,
@@ -411,6 +418,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.gitContext).toEqual({
         currentBranch: validResponse.gitContext.currentBranch,
@@ -440,6 +448,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.prStackTree).toEqual({
         nodes: [
@@ -461,6 +470,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.prStackTree).toBeUndefined();
     }
@@ -482,6 +492,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.repoInfo).toEqual({ display: validResponse.repoInfo.display });
       expect(decoded.success.prStackInfo).toEqual({
@@ -515,6 +526,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.prStackTree).toBeUndefined();
     }
@@ -528,6 +540,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.prStackTree).toEqual({ nodes: [] });
     }
@@ -543,6 +556,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.prStackTree).toEqual(validResponse.prStackTree);
     }
@@ -561,6 +575,7 @@ describe("decodeInitialDiffResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.serverConfig?.conventionalLabels).toEqual(
         validResponse.serverConfig.conventionalLabels,

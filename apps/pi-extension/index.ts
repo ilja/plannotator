@@ -90,7 +90,9 @@ function reportBackgroundError(
 
 function excerptText(text: string, maxChars = 1000): string {
   const trimmed = text.trim();
+
   if (trimmed.length <= maxChars) return trimmed;
+
   return `${trimmed.slice(0, maxChars).trimEnd()}...`;
 }
 
@@ -116,6 +118,7 @@ function shouldAnchorLastMessageFeedback(
   origin: PiSessionIdentity,
 ): boolean {
   if (isCurrentPiSessionDifferentFrom(origin)) return true;
+
   try {
     return hasSessionMovedPastEntry(ctx, entryId);
   } catch {
@@ -144,11 +147,15 @@ function trySendUserMessageToDifferentCurrentSession(
     options,
     origin,
   );
+
   if (result.ok) return true;
+
   if (result.reason === "send-failed") {
     reportCurrentSessionSendFailure(errorMessage, result.error, origin);
+
     return true;
   }
+
   return false;
 }
 
@@ -163,6 +170,7 @@ function sendUserMessageWithCurrentSessionFallback(
 
   try {
     pi.sendUserMessage(content, options);
+
     return;
   } catch (err) {
     if (trySendUserMessageToDifferentCurrentSession(content, options, errorMessage, origin)) return;
@@ -183,14 +191,14 @@ export default function plannotator(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("plannotator-review", {
-    description:
-      "Open interactive code review for current changes or a PR URL",
+    description: "Open interactive code review for current changes or a PR URL",
     handler: async (args, ctx) => {
       if (!hasReviewBrowserHtml()) {
         ctx.ui.notify(
           "Code review UI not available. Run 'bun run build' in the pi-extension directory.",
           "error",
         );
+
         return;
       }
 
@@ -199,10 +207,12 @@ export default function plannotator(pi: ExtensionAPI): void {
 
       try {
         const reviewArgs = parseReviewArgs(args ?? "");
+
         const session = await startCodeReviewBrowserSession(ctx, {
           prUrl: reviewArgs.prUrl,
           useLocal: reviewArgs.useLocal,
         });
+
         ctx.ui.notify(sessionOpenedMessage("Code review opened", session.url), "info");
         void session
           .waitForDecision()
@@ -210,8 +220,10 @@ export default function plannotator(pi: ExtensionAPI): void {
             try {
               if (result.exit) {
                 safeNotify(ctx, "Code review session closed.", "info", origin);
+
                 return;
               }
+
               if (result.approved) {
                 sendUserMessageWithCurrentSessionFallback(
                   pi,
@@ -220,12 +232,16 @@ export default function plannotator(pi: ExtensionAPI): void {
                   "Plannotator code review feedback could not be sent",
                   origin,
                 );
+
                 return;
               }
+
               if (!result.feedback) {
                 safeNotify(ctx, "Code review closed (no feedback).", "info", origin);
+
                 return;
               }
+
               // Append the triage-first suffix when the reviewer sent
               // annotations to act on (PR mode included). Platform PR actions
               // (approve/comment posted to the host) come back with an empty
@@ -235,6 +251,7 @@ export default function plannotator(pi: ExtensionAPI): void {
                 (result.annotations?.length ?? 0) > 0
                   ? `${result.feedback}${getReviewDeniedSuffix("pi", loadConfig())}`
                   : result.feedback;
+
               sendUserMessageWithCurrentSessionFallback(
                 pi,
                 reviewFeedback,
@@ -282,18 +299,22 @@ export default function plannotator(pi: ExtensionAPI): void {
         renderMarkdown: renderMarkdownFlag,
         noJina,
       } = parseAnnotateArgs(args ?? "");
+
       if (!filePath) {
         ctx.ui.notify(
           "Usage: /plannotator-annotate <file.md | file.txt | file.html | https://... | folder/> [--markdown] [--no-jina] [--gate] [--json]",
           "error",
         );
+
         return;
       }
+
       if (!hasAnnotationBrowserHtml()) {
         ctx.ui.notify(
           "Annotation UI not available. Run 'bun run build' in the pi-extension directory.",
           "error",
         );
+
         return;
       }
 
@@ -315,6 +336,7 @@ export default function plannotator(pi: ExtensionAPI): void {
           `Fetching: ${filePath}${useJina ? " (via Jina Reader)" : " (via fetch+Turndown)"}...`,
           "info",
         );
+
         try {
           const result = await urlToMarkdown(filePath, { useJina });
           markdown = result.markdown;
@@ -324,8 +346,10 @@ export default function plannotator(pi: ExtensionAPI): void {
             `Failed to fetch URL: ${err instanceof Error ? err.message : String(err)}`,
             "error",
           );
+
           return;
         }
+
         absolutePath = filePath;
         sourceInfo = filePath;
       } else {
@@ -335,27 +359,34 @@ export default function plannotator(pi: ExtensionAPI): void {
         // for the error message if neither exists.
         const resolvedCandidate = resolveAtReference(rawFilePath, (c) => {
           const abs = resolveUserPath(c, ctx.cwd);
+
           return existsSync(abs);
         });
+
         if (resolvedCandidate === null) {
           absolutePath = resolveUserPath(filePath, ctx.cwd);
           ctx.ui.notify(`File not found: ${absolutePath}`, "error");
+
           return;
         }
+
         absolutePath = resolveUserPath(resolvedCandidate, ctx.cwd);
 
         try {
           isFolder = statSync(absolutePath).isDirectory();
         } catch {
           ctx.ui.notify(`Cannot access: ${absolutePath}`, "error");
+
           return;
         }
 
         if (isFolder) {
           if (!hasMarkdownFiles(absolutePath, FILE_BROWSER_EXCLUDED, /\.(mdx?|txt|html?)$/i)) {
             ctx.ui.notify(`No markdown, text, or HTML files found in ${absolutePath}`, "error");
+
             return;
           }
+
           markdown = "";
           folderPath = absolutePath;
           mode = "annotate-folder";
@@ -363,6 +394,7 @@ export default function plannotator(pi: ExtensionAPI): void {
         } else if (/\.html?$/i.test(absolutePath)) {
           const html = readFileSync(absolutePath, "utf-8");
           const renderHtmlForFile = !renderMarkdownFlag;
+
           if (renderHtmlForFile) {
             rawHtml = html;
             markdown = "";
@@ -370,13 +402,16 @@ export default function plannotator(pi: ExtensionAPI): void {
             markdown = htmlToMarkdown(html);
             sourceConverted = true;
           }
+
           sourceInfo = basename(absolutePath);
           ctx.ui.notify(`Opening annotation UI for ${filePath}...`, "info");
         } else {
           if (!/\.(mdx?|txt)$/i.test(absolutePath)) {
             ctx.ui.notify("Only .md, .mdx, .txt, .html, .htm files are supported.", "error");
+
             return;
           }
+
           markdown = readFileSync(absolutePath, "utf-8");
           ctx.ui.notify(`Opening annotation UI for ${filePath}...`, "info");
         }
@@ -399,6 +434,7 @@ export default function plannotator(pi: ExtensionAPI): void {
           !!rawHtml,
           renderMarkdownFlag,
         );
+
         ctx.ui.notify(sessionOpenedMessage("Annotation opened", session.url), "info");
         void session
           .waitForDecision()
@@ -406,16 +442,22 @@ export default function plannotator(pi: ExtensionAPI): void {
             try {
               if (result.exit) {
                 safeNotify(ctx, "Annotation session closed.", "info", origin);
+
                 return;
               }
+
               if (result.approved) {
                 safeNotify(ctx, "Annotation approved.", "info", origin);
+
                 return;
               }
+
               if (!result.feedback) {
                 safeNotify(ctx, "Annotation closed (no feedback).", "info", origin);
+
                 return;
               }
+
               sendUserMessageWithCurrentSessionFallback(
                 pi,
                 getAnnotateFileFeedbackPrompt("pi", loadConfig(), {
@@ -464,6 +506,7 @@ export default function plannotator(pi: ExtensionAPI): void {
           "Annotation UI not available. Run 'bun run build' in the pi-extension directory.",
           "error",
         );
+
         return;
       }
 
@@ -471,8 +514,10 @@ export default function plannotator(pi: ExtensionAPI): void {
       const origin = getPiSessionIdentity(ctx);
 
       const snapshot = getLastAssistantMessageSnapshot(ctx);
+
       if (!snapshot) {
         ctx.ui.notify("No assistant message found in session.", "error");
+
         return;
       }
 
@@ -488,6 +533,7 @@ export default function plannotator(pi: ExtensionAPI): void {
           gate,
           pickerMessages,
         );
+
         ctx.ui.notify(sessionOpenedMessage("Last-message annotation opened", session.url), "info");
         void session
           .waitForDecision()
@@ -495,27 +541,35 @@ export default function plannotator(pi: ExtensionAPI): void {
             try {
               if (result.exit) {
                 safeNotify(ctx, "Annotation session closed.", "info", origin);
+
                 return;
               }
+
               if (result.approved) {
                 safeNotify(ctx, "Message approved.", "info", origin);
+
                 return;
               }
+
               if (!result.feedback) {
                 safeNotify(ctx, "Annotation closed (no feedback).", "info", origin);
+
                 return;
               }
+
               // Picker may have changed which message the feedback targets; if so,
               // look that one up in the current branch so the anchor quote matches.
               const target =
                 result.selectedMessageId && result.selectedMessageId !== snapshot.entryId
                   ? (findAssistantMessageByEntryId(ctx, result.selectedMessageId) ?? snapshot)
                   : snapshot;
+
               const feedback =
                 result.feedbackScope !== "messages" &&
                 shouldAnchorLastMessageFeedback(ctx, target.entryId, origin)
                   ? anchorMessageFeedback(result.feedback, target.text)
                   : result.feedback;
+
               sendUserMessageWithCurrentSessionFallback(
                 pi,
                 getAnnotateMessageFeedbackPrompt("pi", loadConfig(), {

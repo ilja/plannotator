@@ -14,8 +14,11 @@ import { tmpdir } from "os";
 // a test harness that sets HOME to a temp directory.
 
 const TEST_HOME = join(tmpdir(), `improvement-hooks-test-${Date.now()}`);
+
 const NEW_BASE = join(TEST_HOME, ".plannotator", "hooks");
+
 const LEGACY_BASE = join(TEST_HOME, ".plannotator");
+
 const HOOK_RELATIVE = "compound/enterplanmode-improve-hook.txt";
 
 function setupTestHome() {
@@ -44,6 +47,7 @@ async function runScenario(setup: {
   if (setup.newPathContent !== undefined && setup.newPathContent !== null) {
     writeFileSync(newPath, setup.newPathContent);
   }
+
   if (setup.legacyPathContent !== undefined && setup.legacyPathContent !== null) {
     writeFileSync(legacyPath, setup.legacyPathContent);
   }
@@ -76,6 +80,7 @@ async function runScenario(setup: {
   }
 
   const parsed = JSON.parse(stdout.trim());
+
   return parsed;
 }
 
@@ -87,6 +92,7 @@ describe("readImprovementHook", () => {
     const result = await runScenario({
       newPathContent: "Focus on error handling",
     });
+
     expect(result).not.toBeNull();
     expect(result!.content).toBe("Focus on error handling");
     expect(result!.filePath).toContain(".plannotator/hooks/compound/");
@@ -97,6 +103,7 @@ describe("readImprovementHook", () => {
       newPathContent: "New instructions",
       legacyPathContent: "Old instructions",
     });
+
     expect(result).not.toBeNull();
     expect(result!.content).toBe("New instructions");
     expect(result!.filePath).toContain(".plannotator/hooks/compound/");
@@ -106,6 +113,7 @@ describe("readImprovementHook", () => {
     const result = await runScenario({
       legacyPathContent: "Legacy instructions",
     });
+
     expect(result).not.toBeNull();
     expect(result!.content).toBe("Legacy instructions");
     expect(result!.filePath).toContain(".plannotator/compound/");
@@ -117,6 +125,7 @@ describe("readImprovementHook", () => {
       newPathContent: "",
       legacyPathContent: "Legacy instructions",
     });
+
     expect(result).toBeNull();
   });
 
@@ -130,6 +139,7 @@ describe("readImprovementHook", () => {
       newPathContent: "   \n  \n  ",
       legacyPathContent: "Legacy instructions",
     });
+
     expect(result).toBeNull();
   });
 });

@@ -7,7 +7,11 @@
  */
 
 export type { DiffOption, DiffType, GitContext } from "./generated/review-core.js";
+
 export type { WorkspaceDiffType } from "./generated/review-workspace.js";
+
 export { type AnnotateServerResult, startAnnotateServer } from "./server/serverAnnotate.js";
+
 export { type ReviewServerResult, startReviewServer } from "./server/serverReview.js";
+
 export { reviewRuntime } from "./server/git.js";

@@ -7,6 +7,7 @@ import { deleteDraft, getDraftDir, getDraftGeneration, loadDraft, saveDraft } fr
 const KEY = "draft-generation-test";
 
 let dataDir = "";
+
 let previousDataDir: string | undefined;
 
 beforeEach(() => {

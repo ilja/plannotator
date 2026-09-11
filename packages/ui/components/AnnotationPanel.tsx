@@ -191,6 +191,7 @@ const AnnotationTimelineRow: React.FC<AnnotationTimelineRowProps> = ({
     const { annotation } = entry;
     const handleSelect = () => onSelect(annotation.id);
     const handleDelete = () => onDelete(annotation.id);
+
     const handleEdit = onEdit
       ? (updates: Partial<Annotation>) => onEdit(annotation.id, updates)
       : undefined;
@@ -210,6 +211,7 @@ const AnnotationTimelineRow: React.FC<AnnotationTimelineRowProps> = ({
   const { annotation } = entry;
   const handleSelect = () => onSelectCodeAnnotation?.(annotation.id);
   const handleDelete = () => onDeleteCodeAnnotation?.(annotation.id);
+
   const handleEdit = onEditCodeAnnotation
     ? (updates: Partial<CodeAnnotation>) => onEditCodeAnnotation(annotation.id, updates)
     : undefined;
@@ -531,6 +533,7 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
   const sortedAnnotations = [...annotations].sort((a, b) => a.createdA - b.createdA);
   const sortedCodeAnnotations = [...codeAnnotations].sort((a, b) => a.createdAt - b.createdAt);
+
   const timelineEntries: TimelineEntry[] = [
     ...sortedAnnotations.map((annotation) => ({
       kind: "plan" as const,
@@ -543,17 +546,20 @@ export const AnnotationPanel: React.FC<PanelProps> = ({
       annotation,
     })),
   ].sort((a, b) => a.ts - b.ts);
+
   const totalCount = annotations.length + codeAnnotations.length + (editorAnnotations?.length ?? 0);
 
   useEffect(() => {
     if (!selectedId || !listRef.current) return;
     const card = listRef.current.querySelector(`[data-annotation-id="${selectedId}"]`);
+
     if (card) {
       card.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [selectedId]);
 
   const resetCopiedText = () => setCopiedText(false);
+
   const handleQuickCopy = async () => {
     if (!onQuickCopy) return;
 
@@ -613,8 +619,11 @@ function formatTimestamp(ts: number): string {
   const days = Math.floor(hours / 24);
 
   if (seconds < 60) return "now";
+
   if (minutes < 60) return `${minutes}m`;
+
   if (hours < 24) return `${hours}h`;
+
   if (days < 7) return `${days}d`;
 
   return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -639,6 +648,7 @@ const DirectEditCard: React.FC<{
   useEffect(() => {
     if (!confirmDiscard) return;
     const t = setTimeout(() => setConfirmDiscard(false), 3000);
+
     return () => clearTimeout(t);
   }, [confirmDiscard]);
 
@@ -646,8 +656,10 @@ const DirectEditCard: React.FC<{
   const diffLines = React.useMemo(() => {
     const lines = diffText.split("\n");
     const fileSeparators = lines.filter((l) => l.startsWith("===")).length;
+
     if (fileSeparators > 1) return lines;
     const firstHunk = lines.findIndex((l) => l.startsWith("@@"));
+
     return firstHunk === -1 ? lines : lines.slice(firstHunk);
   }, [diffText]);
 
@@ -760,6 +772,7 @@ const AnnotationCard: React.FC<{
     if (onEdit) {
       onEdit({ text: editText });
     }
+
     setIsEditing(false);
   };
 
@@ -943,6 +956,7 @@ const CodeAnnotationCard: React.FC<{
     annotation.lineStart === annotation.lineEnd
       ? `line ${annotation.lineStart}`
       : `lines ${annotation.lineStart}-${annotation.lineEnd}`;
+
   const fileName = annotation.filePath.split("/").pop() || annotation.filePath;
 
   const handleCancelEdit = () => {

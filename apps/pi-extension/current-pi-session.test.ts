@@ -7,12 +7,14 @@ import {
 } from "./current-pi-session";
 
 type SendUserMessageContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
+
 type SendUserMessageOptions = Parameters<ExtensionAPI["sendUserMessage"]>[1];
 
 function fakeApi(
   sendUserMessage: (content: SendUserMessageContent, options?: SendUserMessageOptions) => void,
 ): ExtensionAPI {
   const partial: Partial<ExtensionAPI> = { sendUserMessage };
+
   // SAFETY: test double covering only the sendUserMessage surface that
   // current-pi-session.ts touches; ExtensionAPI has many other members.
   return partial as ExtensionAPI;
@@ -36,6 +38,7 @@ describe("withCurrentPiSessionFallbackHeader", () => {
 describe("sendUserMessageToCurrentPiSession", () => {
   test("returns ok and forwards string content to the current session", () => {
     const sent: unknown[] = [];
+
     const registration = registerCurrentPiSession(
       fakeApi((content) => {
         sent.push(content);
@@ -69,11 +72,13 @@ describe("sendUserMessageToCurrentPiSession", () => {
     const result = sendUserMessageToCurrentPiSession("hello");
 
     expect(result.ok).toBe(false);
+
     if (!result.ok) {
       expect(result.reason).toBe("send-failed");
       expect(result.error instanceof Error).toBe(true);
       expect(result.error instanceof Error && result.error.message).toBe("boom");
     }
+
     registration.clear();
   });
 
@@ -87,11 +92,13 @@ describe("sendUserMessageToCurrentPiSession", () => {
     const result = sendUserMessageToCurrentPiSession("hello");
 
     expect(result.ok).toBe(false);
+
     if (!result.ok) {
       expect(result.reason).toBe("send-failed");
       expect(result.error instanceof Error).toBe(true);
       expect(result.error instanceof Error && result.error.message).toBe("string boom");
     }
+
     registration.clear();
   });
 });

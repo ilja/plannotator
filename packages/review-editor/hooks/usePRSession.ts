@@ -50,15 +50,23 @@ export function usePRSession() {
   const updatePRSession = useCallback((update: PRSessionUpdate) => {
     setState((prev) => {
       const next = { ...prev };
+
       if (update.prMetadata !== undefined) next.prMetadata = update.prMetadata;
+
       if (update.prStackInfo !== undefined) next.prStackInfo = update.prStackInfo;
+
       if (update.prStackTree !== undefined) next.prStackTree = update.prStackTree;
+
       if (update.prDiffScope !== undefined) next.prDiffScope = update.prDiffScope;
+
       if (update.prDiffScopeOptions !== undefined)
         next.prDiffScopeOptions = update.prDiffScopeOptions;
+
       if (update.prPatchIncomplete !== undefined) next.prPatchIncomplete = update.prPatchIncomplete;
+
       if (update.prPatchUpgradeAvailable !== undefined)
         next.prPatchUpgradeAvailable = update.prPatchUpgradeAvailable;
+
       return next;
     });
   }, []);

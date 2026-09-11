@@ -49,6 +49,7 @@ export function getAgentName(origin: Origin | null | undefined): string {
     // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
     return AGENT_CONFIG[origin as Origin].name;
   }
+
   return "Coding Agent";
 }
 
@@ -58,6 +59,7 @@ export function getAgentBadge(origin: Origin | null | undefined): string {
     // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
     return AGENT_CONFIG[origin as Origin].badge;
   }
+
   return "bg-zinc-500/20 text-zinc-400";
 }
 
@@ -66,7 +68,9 @@ export function getAgentAIProviderTypes(origin: Origin | null | undefined): read
   if (origin && origin in AGENT_CONFIG) {
     // SAFETY: `origin in AGENT_CONFIG` narrows origin to a valid Origin key; AGENT_CONFIG is the closed key set.
     const config = AGENT_CONFIG[origin as Origin];
+
     return "aiProviderTypes" in config ? config.aiProviderTypes : [];
   }
+
   return [];
 }

@@ -40,14 +40,17 @@ export function computeEditStats(base: string, edited: string): EditStats {
   const patch = structuredPatch("plan.md", "plan.md", base, edited, undefined, undefined, {
     context: 0,
   });
+
   let added = 0;
   let removed = 0;
+
   for (const hunk of patch.hunks) {
     for (const line of hunk.lines) {
       if (line.startsWith("+")) added++;
       else if (line.startsWith("-")) removed++;
     }
   }
+
   return { added, removed };
 }
 
@@ -56,6 +59,7 @@ export function normalizeEditedMarkdown(
   current: string | null | undefined,
 ): string | null {
   if (base === null || current == null || current === base) return null;
+
   return current;
 }
 
@@ -65,6 +69,7 @@ export function buildDirectEditsSection(
   sourceConverted: boolean,
 ): string {
   const edited = normalizeEditedMarkdown(base, current);
+
   if (base === null || edited === null) return "";
 
   const patch = createTwoFilesPatch(
@@ -76,6 +81,7 @@ export function buildDirectEditsSection(
     undefined,
     { context: 3 },
   );
+
   const preamble = sourceConverted
     ? "The user edited a markdown conversion of the original source. This diff describes the desired content changes (it is not a literal patch to a file on disk):"
     : "The user edited the document directly. Apply these exact changes — a unified diff against the version you submitted:";
@@ -88,6 +94,7 @@ export function composeFeedbackWithDirectEdits(
   editsSection: string,
 ): string {
   if (!editsSection) return annotationsText;
+
   return EMPTY_FEEDBACK_SENTINELS.has(annotationsText)
     ? editsSection
     : `${editsSection}\n\n---\n\n${annotationsText}`;
@@ -95,6 +102,7 @@ export function composeFeedbackWithDirectEdits(
 
 export function buildSavedFileChangesSection(changes: SavedFileChangeInput[]): string {
   const changed = changes.filter((change) => change.beforeText !== change.afterText);
+
   if (changed.length === 0) return "";
 
   const sections = changed.map((change) => {
@@ -107,6 +115,7 @@ export function buildSavedFileChangesSection(changes: SavedFileChangeInput[]): s
       undefined,
       { context: 3 },
     );
+
     return [`## ${change.path}`, "", "```diff", patch.trimEnd(), "```"].join("\n");
   });
 
@@ -124,6 +133,7 @@ export function buildSavedFileChangePanelItems(
 ): DirectEditPanelItem[] {
   return changes.map((change) => {
     const stats = computeEditStats(change.beforeText, change.afterText);
+
     return {
       id: `saved:${change.key}`,
       title: "Edits",
@@ -146,6 +156,7 @@ export function buildSavedFileChangePanelItems(
 
 export function buildPlanEditPanelItem(base: string, edited: string): DirectEditPanelItem {
   const stats = computeEditStats(base, edited);
+
   return {
     id: "plan",
     added: stats.added,
@@ -168,7 +179,10 @@ export function composeFeedbackWithEditSections(
   savedChangesSection: string,
 ): string {
   const feedback = composeFeedbackWithDirectEdits(annotationsText, editsSection);
+
   if (!savedChangesSection) return feedback;
+
   if (!editsSection && isEmptyFeedbackSentinel(annotationsText)) return savedChangesSection;
+
   return `${savedChangesSection}\n\n---\n\n${feedback}`;
 }

@@ -1,6 +1,7 @@
 import React from "react";
 
 type ButtonVariant = "primary" | "outline" | "ghost" | "icon" | "danger";
+
 type ButtonSize = "sm" | "md" | "icon";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -41,4 +42,5 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     />
   ),
 );
+
 Button.displayName = "Button";

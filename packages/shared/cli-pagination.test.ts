@@ -3,6 +3,7 @@ import { Option, Schema } from "effect";
 import { parsePaginatedArray } from "./cli-pagination";
 
 const ItemSchema = Schema.Struct({ id: Schema.Number });
+
 const decodeItem = <Input>(value: Input) =>
   Option.getOrUndefined(Schema.decodeUnknownOption(ItemSchema)(value));
 
@@ -16,8 +17,10 @@ describe("parsePaginatedArray", () => {
 
   test("round-trips single-page output", () => {
     const schema = Schema.Struct({ a: Schema.Number });
+
     const decode = <Input>(value: Input) =>
       Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
+
     expect(parsePaginatedArray('[{"a":1}]', decode)).toEqual({
       items: [{ a: 1 }],
       rejected: 0,
@@ -26,8 +29,10 @@ describe("parsePaginatedArray", () => {
 
   test("does not split on bracket characters inside strings", () => {
     const schema = Schema.Struct({ s: Schema.String });
+
     const decode = <Input>(value: Input) =>
       Option.getOrUndefined(Schema.decodeUnknownOption(schema)(value));
+
     expect(parsePaginatedArray('[{"s":"a][b"}]', decode)).toEqual({
       items: [{ s: "a][b" }],
       rejected: 0,

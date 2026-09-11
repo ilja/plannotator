@@ -32,9 +32,13 @@ const RawGhPRViewSchema = Schema.Struct({
   url: Schema.String,
   changedFiles: Schema.optionalKey(Schema.Unknown),
 });
+
 const decodeRawGhPRViewJson = Schema.decodeUnknownOption(Schema.fromJsonString(RawGhPRViewSchema));
+
 const RawGhPRContextSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 type RawGhPRContext = Schema.Schema.Type<typeof RawGhPRContextSchema>;
+
 const decodeRawGhPRContextJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(RawGhPRContextSchema),
 );
@@ -47,15 +51,18 @@ const GhPRListItemSchema = Schema.Struct({
   baseRefName: Schema.String,
   state: Schema.Literals(["OPEN", "MERGED", "CLOSED"]),
 });
+
 const decodeGhPRListJson = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Array(Schema.Unknown)),
 );
+
 const decodeGhPRListItem = Schema.decodeUnknownOption(GhPRListItemSchema);
 
 const GhViewedFileNodeSchema = Schema.Struct({
   path: Schema.String,
   viewerViewedState: Schema.Literals(["VIEWED", "UNVIEWED", "DISMISSED"]),
 });
+
 const GhViewedFilesResponseSchema = Schema.Struct({
   data: Schema.optionalKey(
     Schema.NullOr(
@@ -88,9 +95,11 @@ const GhViewedFilesResponseSchema = Schema.Struct({
   ),
   errors: Schema.optionalKey(Schema.Array(Schema.Struct({ message: Schema.String }))),
 });
+
 const decodeGhViewedFilesJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(GhViewedFilesResponseSchema),
 );
+
 const decodeGhViewedFileNode = Schema.decodeUnknownOption(GhViewedFileNodeSchema);
 
 const GhReviewThreadCommentSchema = Schema.Struct({
@@ -101,6 +110,7 @@ const GhReviewThreadCommentSchema = Schema.Struct({
   url: Schema.String,
   diffHunk: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
+
 const GhReviewThreadSchema = Schema.Struct({
   id: Schema.String,
   isResolved: Schema.Boolean,
@@ -117,6 +127,7 @@ const GhReviewThreadSchema = Schema.Struct({
     ),
   ),
 });
+
 const GhReviewThreadsResponseSchema = Schema.Struct({
   data: Schema.optionalKey(
     Schema.NullOr(
@@ -144,10 +155,13 @@ const GhReviewThreadsResponseSchema = Schema.Struct({
     ),
   ),
 });
+
 const decodeGhReviewThreadsJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(GhReviewThreadsResponseSchema),
 );
+
 const decodeGhReviewThread = Schema.decodeUnknownOption(GhReviewThreadSchema);
+
 const decodeGhReviewThreadComment = Schema.decodeUnknownOption(GhReviewThreadCommentSchema);
 
 type GhPRRef = PRRef;
@@ -157,6 +171,7 @@ function repoFlag(ref: GhPRRef): string {
   if (ref.host !== "github.com") {
     return `${ref.host}/${ref.owner}/${ref.repo}`;
   }
+
   return `${ref.owner}/${ref.repo}`;
 }
 
@@ -165,6 +180,7 @@ function hostnameArgs(host: string, args: string[]): string[] {
   if (host !== "github.com") {
     return [...args, "--hostname", host];
   }
+
   return args;
 }
 
@@ -172,6 +188,7 @@ function hostnameArgs(host: string, args: string[]): string[] {
 
 export async function checkGhAuth(runtime: PRRuntime, host: string): Promise<void> {
   const result = await runtime.runCommand("gh", hostnameArgs(host, ["auth", "status"]));
+
   if (result.exitCode !== 0) {
     const stderr = result.stderr.trim();
     const hostHint = host !== "github.com" ? ` --hostname ${host}` : "";
@@ -187,9 +204,11 @@ export async function getGhUser(runtime: PRRuntime, host: string): Promise<strin
       "gh",
       hostnameArgs(host, ["api", "user", "--jq", ".login"]),
     );
+
     if (result.exitCode === 0 && result.stdout.trim()) {
       return result.stdout.trim();
     }
+
     return null;
   } catch {
     return null;
@@ -222,6 +241,7 @@ export interface GitHubFileEntry {
 }
 
 const decodeGitHubFileEntry = Schema.decodeUnknownOption(GitHubFileEntrySchema);
+
 const decodeGitHubFileEntryForPagination = <Input>(value: Input) =>
   Option.getOrUndefined(decodeGitHubFileEntry(value));
 
@@ -233,10 +253,13 @@ function needsGitQuoting(p: string): boolean {
   // eslint-disable-next-line no-control-regex -- intentionally checks for control characters in git paths
   return /["\\\u0000-\u001F]/.test(p);
 }
+
 function headerPathToken(side: "a" | "b", p: string): string {
   const full = `${side}/${p}`;
+
   return needsGitQuoting(p) ? JSON.stringify(full) : full;
 }
+
 function metadataPathToken(p: string): string {
   return needsGitQuoting(p) ? JSON.stringify(p) : p;
 }
@@ -261,6 +284,7 @@ export function reconstructGhPatch(files: GitHubFileEntry[]): string {
     const isDeleted = f.status === "removed";
 
     let header = `diff --git ${headerPathToken("a", oldPath)} ${headerPathToken("b", newPath)}`;
+
     if (f.status === "renamed" || f.status === "copied") {
       // Git always prints a similarity score before rename/copy lines, and
       // diff parsers (e.g. Pierre's) key rename classification off it —
@@ -274,9 +298,11 @@ export function reconstructGhPatch(files: GitHubFileEntry[]): string {
           ? `\nrename from ${metadataPathToken(oldPath)}\nrename to ${metadataPathToken(newPath)}`
           : `\ncopy from ${metadataPathToken(oldPath)}\ncopy to ${metadataPathToken(newPath)}`;
     }
+
     if (isNew) {
       header += "\nnew file mode 100644";
     }
+
     if (isDeleted) {
       header += "\ndeleted file mode 100644";
     }
@@ -333,6 +359,7 @@ async function fetchGhPatch(
       "--paginate",
     ]),
   );
+
   if (filesResult.exitCode !== 0) {
     const diffErr = diffResult.stderr.trim() || `exit code ${diffResult.exitCode}`;
     const filesErr = filesResult.stderr.trim() || `exit code ${filesResult.exitCode}`;
@@ -342,6 +369,7 @@ async function fetchGhPatch(
   const parsedFiles = parsePaginatedArray(filesResult.stdout, decodeGitHubFileEntryForPagination);
   const fileEntries = parsedFiles.items;
   let patchIncomplete = false;
+
   if (parsedFiles.rejected > 0) {
     console.error(
       `Warning: GitHub files API returned ${parsedFiles.rejected} malformed file entr${parsedFiles.rejected === 1 ? "y" : "ies"}; the review is missing the remainder.`,
@@ -350,6 +378,7 @@ async function fetchGhPatch(
   }
 
   const rawPatch = reconstructGhPatch(fileEntries);
+
   if (!rawPatch.trim()) {
     throw new Error(
       "PR diff is empty — it may be too large to fetch via the GitHub API. Review it on the GitHub web UI.",
@@ -362,7 +391,9 @@ async function fetchGhPatch(
     );
     patchIncomplete = true;
   }
+
   const missingContent = fileEntries.filter(entryMissingContent).length;
+
   if (missingContent > 0) {
     console.error(
       `Warning: GitHub omitted diff content for ${missingContent} file(s) (PR too large). They appear in the review without hunks; the full diff can be recomputed locally once the checkout is ready.`,
@@ -409,6 +440,7 @@ export async function fetchGhPR(
   }
 
   const raw = Option.getOrUndefined(decodeRawGhPRViewJson(viewResult.stdout));
+
   if (!raw) {
     throw new Error("Failed to fetch PR metadata: Invalid response");
   }
@@ -420,12 +452,14 @@ export async function fetchGhPR(
   const expectedFiles = Option.getOrUndefined(
     Schema.decodeUnknownOption(Schema.Natural)(raw.changedFiles),
   );
+
   const patch = await fetchGhPatch(runtime, ref, diffResult, expectedFiles);
 
   // Fetch the merge-base SHA — the common ancestor commit GitHub uses to compute the PR diff.
   // baseSha (baseRefOid) is the tip of the base branch, which may have moved since the branch point.
   // File contents must be fetched at the merge-base to match the diff hunks.
   let mergeBaseSha: string | undefined;
+
   try {
     const compareResult = await runtime.runCommand(
       "gh",
@@ -436,6 +470,7 @@ export async function fetchGhPR(
         ".merge_base_commit.sha",
       ]),
     );
+
     if (compareResult.exitCode === 0 && compareResult.stdout.trim()) {
       mergeBaseSha = compareResult.stdout.trim();
     }
@@ -504,6 +539,7 @@ function parseGhPRContext(raw: RawGhPRContext): PRContext {
       const rec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(l),
       );
+
       return {
         name: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.name)) ?? "",
         color: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.color)) ?? "",
@@ -519,9 +555,11 @@ function parseGhPRContext(raw: RawGhPRContext): PRContext {
       const rec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(c),
       );
+
       const authorRec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(rec?.author),
       );
+
       return {
         id: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.id)) ?? "",
         author:
@@ -536,9 +574,11 @@ function parseGhPRContext(raw: RawGhPRContext): PRContext {
       const rec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(r),
       );
+
       const authorRec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(rec?.author),
       );
+
       const base: GhReviewBase = {
         id: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.id)) ?? "",
         author:
@@ -548,8 +588,11 @@ function parseGhPRContext(raw: RawGhPRContext): PRContext {
         submittedAt:
           Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.submittedAt)) ?? "",
       };
+
       const urlVal = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url));
+
       if (urlVal) base.url = urlVal;
+
       return base;
     }),
     reviewThreads: [], // populated via GraphQL after initial fetch
@@ -557,6 +600,7 @@ function parseGhPRContext(raw: RawGhPRContext): PRContext {
       const rec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(c),
       );
+
       return {
         name: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.name)) ?? "",
         status: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.status)) ?? "",
@@ -575,12 +619,15 @@ function parseGhPRContext(raw: RawGhPRContext): PRContext {
       const rec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(i),
       );
+
       const repoRec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))(rec?.repository),
       );
+
       const ownerRec = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.Struct({ login: Schema.Unknown }))(repoRec?.owner),
       );
+
       return {
         number: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(rec?.number)) ?? 0,
         url: Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(rec?.url)) ?? "",
@@ -612,9 +659,11 @@ export async function fetchGhPRContext(runtime: PRRuntime, ref: GhPRRef): Promis
   }
 
   const raw = Option.getOrUndefined(decodeRawGhPRContextJson(result.stdout));
+
   if (!raw) {
     throw new Error("Failed to fetch PR context: Invalid response");
   }
+
   const context = parseGhPRContext(raw);
 
   // Fetch inline review threads via GraphQL (parallel-safe, non-blocking failure)
@@ -680,17 +729,23 @@ async function fetchGhReviewThreads(runtime: PRRuntime, ref: GhPRRef): Promise<P
 
   const response = Option.getOrUndefined(decodeGhReviewThreadsJson(result.stdout));
   const threads = response?.data?.repository?.pullRequest?.reviewThreads?.nodes;
+
   if (!threads) return [];
 
   const decodedThreads: PRReviewThread[] = [];
+
   for (const rawThread of threads) {
     const decodedThread = Option.getOrUndefined(decodeGhReviewThread(rawThread));
+
     if (!decodedThread) continue;
 
     const comments: PRThreadComment[] = [];
+
     for (const rawComment of decodedThread.comments?.nodes ?? []) {
       const decodedComment = Option.getOrUndefined(decodeGhReviewThreadComment(rawComment));
+
       if (!decodedComment) continue;
+
       const comment: PRThreadComment = {
         id: decodedComment.id,
         author: decodedComment.author?.login ?? "",
@@ -698,6 +753,7 @@ async function fetchGhReviewThreads(runtime: PRRuntime, ref: GhPRRef): Promise<P
         createdAt: decodedComment.createdAt,
         url: decodedComment.url,
       };
+
       if (decodedComment.diffHunk) comment.diffHunk = decodedComment.diffHunk;
       comments.push(comment);
     }
@@ -713,6 +769,7 @@ async function fetchGhReviewThreads(runtime: PRRuntime, ref: GhPRRef): Promise<P
       comments,
     });
   }
+
   return decodedThreads;
 }
 
@@ -737,10 +794,12 @@ export async function fetchGhPRFileContent(
   if (result.exitCode !== 0) return null;
 
   const base64Content = result.stdout.trim();
+
   if (!base64Content) return null;
 
   // GitHub returns base64-encoded content with newlines
   const cleaned = base64Content.replace(/\n/g, "");
+
   try {
     return Buffer.from(cleaned, "base64").toString("utf-8");
   } catch {
@@ -796,11 +855,13 @@ export async function fetchGhPRViewedFiles(
       "-F",
       `number=${ref.number}`,
     ]);
+
     if (cursor) {
       args.push("-F", `cursor=${cursor}`);
     }
 
     const res = await runtime.runCommand("gh", args);
+
     if (res.exitCode !== 0) {
       throw new Error(
         `Failed to fetch PR viewed files: ${res.stderr.trim() || `exit code ${res.exitCode}`}`,
@@ -808,6 +869,7 @@ export async function fetchGhPRViewedFiles(
     }
 
     const data = Option.getOrUndefined(decodeGhViewedFilesJson(res.stdout));
+
     if (!data) throw new Error("Failed to fetch PR viewed files: Invalid response");
 
     if (data.errors?.length) {
@@ -815,10 +877,12 @@ export async function fetchGhPRViewedFiles(
     }
 
     const files = data.data?.repository?.pullRequest?.files;
+
     if (!files) break;
 
     for (const rawNode of files.nodes) {
       const node = Option.getOrUndefined(decodeGhViewedFileNode(rawNode));
+
       if (!node) continue;
       // VIEWED = explicitly marked as viewed
       // DISMISSED = was viewed but new commits arrived (still "was reviewed")
@@ -847,6 +911,7 @@ export async function markGhFilesViewed(
   if (filePaths.length === 0) return;
 
   const mutationName = viewed ? "markFileAsViewed" : "unmarkFileAsViewed";
+
   const mutation = `
     mutation($id: ID!, $path: String!) {
       ${mutationName}(input: { pullRequestId: $id, path: $path }) {
@@ -876,6 +941,7 @@ export async function markGhFilesViewed(
   );
 
   const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+
   if (failures.length === filePaths.length) {
     throw new Error(`Failed to ${mutationName} all files: ${failures[0].reason}`);
   }
@@ -928,6 +994,7 @@ const StackPRNodeSchema = Schema.Struct({
   headRefName: Schema.String,
   state: Schema.Literals(["OPEN", "MERGED", "CLOSED"]),
 });
+
 const StackPRResponseSchema = Schema.Struct({
   data: Schema.optionalKey(
     Schema.NullOr(
@@ -949,15 +1016,19 @@ const StackPRResponseSchema = Schema.Struct({
     ),
   ),
 });
+
 const decodeStackPRResponseJson = Schema.decodeUnknownOption(
   Schema.fromJsonString(StackPRResponseSchema),
 );
+
 const decodeStackPRNode = Schema.decodeUnknownOption(StackPRNodeSchema);
+
 type StackPRNode = Schema.Schema.Type<typeof StackPRNodeSchema>;
 
 function stackPRQuery(kind: "head" | "base"): string {
   const varName = kind === "head" ? "headRefName" : "baseRefName";
   const first = kind === "head" ? 5 : 10;
+
   return `
 query($owner: String!, $repo: String!, $${varName}: String!) {
   repository(owner: $owner, name: $repo) {
@@ -975,6 +1046,7 @@ async function queryPRsByRef(
   refName: string,
 ): Promise<StackPRNode[]> {
   const varName = kind === "head" ? "headRefName" : "baseRefName";
+
   const result = await runtime.runCommand(
     "gh",
     hostnameArgs(ref.host, [
@@ -990,16 +1062,21 @@ async function queryPRsByRef(
       `${varName}=${refName}`,
     ]),
   );
+
   if (result.exitCode !== 0) return [];
   const response = Option.getOrUndefined(decodeStackPRResponseJson(result.stdout));
   const nodes = response?.data?.repository?.pullRequests?.nodes;
+
   if (!nodes) return [];
 
   const prs: StackPRNode[] = [];
+
   for (const rawNode of nodes) {
     const node = Option.getOrUndefined(decodeStackPRNode(rawNode));
+
     if (node) prs.push(node);
   }
+
   return prs;
 }
 
@@ -1016,6 +1093,7 @@ export async function fetchGhPRStack(
   metadata: PRMetadata,
 ): Promise<PRStackTree | null> {
   const defaultBranch = metadata.defaultBranch;
+
   if (!defaultBranch) return null;
 
   const currentNode: PRStackNode = {
@@ -1036,6 +1114,7 @@ export async function fetchGhPRStack(
     if (nextHead === defaultBranch) break;
 
     const prs = await queryPRsByRef(runtime, ref, "head", nextHead);
+
     if (prs.length === 0) {
       ancestors.push({ branch: nextHead, isCurrent: false, isDefaultBranch: false });
       break;
@@ -1061,6 +1140,7 @@ export async function fetchGhPRStack(
 
   for (let i = 0; i < maxDepth; i++) {
     const prs = await queryPRsByRef(runtime, ref, "base", nextBase);
+
     if (prs.length === 0) break;
 
     const pr = prs[0];
@@ -1108,8 +1188,10 @@ export async function fetchGhPRList(runtime: PRRuntime, ref: GhPRRef): Promise<P
 
   const raw = decodeGhPRListJson(result.stdout);
   const items: PRListItem[] = [];
+
   for (const rawEntry of raw) {
     const pr = Option.getOrUndefined(decodeGhPRListItem(rawEntry));
+
     if (!pr) continue;
     const state = pr.state === "OPEN" ? "open" : pr.state === "MERGED" ? "merged" : "closed";
     items.push({
@@ -1122,5 +1204,6 @@ export async function fetchGhPRList(runtime: PRRuntime, ref: GhPRRef): Promise<P
       state,
     });
   }
+
   return items;
 }

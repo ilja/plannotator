@@ -193,6 +193,7 @@ export function parsePRUrl(url: string): PRRef | null {
   if (!url) return null;
 
   const match = url.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+
   if (!match) return null;
 
   return {

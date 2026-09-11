@@ -5,6 +5,7 @@ interface LanguageByExtension {
 /** Map file extension to highlight.js language name */
 export function detectLanguage(filePath: string): string | undefined {
   const ext = filePath.split(".").pop()?.toLowerCase();
+
   const map: LanguageByExtension = {
     ts: "typescript",
     tsx: "typescript",
@@ -39,5 +40,6 @@ export function detectLanguage(filePath: string): string | undefined {
     lua: "lua",
     php: "php",
   };
+
   return ext ? map[ext] : undefined;
 }

@@ -62,6 +62,8 @@ interface AppIconProps {
  */
 export const AppIcon: React.FC<AppIconProps> = ({ id, className }) => {
   const src = APP_ICON_DATA[id];
+
   if (!src) return null;
+
   return <img src={src} alt="" className={className ?? "w-4 h-4"} draggable={false} />;
 };

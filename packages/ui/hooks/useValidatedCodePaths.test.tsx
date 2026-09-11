@@ -4,7 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { useValidatedCodePaths } from "./useValidatedCodePaths";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 function installFetch(responses: Response[]): void {
@@ -60,12 +62,15 @@ async function mountHarness(): Promise<HTMLDivElement> {
     root.render(<HookHarness />);
     await flushAsyncWork();
   });
+
   return host;
 }
 
 async function readOutput(host: HTMLDivElement): Promise<HTMLOutputElement> {
   const output = host.querySelector("output");
+
   if (!(output instanceof HTMLOutputElement)) throw new Error("Hook harness did not render");
+
   return output;
 }
 
@@ -73,7 +78,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 
@@ -93,6 +100,7 @@ describe("useValidatedCodePaths response handling", () => {
       ]);
       const host = await mountHarness();
       const switchButton = host.querySelector("button");
+
       if (!(switchButton instanceof HTMLButtonElement))
         throw new Error("Switch button did not render");
 
@@ -119,6 +127,7 @@ describe("useValidatedCodePaths response handling", () => {
     ]);
     const host = await mountHarness();
     const switchButton = host.querySelector("button");
+
     if (!(switchButton instanceof HTMLButtonElement))
       throw new Error("Switch button did not render");
 
@@ -140,6 +149,7 @@ describe("useValidatedCodePaths response handling", () => {
     );
     const host = await mountHarness();
     const switchButton = host.querySelector("button");
+
     if (!(switchButton instanceof HTMLButtonElement))
       throw new Error("Switch button did not render");
 

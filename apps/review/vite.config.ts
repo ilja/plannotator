@@ -15,6 +15,7 @@ function demoFileContentPlugin(): Plugin {
         if (!req.url?.startsWith("/api/file-content")) return next();
         const filePath = new URL(req.url, "http://localhost").searchParams.get("path");
         const entry = filePath ? DEMO_FILE_CONTENTS[filePath] : undefined;
+
         if (!entry) return next();
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ oldContent: entry.oldContent, newContent: entry.newContent }));

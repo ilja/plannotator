@@ -11,11 +11,15 @@ const SaveNotesResponseEnvelopeSchema = Schema.Struct({
 });
 
 const saveNotesTargets = ["obsidian"] as const;
+
 const decodeSaveNotesResponseEnvelope = Schema.decodeUnknownResult(SaveNotesResponseEnvelopeSchema);
+
 const decodeSaveNotesTarget = Schema.decodeUnknownResult(SaveNotesTargetSchema);
 
 type SaveNotesTarget = (typeof saveNotesTargets)[number];
+
 type SaveNotesTargetResult = Schema.Schema.Type<typeof SaveNotesTargetSchema>;
+
 type SaveNotesResults = Partial<Record<SaveNotesTarget, SaveNotesTargetResult>>;
 
 /**
@@ -26,12 +30,16 @@ export function decodeSaveNotesResponse<Input>(
   value: Input,
 ): Result.Result<SaveNotesResults, Schema.SchemaError> {
   const envelope = decodeSaveNotesResponseEnvelope(value);
+
   if (Result.isFailure(envelope)) return Result.fail(envelope.failure);
 
   const results: SaveNotesResults = {};
+
   for (const target of saveNotesTargets) {
     const decodedTarget = decodeSaveNotesTarget(envelope.success.results[target]);
+
     if (Result.isSuccess(decodedTarget)) results[target] = decodedTarget.success;
   }
+
   return Result.succeed(results);
 }

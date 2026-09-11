@@ -39,9 +39,12 @@ export function useAgentReviewActions({
   const sendFeedback = useCallback(async (): Promise<void> => {
     if (totalAnnotationCount === 0) {
       onNoAnnotations();
+
       return;
     }
+
     setIsSendingFeedback(true);
+
     try {
       const response = await fetch("/api/feedback", {
         method: "POST",
@@ -53,6 +56,7 @@ export function useAgentReviewActions({
           annotations: buildReviewFeedbackAnnotations(allAnnotations, editorAnnotations),
         }),
       });
+
       if (response.ok) {
         onSubmitted("feedback");
       } else {
@@ -77,10 +81,12 @@ export function useAgentReviewActions({
 
   const exitReview = useCallback(async (): Promise<void> => {
     setIsExiting(true);
+
     try {
       const response = await fetch(`/api/exit?draftGeneration=${getDraftGeneration()}`, {
         method: "POST",
       });
+
       if (response.ok) {
         onSubmitted("exited");
       } else {
@@ -94,6 +100,7 @@ export function useAgentReviewActions({
 
   const approveReview = useCallback(async (): Promise<void> => {
     setIsApproving(true);
+
     try {
       const response = await fetch("/api/feedback", {
         method: "POST",
@@ -105,6 +112,7 @@ export function useAgentReviewActions({
           annotations: [],
         }),
       });
+
       if (response.ok) {
         onSubmitted("approved");
       } else {

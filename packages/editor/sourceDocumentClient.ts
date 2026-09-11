@@ -72,11 +72,15 @@ export type SourceDocumentSaveResult =
 async function fetchSourceDocument(path: string): Promise<SourceDocumentFetchResult> {
   try {
     const res = await fetch(`/api/doc?path=${encodeURIComponent(path)}`);
+
     if (res.status === 404) return { status: "missing" };
+
     if (!res.ok) return { status: "unavailable" };
+
     const data = Option.getOrUndefined(
       Schema.decodeUnknownOption(SourceDocumentResponseSchema)(await res.json()),
     );
+
     return data ? { status: "ok", data } : { status: "unavailable" };
   } catch {
     return { status: "unavailable" };
@@ -85,13 +89,17 @@ async function fetchSourceDocument(path: string): Promise<SourceDocumentFetchRes
 
 export async function probeSourceSave(path: string): Promise<SourceSaveProbeResult> {
   const result = await fetchSourceDocument(path);
+
   if (result.status !== "ok") return { status: result.status };
 
   const { sourceSave } = result.data;
+
   if (sourceSave?.enabled) return { status: "ok", sourceSave };
+
   if (sourceSave?.enabled === false && sourceSave.reason === "missing-file") {
     return { status: "missing" };
   }
+
   return { status: "unavailable" };
 }
 
@@ -99,14 +107,18 @@ export async function fetchSourceDocumentSnapshot(
   path: string,
 ): Promise<SourceDocumentSnapshotResult> {
   const result = await fetchSourceDocument(path);
+
   if (result.status !== "ok") return { status: result.status };
 
   const { markdown, renderAs, sourceSave } = result.data;
+
   if (sourceSave?.enabled === false && sourceSave.reason === "missing-file") {
     return { status: "missing" };
   }
+
   if (renderAs === "html" || markdown === undefined || !sourceSave?.enabled)
     return { status: "unavailable" };
+
   return { status: "ok", snapshot: { markdown, sourceSave } };
 }
 
@@ -115,6 +127,7 @@ export async function saveSourceDocument(
   input: SourceDocumentSaveRequest,
 ): Promise<SourceDocumentSaveResult> {
   let response: Response;
+
   try {
     response = await fetch("/api/source/save", {
       method: "POST",
@@ -128,6 +141,7 @@ export async function saveSourceDocument(
   const payload = Option.getOrUndefined(
     Schema.decodeUnknownOption(SourceSaveResponseSchema)(await response.json().catch(() => null)),
   );
+
   if (!payload) {
     return { status: "error", code: "invalid-response", message: "Save failed" };
   }
@@ -149,6 +163,7 @@ export async function saveSourceDocument(
   }
 
   const message = payload.message;
+
   if (payload.code === "conflict") {
     if (
       payload.currentText === undefined ||
@@ -159,6 +174,7 @@ export async function saveSourceDocument(
     ) {
       return { status: "conflict-incomplete", message };
     }
+
     return {
       status: "conflict",
       message,
@@ -179,5 +195,6 @@ export async function saveSourceDocument(
   ) {
     return { status: "error", code: payload.code, message };
   }
+
   return { status: "error", code: "invalid-response", message };
 }

@@ -246,9 +246,11 @@ interface ItemIdentity {
 // (cacheKey). Not cryptographic — collision odds for this purpose are fine.
 function hashString(value: string): string {
   let hash = 5381;
+
   for (let i = 0; i < value.length; i++) {
     hash = ((hash * 33) ^ value.charCodeAt(i)) >>> 0;
   }
+
   return hash.toString(36);
 }
 
@@ -266,18 +268,23 @@ function projectFileAnnotations(
   prUrl: string | undefined,
   prDiffScope: string | undefined,
 ): DiffLineAnnotation<DiffAnnotationMetadata>[] {
-  return annotations
-    .filter(
-      (a) =>
-        a.filePath === filePath &&
-        (a.scope ?? "line") === "line" &&
-        annotationMatchesPrScope(a, prUrl, prDiffScope),
-    )
-    .map((ann) => ({
-      side: ann.side === "new" ? ("additions" as const) : ("deletions" as const),
-      lineNumber: ann.lineEnd,
-      metadata: lineAnnotationMetadata(ann),
-    }));
+  return annotations.flatMap((ann) => {
+    if (
+      ann.filePath !== filePath ||
+      (ann.scope ?? "line") !== "line" ||
+      !annotationMatchesPrScope(ann, prUrl, prDiffScope)
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        side: ann.side === "new" ? ("additions" as const) : ("deletions" as const),
+        lineNumber: ann.lineEnd,
+        metadata: lineAnnotationMetadata(ann),
+      },
+    ];
+  });
 }
 
 function lineAnnotationSignature(annotation: CodeAnnotation): string {
@@ -321,17 +328,23 @@ function annotationSignaturesByFilePath(
   prDiffScope: string | undefined,
 ): Map<string, string> {
   const signatures = new Map<string, string>();
+
   for (const annotation of annotations) {
     const scope = annotation.scope ?? "line";
+
     if (scope !== "line" && scope !== "file") continue;
+
     if (!annotationMatchesPrScope(annotation, prUrl, prDiffScope)) continue;
+
     const signature =
       scope === "file" ? fileAnnotationSignature(annotation) : lineAnnotationSignature(annotation);
+
     signatures.set(
       annotation.filePath,
       `${signatures.get(annotation.filePath) ?? ""}${signature}\n`,
     );
   }
+
   return signatures;
 }
 
@@ -342,6 +355,7 @@ function isKeyboardEventFromTypeableElement(event: KeyboardEvent): boolean {
   // to the shadow HOST (e.g. <diffs-container>), which would hide a typeable
   // element living inside a shadow root from this guard.
   const element = event.composedPath?.()[0] ?? event.target;
+
   return (
     element instanceof HTMLElement &&
     (TYPEABLE_ELEMENT_TAGS.has(element.tagName) || element.isContentEditable)
@@ -358,8 +372,10 @@ function collapsedItemToRestore(
   isItemCollapsed: (itemId: string) => boolean,
 ): string | undefined {
   const collapsedItemIds = orderedItemIds.filter(isItemCollapsed);
+
   if (collapsedItemIds.length === 0) return undefined;
   const currentIndex = currentItemId ? orderedItemIds.indexOf(currentItemId) : -1;
+
   return (
     [...collapsedItemIds]
       .reverse()
@@ -403,36 +419,43 @@ function handleCurrentFileKeyboardShortcut({
   if (event.key === "x" && currentItemId) {
     event.preventDefault();
     toggleItemCollapsed(currentItemId);
+
     return true;
   }
 
   if (event.key === "z") {
     const itemId = collapsedItemToRestore(orderedItemIds, currentItemId, isItemCollapsed);
+
     if (itemId == null) return true;
     event.preventDefault();
     toggleItemCollapsed(itemId);
     scrollToItem(itemId);
+
     return true;
   }
 
   if (event.key === "c" && currentFilePath && onAddFileCommentForFile) {
     event.preventDefault();
     const button = fileCommentButtonRefs.current.get(currentFilePath);
+
     if (button?.isConnected) {
       setFileCommentAnchor({ el: button, filePath: currentFilePath });
     }
+
     return true;
   }
 
   if (event.key === "v" && currentFilePath && currentItemId) {
     event.preventDefault();
     handleToggleViewedAndCollapse(currentFilePath, currentItemId);
+
     return true;
   }
 
   if (event.key === "a" && currentFilePath && canStageFiles) {
     event.preventDefault();
     onStage?.(currentFilePath);
+
     return true;
   }
 
@@ -449,6 +472,7 @@ function handleAdjacentFileKeyboardShortcut(
   event.preventDefault();
 
   const currentIndex = currentItemId ? orderedItemIds.indexOf(currentItemId) : -1;
+
   const targetIndex =
     event.key === "]"
       ? currentIndex < orderedItemIds.length - 1
@@ -457,6 +481,7 @@ function handleAdjacentFileKeyboardShortcut(
       : currentIndex > 0
         ? currentIndex - 1
         : 0;
+
   scrollToItem(orderedItemIds[targetIndex]);
 }
 
@@ -554,33 +579,41 @@ function buildItemIdentity(
   const allocateId = (path: string): string => {
     if (!usedIds.has(path)) {
       usedIds.add(path);
+
       return path;
     }
+
     let suffix = nextSuffixByBase.get(path) ?? 2;
     let id = `${path}?${suffix}`;
+
     while (usedIds.has(id)) {
       suffix++;
       id = `${path}?${suffix}`;
     }
+
     nextSuffixByBase.set(path, suffix + 1);
     usedIds.add(id);
+
     return id;
   };
 
   for (const index of visualOrder) {
     const file = files[index];
+
     if (!file) continue;
     // getSingularPatch throws when a patch doesn't parse to exactly one file.
     // The legacy per-file surface isolated such failures to one FileDiff; here
     // one bad patch must not take down the whole all-files surface — skip the
     // file (it remains reachable via the tree / single-file panel).
     let fileDiff: FileDiffMetadata;
+
     try {
       fileDiff = getSingularPatch(file.patch);
     } catch (err) {
       console.warn(`AllFilesCodeView: skipping unparseable patch for ${file.path}`, err);
       continue;
     }
+
     const id = allocateId(file.path);
     // cacheKey seeds worker highlighting (a later phase), whose cache is a
     // singleton that SURVIVES fileSetKey remounts — so the key must be unique
@@ -592,12 +625,15 @@ function buildItemIdentity(
     // fileSetKey) already paints existing annotations without an extra update.
     const fileAnnotations = projectFileAnnotations(annotations, file.path, prUrl, prDiffScope);
     items.push({ id, type: "diff", fileDiff, version: 0, annotations: fileAnnotations });
+
     // First occurrence of a path wins the canonical lookup so the file tree
     // (keyed by path) navigates to the primary item for that path.
     if (!filePathToItemId.has(file.path)) {
       filePathToItemId.set(file.path, id);
     }
+
     const twins = filePathToItemIds.get(file.path);
+
     if (twins) twins.push(id);
     else filePathToItemIds.set(file.path, [id]);
     itemIdToFilePath.set(id, file.path);
@@ -613,6 +649,7 @@ function buildItemIdentity(
 // internally responsive (ResizeObserver shrinks labels) but its OUTER box height
 // is fixed, so the responsive label changes never alter the row height.
 const PANEL_HEADER_HEIGHT = 33; // --panel-header-h
+
 // Hunk separator height forced by usePierreTheme unsafeCSS:
 //   [data-separator='line-info'] { height: 24px; margin-block: 4px; }
 // => 24 + 4*2 = 32. Pierre's own 'line-info' default metric is also 32, so
@@ -707,6 +744,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     el: HTMLElement;
     filePath: string;
   } | null>(null);
+
   // Per-file-comment-button ref map so the `c` keyboard shortcut can anchor the
   // popover without DOM querying. Eagerly populated/cleared by FileHeader's
   // fileCommentButtonRef callback as header slots mount/unmount (clicking also
@@ -727,6 +765,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // legacy all-files view uses, so the two surfaces present files identically.
   const visualOrder = useMemo(() => {
     const tree = buildFileTree(files);
+
     return getVisualFileOrder(tree);
   }, [files]);
 
@@ -755,6 +794,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // and the items' cacheKeys (highlight cache identity). Hashed once per
   // files-identity change.
   const patchHashes = useMemo(() => files.map((f) => hashString(f.patch)), [files]);
+
   const identity = useMemo<ItemIdentity>(
     () =>
       buildItemIdentity(
@@ -768,6 +808,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [files, visualOrder, prUrl, prDiffScope, patchHashes],
   );
+
   const { filePathToItemId, filePathToItemIds, itemIdToFilePath, itemIdToFile } = identity;
 
   // Stable identity of the current diff. Changes whenever the file set or any
@@ -801,14 +842,19 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // matches. Matches are file-keyed (filePath); resolve to itemId via the bridge.
   const matchesByItemId = useMemo(() => {
     const map = new Map<string, ReviewSearchMatch[]>();
+
     if (searchMatches.length === 0) return map;
+
     for (const match of searchMatches) {
       const itemId = filePathToItemId.get(match.filePath);
+
       if (itemId == null) continue;
       const group = map.get(itemId);
+
       if (group) group.push(match);
       else map.set(itemId, [match]);
     }
+
     return map;
   }, [searchMatches, filePathToItemId]);
 
@@ -840,6 +886,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
         // pairs pendingSelection with activeFilePath, which hasn't committed
         // yet.
         const itemId = filePathToItemId.get(filePath);
+
         if (itemId != null) setSelectedLines({ id: itemId, range });
         // Publish the new range alongside the new active file so the
         // pendingSelection mirror effect never sees the PREVIOUS file's range
@@ -902,6 +949,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // closure.
   const handleEditAnnotation = useStableCallback((id: string) => {
     const ann = annotationsRef.current.find((a) => a.id === id);
+
     if (!ann) return;
     toolbarHostRef.current?.startEdit(ann);
   });
@@ -912,12 +960,15 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // than a stray line comment.
   const fileCommentsByPath = useMemo(() => {
     const map = new Map<string, CodeAnnotation[]>();
+
     for (const a of annotations) {
       if (!isFileScopedAnnotation(a) || !annotationMatchesPrScope(a, prUrl, prDiffScope)) continue;
       const arr = map.get(a.filePath);
+
       if (arr) arr.push(a);
       else map.set(a.filePath, [a]);
     }
+
     return map;
   }, [annotations, prUrl, prDiffScope]);
 
@@ -934,8 +985,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       item: CodeViewItem<DiffAnnotationMetadata>,
     ) => {
       if (!("side" in annotation) || item.type !== "diff") return null;
+
       if (!annotation.metadata) return null;
       const filePath = itemIdToFilePath.get(item.id);
+
       return (
         <InlineAnnotation
           metadata={annotation.metadata}
@@ -959,14 +1012,17 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // to it (rAF lets the seed render settle first). Matters most for the
     // staleness-refresh flow — "Refresh" must not dump the user at the top.
     const previousVisible = visibleFileRef.current;
+
     if (previousVisible) {
       const restoreId = filePathToItemId.get(previousVisible);
+
       if (restoreId != null) {
         requestAnimationFrame(() => {
           viewerRef.current?.scrollTo({ type: "item", id: restoreId, align: "start" });
         });
       }
     }
+
     setActiveFilePath(null);
     setSelectedLines(null);
     pendingToolbarRange.current = null;
@@ -983,6 +1039,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // Annotations are seeded into the remounted items at build time, so resync
     // the snapshot here to avoid a spurious full annotation refresh post-remount.
     prevAnnotationsRef.current = annotations;
+
     // Garbage-collect STALE-generation content fetches. Generation-aware on
     // purpose: this passive effect runs AFTER the remounted CodeView's seed
     // layout effect has already fired the new diff's first postRender wave —
@@ -1012,6 +1069,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     const handle = viewerRef.current;
     const viewer = handle?.getInstance();
     const item = handle?.getItem(itemId);
+
     if (handle == null || viewer == null || item == null) return;
 
     // If the item top is above scrollTop, re-anchor after the update so the
@@ -1020,6 +1078,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     const itemTop = viewer.getTopForItem(itemId);
     item.collapsed = item.collapsed !== true;
     item.version = (item.version ?? 0) + 1;
+
     if (!handle.updateItem(item)) return;
 
     if (itemTop != null && itemTop < viewer.getScrollTop()) {
@@ -1032,6 +1091,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const collapseItem = useStableCallback((itemId: string) => {
     const handle = viewerRef.current;
     const item = handle?.getItem(itemId);
+
     if (handle == null || item == null || item.collapsed === true) return;
     item.collapsed = true;
     item.version = (item.version ?? 0) + 1;
@@ -1047,22 +1107,28 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // jump into empty space.
   const setAllItemsCollapsed = useStableCallback((collapsed: boolean) => {
     const handle = viewerRef.current;
+
     if (handle == null) return;
+
     for (const { id } of identity.items) {
       const item = handle.getItem(id);
+
       if (item == null || (item.collapsed === true) === collapsed) continue;
       item.collapsed = collapsed;
       item.version = (item.version ?? 0) + 1;
       handle.updateItem(item);
     }
+
     if (collapsed) {
       const first = identity.items[0]?.id;
+
       if (first) handle.getInstance()?.scrollTo({ type: "item", id: first, align: "start" });
     }
   });
 
   const handleToggleAllCollapsed = useStableCallback(() => {
     const handle = viewerRef.current;
+
     if (handle == null) return;
     // If anything is open, collapse all; otherwise expand all. Computed from
     // live item state so it stays correct after manual per-file toggles.
@@ -1083,6 +1149,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const refreshItem = useCallback((itemId: string) => {
     const handle = viewerRef.current;
     const item = handle?.getItem(itemId);
+
     if (handle == null || item == null) return;
     item.version = (item.version ?? 0) + 1;
     handle.updateItem(item);
@@ -1106,6 +1173,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       { status: "pending" | "done" | "error"; controller: AbortController; generation: string }
     >
   >(new Map());
+
   // reviewBase / itemIdToFile / fileSetKey read through refs so the stable
   // onPostRender callback always sees the latest values without changing
   // identity (which would otherwise churn the CodeView options object).
@@ -1132,21 +1200,26 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const flushAugmentApplies = useCallback(() => {
     augmentFlushTimerRef.current = null;
     const idleFor = Date.now() - lastScrollTsRef.current;
+
     if (idleFor < AUGMENT_APPLY_IDLE_MS) {
       augmentFlushTimerRef.current = setTimeout(
         flushAugmentApplies,
         AUGMENT_APPLY_IDLE_MS - idleFor + 10,
       );
+
       return;
     }
+
     const applies = [...pendingAugmentAppliesRef.current.values()];
     pendingAugmentAppliesRef.current.clear();
+
     for (const apply of applies) apply();
   }, []);
 
   const queueAugmentApply = useCallback(
     (itemId: string, apply: () => void) => {
       pendingAugmentAppliesRef.current.set(itemId, apply);
+
       if (augmentFlushTimerRef.current == null) {
         augmentFlushTimerRef.current = setTimeout(flushAugmentApplies, AUGMENT_APPLY_IDLE_MS);
       }
@@ -1184,6 +1257,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // An entry from a PREVIOUS diff (stale generation) does not count: abort it
       // and fetch fresh for the new diff's content.
       const existing = augmentState.get(itemId);
+
       if (existing) {
         if (existing.generation === generation) return;
         existing.controller.abort();
@@ -1192,6 +1266,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // Resolve the file by item id (NOT path) so duplicate display paths each
       // augment with their own DiffFile content.
       const file = itemIdToFileRef.current.get(itemId);
+
       if (file == null) return;
 
       const controller = new AbortController();
@@ -1210,19 +1285,23 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // resolves the prefix back to the owning repo (same contract LazyFileDiff /
       // DiffViewer rely on).
       const params = new URLSearchParams({ path: file.path });
+
       if (file.oldPath) params.set("oldPath", file.oldPath);
       const base = reviewBaseRef.current;
+
       if (base) params.set("base", base);
 
       fetch(`/api/file-content?${params}`, { signal: controller.signal })
         .then(loadFileContentResponse)
         .then((data) => {
           if (isStale()) return;
+
           if (!data || (data.oldContent == null && data.newContent == null)) {
             // No content available (e.g. demo mode / binary): mark done so we do
             // not retry on every subsequent render. The raw-patch context still
             // shows; there is just nothing to expand.
             augmentState.set(itemId, { status: "done", controller, generation });
+
             return;
           }
 
@@ -1238,10 +1317,12 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
               `AllFilesCodeView: skipping full-content expansion for ${file.path} — file changed since the diff was captured`,
             );
             augmentState.set(itemId, { status: "done", controller, generation });
+
             return;
           }
 
           let augmented: FileDiffMetadata;
+
           try {
             const result = processFile(file.patch, {
               oldFile:
@@ -1253,13 +1334,17 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
                   ? { name: file.path, contents: data.newContent }
                   : undefined,
             });
+
             if (!result) {
               augmentState.set(itemId, { status: "done", controller, generation });
+
               return;
             }
+
             augmented = result;
           } catch {
             augmentState.set(itemId, { status: "error", controller, generation });
+
             return;
           }
 
@@ -1274,10 +1359,12 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
             if (isStale()) return;
             const liveHandle = viewerRef.current;
             const item = liveHandle?.getItem(itemId);
+
             // The item may have been torn down between fetch start and apply;
             // belt-and-suspenders on top of the staleness check above.
             if (liveHandle == null || item == null || item.type !== "diff") {
               augmentState.set(itemId, { status: "done", controller, generation });
+
               return;
             }
 
@@ -1303,8 +1390,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
             if (augmentState.get(itemId)?.controller === controller) {
               augmentState.delete(itemId);
             }
+
             return;
           }
+
           augmentState.set(itemId, { status: "error", controller, generation });
           void err;
         });
@@ -1353,11 +1442,14 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       context: CodeViewItem<DiffAnnotationMetadata>,
     ) => {
       if (context.type !== "diff") return;
+
       if (phase === "unmount") {
         clearItemSearchHighlights(node);
         nodeToItemIdRef.current.delete(node);
+
         return;
       }
+
       // Track which item currently owns this <diffs-container> element so the
       // text-drag selection handler can resolve file identity from the
       // selection's shadow-root host. Registered on every mount/update because
@@ -1380,17 +1472,22 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     requestAnimationFrame(() => {
       const root = scrollRef.current;
       const selection = getDiffSelection(root);
+
       if (!selection || selection.isCollapsed || !selection.toString().trim()) return;
       const anchorLine = getLineNumberFromNode(selection.anchorNode);
       const focusLine = getLineNumberFromNode(selection.focusNode);
+
       if (anchorLine == null || focusLine == null) return;
+
       // Single-line drags keep native copy behavior (same rule as DiffViewer).
       if (anchorLine === focusLine) return;
       const rootNode = selection.anchorNode?.getRootNode();
       const host = rootNode instanceof ShadowRoot ? rootNode.host : null;
       const itemId = host instanceof HTMLElement ? nodeToItemIdRef.current.get(host) : undefined;
+
       if (itemId == null) return;
       const filePath = itemIdToFilePath.get(itemId);
+
       if (filePath == null) return;
       routeSelectionToToolbar(
         {
@@ -1408,9 +1505,11 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // element scrollRef points at, dropping any previously-attached listener.
   useEffect(() => {
     const root = scrollRef.current;
+
     if (!root) return;
     const handler = () => handleContentTextSelection();
     root.addEventListener("mouseup", handler, true);
+
     return () => root.removeEventListener("mouseup", handler, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileSetKey]);
@@ -1418,6 +1517,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // Abort all in-flight content fetches on unmount.
   useEffect(() => {
     const augmentState = augmentRef.current;
+
     return () => {
       for (const { controller } of augmentState.values()) controller.abort();
       augmentState.clear();
@@ -1432,15 +1532,20 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // rAF defers one frame so any pending CodeView render settles first.
   useEffect(() => {
     const handle = viewerRef.current;
+
     if (handle == null) return;
+
     const raf = requestAnimationFrame(() => {
       const viewer = viewerRef.current?.getInstance();
+
       if (viewer == null) return;
+
       for (const rendered of viewer.getRenderedItems()) {
         if (rendered.type !== "diff" || rendered.element == null) continue;
         applyItemHighlights(rendered.element, rendered.id);
       }
     });
+
     return () => cancelAnimationFrame(raf);
   }, [searchQuery, matchesByItemId, applyItemHighlights]);
 
@@ -1449,6 +1554,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // of rebuilding every item's marks. Mirrors DiffViewer's swap effect.
   useEffect(() => {
     const container = scrollRef.current;
+
     if (container == null) return;
     swapActiveSearchHighlight(container, activeSearchMatchId);
   }, [activeSearchMatchId]);
@@ -1465,13 +1571,17 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // selected while the panel was hidden scrolls once the panel is shown.
   useEffect(() => {
     if (!isActive) return;
+
     if (activeSearchMatch == null) return;
     const itemId = filePathToItemId.get(activeSearchMatch.filePath);
+
     if (itemId == null) return;
     const handle = viewerRef.current;
+
     if (handle == null) return;
 
     const item = handle.getItem(itemId);
+
     if (item != null && item.collapsed === true) {
       item.collapsed = false;
       item.version = (item.version ?? 0) + 1;
@@ -1483,12 +1593,16 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     // search index, so the additions side resolves the correct row).
     const side: "additions" | "deletions" =
       activeSearchMatch.side === "deletion" ? "deletions" : "additions";
+
     const lineNumber = activeSearchMatch.lineNumber;
+
     const raf = requestAnimationFrame(() => {
       const viewer = viewerRef.current;
+
       if (viewer == null) return;
       viewer.scrollTo({ type: "line", id: itemId, lineNumber, side, align: "center" });
     });
+
     return () => cancelAnimationFrame(raf);
   }, [activeSearchMatch, filePathToItemId, isActive]);
 
@@ -1504,6 +1618,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     (filePath: string, itemId: string, allAnnotations: CodeAnnotation[]) => {
       const handle = viewerRef.current;
       const item = handle?.getItem(itemId);
+
       if (handle == null || item == null || item.type !== "diff") return;
       item.annotations = projectFileAnnotations(allAnnotations, filePath, prUrl, prDiffScope);
       item.version = (item.version ?? 0) + 1;
@@ -1523,6 +1638,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     const handle = viewerRef.current;
     const prev = prevAnnotationsRef.current;
     prevAnnotationsRef.current = annotations;
+
     if (handle == null || prev === annotations) return;
 
     // Per-file annotation signature: id|line|side|content fingerprint. We only
@@ -1554,6 +1670,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const handleToggleViewedAndCollapse = useStableCallback((filePath: string, itemId: string) => {
     const wasViewed = viewedFiles?.has(filePath) ?? false;
     onToggleViewed?.(filePath);
+
     // Mark-as-viewed also collapses (legacy behavior); un-viewing leaves it.
     // collapseItem bumps the version + updateItem so the header re-renders to
     // the viewed state. Un-viewing performs no collapse, so it would otherwise
@@ -1585,6 +1702,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // items whose state actually changed.
   useEffect(() => {
     const handle = viewerRef.current;
+
     if (handle == null) {
       // Update snapshots even when no viewer is mounted yet so the first real
       // diff doesn't refresh everything spuriously.
@@ -1592,10 +1710,12 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       prevStagedRef.current = stagedFiles;
       prevStagingRef.current = stagingFile;
       prevStageErrorRef.current = stageError;
+
       return;
     }
 
     const changedPaths = new Set<string>();
+
     const collectSetDelta = (next: Set<string> | undefined, prev: Set<string> | undefined) => {
       if (next === prev) return;
       next?.forEach((p) => {
@@ -1608,16 +1728,20 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
     collectSetDelta(viewedFiles, prevViewedRef.current);
     collectSetDelta(stagedFiles, prevStagedRef.current);
+
     // stagingFile / stageError are single-file scalars: the file that just
     // started/stopped staging (or whose error appeared/cleared) needs a refresh.
     if (stagingFile !== prevStagingRef.current) {
       if (stagingFile) changedPaths.add(stagingFile);
+
       if (prevStagingRef.current) changedPaths.add(prevStagingRef.current);
     }
+
     if (stageError !== prevStageErrorRef.current) {
       // stageError is shown on the file currently/last staging, so refresh that
       // file in both the appear and clear directions.
       if (stagingFile) changedPaths.add(stagingFile);
+
       if (prevStagingRef.current) changedPaths.add(prevStagingRef.current);
     }
 
@@ -1667,9 +1791,11 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     (ann: CodeAnnotation | null | undefined): CodeViewLineSelection | null => {
       if (!ann || isFileScopedAnnotation(ann)) return null;
       const itemId = filePathToItemId.get(ann.filePath);
+
       return itemId != null ? { id: itemId, range: lineRangeForAnnotation(ann) } : null;
     },
   );
+
   // Mirror so the effect below can restore the selected comment's highlight when
   // a compose ends, without taking selectedAnnotationId as a dep.
   const selectedAnnotationIdRef = useRef(selectedAnnotationId);
@@ -1681,10 +1807,14 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       const ann = selectedAnnotationIdRef.current
         ? annotationsRef.current.find((a) => a.id === selectedAnnotationIdRef.current)
         : null;
+
       setSelectedLines(lineSelectionForAnnotation(ann));
+
       return;
     }
+
     const current = selectedLinesRef.current;
+
     if (
       current != null &&
       current.range.start === pendingSelection.start &&
@@ -1694,8 +1824,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       // Selection originated inside CodeView — already on the right item.
       return;
     }
+
     if (activeFilePath) {
       const itemId = filePathToItemId.get(activeFilePath);
+
       if (itemId != null) {
         setSelectedLines({ id: itemId, range: pendingSelection });
       }
@@ -1706,6 +1838,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     (range: SelectedLineRange | null, item: CodeViewItem<DiffAnnotationMetadata>) => {
       if (range == null || item.type !== "diff") return;
       const filePath = itemIdToFilePath.get(item.id);
+
       if (filePath == null) return;
       routeSelectionToToolbar(range, filePath);
     },
@@ -1717,8 +1850,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       context: { item: CodeViewItem<DiffAnnotationMetadata> },
     ) => {
       const { item } = context;
+
       if (item.type !== "diff") return null;
       const file = itemIdToFile.get(item.id);
+
       if (file == null) return null;
 
       return createReviewGutterActionsElement({
@@ -1741,8 +1876,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
       item: CodeViewItem<DiffAnnotationMetadata>,
     ) => {
       if (!onCodeNavRequest || item.type !== "diff") return;
+
       if (!(event.metaKey || event.ctrlKey)) return;
       const filePath = itemIdToFilePath.get(item.id);
+
       if (filePath == null) return;
       onCodeNavRequest(buildCodeNavRequest(props, filePath));
     },
@@ -1764,19 +1901,25 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
   const reportVisibleFile = useStableCallback(() => {
     const viewer = viewerRef.current?.getInstance();
+
     if (viewer == null) return;
     const rendered = viewer.getRenderedItems();
+
     if (rendered.length === 0) return;
     const scrollTop = viewer.getScrollTop();
     // The active file is the last rendered item whose top is at or above the
     // current scroll position (with a small threshold), i.e. the file the user
     // is currently reading. Falls back to the first rendered item.
     let bestId = rendered[0].id;
+
     for (const renderedItem of rendered) {
       const top = viewer.getTopForItem(renderedItem.id);
+
       if (top == null) continue;
+
       if (top <= scrollTop + 50) bestId = renderedItem.id;
     }
+
     // At-bottom override (legacy parity): a short final file pinned at the
     // container bottom never gets its top above scrollTop+threshold, so the
     // loop would leave an earlier file active while the user reads the last
@@ -1786,7 +1929,9 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     if (viewer.getScrollTop() + viewer.getHeight() >= viewer.getScrollHeight() - 2) {
       bestId = rendered[rendered.length - 1].id;
     }
+
     const path = itemIdToFilePath.get(bestId) ?? null;
+
     if (path !== visibleFileRef.current) {
       visibleFileRef.current = path;
       onVisibleFileChange?.(path);
@@ -1797,8 +1942,10 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // scroll EVENT, which can outpace frames during momentum scrolling. Also
   // stamps scroll activity for the augmentation idle-flush.
   const scrollReportRafRef = useRef<number | null>(null);
+
   const handleScroll = useStableCallback(() => {
     lastScrollTsRef.current = Date.now();
+
     if (scrollReportRafRef.current != null) return;
     scrollReportRafRef.current = requestAnimationFrame(() => {
       scrollReportRafRef.current = null;
@@ -1820,6 +1967,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   // new diff's first file must be re-reported as the active file.
   useEffect(() => {
     const raf = requestAnimationFrame(() => reportVisibleFile());
+
     return () => cancelAnimationFrame(raf);
   }, [reportVisibleFile, fileSetKey]);
 
@@ -1827,6 +1975,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
   const scrollToItem = useCallback((itemId: string) => {
     const viewer = viewerRef.current;
+
     if (viewer == null) return;
     viewer.scrollTo({ type: "item", id: itemId, align: "start" });
   }, []);
@@ -1847,15 +1996,19 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
     const ann = selectedAnnotationId
       ? annotationsRef.current.find((a) => a.id === selectedAnnotationId)
       : null;
+
     const newFile = ann?.filePath ?? null;
 
     // Repaint the inline card's selected ring on the previously- AND
     // newly-selected file: renderAnnotation only re-runs on updateItem, so a bare
     // selection-state change wouldn't otherwise reach the portal'd cards.
     const filesToRefresh = new Set<string>();
+
     if (prevSelectedFileRef.current) filesToRefresh.add(prevSelectedFileRef.current);
+
     if (newFile) filesToRefresh.add(newFile);
     prevSelectedFileRef.current = newFile;
+
     for (const path of filesToRefresh) {
       for (const itemId of filePathToItemIds.get(path) ?? []) refreshItem(itemId);
     }
@@ -1878,12 +2031,15 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   useEffect(() => {
     if (!scrollTargetAnnotation) return;
     const ann = annotationsRef.current.find((a) => a.id === scrollTargetAnnotation.id);
+
     if (!ann) return;
     const itemId = filePathToItemId.get(ann.filePath);
     const handle = viewerRef.current;
+
     if (itemId == null || handle == null) return;
 
     const item = handle.getItem(itemId);
+
     if (item != null && item.collapsed === true) {
       item.collapsed = false;
       item.version = (item.version ?? 0) + 1;
@@ -1892,27 +2048,35 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
     const isFile = isFileScopedAnnotation(ann);
     const range = lineRangeForAnnotation(ann);
+
     const raf = requestAnimationFrame(() => {
       const viewer = viewerRef.current;
+
       if (viewer == null) return;
+
       if (isFile) viewer.scrollTo({ type: "item", id: itemId, align: "start" });
       else viewer.scrollTo({ type: "range", id: itemId, range });
     });
+
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollTargetAnnotation, filePathToItemId]);
 
   useEffect(() => {
     if (!isActive) return;
+
     const handler = (event: KeyboardEvent) => {
       if (isKeyboardEventFromTypeableElement(event)) return;
+
       if (hasKeyboardShortcutModifier(event)) return;
+
       if (orderedItemIds.length === 0) return;
 
       // The item the user is currently reading (active-file tracking).
       const currentId = visibleFileRef.current
         ? (filePathToItemId.get(visibleFileRef.current) ?? null)
         : null;
+
       const currentPath = currentId ? (itemIdToFilePath.get(currentId) ?? null) : null;
 
       if (
@@ -1936,7 +2100,9 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
 
       handleAdjacentFileKeyboardShortcut(event, currentId, orderedItemIds, scrollToItem);
     };
+
     window.addEventListener("keydown", handler);
+
     return () => window.removeEventListener("keydown", handler);
   }, [
     isActive,
@@ -1957,11 +2123,13 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const renderCustomHeader = useStableCallback((item: CodeViewItem<DiffAnnotationMetadata>) => {
     if (item.type !== "diff") return null;
     const filePath = itemIdToFilePath.get(item.id);
+
     if (filePath == null) return null;
     // Resolve by item id (NOT files.find by path): duplicate display paths each
     // have their own DiffFile, and a path lookup would render the FIRST file's
     // stats on every duplicate's header.
     const file = itemIdToFile.get(item.id);
+
     if (file == null) return null;
 
     const collapsed = item.collapsed === true;
@@ -2056,6 +2224,7 @@ export const AllFilesCodeView: React.FC<AllFilesCodeViewProps> = ({
   const customLineHeight = useMemo(() => {
     if (!fontSize) return undefined;
     const px = parseFloat(fontSize);
+
     return Number.isFinite(px) && px > 0 ? Math.round(px * 1.5) : undefined;
   }, [fontSize]);
 

@@ -32,13 +32,16 @@ type GlimpseWindow = Window & {
 function requestGlimpseClose(): boolean {
   // SAFETY: window may carry glimpse extension — cast to access optional glimpse
   const glimpseClose = (window as GlimpseWindow).glimpse?.close;
+
   if (glimpseClose instanceof Function) {
     glimpseClose();
+
     return true;
   }
 
   if (window.parent && window.parent !== window) {
     window.parent.postMessage({ __plannotator_glimpse_close: true }, "*");
+
     return true;
   }
 
@@ -47,6 +50,7 @@ function requestGlimpseClose(): boolean {
 
 function tryClose(onFail: () => void): void {
   const requestedNativeClose = requestGlimpseClose();
+
   if (requestedNativeClose) {
     return;
   }
@@ -72,6 +76,7 @@ export function useAutoClose(active: boolean): UseAutoCloseReturn {
     if (!active) return;
 
     const delay = getAutoCloseDelay();
+
     if (delay === "0") {
       tryClose(() => setState({ phase: "closeFailed" }));
       setState({ phase: "closed" });
@@ -85,10 +90,13 @@ export function useAutoClose(active: boolean): UseAutoCloseReturn {
   // Tick the countdown once per second.
   useEffect(() => {
     if (state.phase !== "counting") return;
+
     if (state.remaining <= 0) {
       tryClose(() => setState({ phase: "closeFailed" }));
+
       return;
     }
+
     const timer = setTimeout(
       () =>
         setState((prev) =>
@@ -96,6 +104,7 @@ export function useAutoClose(active: boolean): UseAutoCloseReturn {
         ),
       1000,
     );
+
     return () => clearTimeout(timer);
   }, [state]);
 

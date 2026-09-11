@@ -20,7 +20,9 @@ export function copyLocationPrefix(
   scope: CodeAnnotationScope = annotationScope(a),
 ): string {
   if (scope === "general") return "";
+
   if (scope === "file") return `${a.filePath}\n`;
+
   return `${a.filePath}:${a.lineStart}${a.lineEnd !== a.lineStart ? `-${a.lineEnd}` : ""}\n`;
 }
 

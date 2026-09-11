@@ -29,6 +29,7 @@ function sourceSave(hash: string, text = "after\n"): EnabledSourceSaveCapability
 
 function record(overrides: Partial<SourceBackedDocumentRecord> = {}): SourceBackedDocumentRecord {
   const source = sourceSave("sha256:after");
+
   return {
     key: "file:/repo/docs/a.md",
     path: source.path,
@@ -73,6 +74,7 @@ describe("sourceBackedLinkedDocumentKey", () => {
 describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
   test("known disk hash follows an active disk-conflict snapshot", () => {
     const nextSource = sourceSave("sha256:external", "external\n");
+
     const doc = record({
       currentText: "after\nunsaved\n",
       saveStatus: "conflict",
@@ -107,6 +109,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
     });
 
     expect(result.type).toBe("clean-updated");
+
     if (result.type !== "clean-updated") throw new Error("expected clean update");
     expect(result.clearedSavedChange).toBe(true);
     expect(result.record.currentText).toBe("external\n");
@@ -123,6 +126,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
       editMountText: "after\n",
       saveStatus: "dirty",
     });
+
     const nextSource = sourceSave("sha256:external", "external\n");
 
     const result = reconcileSourceBackedDocumentDiskSnapshot(doc, {
@@ -132,6 +136,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
     });
 
     expect(result.type).toBe("conflict");
+
     if (result.type !== "conflict") throw new Error("expected conflict");
     expect(result.record.currentText).toBe("after\nunsaved\n");
     expect(result.record.diskBaseline).toBe("after\n");
@@ -150,6 +155,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
       editMountText: "after\n",
       saveStatus: "saving",
     });
+
     const nextSource = sourceSave("sha256:external", "external\n");
 
     const result = reconcileSourceBackedDocumentDiskSnapshot(doc, {
@@ -159,6 +165,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
     });
 
     expect(result.type).toBe("conflict");
+
     if (result.type !== "conflict") throw new Error("expected conflict");
     expect(result.record.currentText).toBe("local save\n");
     expect(result.record.sourceSave).toEqual(sourceSave("sha256:after"));
@@ -174,6 +181,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
       editMountText: "after\n",
       saveStatus: "dirty",
     });
+
     const nextSource = sourceSave("sha256:external", "external\n");
 
     const first = reconcileSourceBackedDocumentDiskSnapshot(doc, {
@@ -181,6 +189,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
       text: "external\n",
       sourceSave: nextSource,
     });
+
     const second = reconcileSourceBackedDocumentDiskSnapshot(doc, {
       key: doc.key,
       text: "external\n",
@@ -189,6 +198,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
 
     expect(first.type).toBe("conflict");
     expect(second.type).toBe("unchanged");
+
     if (second.type !== "unchanged") throw new Error("expected unchanged");
     expect(second.record.saveStatus).toBe("conflict");
     expect(second.record.sourceSave).toEqual(sourceSave("sha256:after"));
@@ -200,6 +210,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
 
   test("same-hash snapshots refresh metadata without clearing saved edit context", () => {
     const doc = record();
+
     const nextSource = {
       ...sourceSave("sha256:after"),
       mtimeMs: 3000,
@@ -212,6 +223,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
     });
 
     expect(result.type).toBe("unchanged");
+
     if (result.type !== "unchanged") throw new Error("expected unchanged");
     expect(result.record.lastKnownMtimeMs).toBe(3000);
     expect(result.record.savedChange).toEqual({
@@ -232,6 +244,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
       saveStatus: "missing",
       missingOnDisk: true,
     });
+
     const nextSource = {
       ...sourceSave("sha256:after"),
       mtimeMs: 3000,
@@ -244,6 +257,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
     });
 
     expect(result.type).toBe("status-updated");
+
     if (result.type !== "status-updated") throw new Error("expected status update");
     expect(result.record.currentText).toBe("after\nlocal\n");
     expect(result.record.diskBaseline).toBe("after\n");
@@ -261,6 +275,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
     const result = markSourceBackedDocumentFileMissing(doc);
 
     expect(result.type).toBe("file-missing");
+
     if (result.type !== "file-missing") throw new Error("expected file missing");
     expect(result.clearedSavedChange).toBe(true);
     expect(result.record.currentText).toBe("after\nlocal\n");
@@ -275,6 +290,7 @@ describe("reconcileSourceBackedDocumentDiskSnapshot", () => {
 describe("canRestoreSourceBackedDocumentDraft", () => {
   test("allows restoring over the initial clean file snapshot", () => {
     const source = sourceSave("sha256:after");
+
     const doc = record({
       saveStatus: "clean",
       savedChange: undefined,
@@ -287,6 +303,7 @@ describe("canRestoreSourceBackedDocumentDraft", () => {
 
   test("does not restore over newer session state", () => {
     const source = sourceSave("sha256:after");
+
     const cleanDoc = record({
       saveStatus: "clean",
       savedChange: undefined,
@@ -341,6 +358,7 @@ describe("markSourceBackedDocumentSaved", () => {
       currentText: "local\n",
       savedChange: undefined,
     });
+
     const overwriteSource = sourceSave("sha256:overwrite", "local\n");
 
     markSourceBackedDocumentSaved(doc, {

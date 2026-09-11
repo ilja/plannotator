@@ -11,6 +11,7 @@ describe("decodeSaveNotesResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         obsidian: { success: true, path: "/notes/plan.md" },
@@ -32,6 +33,7 @@ describe("decodeSaveNotesResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({});
     }

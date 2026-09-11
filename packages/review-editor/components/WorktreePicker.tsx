@@ -27,10 +27,13 @@ export const WorktreePicker: React.FC<WorktreePickerProps> = ({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+
     if (!q) return worktrees;
+
     return worktrees.filter((wt) => {
       const branch = (wt.branch || "").toLowerCase();
       const path = wt.path.toLowerCase();
+
       return branch.includes(q) || path.includes(q);
     });
   }, [worktrees, query]);
@@ -45,9 +48,11 @@ export const WorktreePicker: React.FC<WorktreePickerProps> = ({
   };
 
   const active = activeWorktreePath ? worktrees.find((wt) => wt.path === activeWorktreePath) : null;
+
   const activeLabel = active
     ? active.branch || active.path.split("/").pop() || "worktree"
     : mainLabel;
+
   const isCustom = activeWorktreePath !== null;
 
   return (
@@ -55,6 +60,7 @@ export const WorktreePicker: React.FC<WorktreePickerProps> = ({
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
+
         if (!v) setQuery("");
       }}
     >

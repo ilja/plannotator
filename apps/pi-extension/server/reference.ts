@@ -69,12 +69,16 @@ function getAllowedRootPaths(options?: { rootPath?: string; rootPaths?: string[]
   const rawRoots = options?.rootPaths?.length
     ? options.rootPaths
     : [options?.rootPath ?? process.cwd()];
+
   const roots: string[] = [];
+
   for (const root of rawRoots) {
     if (root.length === 0) continue;
     const resolved = resolveUserPath(root);
+
     if (!roots.includes(resolved)) roots.push(resolved);
   }
+
   return roots.length > 0 ? roots : [resolveUserPath(process.cwd())];
 }
 
@@ -85,15 +89,19 @@ function isWithinAllowedRoots(candidate: string, roots: string[]): boolean {
 function getTrustedBaseDir(base: string | null, roots: string[]): string | null {
   if (!base) return null;
   const resolvedBase = resolveUserPath(base);
+
   return isWithinAllowedRoots(resolvedBase, roots) ? resolvedBase : null;
 }
 
 function relativizeToAllowedRoots(path: string, roots: string[]): string {
   for (const root of roots) {
     const prefix = `${root}/`;
+
     if (path.startsWith(prefix)) return path.slice(prefix.length);
+
     if (path === root) return ".";
   }
+
   return path;
 }
 
@@ -109,6 +117,7 @@ async function resolveCodeFileFromAllowedRoots(
   for (const root of roots) {
     const rootBase = baseDir && isWithinProjectRoot(baseDir, root) ? baseDir : undefined;
     const result = await resolveCodeFile(input, root, rootBase);
+
     if (result.kind === "found") {
       if (isWithinProjectRoot(result.path, root)) found.add(result.path);
     } else if (result.kind === "ambiguous") {
@@ -121,9 +130,13 @@ async function resolveCodeFileFromAllowedRoots(
   }
 
   if (found.size === 1) return { kind: "found", path: [...found][0] };
+
   if (found.size > 1) return { kind: "ambiguous", input, matches: [...found] };
+
   if (ambiguous.size > 0) return { kind: "ambiguous", input, matches: [...ambiguous] };
+
   if (unavailable) return { kind: "unavailable", input };
+
   return { kind: "not_found", input };
 }
 
@@ -134,6 +147,7 @@ function resolveMarkdownFileFromAllowedRoots(input: string, roots: string[]): Ro
 
   for (const root of roots) {
     const result = resolveMarkdownFile(input, root);
+
     if (result.kind === "found") {
       if (isWithinProjectRoot(result.path, root)) found.add(result.path);
     } else if (result.kind === "ambiguous") {
@@ -146,9 +160,13 @@ function resolveMarkdownFileFromAllowedRoots(input: string, roots: string[]): Ro
   }
 
   if (found.size === 1) return { kind: "found", path: [...found][0] };
+
   if (found.size > 1) return { kind: "ambiguous", input, matches: [...found] };
+
   if (ambiguous.size > 0) return { kind: "ambiguous", input, matches: [...ambiguous] };
+
   if (unavailable) return { kind: "unavailable", input };
+
   return { kind: "not_found", input };
 }
 
@@ -168,26 +186,35 @@ function applyDocOptions(
   sourceSnapshot?: SourceFileSnapshot,
 ): DocPayloadWithSourceSave {
   const next: DocPayload = { ...data };
+
   if (next.rawHtml !== undefined && options.rewriteHtml) {
     next.rawHtml = options.rewriteHtml(next.rawHtml, next.filepath);
   }
+
   if (data.renderAs === "html") {
     return { ...next, sourceSave: disabledSourceSave("html-render") };
   }
+
   if (data.isConverted === true) {
     return { ...next, sourceSave: disabledSourceSave("converted-source") };
   }
+
   if (options.sourceSaveFilePath) {
     const sourcePath = resolveExistingSourceSaveFile("single-file", options.sourceSaveFilePath);
+
     const doc = sourceSnapshot
       ? createSourceSaveCapabilityFromSnapshot("single-file", data.filepath, sourceSnapshot)
       : createSourceSaveCapability("single-file", data.filepath);
+
     if (sourcePath && doc.enabled && sourcePath === doc.path) {
       options.onSourceDocumentServed?.(doc.path);
+
       return { ...next, sourceSave: doc };
     }
   }
+
   if (!options.sourceSaveFolderPath) return next;
+
   const sourceSave = sourceSnapshot
     ? createSourceSaveCapabilityFromSnapshot(
         "folder-file",
@@ -196,7 +223,9 @@ function applyDocOptions(
         options.sourceSaveFolderPath,
       )
     : createSourceSaveCapability("folder-file", data.filepath, options.sourceSaveFolderPath);
+
   if (sourceSave.enabled) options.onSourceDocumentServed?.(sourceSave.path);
+
   return {
     ...next,
     sourceSave,
@@ -223,15 +252,18 @@ function walkMarkdownFiles(
   extensions: RegExp = FILE_BROWSER_EXTENSIONS,
 ): void {
   let entries: Dirent[];
+
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     return;
   }
+
   for (const entry of entries) {
     const relative = join(dir, entry.name)
       .slice(root.length + 1)
       .replace(/\\/g, "/");
+
     if (entry.isDirectory()) {
       if (isFileBrowserExcludedPath(relative)) continue;
       walkMarkdownFiles(join(dir, entry.name), root, results, extensions);
@@ -261,20 +293,27 @@ function serveTrustedBaseDocument(
   ) {
     return false;
   }
+
   const fromBase = resolveUserPath(requestedPath, resolvedBase);
+
   if (!isWithinAllowedRoots(fromBase, allowedRoots)) {
     json(res, { error: "Access denied: path is outside project root" }, 403);
+
     return true;
   }
+
   try {
     if (!existsSync(fromBase)) return false;
     const snapshot = readSourceFileSnapshot(fromBase);
     const raw = snapshot.text;
     const isHtml = /\.html?$/i.test(requestedPath);
+
     if (isHtml && !convert) {
       jsonDoc(res, { rawHtml: raw, renderAs: "html", filepath: fromBase }, options);
+
       return true;
     }
+
     const markdown = isHtml ? htmlToMarkdown(raw) : raw;
     jsonDoc(
       res,
@@ -283,6 +322,7 @@ function serveTrustedBaseDocument(
       undefined,
       isHtml ? undefined : snapshot,
     );
+
     return true;
   } catch {
     return false;
@@ -300,17 +340,23 @@ function serveHtmlDocument(
 ): boolean {
   if (!/\.html?$/i.test(requestedPath)) return false;
   const resolvedHtml = resolveUserPath(requestedPath, resolvedBase || projectRoot);
+
   if (!isWithinAllowedRoots(resolvedHtml, allowedRoots)) {
     json(res, { error: "Access denied: path is outside project root" }, 403);
+
     return true;
   }
+
   try {
     if (existsSync(resolvedHtml)) {
       const html = readFileSync(resolvedHtml, "utf-8");
+
       if (!convert) {
         jsonDoc(res, { rawHtml: html, renderAs: "html", filepath: resolvedHtml }, options);
+
         return true;
       }
+
       jsonDoc(
         res,
         {
@@ -321,12 +367,15 @@ function serveHtmlDocument(
         },
         options,
       );
+
       return true;
     }
   } catch {
     // Fall through to the not-found response.
   }
+
   json(res, { error: `File not found: ${requestedPath}` }, 404);
+
   return true;
 }
 
@@ -340,15 +389,18 @@ async function resolveCodeDocument(
   const parsed = parseCodePath(requestedPath);
   const cleanPath = parsed.filePath;
   const literalPath = resolveUserPath(cleanPath, resolvedBase || allowedRoots[0]);
+
   if (isWithinAllowedRoots(literalPath, allowedRoots) && existsSync(literalPath)) {
     return { kind: "found", path: literalPath };
   }
+
   if (
     isAbsoluteUserPath(cleanPath) &&
     !isWithinAllowedRoots(resolveUserPath(cleanPath), allowedRoots)
   ) {
     return { kind: "access_denied" };
   }
+
   return resolveCodeFileFromAllowedRoots(cleanPath, allowedRoots, resolvedBase);
 }
 
@@ -360,22 +412,28 @@ async function serveResolvedCodeDocument(
 ): Promise<void> {
   try {
     const stat = statSync(resolvedCode);
+
     if (stat.size > 2 * 1024 * 1024) {
       json(res, { error: "File too large (max 2MB)" }, 413);
+
       return;
     }
+
     const contents = readFileSync(resolvedCode, "utf-8");
     const displayName = resolvedCode.split("/").pop() || resolvedCode;
     let prerenderedHTML: string | undefined;
+
     try {
       const result = await preloadFile({
         file: { name: displayName, contents },
         options: { disableFileHeader: true },
       });
+
       prerenderedHTML = result.prerenderedHTML;
     } catch {
       // Fall back to client-side rendering.
     }
+
     json(res, {
       codeFile: true,
       contents,
@@ -398,10 +456,13 @@ async function serveCodeDocument(
   if (!isCodeFilePath(requestedPath)) return false;
   const parsed = parseCodePath(requestedPath);
   const result = await resolveCodeDocument(requestedPath, allowedRoots, resolvedBase);
+
   if (result.kind === "access_denied") {
     json(res, { error: "Access denied: path is outside project root" }, 403);
+
     return true;
   }
+
   if (result.kind === "ambiguous") {
     json(
       res,
@@ -411,21 +472,30 @@ async function serveCodeDocument(
       },
       400,
     );
+
     return true;
   }
+
   if (result.kind === "unavailable") {
     json(res, { error: `Cannot scan project: ${requestedPath}`, reason: "unavailable" }, 503);
+
     return true;
   }
+
   if (result.kind === "not_found") {
     json(res, { error: `File not found: ${requestedPath}` }, 404);
+
     return true;
   }
+
   if (!isWithinAllowedRoots(result.path, allowedRoots)) {
     json(res, { error: "Access denied: path is outside project root" }, 403);
+
     return true;
   }
+
   await serveResolvedCodeDocument(res, requestedPath, parsed, result.path);
+
   return true;
 }
 
@@ -445,16 +515,22 @@ function serveMarkdownResolution(
       },
       400,
     );
+
     return;
   }
+
   if (result.kind === "unavailable") {
     json(res, { error: `Cannot scan project: ${result.input}`, reason: "unavailable" }, 503);
+
     return;
   }
+
   if (result.kind === "not_found") {
     json(res, { error: `File not found: ${result.input}` }, 404);
+
     return;
   }
+
   try {
     const snapshot = readSourceFileSnapshot(result.path);
     jsonDoc(
@@ -476,12 +552,15 @@ export async function handleDocRequest(
   options: HandleDocOptions = {},
 ): Promise<void> {
   const requestedPath = url.searchParams.get("path");
+
   if (!requestedPath) {
     json(res, { error: "Missing path parameter" }, 400);
+
     return;
   }
 
   const allowedRoots = getAllowedRootPaths(options);
+
   // Side-channel: warm the code-file walk so /api/doc/exists POSTs land warm.
   for (const root of allowedRoots) {
     void warmFileListCache(root, "code");
@@ -491,11 +570,13 @@ export async function handleDocRequest(
   const base = url.searchParams.get("base");
   const resolvedBase = getTrustedBaseDir(base, allowedRoots);
   const convert = url.searchParams.get("convert") === "1";
+
   if (serveTrustedBaseDocument(res, requestedPath, resolvedBase, allowedRoots, convert, options))
     return;
 
   // HTML files: resolve directly (not via resolveMarkdownFile which only handles .md/.mdx)
   const projectRoot = allowedRoots[0];
+
   if (
     serveHtmlDocument(res, requestedPath, resolvedBase, projectRoot, allowedRoots, convert, options)
   )
@@ -509,8 +590,10 @@ export async function handleDocRequest(
     !isWithinAllowedRoots(resolveUserPath(requestedPath), allowedRoots)
   ) {
     json(res, { error: "Access denied: path is outside project root" }, 403);
+
     return;
   }
+
   const result = resolveMarkdownFileFromAllowedRoots(requestedPath, allowedRoots);
   serveMarkdownResolution(res, requestedPath, result, allowedRoots, options);
 }
@@ -530,19 +613,26 @@ export async function handleDocExistsRequest(
   options?: HandleDocExistsOptions,
 ): Promise<void> {
   let request: Schema.Schema.Type<typeof DocExistsRequestSchema>;
+
   try {
     request = Schema.decodeUnknownSync(DocExistsRequestSchema)(await parseBody(req));
   } catch {
     json(res, { error: "Expected { paths: string[] }" }, 400);
+
     return;
   }
+
   if (request.paths.length > 500) {
     json(res, { error: "Too many paths (max 500)" }, 400);
+
     return;
   }
+
   const allowedRoots = getAllowedRootPaths(options);
+
   const baseDir =
     request.base && request.base.length > 0 ? getTrustedBaseDir(request.base, allowedRoots) : null;
+
   const results: Record<
     string,
     | { status: "found"; resolved: string }
@@ -554,14 +644,18 @@ export async function handleDocExistsRequest(
   await Promise.all(
     request.paths.map(async (p) => {
       const cleanP = parseCodePath(p).filePath;
+
       if (
         isAbsoluteUserPath(cleanP) &&
         !isWithinAllowedRoots(resolveUserPath(cleanP), allowedRoots)
       ) {
         results[p] = { status: "missing" };
+
         return;
       }
+
       const r = await resolveCodeFileFromAllowedRoots(cleanP, allowedRoots, baseDir);
+
       if (r.kind === "found") {
         results[p] = isWithinAllowedRoots(r.path, allowedRoots)
           ? { status: "found", resolved: r.path }
@@ -588,15 +682,21 @@ export function handleObsidianVaultsRequest(res: Res): void {
 
 export function handleObsidianFilesRequest(res: Res, url: URL): void {
   const vaultPath = url.searchParams.get("vaultPath");
+
   if (!vaultPath) {
     json(res, { error: "Missing vaultPath parameter" }, 400);
+
     return;
   }
+
   const resolvedVault = resolveUserPath(vaultPath);
+
   if (!existsSync(resolvedVault) || !statSync(resolvedVault).isDirectory()) {
     json(res, { error: "Invalid vault path" }, 400);
+
     return;
   }
+
   try {
     const files: string[] = [];
     walkMarkdownFiles(resolvedVault, resolvedVault, files, /\.mdx?$/i);
@@ -610,14 +710,19 @@ export function handleObsidianFilesRequest(res: Res, url: URL): void {
 export function handleObsidianDocRequest(res: Res, url: URL): void {
   const vaultPath = url.searchParams.get("vaultPath");
   const filePath = url.searchParams.get("path");
+
   if (!vaultPath || !filePath) {
     json(res, { error: "Missing vaultPath or path parameter" }, 400);
+
     return;
   }
+
   if (!/\.mdx?$/i.test(filePath)) {
     json(res, { error: "Only markdown files are supported" }, 400);
+
     return;
   }
+
   const resolvedVault = resolveUserPath(vaultPath);
   let resolvedFile = resolvePath(resolvedVault, filePath);
 
@@ -625,9 +730,11 @@ export function handleObsidianDocRequest(res: Res, url: URL): void {
   if (!existsSync(resolvedFile) && !filePath.includes("/")) {
     const files: string[] = [];
     walkMarkdownFiles(resolvedVault, resolvedVault, files, /\.mdx?$/i);
+
     const matches = files.filter(
       (f) => f.split("/").pop()?.toLowerCase() === filePath.toLowerCase(),
     );
+
     if (matches.length === 1) {
       resolvedFile = resolvePath(resolvedVault, matches[0]);
     } else if (matches.length > 1) {
@@ -639,6 +746,7 @@ export function handleObsidianDocRequest(res: Res, url: URL): void {
         },
         400,
       );
+
       return;
     }
   }
@@ -646,13 +754,16 @@ export function handleObsidianDocRequest(res: Res, url: URL): void {
   // Security: must be within vault
   if (!resolvedFile.startsWith(resolvedVault + "/") && resolvedFile !== resolvedVault) {
     json(res, { error: "Access denied: path is outside vault" }, 403);
+
     return;
   }
 
   if (!existsSync(resolvedFile)) {
     json(res, { error: `File not found: ${filePath}` }, 404);
+
     return;
   }
+
   try {
     const markdown = readFileSync(resolvedFile, "utf-8");
     json(res, { markdown, filepath: resolvedFile });
@@ -663,25 +774,34 @@ export function handleObsidianDocRequest(res: Res, url: URL): void {
 
 export async function handleFileBrowserRequest(res: Res, url: URL): Promise<void> {
   const dirPath = url.searchParams.get("dirPath");
+
   if (!dirPath) {
     json(res, { error: "Missing dirPath parameter" }, 400);
+
     return;
   }
+
   const resolvedDir = resolveUserPath(dirPath);
+
   if (!existsSync(resolvedDir) || !statSync(resolvedDir).isDirectory()) {
     json(res, { error: "Invalid directory path" }, 400);
+
     return;
   }
+
   try {
     const files = new Set<string>();
     const diskFiles: string[] = [];
     walkMarkdownFiles(resolvedDir, resolvedDir, diskFiles);
+
     for (const file of diskFiles) files.add(file);
+
     const workspaceStatus = filterWorkspaceStatusForDirectory(
       await getWorkspaceStatusForDirectory(resolvedDir),
       resolvedDir,
       includeWorkspaceFile,
     );
+
     for (const file of getWorkspaceStatusRelativePaths(
       workspaceStatus,
       resolvedDir,
@@ -689,6 +809,7 @@ export async function handleFileBrowserRequest(res: Res, url: URL): Promise<void
     )) {
       files.add(file);
     }
+
     json(res, { tree: buildFileTree([...files].sort()), workspaceStatus });
   } catch {
     json(res, { error: "Failed to list directory files" }, 500);

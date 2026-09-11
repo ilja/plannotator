@@ -20,7 +20,9 @@ interface EditorAnnotation {
 }
 
 const decodeEditorAnnotationRequest = Schema.decodeUnknownOption(EditorAnnotationRequestSchema);
+
 const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown));
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 export function createEditorAnnotationHandler() {
@@ -34,6 +36,7 @@ export function createEditorAnnotationHandler() {
     ): Promise<boolean> {
       if (url.pathname === "/api/editor-annotations" && req.method === "GET") {
         json(res, { annotations });
+
         return true;
       }
 
@@ -41,6 +44,7 @@ export function createEditorAnnotationHandler() {
         try {
           const body = await parseBody(req);
           const decoded = Option.getOrUndefined(decodeEditorAnnotationRequest(body));
+
           if (
             !decoded ||
             !decoded.filePath ||
@@ -49,11 +53,13 @@ export function createEditorAnnotationHandler() {
             !decoded.lineEnd
           ) {
             json(res, { error: "Missing required fields" }, 400);
+
             return true;
           }
 
           const record = Option.getOrUndefined(decodeRecord(body));
           const comment = record ? Option.getOrUndefined(decodeString(record.comment)) : undefined;
+
           const annotation: EditorAnnotation = {
             id: randomUUID(),
             filePath: decoded.filePath,
@@ -69,20 +75,27 @@ export function createEditorAnnotationHandler() {
         } catch {
           json(res, { error: "Invalid JSON" }, 400);
         }
+
         return true;
       }
 
       if (url.pathname === "/api/editor-annotation" && req.method === "DELETE") {
         const id = url.searchParams.get("id");
+
         if (!id) {
           json(res, { error: "Missing id parameter" }, 400);
+
           return true;
         }
+
         const idx = annotations.findIndex((annotation) => annotation.id === id);
+
         if (idx !== -1) {
           annotations.splice(idx, 1);
         }
+
         json(res, { ok: true });
+
         return true;
       }
 

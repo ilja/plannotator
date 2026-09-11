@@ -30,16 +30,20 @@ function generateId(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   const limit = 256 - (256 % chars.length); // 248 — largest multiple of 62 that fits in a byte
   const id: string[] = [];
+
   while (id.length < 8) {
     const bytes = new Uint8Array(16); // oversample to minimize rounds
     crypto.getRandomValues(bytes);
+
     for (const b of bytes) {
       if (b < limit) {
         id.push(chars[b % chars.length]);
+
         if (id.length === 8) break;
       }
     }
   }
+
   return id.join("");
 }
 
@@ -56,6 +60,7 @@ export async function createPaste(
 
   const id = generateId();
   await store.put(id, data, opts.ttlSeconds);
+
   return { id };
 }
 
@@ -63,6 +68,7 @@ function formatByteLimit(bytes: number): string {
   if (bytes >= 1024 * 1024) {
     return `${Math.round(bytes / 1024 / 1024)} MB`;
   }
+
   return `${Math.round(bytes / 1024)} KB`;
 }
 
@@ -97,6 +103,7 @@ export async function handleRequest(
 
   if (url.pathname === "/api/paste" && request.method === "POST") {
     let body: PasteCreateRequest;
+
     try {
       body = Schema.decodeUnknownSync(PasteCreateRequest)(await request.json());
     } catch (error) {
@@ -106,25 +113,32 @@ export async function handleRequest(
           { status: 400, headers: cors },
         );
       }
+
       return Response.json({ error: "Invalid JSON body" }, { status: 400, headers: cors });
     }
+
     try {
       const result = await createPaste(body.data, store, options);
+
       return Response.json(result, { status: 201, headers: cors });
     } catch (e) {
       if (e instanceof PasteError) {
         return Response.json({ error: e.message }, { status: e.status, headers: cors });
       }
+
       return Response.json({ error: "Failed to store paste" }, { status: 500, headers: cors });
     }
   }
 
   const match = url.pathname.match(ID_PATTERN);
+
   if (match && request.method === "GET") {
     const data = await getPaste(match[1], store);
+
     if (!data) {
       return Response.json({ error: "Paste not found or expired" }, { status: 404, headers: cors });
     }
+
     return Response.json(
       { data },
       {

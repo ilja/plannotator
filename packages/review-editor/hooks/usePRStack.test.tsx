@@ -13,7 +13,9 @@ import {
 } from "./usePRStack";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 const validLayerResponse = {
@@ -112,6 +114,7 @@ function HookHarness({
     applyPRResponse: (data) => applied.push(data),
     onError: (message) => errors.push(message),
   });
+
   const {
     handleScopeSelect,
     handleLoadFullDiff,
@@ -162,6 +165,7 @@ async function renderHarness(applied: unknown[], errors: string[]): Promise<void
 async function clickAction(action: "scope" | "full" | "pr-switch"): Promise<HTMLOutputElement> {
   const button = document.querySelector(`[data-action="${action}"]`);
   const output = document.querySelector("output");
+
   if (!(button instanceof HTMLButtonElement) || !(output instanceof HTMLOutputElement)) {
     throw new Error("Hook harness did not render");
   }
@@ -179,7 +183,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 

@@ -38,13 +38,16 @@ function parseWatchEvent(data: string): WatchEvent | null {
 /** Start the EventSource transport that requests source-backed reconciliation commands. */
 export function createSourceDocumentWatch(options: SourceDocumentWatchOptions): () => void {
   const directories = [...new Set(options.directories)].filter(Boolean);
+
   if (directories.length === 0) return () => undefined;
 
   const debounceMs = options.debounceMs ?? 120;
   const reconnectDelayMs = options.reconnectDelayMs ?? 1000;
+
   const eventSourceFactory =
     options.eventSourceFactory ??
     (globalThis.EventSource === undefined ? undefined : (url: string) => new EventSource(url));
+
   if (!eventSourceFactory) return () => undefined;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -54,6 +57,7 @@ export function createSourceDocumentWatch(options: SourceDocumentWatchOptions): 
   const scheduleReconcile = (changedDir?: string) => {
     const key = changedDir ?? "*";
     const existing = timers.get(key);
+
     if (existing) clearTimeout(existing);
     timers.set(
       key,
@@ -67,19 +71,23 @@ export function createSourceDocumentWatch(options: SourceDocumentWatchOptions): 
   const connect = () => {
     if (stopped) return;
     const params = new URLSearchParams();
+
     for (const directory of directories) params.append("dirPath", directory);
     const nextSource = eventSourceFactory(`/api/reference/files/stream?${params.toString()}`);
     source = nextSource;
     nextSource.onmessage = (event) => {
       if (source !== nextSource || stopped) return;
       const payload = parseWatchEvent(event.data);
+
       if (!payload || !watchedDirectory(payload.dirPath, directories)) return;
       scheduleReconcile(payload.dirPath);
     };
+
     nextSource.onerror = () => {
       if (source !== nextSource || stopped) return;
       source = undefined;
       nextSource.close();
+
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => {
         reconnectTimer = undefined;
@@ -92,8 +100,10 @@ export function createSourceDocumentWatch(options: SourceDocumentWatchOptions): 
 
   return () => {
     stopped = true;
+
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
+
     for (const timer of timers.values()) clearTimeout(timer);
     timers.clear();
     source?.close();

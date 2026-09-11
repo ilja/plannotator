@@ -16,7 +16,9 @@ export function ModeToggle() {
         setIsOpen(false);
       }
     };
+
     document.addEventListener("pointerdown", handleClickOutside);
+
     return () => document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
 

@@ -48,6 +48,7 @@ describe("composeImproveContext", () => {
       pfmEnabled: true,
       improvementHookContent: null,
     });
+
     expect(ctx).not.toBeNull();
     expect(ctx).toContain("[Plannotator Flavored Markdown]");
     expect(ctx).not.toContain("[Plannotator Improvement Hook]");
@@ -58,6 +59,7 @@ describe("composeImproveContext", () => {
       pfmEnabled: false,
       improvementHookContent: "1. Always include a test plan section.",
     });
+
     expect(ctx).not.toBeNull();
     expect(ctx).toContain("[Plannotator Improvement Hook]");
     expect(ctx).toContain("The following corrective instructions were generated");

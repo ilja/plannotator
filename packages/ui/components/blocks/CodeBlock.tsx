@@ -22,6 +22,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLElement>(null);
   const { colorTheme, resolvedMode } = useTheme();
+
   const themeName = useMemo(
     () => resolveShikiThemeName(colorTheme, resolvedMode),
     [colorTheme, resolvedMode],
@@ -34,16 +35,20 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   // Use layout effect so plain text is visible before async highlight
   useLayoutEffect(() => {
     const el = codeRef.current;
+
     if (!el) return;
+
     // Don't overwrite if already highlighted with same code or if annotated
     if (el.querySelector("mark[data-bind-id]")) return;
     const currentText = el.textContent ?? "";
+
     // If element is empty or plain text differs, set plain
     if (currentText !== block.content) {
       // Only reset if not already highlighted with same code
       // Check if highlighted content reconstructs to same text
       // For now, if data-syntax-state is highlighted and text matches, keep it until new highlight
       const state = el.getAttribute("data-syntax-state");
+
       if (state === "highlighted" && currentText === block.content) {
         // Already highlighted with same code – keep until theme change triggers new highlight
         // But if code changed, we need to reset
@@ -60,19 +65,24 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 
   useEffect(() => {
     const el = codeRef.current;
+
     if (!el) return;
 
     const normalized = normalizeLanguage(block.language);
     const sizeReason = checkSizeLimits(block.content);
+
     if (sizeReason === "empty") {
       el.textContent = block.content;
       el.setAttribute("data-syntax-state", "plain");
+
       return;
     }
+
     if (sizeReason || !normalized) {
       // Ensure plain text visible for fallback
       if (el.textContent !== block.content) el.textContent = block.content;
       el.setAttribute("data-syntax-state", "fallback");
+
       return;
     }
 

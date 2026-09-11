@@ -94,6 +94,7 @@ describe("message annotation session", () => {
         },
       ],
     ]);
+
     const cached = state({ linkedDocSession: { ...state().linkedDocSession, docs } });
 
     const normalized = normalizeMessageAnnotationState(cached, message);

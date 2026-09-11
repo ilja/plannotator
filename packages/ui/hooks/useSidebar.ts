@@ -34,6 +34,7 @@ export function useSidebar<T extends string = SidebarTab>(
 
   const open = useCallback((tab?: T) => {
     setIsOpen(true);
+
     if (tab) setActiveTab(tab);
   }, []);
 

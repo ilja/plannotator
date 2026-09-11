@@ -31,6 +31,7 @@ describe("generateRemoteShareUrl", () => {
         const rawBody = JSON.parse(String(init?.body));
         const body = Option.getOrThrow(Schema.decodeUnknownOption(PasteUploadBodySchema)(rawBody));
         expect(body.data.length > 0).toBe(true);
+
         return new Response(JSON.stringify({ id: "abc123" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -56,10 +57,13 @@ describe("generateRemoteShareUrl", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
+
     const writeMock: typeof process.stderr.write = (chunk: string | Uint8Array) => {
       stderr += String(chunk);
+
       return true;
     };
+
     const originalWrite = process.stderr.write;
     let stderr = "";
     process.stderr.write = writeMock;
@@ -93,6 +97,7 @@ describe("generateRemoteShareUrl", () => {
   ])("throws when paste success response has %s", async (_label, body) => {
     const fetchImpl: RemoteShareFetch = mock(async () => {
       const responseBody = JSON.stringify(body);
+
       return new Response(responseBody, {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -122,19 +127,26 @@ describe("generateRemoteShareUrl", () => {
           headers: { "Content-Type": "text/plain" },
         });
       }
+
       const responseBody = errorBody === "not-json" ? errorBody : JSON.stringify(errorBody);
+
       return new Response(responseBody, {
         status: 413,
         headers: { "Content-Type": "application/json" },
       });
     });
+
     const writes: string[] = [];
+
     const writeMock: typeof process.stderr.write = (chunk: string | Uint8Array) => {
       writes.push(String(chunk));
+
       return true;
     };
+
     const originalWrite = process.stderr.write;
     process.stderr.write = writeMock;
+
     try {
       await writeRemoteShareLink("", "https://share.example.test", "annotate", "doc", {
         rawHtml: "<!doctype html><h1>Hello</h1>",
@@ -144,6 +156,7 @@ describe("generateRemoteShareUrl", () => {
     } finally {
       process.stderr.write = originalWrite;
     }
+
     expect(writes.join("")).toContain(expectedFallback);
   });
 });

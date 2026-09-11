@@ -5,7 +5,9 @@ const CodeNavFileResponseSchema = Schema.Struct({
 });
 
 type CodeNavFileResponse = Schema.Schema.Type<typeof CodeNavFileResponseSchema>;
+
 type UnknownValue = Schema.Schema.Type<typeof Schema.Unknown>;
+
 const decodeResponse = Schema.decodeUnknownOption(CodeNavFileResponseSchema);
 
 /** Decode the unknown successful response from `/api/code-nav/file`. */

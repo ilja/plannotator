@@ -3,6 +3,7 @@ import { Option, Schema } from "effect";
 import type { Annotation, ChoiceQuestionOption, ChoiceValidationEvidence } from "../types";
 
 const CHOICE_ANNOTATION_PREFIX = "ann-choice-";
+
 let choiceAnnotationSequence = 0;
 
 export const ChoiceQuestionOptionSchema = Schema.Struct({
@@ -12,6 +13,7 @@ export const ChoiceQuestionOptionSchema = Schema.Struct({
 
 const hasUniqueOptionLabels = (options: readonly ChoiceQuestionOption[]): boolean => {
   const labels = new Set(options.map((option) => option.label));
+
   return labels.size === options.length;
 };
 
@@ -19,6 +21,7 @@ export const ChoiceQuestionIdentitySchema = Schema.Struct({
   question: Schema.String,
   options: Schema.Array(ChoiceQuestionOptionSchema),
 });
+
 export type ChoiceQuestionIdentity = Schema.Schema.Type<typeof ChoiceQuestionIdentitySchema>;
 
 export const ChoiceQuestionSchema = Schema.Struct({
@@ -37,6 +40,7 @@ export const ParsedChoiceQuestionSchema = Schema.Struct({
   sourceLineCount: Schema.Number,
   recommendedLabel: Schema.optional(Schema.String),
 });
+
 export type ChoiceQuestion = Schema.Schema.Type<typeof ChoiceQuestionSchema>;
 
 export const ChoiceValidationEvidenceSchema = ChoiceQuestionIdentitySchema;
@@ -48,6 +52,7 @@ export const isChoiceOption = (value: any): value is ChoiceQuestionOption =>
 // SAFETY: value is untrusted choice payload — any is intentional
 export const isChoiceQuestionIdentity = (value: any): value is ChoiceQuestionIdentity => {
   const decoded = Schema.decodeUnknownOption(ChoiceQuestionIdentitySchema)(value);
+
   return Option.isSome(decoded) && hasUniqueOptionLabels(decoded.value.options);
 };
 
@@ -56,12 +61,14 @@ export const isParsedChoiceQuestion = (
   value: any,
 ): value is ChoiceQuestion & { blockId: string } => {
   const decoded = Schema.decodeUnknownOption(ParsedChoiceQuestionSchema)(value);
+
   return Option.isSome(decoded) && hasUniqueOptionLabels(decoded.value.options);
 };
 
 // SAFETY: value is untrusted choice payload — any is intentional
 export const isChoiceValidationEvidence = (value: any): value is ChoiceValidationEvidence => {
   const decoded = Schema.decodeUnknownOption(ChoiceValidationEvidenceSchema)(value);
+
   return Option.isSome(decoded) && hasUniqueOptionLabels(decoded.value.options);
 };
 
@@ -86,8 +93,11 @@ export interface ChoiceReconciliationResult {
 }
 
 const OPTION_RE = /^(\s*)-\s+Option\s+([^:]+):\s+(.+)\s*$/;
+
 const RICH_OPTION_RE = /^(\s*)(?:-\s+)?Option\s+([^:]+):\s+(.+)\s*$/;
+
 const RECOMMENDATION_RE = /^\s*Rec(?:ommendation|comendation):\s+(.+?)\s*$/i;
+
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalizeLineEndings = (value: string): string => value.replace(/\r\n?/g, "\n");
@@ -103,10 +113,11 @@ const findRecommendedLabel = (
   recommendationLine: string | undefined,
 ): string | undefined => {
   const recommendationText = recommendationLine?.match(RECOMMENDATION_RE)?.[1].trim();
+
   const matchingLabels = recommendationText
-    ? options
-        .filter((option) => matchesRecommendedLabel(recommendationText, option.label))
-        .map((option) => option.label)
+    ? options.flatMap((option) =>
+        matchesRecommendedLabel(recommendationText, option.label) ? [option.label] : [],
+      )
     : [];
 
   return matchingLabels.length === 1 ? matchingLabels[0] : undefined;
@@ -123,10 +134,12 @@ const parseStrictChoiceQuestion = (
 
   while (i < lines.length) {
     const match = lines[i].match(OPTION_RE);
+
     if (!match) break;
 
     const currentIndent = match[1].length;
     optionIndent ??= currentIndent;
+
     if (currentIndent !== optionIndent) break;
 
     const optionTextLines = [match[3].trim()];
@@ -134,8 +147,11 @@ const parseStrictChoiceQuestion = (
 
     while (i < lines.length) {
       const nextOptionMatch = lines[i].match(OPTION_RE);
+
       if (nextOptionMatch && nextOptionMatch[1].length === optionIndent) break;
+
       if (lines[i].trim() === "") break;
+
       if ((lines[i].match(/^\s*/)?.[0].length ?? 0) <= optionIndent) break;
 
       optionTextLines.push(lines[i].trim());
@@ -146,6 +162,7 @@ const parseStrictChoiceQuestion = (
   }
 
   if (options.length < 2) return null;
+
   if (i < lines.length && lines[i]?.trim() !== "") return null;
 
   const recommendationLine = i < lines.length ? lines[i + 1] : undefined;
@@ -169,8 +186,10 @@ const parseRichChoiceQuestion = (
   const optionOffset = paragraphLines.findIndex(
     (line, index) => index > 0 && RICH_OPTION_RE.test(line),
   );
+
   const optionStartIndex = optionOffset >= 0 ? optionOffset : nextIndex + 1;
   const firstOptionMatch = lines[optionStartIndex]?.match(RICH_OPTION_RE);
+
   if (!firstOptionMatch) return null;
 
   const questionLines = optionOffset >= 0 ? paragraphLines.slice(0, optionOffset) : paragraphLines;
@@ -178,26 +197,32 @@ const parseRichChoiceQuestion = (
 
   for (let i = optionStartIndex + 1; i < lines.length; i += 1) {
     if (/^#{1,6}(?:\s|$)/.test(lines[i].trim())) return null;
+
     if (RECOMMENDATION_RE.test(lines[i])) {
       recommendationIndex = i;
       break;
     }
   }
+
   if (recommendationIndex < 0) return null;
 
   const optionIndent = firstOptionMatch[1].length;
   const optionHeaders: Array<{ index: number; match: RegExpMatchArray }> = [];
+
   for (let i = optionStartIndex; i < recommendationIndex; i += 1) {
     const match = lines[i].match(RICH_OPTION_RE);
+
     if (match && match[1].length === optionIndent) {
       optionHeaders.push({ index: i, match });
     }
   }
+
   if (optionHeaders.length < 2) return null;
 
   const options = optionHeaders.map(({ index, match }, optionIndex) => {
     const nextHeaderIndex = optionHeaders[optionIndex + 1]?.index ?? recommendationIndex;
     const textLines = [match[3].trim(), ...lines.slice(index + 1, nextHeaderIndex)];
+
     while (textLines.at(-1)?.trim() === "") textLines.pop();
 
     return {
@@ -219,12 +244,15 @@ const parseRichChoiceQuestion = (
 export const parseChoiceQuestion = (sourceText: string): ChoiceQuestion | null => {
   const lines = normalizeLineEndings(sourceText).split("\n");
   const nextIndex = lines.findIndex((line) => line.trim() === "");
+
   if (nextIndex <= 0) return null;
 
   const paragraphLines = lines.slice(0, nextIndex);
+
   const choice =
     parseStrictChoiceQuestion(lines, paragraphLines, nextIndex) ??
     parseRichChoiceQuestion(lines, paragraphLines, nextIndex);
+
   if (!choice) return null;
 
   return hasUniqueOptionLabels(choice.options) ? choice : null;
@@ -232,6 +260,7 @@ export const parseChoiceQuestion = (sourceText: string): ChoiceQuestion | null =
 
 export const nextChoiceAnnotationId = () => {
   choiceAnnotationSequence += 1;
+
   return `${CHOICE_ANNOTATION_PREFIX}${Date.now()}-${choiceAnnotationSequence}`;
 };
 
@@ -253,10 +282,13 @@ export const selectChoiceOption = (
   if (!isChoiceQuestionIdentity(question) || !isChoiceOption(option)) {
     return { kind: "invalid" };
   }
+
   const matchingOption = question.options.find(
     (currentOption) => currentOption.label === option.label && currentOption.text === option.text,
   );
+
   if (!matchingOption) return { kind: "invalid" };
+
   if (
     current &&
     (Object.prototype.toString.call(current.id) !== "[object String]" ||
@@ -268,6 +300,7 @@ export const selectChoiceOption = (
   ) {
     return { kind: "invalid" };
   }
+
   if (current?.choiceOptionLabel === option.label) {
     return {
       kind: "cleared",
@@ -311,6 +344,7 @@ export const reconcileChoiceAnnotations = (
   const invalidatedIds: string[] = [];
   const retained: Annotation[] = [];
   const validQuestions = Array.isArray(questions) ? questions.filter(isParsedChoiceQuestion) : [];
+
   if (!Array.isArray(annotations)) return { retained, invalidatedIds };
 
   for (const annotation of annotations) {
@@ -320,6 +354,7 @@ export const reconcileChoiceAnnotations = (
     }
 
     const evidence = annotation.choiceValidationEvidence;
+
     if (
       !isChoiceValidationEvidence(evidence) ||
       Object.prototype.toString.call(annotation.choiceOptionLabel) !== "[object String]" ||
@@ -332,16 +367,19 @@ export const reconcileChoiceAnnotations = (
     const matches = validQuestions.filter((question) =>
       evidenceMatchesQuestion(evidence, question),
     );
+
     if (matches.length !== 1) {
       invalidatedIds.push(annotation.id);
       continue;
     }
 
     const question = matches[0];
+
     const selectedOption = question.options.find(
       (option) =>
         normalizeLineEndings(option.label) === normalizeLineEndings(annotation.choiceOptionLabel!),
     );
+
     if (
       !selectedOption ||
       normalizeLineEndings(selectedOption.text) !== normalizeLineEndings(annotation.originalText)

@@ -7,8 +7,11 @@ import { join } from "path";
 import { ConfigPatch, resolveDefaultDiffType, type PlannotatorConfig } from "./config";
 
 const TEST_HOME = join(tmpdir(), `config-test-${Date.now()}`);
+
 const CONFIG_DIR = join(TEST_HOME, ".plannotator");
+
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+
 const PROJECT_ROOT = join(import.meta.dir, "../..");
 
 interface ConfigPropertyInspection {
@@ -50,6 +53,7 @@ async function loadConfigFromDisk(config: string): Promise<string> {
       stderr: "pipe",
     },
   );
+
   const stdout = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
 
@@ -98,6 +102,7 @@ async function inspectConfigFromDisk(config: string): Promise<LoadedConfigInspec
       stderr: "pipe",
     },
   );
+
   const stdout = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
 
@@ -107,6 +112,7 @@ async function inspectConfigFromDisk(config: string): Promise<LoadedConfigInspec
   }
 
   const result: LoadedConfigInspection = JSON.parse(stdout);
+
   return result;
 }
 
@@ -131,6 +137,7 @@ async function saveAndLoadConfig(config: string): Promise<string> {
       stderr: "pipe",
     },
   );
+
   const stdout = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
 
@@ -201,6 +208,7 @@ describe("ConfigPatch", () => {
         conventionalLabels: [{ label: "nit", display: "Nit", blocking: false }],
       }),
     );
+
     expect(labels).toEqual({
       conventionalLabels: [{ label: "nit", display: "Nit", blocking: false }],
     });
@@ -208,6 +216,7 @@ describe("ConfigPatch", () => {
     const nullLabels = Option.getOrUndefined(
       Schema.decodeUnknownOption(ConfigPatch)({ conventionalLabels: null }),
     );
+
     expect(nullLabels).toEqual({ conventionalLabels: null });
   });
 });
@@ -374,6 +383,7 @@ describe("loadConfig", () => {
 				}
 			}
 		}`;
+
     const result = await inspectConfigFromDisk(config);
 
     const loadedExpected = JSON.parse(config);

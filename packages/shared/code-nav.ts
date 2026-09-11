@@ -68,6 +68,7 @@ const CodeNavFilePathSchema = Schema.String.pipe(
   Schema.check(
     Schema.makeFilter((filePath) => {
       if (!filePath.trim()) return "filePath must be nonempty after trimming";
+
       return filePath.includes("..") || filePath.startsWith("/")
         ? "filePath must be a safe relative path"
         : undefined;
@@ -213,7 +214,9 @@ function escapeRegex(str: string): string {
 function sameDirectory(a: string, b: string): boolean {
   const dirA = a.lastIndexOf("/");
   const dirB = b.lastIndexOf("/");
+
   if (dirA === -1 && dirB === -1) return true;
+
   return a.slice(0, dirA) === b.slice(0, dirB);
 }
 
@@ -243,6 +246,7 @@ export function buildRgArgs(symbol: string, language?: string): string[] {
 
   if (language) {
     const rgType = RG_TYPE_MAP[language];
+
     if (rgType) args.push("--type", rgType);
   }
 
@@ -285,9 +289,11 @@ export function parseRgJsonOutput(
 
   for (const line of lines) {
     if (locations.length >= PARSE_CAP) break;
+
     if (!line.trim()) continue;
 
     const parsed = Option.getOrUndefined(decodeRgMatchRecordLine(line));
+
     if (!parsed) continue;
 
     const d = parsed.data;
@@ -323,9 +329,11 @@ export function classifyMatch(
 
   if (language) {
     const langPatterns = DEFINITION_PATTERNS.find((p) => p.languages.includes(language));
+
     if (langPatterns) {
       for (const pattern of langPatterns.patterns) {
         const re = new RegExp(pattern.replace("SYMBOL", escaped));
+
         if (re.test(snippet)) return "definition";
       }
     }
@@ -333,6 +341,7 @@ export function classifyMatch(
 
   for (const pattern of GENERIC_DEFINITION_PATTERNS) {
     const re = new RegExp(pattern.replace("SYMBOL", escaped));
+
     if (re.test(snippet)) return "definition";
   }
 
@@ -371,6 +380,7 @@ export function rankLocations(
     if (isTestFile(loc.filePath) && !context.isTestFile) s -= 300;
 
     if (loc.kind === "definition") s += 100;
+
     if (loc.confidence === "likely") s += 50;
 
     return s;
@@ -395,10 +405,12 @@ export function extractChangedFiles(patch: string | null): string[] {
   const set = new Set<string>();
   const re = /^diff --git a\/(.+?) b\/(.+)$/gm;
   let m: RegExpExecArray | null;
+
   while ((m = re.exec(patch)) !== null) {
     set.add(m[1]);
     set.add(m[2]);
   }
+
   return [...set];
 }
 
@@ -414,22 +426,29 @@ interface CodeNavRequestValidationBody {
 
 export function validateCodeNavRequest(body: CodeNavRequestValidationBody | null): string | null {
   if (!body) return "Invalid request body";
+
   const symbol = Option.getOrUndefined(
     Schema.decodeUnknownOption(CodeNavSymbolSchema)(body.symbol),
   );
+
   if (!symbol) {
     return "Missing or empty symbol";
   }
+
   const filePath = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(body.filePath));
+
   if (!filePath || !filePath.trim()) {
     return "Missing filePath";
   }
+
   if (!Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavFilePathSchema)(filePath))) {
     return "Invalid filePath";
   }
+
   const side = Option.getOrUndefined(
     Schema.decodeUnknownOption(Schema.Literals(["old", "new"]))(body.side),
   );
+
   if (!side) {
     return "side must be 'old' or 'new'";
   }
@@ -456,6 +475,7 @@ export async function resolveCodeNav(
       cwd,
       timeoutMs: 2000,
     });
+
     rgAvailable = check.exitCode === 0;
   }
 

@@ -9,13 +9,16 @@ import {
 
 function getWrappedMatchIndex(matchCount: number, currentIndex: number, direction: 1 | -1): number {
   if (matchCount === 0) return -1;
+
   if (currentIndex === -1) return 0;
+
   return (currentIndex + direction + matchCount) % matchCount;
 }
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tagName = target.tagName;
+
   return tagName === "INPUT" || tagName === "TEXTAREA" || target.isContentEditable;
 }
 
@@ -36,9 +39,12 @@ export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseRev
   useEffect(() => {
     if (!searchQuery.trim()) {
       setDebouncedSearchQuery("");
+
       return;
     }
+
     const timeoutId = setTimeout(() => setDebouncedSearchQuery(searchQuery), 200);
+
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
@@ -58,11 +64,13 @@ export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseRev
 
   const activeSearchMatch = useMemo(() => {
     if (!activeSearchMatchId) return null;
+
     return searchMatches.find((match) => match.id === activeSearchMatchId) ?? null;
   }, [searchMatches, activeSearchMatchId]);
 
   const activeFileSearchMatches = useMemo(() => {
     if (!activeFilePath) return [];
+
     return searchMatches.filter((match) => match.filePath === activeFilePath);
   }, [activeFilePath, searchMatches]);
 
@@ -84,6 +92,7 @@ export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseRev
 
   const handleSearchInputChange = useCallback((value: string) => {
     setSearchQuery(value);
+
     if (value.trim()) {
       setIsSearchOpen(true);
     }
@@ -92,6 +101,7 @@ export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseRev
   const activateSearchMatch = useCallback(
     (match: ReviewSearchMatch | null) => {
       setActiveSearchMatchId(match?.id ?? null);
+
       if (match) {
         onRevealMatch?.(match);
       }
@@ -114,6 +124,7 @@ export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseRev
       const currentIndex = activeSearchMatchId
         ? searchMatches.findIndex((match) => match.id === activeSearchMatchId)
         : -1;
+
       const nextIndex = getWrappedMatchIndex(searchMatches.length, currentIndex, direction);
       const nextMatch = nextIndex === -1 ? null : (searchMatches[nextIndex] ?? null);
       activateSearchMatch(nextMatch);
@@ -124,6 +135,7 @@ export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseRev
   useEffect(() => {
     if (!debouncedSearchQuery.trim() || searchMatches.length === 0) {
       setActiveSearchMatchId(null);
+
       return;
     }
 
@@ -157,4 +169,5 @@ export function useReviewSearch({ files, activeFilePath, onRevealMatch }: UseRev
 }
 
 export type UseReviewSearchResult = ReturnType<typeof useReviewSearch>;
+
 export type { ReviewSearchMatch };

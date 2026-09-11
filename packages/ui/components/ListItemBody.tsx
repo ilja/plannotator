@@ -38,6 +38,7 @@ export const ListItemBody: React.FC<ListItemBodyProps> = ({
   renderInline,
 }) => {
   const paragraphs = content.split(/\n\n+/);
+
   return (
     <>
       <ListMarker

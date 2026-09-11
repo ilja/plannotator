@@ -42,12 +42,14 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept when typing in the name input
       const target = e.target;
+
       if (target instanceof HTMLElement && target.tagName === "INPUT") {
         if (e.key === "Escape") {
           // Blur and let the next Escape close
           target.blur();
           e.preventDefault();
         }
+
         return;
       }
 
@@ -55,6 +57,7 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
       if (e.key === "Escape" || e.key === "Enter") {
         e.preventDefault();
         handleAccept();
+
         return;
       }
 
@@ -62,16 +65,20 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
         e.preventDefault();
         handleUndo();
+
         return;
       }
 
       // 1/2/3 to switch tools
       if (e.key === "1") setState((s) => ({ ...s, tool: "pen" }));
+
       if (e.key === "2") setState((s) => ({ ...s, tool: "arrow" }));
+
       if (e.key === "3") setState((s) => ({ ...s, tool: "circle" }));
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, state.strokes]);
 
@@ -92,6 +99,7 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
   const handleStrokeMove = useCallback((point: Point) => {
     setState((s) => {
       if (!s.currentStroke) return s;
+
       return {
         ...s,
         currentStroke: {
@@ -107,6 +115,7 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
       if (!s.currentStroke || s.currentStroke.points.length < 2) {
         return { ...s, currentStroke: null };
       }
+
       return {
         ...s,
         strokes: [...s.strokes, s.currentStroke],
@@ -140,8 +149,10 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
 
     try {
       const img = imageRef.current;
+
       if (!img) {
         onClose();
+
         return;
       }
 
@@ -154,6 +165,7 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
         const blob = await response.blob();
         await onAccept(blob, false, finalName);
         onClose();
+
         return;
       }
 
@@ -180,6 +192,7 @@ export const ImageAnnotator: React.FC<ImageAnnotatorProps> = ({
         if (blob) {
           await onAccept(blob, true, finalName);
         }
+
         onClose();
       }, "image/png");
     } catch (err) {

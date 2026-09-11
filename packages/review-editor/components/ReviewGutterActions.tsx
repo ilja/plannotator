@@ -51,6 +51,7 @@ function createButton(label: string, title: string, ariaLabel?: string) {
   button.type = "button";
   button.title = title;
   button.dataset.gutterSize = "1lh";
+
   if (ariaLabel) button.setAttribute("aria-label", ariaLabel);
   applyStyles(button, buttonStyle);
   button.addEventListener("mouseenter", () => {
@@ -60,6 +61,7 @@ function createButton(label: string, title: string, ariaLabel?: string) {
     button.style.filter = "";
   });
   button.innerHTML = label;
+
   return button;
 }
 
@@ -77,6 +79,7 @@ export function createReviewGutterActionsElement({
   commentButton.addEventListener("click", (event) => {
     event.stopPropagation();
     const line = getHoveredLine();
+
     if (!line) return;
     onComment({
       start: line.lineNumber,
@@ -92,9 +95,11 @@ export function createReviewGutterActionsElement({
       "Attach line to AI chat",
       "Attach line to AI chat",
     );
+
     aiButton.addEventListener("click", (event) => {
       event.stopPropagation();
       const line = getHoveredLine();
+
       if (!line) return;
       onAttachAI(line);
     });
@@ -113,6 +118,7 @@ export const ReviewGutterActions: React.FC<ReviewGutterActionsProps> = ({
   const brighten = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.currentTarget.style.filter = "brightness(1.2)";
   };
+
   const reset = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.currentTarget.style.filter = "";
   };
@@ -129,6 +135,7 @@ export const ReviewGutterActions: React.FC<ReviewGutterActionsProps> = ({
         onClick={(event) => {
           event.stopPropagation();
           const line = getHoveredLine();
+
           if (!line) return;
           onComment({
             start: line.lineNumber,
@@ -151,6 +158,7 @@ export const ReviewGutterActions: React.FC<ReviewGutterActionsProps> = ({
           onClick={(event) => {
             event.stopPropagation();
             const line = getHoveredLine();
+
             if (!line) return;
             onAttachAI(line);
           }}

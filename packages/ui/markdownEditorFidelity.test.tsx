@@ -25,8 +25,11 @@ import { homedir } from "node:os";
 import { AtomicCodeMirrorEditor, type AtomicCodeMirrorEditorHandle } from "@atomic-editor/editor";
 
 const hasDom = globalThis.document !== undefined;
+
 const CORPUS_DIR = join(homedir(), ".plannotator", "history");
+
 const CORPUS_SAMPLE_SIZE = 150;
+
 const MAX_FILE_BYTES = 64 * 1024;
 
 interface Fixtures {
@@ -110,6 +113,7 @@ async function mountAndRead(markdown: string): Promise<string> {
   host.style.width = "600px";
   host.style.height = "400px";
   document.body.appendChild(host);
+
   interface HandleRef {
     current: AtomicCodeMirrorEditorHandle | null;
   }
@@ -124,6 +128,7 @@ async function mountAndRead(markdown: string): Promise<string> {
     root.unmount();
   });
   host.remove();
+
   return out;
 }
 
@@ -131,17 +136,22 @@ async function mountAndRead(markdown: string): Promise<string> {
 function sampleCorpus(): string[] {
   if (!existsSync(CORPUS_DIR)) return [];
   const files: string[] = [];
+
   const walk = (dir: string) => {
     let entries: string[];
+
     try {
       entries = readdirSync(dir);
     } catch {
       return;
     }
+
     for (const entry of entries) {
       const full = join(dir, entry);
+
       try {
         const st = statSync(full);
+
         if (st.isDirectory()) walk(full);
         else if (entry.endsWith(".md") && st.size > 0 && st.size <= MAX_FILE_BYTES)
           files.push(full);
@@ -150,16 +160,20 @@ function sampleCorpus(): string[] {
       }
     }
   };
+
   walk(CORPUS_DIR);
 
   const hash = (s: string): number => {
     let h = 2166136261;
+
     for (let i = 0; i < s.length; i++) {
       h ^= s.charCodeAt(i);
       h = Math.imul(h, 16777619);
     }
+
     return h >>> 0;
   };
+
   return files
     .map((f) => ({ f, h: hash(f) }))
     .sort((a, b) => a.h - b.h)
@@ -184,16 +198,20 @@ describe("markdown edit mode fidelity", () => {
       const failures: string[] = [];
       let tested = 0;
       let skippedCrlf = 0;
+
       for (const file of sample) {
         const content = readFileSync(file, "utf8");
+
         // CM6's Text model joins lines with \n; CRLF input cannot round-trip.
         // The corpus is verified \r-free today — guard rather than fail noisily.
         if (content.includes("\r")) {
           skippedCrlf++;
           continue;
         }
+
         const out = await mountAndRead(content);
         tested++;
+
         if (out !== content) failures.push(file);
       }
 

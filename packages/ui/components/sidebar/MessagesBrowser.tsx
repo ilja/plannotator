@@ -26,6 +26,7 @@ const PREVIEW_MAX_CHARS = 140;
 
 function previewText(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
+
   return normalized.length > PREVIEW_MAX_CHARS
     ? normalized.slice(0, PREVIEW_MAX_CHARS).trimEnd() + "…"
     : normalized;
@@ -34,7 +35,9 @@ function previewText(text: string): string {
 function formatTimestamp(ts?: string): string | null {
   if (!ts) return null;
   const d = new Date(ts);
+
   if (Number.isNaN(d.getTime())) return null;
+
   return d.toLocaleString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -68,6 +71,7 @@ export const MessagesBrowser: React.FC<MessagesBrowserProps> = ({
           const isDefault = idx === 0;
           const ts = formatTimestamp(msg.timestamp);
           const annotationCount = annotationCounts?.get(msg.messageId) ?? 0;
+
           return (
             <button
               key={msg.messageId}

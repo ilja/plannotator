@@ -3,11 +3,13 @@ import { storage } from "./storage";
 import { getDefaultNotesApp, saveDefaultNotesApp } from "./defaultNotesApp";
 
 const storedValues = new Map<string, string>();
+
 const realStorageMethods = {
   getItem: storage.getItem,
   setItem: storage.setItem,
   removeItem: storage.removeItem,
 };
+
 const STORAGE_KEY = "plannotator-default-notes-app";
 
 beforeEach(() => {
@@ -15,6 +17,7 @@ beforeEach(() => {
   storage.setItem = (key, value) => {
     storedValues.set(key, value);
   };
+
   storage.removeItem = (key) => {
     storedValues.delete(key);
   };

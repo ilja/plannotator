@@ -4,11 +4,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { useDiffFreshness } from "./useDiffFreshness";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const realSetTimeout = globalThis.setTimeout;
+
 const realClearTimeout = globalThis.clearTimeout;
+
 const roots: Root[] = [];
+
 const timerCallbacks = new Map<number, () => void>();
+
 let nextTimerId = 1;
 
 function installManualTimers(): void {
@@ -17,6 +23,7 @@ function installManualTimers(): void {
     value: (callback: () => void): number => {
       const id = nextTimerId++;
       timerCallbacks.set(id, callback);
+
       return id;
     },
   });
@@ -30,6 +37,7 @@ function installManualTimers(): void {
 
 function runNextTimer(): void {
   const next = timerCallbacks.entries().next();
+
   if (next.done) throw new Error("Expected a pending timer");
   timerCallbacks.delete(next.value[0]);
   next.value[1]();
@@ -89,7 +97,9 @@ async function mountHarness(
 
 function staleOutput(host: HTMLDivElement): HTMLOutputElement {
   const output = host.querySelector("output");
+
   if (!(output instanceof HTMLOutputElement)) throw new Error("Hook harness did not render");
+
   return output;
 }
 
@@ -105,6 +115,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
   Object.defineProperty(globalThis, "setTimeout", { configurable: true, value: realSetTimeout });
   Object.defineProperty(globalThis, "clearTimeout", {
@@ -112,6 +123,7 @@ afterEach(async () => {
     value: realClearTimeout,
   });
   timerCallbacks.clear();
+
   if (hasDom) document.body.innerHTML = "";
 });
 
@@ -149,6 +161,7 @@ describe("useDiffFreshness response handling", () => {
     expect(staleOutput(host).dataset.stale).toBe("true");
 
     const dismiss = host.querySelector("button");
+
     if (!(dismiss instanceof HTMLButtonElement)) throw new Error("Hook harness did not render");
     await act(async () => dismiss.click());
     expect(staleOutput(host).dataset.stale).toBe("false");
@@ -187,12 +200,15 @@ describe("useDiffFreshness response handling", () => {
 
   test.skipIf(!hasDom)("does not apply a cancelled poll after a reset", async () => {
     installManualTimers();
+
     let resolveFirst: (response: Response) => void = () => {
       throw new Error("First response resolver was not initialized");
     };
+
     const firstResponse = new Promise<Response>((resolve) => {
       resolveFirst = resolve;
     });
+
     installFetch([
       firstResponse,
       new Response(JSON.stringify({ fresh: false, fingerprint: "new", agentCwd: "/tmp/new" })),
@@ -214,6 +230,7 @@ describe("useDiffFreshness response handling", () => {
     expect(appliedCwds).toEqual(["/tmp/new"]);
 
     const dismiss = host.querySelector("button");
+
     if (!(dismiss instanceof HTMLButtonElement)) throw new Error("Hook harness did not render");
     await act(async () => dismiss.click());
     expect(staleOutput(host).dataset.stale).toBe("false");

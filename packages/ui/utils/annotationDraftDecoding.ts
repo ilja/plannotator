@@ -31,23 +31,35 @@ const SourceBackedDocumentInputSchema = Schema.Struct({
 });
 
 const DraftEnvelopeSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 const DraftItemsSchema = Schema.Array(Schema.Unknown);
+
 const DraftGenerationSchema = Schema.Natural;
+
 const DraftGenerationCarrierSchema = Schema.Struct({
   draftGeneration: Schema.optionalKey(DraftGenerationSchema),
 });
 
 const decodeSavedFileChangeInput = Schema.decodeUnknownOption(SavedFileChangeInputSchema);
+
 const decodeSourceBackedDocumentInput = Schema.decodeUnknownOption(SourceBackedDocumentInputSchema);
+
 const decodeSourceSaveCapability = Schema.decodeUnknownOption(SourceSaveCapabilitySchema);
+
 const decodeDraftEnvelope = Schema.decodeUnknownOption(DraftEnvelopeSchema);
+
 const decodeDraftItems = Schema.decodeUnknownOption(DraftItemsSchema);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeNumber = Schema.decodeUnknownOption(Schema.Finite);
+
 const decodeGeneration = Schema.decodeUnknownOption(DraftGenerationSchema);
+
 const decodeGenerationCarrier = Schema.decodeUnknownOption(DraftGenerationCarrierSchema);
 
 type DraftEnvelope = Schema.Schema.Type<typeof DraftEnvelopeSchema>;
+
 type DraftItems = Schema.Schema.Type<typeof DraftItemsSchema>;
 
 export interface DecodedStoredAnnotationDraft {
@@ -79,7 +91,9 @@ function readNumber<Input>(value: Input): number | null {
 
 export function decodeStoredDraftGeneration<Input>(value: Input): number | null {
   const direct = Option.getOrNull(decodeGeneration(value));
+
   if (direct !== null) return direct;
+
   return Option.getOrNull(decodeGenerationCarrier(value))?.draftGeneration ?? null;
 }
 
@@ -87,39 +101,52 @@ function readSourceSaveCapability<Input>(
   value: Input,
 ): SourceBackedDraftSourceSaveCapability | null {
   const decoded = Option.getOrNull(decodeSourceSaveCapability(value));
+
   return decoded?.enabled === true ? decoded : null;
 }
 
 function readAnnotations<Input>(value: Input): Annotation[] | null {
   const items = readDraftItems(value);
+
   if (!items) return null;
   const annotations: Annotation[] = [];
+
   for (const item of items) {
     const decoded = Option.getOrNull(decodeAnnotation(item));
+
     if (decoded) annotations.push(decoded);
   }
+
   return annotations;
 }
 
 function readCodeAnnotations<Input>(value: Input): CodeAnnotation[] | null {
   const items = readDraftItems(value);
+
   if (!items) return null;
   const annotations: CodeAnnotation[] = [];
+
   for (const item of items) {
     const decoded = Option.getOrNull(decodeCodeAnnotation(item));
+
     if (decoded) annotations.push(decoded);
   }
+
   return annotations;
 }
 
 function readImageAttachments<Input>(value: Input): ImageAttachment[] | null {
   const items = readDraftItems(value);
+
   if (!items) return null;
   const attachments: ImageAttachment[] = [];
+
   for (const item of items) {
     const decoded = Option.getOrNull(decodeImageAttachment(item));
+
     if (decoded) attachments.push(decoded);
   }
+
   return attachments;
 }
 
@@ -128,9 +155,12 @@ function readSavedFileChange<Input>(
   fallbackSourceSave?: SourceBackedDraftSourceSaveCapability,
 ): SourceBackedSavedFileChangeDraftData | null {
   const decoded = Option.getOrNull(decodeSavedFileChangeInput(value));
+
   if (!decoded) return null;
   const sourceSave = readSourceSaveCapability(decoded.sourceSave) ?? fallbackSourceSave;
+
   if (!sourceSave) return null;
+
   return {
     key: decoded.key,
     path: decoded.path,
@@ -145,10 +175,13 @@ function readSavedFileChange<Input>(
 
 function readSourceBackedDocument<Input>(value: Input): SourceBackedDocumentDraftData | null {
   const decoded = Option.getOrNull(decodeSourceBackedDocumentInput(value));
+
   if (!decoded) return null;
   const sourceSave = readSourceSaveCapability(decoded.sourceSave);
+
   if (!sourceSave) return null;
   const savedChange = readSavedFileChange(decoded.savedChange, sourceSave);
+
   return {
     key: decoded.key,
     sourceSave,
@@ -162,23 +195,31 @@ function readSourceBackedDocument<Input>(value: Input): SourceBackedDocumentDraf
 
 function readSourceBackedDocuments<Input>(value: Input): SourceBackedDocumentDraftData[] | null {
   const items = readDraftItems(value);
+
   if (!items) return null;
   const documents: SourceBackedDocumentDraftData[] = [];
+
   for (const item of items) {
     const decoded = readSourceBackedDocument(item);
+
     if (decoded) documents.push(decoded);
   }
+
   return documents;
 }
 
 function readSavedFileChanges<Input>(value: Input): SourceBackedSavedFileChangeDraftData[] | null {
   const items = readDraftItems(value);
+
   if (!items) return null;
   const changes: SourceBackedSavedFileChangeDraftData[] = [];
+
   for (const item of items) {
     const decoded = readSavedFileChange(item);
+
     if (decoded) changes.push(decoded);
   }
+
   return changes;
 }
 
@@ -186,13 +227,16 @@ export function decodeStoredAnnotationDraft<Input>(
   value: Input,
 ): DecodedStoredAnnotationDraft | null {
   const envelope = readDraftEnvelope(value);
+
   if (!envelope) return null;
 
   const normalizedTimestamp = readNumber(envelope.ts) ?? 0;
+
   const legacy = decodeLegacyShareData({
     ...envelope,
     ts: normalizedTimestamp,
   });
+
   if (legacy) {
     return {
       annotations: legacy.a.length > 0 ? fromShareable(legacy.a, legacy.d) : [],
@@ -212,6 +256,7 @@ export function decodeStoredAnnotationDraft<Input>(
   const editedMarkdown = readString(envelope.editedMarkdown);
   const editedDocuments = readSourceBackedDocuments(envelope.editedDocuments);
   const savedFileChanges = readSavedFileChanges(envelope.savedFileChanges);
+
   const hasDirectDraftField =
     annotations !== null ||
     codeAnnotations !== null ||
@@ -219,6 +264,7 @@ export function decodeStoredAnnotationDraft<Input>(
     editedMarkdown !== null ||
     editedDocuments !== null ||
     savedFileChanges !== null;
+
   if (!hasDirectDraftField) return null;
 
   return {

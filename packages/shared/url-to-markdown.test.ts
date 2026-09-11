@@ -3,6 +3,7 @@ import { urlToMarkdown } from "./url-to-markdown";
 
 // Track fetch calls to verify headers and URL selection
 let fetchCalls: { url: string; headers: Record<string, string> }[] = [];
+
 const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
@@ -25,6 +26,7 @@ function mockFetchWithMarkdownSupport(markdown: string) {
     fetchCalls.push({ url: String(url), headers: headers ?? {} });
 
     const accept = headers?.Accept || headers?.accept || "";
+
     if (accept.includes("text/markdown")) {
       return Promise.resolve(
         new Response(markdown, {
@@ -36,6 +38,7 @@ function mockFetchWithMarkdownSupport(markdown: string) {
         }),
       );
     }
+
     return Promise.resolve(
       new Response("<html><body><p>Hello</p></body></html>", {
         status: 200,
@@ -51,6 +54,7 @@ function _mockFetchHtmlOnly(html = "<html><body><p>Fallback</p></body></html>") 
     // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(url), headers: headers ?? {} });
+
     return Promise.resolve(
       new Response(html, {
         status: 200,
@@ -93,6 +97,7 @@ test("content negotiation: falls through to Jina when server returns HTML", asyn
         }),
       );
     }
+
     // Jina Reader call
     return Promise.resolve(
       new Response("# From Jina", {
@@ -119,6 +124,7 @@ test("content negotiation: skipped for local URLs", async () => {
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(_url), headers: headers ?? {} });
     _callCount++;
+
     return Promise.resolve(
       new Response("<html><body>Local</body></html>", {
         status: 200,
@@ -130,6 +136,7 @@ test("content negotiation: skipped for local URLs", async () => {
   const result = await urlToMarkdown("http://localhost:3000/readme", { useJina: false });
 
   expect(result.source).toBe("fetch+turndown");
+
   // No content negotiation request should have been made
   // (first call should be the Turndown fetch, not a markdown request)
   for (const call of fetchCalls) {
@@ -152,6 +159,7 @@ test("content negotiation: handles server error gracefully", async () => {
       // Content negotiation — server error
       return Promise.resolve(new Response(null, { status: 500 }));
     }
+
     // Jina fallback
     return Promise.resolve(
       new Response("# Jina fallback", {
@@ -173,6 +181,7 @@ test("raw .md URL: still takes priority over content negotiation", async () => {
     // SAFETY: test builds HeadersInit from string map; cast to access Accept header
     const headers = init?.headers as Record<string, string> | undefined;
     fetchCalls.push({ url: String(_url), headers: headers ?? {} });
+
     return Promise.resolve(
       new Response("# Raw markdown file", {
         status: 200,

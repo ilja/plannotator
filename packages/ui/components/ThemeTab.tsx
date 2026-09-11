@@ -22,6 +22,7 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ onPreview, compact }) => {
         <div className="flex gap-1">
           {(["dark", "light", "system"] satisfies Mode[]).map((m) => {
             const isActive = mode === m;
+
             return (
               <button
                 key={m}
@@ -107,9 +108,11 @@ export const ThemeTab: React.FC<ThemeTabProps> = ({ onPreview, compact }) => {
           {availableThemes.map((theme) => {
             const isSelected = colorTheme === theme.id;
             const colors = theme.colors[resolvedMode];
+
             const modeUnavailable =
               (resolvedMode === "light" && theme.modeSupport === "dark-only") ||
               (resolvedMode === "dark" && theme.modeSupport === "light-only");
+
             return (
               <button
                 key={theme.id}

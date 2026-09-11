@@ -66,7 +66,9 @@ import {
 
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
+
 export { openBrowser } from "./browser";
+
 export { handleServerReady as handleAnnotateServerReady } from "./shared-handlers";
 
 // --- Types ---
@@ -140,6 +142,7 @@ export interface AnnotateServerResult {
 // --- Server Implementation ---
 
 const MAX_RETRIES = 5;
+
 const RETRY_DELAY_MS = 500;
 
 type InitialSourceState =
@@ -154,8 +157,11 @@ type AnnotateRouteHandler = (
 
 function sourceSaveFailureStatus(code: string): number {
   if (code === "conflict") return 409;
+
   if (code === "invalid-request") return 400;
+
   if (code === "not-writable") return 403;
+
   return 500;
 }
 
@@ -217,6 +223,7 @@ export async function startAnnotateServer(
     if (!eligible) return { eligible: false, path: null };
 
     const sourceSave = createSourceSaveCapability("single-file", filePath);
+
     return {
       eligible: true,
       path: sourceSave.enabled ? sourceSave.path : resolveUserPath(filePath),
@@ -228,6 +235,7 @@ export async function startAnnotateServer(
   const externalAnnotations = createExternalAnnotationHandler("plan");
   const aiRuntime = await createAIRuntime();
   const htmlAssets = createHtmlAssetRegistry();
+
   const agentTerminal = await createBunAgentTerminalBridge({
     enabled: supportsAnnotateAgentTerminalMode(mode),
     cwd: agentCwd ?? process.cwd(),
@@ -243,12 +251,14 @@ export async function startAnnotateServer(
 
     const sourcePath = resolvePath(filePath);
     const requestedPath = pathParam ? resolvePath(pathParam) : sourcePath;
+
     if (!/\.html?$/i.test(requestedPath)) {
       return Response.json(
         { error: "Share HTML is only available for HTML documents" },
         { status: 400 },
       );
     }
+
     if (!isAllowedHtmlSharePath(requestedPath)) {
       return Response.json({ error: "Access denied" }, { status: 403 });
     }
@@ -258,6 +268,7 @@ export async function startAnnotateServer(
         renderHtml && rawHtml && requestedPath === sourcePath
           ? rawHtml
           : await Bun.file(requestedPath).text();
+
       return Response.json({ shareHtml: htmlAssets.inlineHtml(html, requestedPath) });
     } catch {
       return Response.json({ error: "Failed to prepare share HTML" }, { status: 500 });
@@ -266,11 +277,15 @@ export async function startAnnotateServer(
 
   function isAllowedHtmlSharePath(targetPath: string): boolean {
     const roots = new Set<string>([process.cwd()]);
+
     if (folderPath) roots.add(folderPath);
+
     if (!/^https?:\/\//i.test(filePath)) roots.add(dirname(filePath));
+
     for (const root of roots) {
       if (isWithinDirectory(targetPath, root)) return true;
     }
+
     return false;
   }
 
@@ -278,22 +293,28 @@ export async function startAnnotateServer(
   const singleFileSourceSaveEligible = initialSourceState.eligible;
   const initialSingleFileSourcePath = initialSourceState.path;
   const openedSourceFilePaths = new Set<string>();
+
   if (initialSourceState.eligible) {
     openedSourceFilePaths.add(initialSourceState.path);
   }
+
   const getPrimarySource = () => {
     if (mode === "annotate-last") {
       return { plan: markdown, sourceSave: disabledSourceSave("message-mode") };
     }
+
     if (mode === "annotate-folder") {
       return { plan: markdown, sourceSave: disabledSourceSave("folder-mode") };
     }
+
     if (renderHtml && rawHtml) {
       return { plan: markdown, sourceSave: disabledSourceSave("html-render") };
     }
+
     if (sourceConverted) {
       return { plan: markdown, sourceSave: disabledSourceSave("converted-source") };
     }
+
     if (/^https?:\/\//i.test(filePath)) {
       return { plan: markdown, sourceSave: disabledSourceSave("not-local-file") };
     }
@@ -302,6 +323,7 @@ export async function startAnnotateServer(
       "single-file",
       initialSingleFileSourcePath ?? filePath,
     );
+
     if (!sourceSave.enabled) {
       if (sourceSave.reason === "missing-file" && initialSingleFileSourcePath) {
         const missingSourceSave = createSourceSaveCapabilityFromText(
@@ -309,15 +331,18 @@ export async function startAnnotateServer(
           initialSingleFileSourcePath,
           markdown,
         );
+
         if (missingSourceSave.enabled) {
           return { plan: markdown, sourceSave: missingSourceSave };
         }
       }
+
       return { plan: markdown, sourceSave };
     }
 
     try {
       const snapshot = readSourceFileSnapshot(sourceSave.path);
+
       return {
         plan: snapshot.text,
         sourceSave: {
@@ -353,6 +378,7 @@ export async function startAnnotateServer(
     selectedMessageId?: string;
     feedbackScope?: "message" | "messages";
   }) => void;
+
   const decisionPromise = new Promise<{
     feedback: string;
     annotations: unknown[];
@@ -369,7 +395,9 @@ export async function startAnnotateServer(
 
     const displayRawHtml =
       renderHtml && rawHtml ? htmlAssets.rewriteHtml(rawHtml, filePath) : undefined;
+
     const primarySource = getPrimarySource();
+
     const planResponse = {
       plan: primarySource.plan,
       origin,
@@ -390,40 +418,51 @@ export async function startAnnotateServer(
       serverConfig: getServerConfig(gitUser),
       agentTerminal: agentTerminal.capability,
     };
+
     if (displayRawHtml) Object.assign(planResponse, { rawHtml: displayRawHtml });
+
     if (recentMessages) Object.assign(planResponse, { recentMessages });
+
     return Response.json(planResponse);
   };
 
   const handleShareHtmlRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/share-html" || req.method !== "GET") return null;
+
     return loadShareHtml(url.searchParams.get("path"));
   };
 
   const handleOpenInAppsRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/open-in/apps" || req.method !== "GET") return null;
+
     if (/^https?:\/\//i.test(filePath)) {
       return Response.json({ available: false, apps: [] });
     }
+
     return handleOpenInApps();
   };
 
   const handleOpenInRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/open-in" || req.method !== "POST") return null;
+
     if (/^https?:\/\//i.test(filePath)) {
       return Response.json(
         { ok: false, error: "Open in app is unavailable for this source" },
         { status: 400 },
       );
     }
+
     return handleOpenIn(req, { resolveRoot: getReferenceRootPaths });
   };
 
   const handleConfigRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/config" || req.method !== "POST") return null;
+
     try {
       const patch = Schema.decodeUnknownSync(ConfigPatch)(await req.json());
+
       if (Object.keys(patch).length > 0) saveConfig(patch);
+
       return Response.json({ ok: true });
     } catch {
       return Response.json({ error: "Invalid request" }, { status: 400 });
@@ -443,6 +482,7 @@ export async function startAnnotateServer(
 
     const docUrl = new URL(req.url);
     let changed = false;
+
     if (!docUrl.searchParams.has("base") && !/^https?:\/\//i.test(filePath)) {
       docUrl.searchParams.set(
         "base",
@@ -450,11 +490,14 @@ export async function startAnnotateServer(
       );
       changed = true;
     }
+
     if (convertHtml && !docUrl.searchParams.has("convert")) {
       docUrl.searchParams.set("convert", "1");
       changed = true;
     }
+
     const docReq = changed ? new Request(docUrl.toString()) : req;
+
     return handleDoc(docReq, {
       rewriteHtml: htmlAssets.rewriteHtml,
       sourceSaveFilePath: singleFileSourceSaveEligible
@@ -472,6 +515,7 @@ export async function startAnnotateServer(
     const body = Option.getOrUndefined(
       Schema.decodeUnknownOption(SourceSaveRequestSchema)(await req.json()),
     );
+
     if (!body) {
       return Response.json(
         { ok: false, code: "invalid-request", message: "Invalid JSON body." },
@@ -480,16 +524,19 @@ export async function startAnnotateServer(
     }
 
     let targetPath: string | null = null;
+
     if (singleFileSourceSaveEligible) {
       const capability = createSourceSaveCapability(
         "single-file",
         initialSingleFileSourcePath ?? filePath,
       );
+
       targetPath = capability.enabled ? capability.path : initialSingleFileSourcePath;
     } else if (mode === "annotate-folder" && folderPath && body.path !== undefined) {
       targetPath = body.allowMissingBase
         ? resolveFolderSourceFileForSave(body.path, folderPath)
         : resolveFolderSourceFile(body.path, folderPath);
+
       if (
         body.allowMissingBase &&
         targetPath &&
@@ -516,12 +563,15 @@ export async function startAnnotateServer(
       missingBaseEol: body.baseEol,
       allowedRoot: mode === "annotate-folder" ? folderPath : undefined,
     });
+
     const status = result.ok ? 200 : sourceSaveFailureStatus(result.code);
+
     return Response.json(result, { status });
   };
 
   const handleDocExistsRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/doc/exists" || req.method !== "POST") return null;
+
     return handleDocExists(req, { rootPaths: getReferenceRootPaths() });
   };
 
@@ -531,16 +581,19 @@ export async function startAnnotateServer(
 
   const handleObsidianFilesRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/reference/obsidian/files" || req.method !== "GET") return null;
+
     return handleObsidianFiles(req);
   };
 
   const handleObsidianDocRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/reference/obsidian/doc" || req.method !== "GET") return null;
+
     return handleObsidianDoc(req);
   };
 
   const handleReferenceFilesRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/reference/files" || req.method !== "GET") return null;
+
     return handleFileBrowserFiles(req);
   };
 
@@ -550,18 +603,23 @@ export async function startAnnotateServer(
     disableIdleTimeout,
   ) => {
     if (url.pathname !== "/api/reference/files/stream" || req.method !== "GET") return null;
+
     return handleFileBrowserFilesStream(req, { disableIdleTimeout });
   };
 
   const handleUploadRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/upload" || req.method !== "POST") return null;
+
     return handleUpload(req);
   };
 
   const handleDraftRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/draft") return null;
+
     if (req.method === "POST") return handleDraftSave(req, draftKey);
+
     if (req.method === "DELETE") return handleDraftDelete(draftKey, req);
+
     return handleDraftLoad(draftKey);
   };
 
@@ -579,8 +637,11 @@ export async function startAnnotateServer(
     // SAFETY: url.pathname is prefix-checked against /api/ai/ above, and
     // AIEndpoints is keyed by exactly those API paths.
     const handler = aiRuntime.endpoints[url.pathname as keyof AIEndpoints];
+
     if (!handler) return Response.json({ error: "Not found" }, { status: 404 });
+
     if (url.pathname === AI_QUERY_ENDPOINT) disableIdleTimeout();
+
     return handler(req);
   };
 
@@ -588,6 +649,7 @@ export async function startAnnotateServer(
     if (url.pathname !== "/api/exit" || req.method !== "POST") return null;
     deleteDraft(draftKey, readDraftGenerationFromUrl(req));
     resolveDecision({ feedback: "", annotations: [], exit: true });
+
     return Response.json({ ok: true });
   };
 
@@ -595,16 +657,20 @@ export async function startAnnotateServer(
     if (url.pathname !== "/api/approve" || req.method !== "POST") return null;
     deleteDraft(draftKey, readDraftGenerationFromUrl(req));
     resolveDecision({ feedback: "", annotations: [], approved: true });
+
     return Response.json({ ok: true });
   };
 
   const handleFeedbackRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/feedback" || req.method !== "POST") return null;
+
     try {
       const rawBody = await req.json();
+
       const body = Option.getOrUndefined(
         Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
       );
+
       if (!body) {
         return Response.json({ error: "Invalid request" }, { status: 400 });
       }
@@ -620,12 +686,14 @@ export async function startAnnotateServer(
       return Response.json({ ok: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to process feedback";
+
       return Response.json({ error: message }, { status: 500 });
     }
   };
 
   const handleSaveNotesRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/save-notes" || req.method !== "POST") return null;
+
     return handleSaveNotes(req);
   };
 
@@ -677,15 +745,19 @@ export async function startAnnotateServer(
 
           if (agentTerminal.matches(url.pathname)) {
             if (agentTerminal.capability.enabled && agentTerminal.upgrade(req, bunServer)) return;
+
             return new Response("Agent terminal is unavailable", { status: 404 });
           }
+
           if (isAgentTerminalWsRoute(url.pathname)) {
             return new Response("Agent terminal is unavailable", { status: 404 });
           }
 
           const disableIdleTimeout = () => bunServer.timeout(req, 0);
+
           for (const handleRoute of routeHandlers) {
             const response = await handleRoute(req, url, disableIdleTimeout);
+
             if (response) return response;
           }
 
@@ -697,6 +769,7 @@ export async function startAnnotateServer(
 
         error(err) {
           console.error("[plannotator] Server error:", err);
+
           return new Response(
             `Internal Server Error: ${err instanceof Error ? err.message : String(err)}`,
             { status: 500, headers: { "Content-Type": "text/plain" } },

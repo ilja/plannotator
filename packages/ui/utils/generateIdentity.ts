@@ -25,5 +25,6 @@ export function generateIdentity(): string {
   });
 
   const [adjective, noun] = generated.split("|||");
+
   return `${adjective}-${noun}-tater`;
 }

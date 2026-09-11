@@ -33,22 +33,28 @@ export function useCodeNavPreview() {
         targetLine: line,
         filePath,
       });
+
       return;
     }
 
     setIsLoading(true);
+
     try {
       const res = await fetch(`/api/code-nav/file?path=${encodeURIComponent(filePath)}`, {
         signal: controller.signal,
       });
+
       if (!res.ok) throw new Error("Failed");
       const data = decodeCodeNavFileResponse(await res.json());
+
       if (!data) throw new Error("Malformed response");
 
       if (cache.size >= MAX_CACHE_ENTRIES) {
         const firstKey = cache.keys().next().value;
+
         if (firstKey) cache.delete(firstKey);
       }
+
       cache.set(filePath, data.content);
 
       if (controller.signal.aborted) return;

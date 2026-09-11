@@ -9,6 +9,7 @@ import { isRemoteSession, getServerHostname, getServerPort } from "./remote";
 
 // Save and restore env between tests
 const savedEnv: Record<string, string | undefined> = {};
+
 const envKeys = ["PLANNOTATOR_REMOTE", "PLANNOTATOR_PORT", "SSH_TTY", "SSH_CONNECTION"];
 
 function clearEnv() {

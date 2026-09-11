@@ -97,11 +97,13 @@ function useFileTreeKeyboardNavigation({
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return;
+
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return;
       }
 
       const activeElement = document.activeElement;
+
       if (
         activeElement instanceof HTMLElement &&
         activeElement.closest(
@@ -112,21 +114,30 @@ function useFileTreeKeyboardNavigation({
       }
 
       const visualPosition = visualOrder.indexOf(activeFileIndex);
+
       if (event.key === "j" || event.key === "ArrowDown") {
         event.preventDefault();
+
         if (visualPosition < visualOrder.length - 1) onSelectFile(visualOrder[visualPosition + 1]);
+
         return;
       }
+
       if (event.key === "k" || event.key === "ArrowUp") {
         event.preventDefault();
+
         if (visualPosition > 0) onSelectFile(visualOrder[visualPosition - 1]);
+
         return;
       }
+
       if (event.key === "Home") {
         event.preventDefault();
         onSelectFile(visualOrder[0]);
+
         return;
       }
+
       if (event.key === "End") {
         event.preventDefault();
         onSelectFile(visualOrder[visualOrder.length - 1]);
@@ -137,6 +148,7 @@ function useFileTreeKeyboardNavigation({
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 }
@@ -157,6 +169,7 @@ function useExpandedFolders({
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     () => new Set(allFolderPaths),
   );
+
   const [previousTree, setPreviousTree] = useState(tree);
 
   if (tree !== previousTree) {
@@ -166,15 +179,19 @@ function useExpandedFolders({
 
   useEffect(() => {
     const activeFile = files[activeFileIndex];
+
     if (!activeFile) return;
 
     const ancestors = getAncestorPaths(activeFile.path);
     setExpandedFolders((previousFolders) => {
       const missingFolders = ancestors.filter((path) => !previousFolders.has(path));
+
       if (missingFolders.length === 0) return previousFolders;
 
       const nextFolders = new Set(previousFolders);
+
       for (const path of missingFolders) nextFolders.add(path);
+
       return nextFolders;
     });
   }, [activeFileIndex, files]);
@@ -182,14 +199,17 @@ function useExpandedFolders({
   const toggleFolder = useCallback((path: string) => {
     setExpandedFolders((previousFolders) => {
       const nextFolders = new Set(previousFolders);
+
       if (nextFolders.has(path)) nextFolders.delete(path);
       else nextFolders.add(path);
+
       return nextFolders;
     });
   }, []);
 
   const areAllFoldersExpanded =
     allFolderPaths.length > 0 && allFolderPaths.every((path) => expandedFolders.has(path));
+
   const toggleAllFolders = useCallback(() => {
     setExpandedFolders(areAllFoldersExpanded ? new Set() : new Set(allFolderPaths));
   }, [allFolderPaths, areAllFoldersExpanded]);
@@ -200,9 +220,11 @@ function useExpandedFolders({
 function useAnnotationCountMap(annotations: CodeAnnotation[]) {
   const annotationCountMap = useMemo(() => {
     const counts = new Map<string, number>();
+
     for (const annotation of annotations) {
       counts.set(annotation.filePath, (counts.get(annotation.filePath) ?? 0) + 1);
     }
+
     return counts;
   }, [annotations]);
 
@@ -333,15 +355,20 @@ const SearchInput: React.FC<SearchInputProps> = ({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
       event.preventDefault();
+
       return;
     }
+
     if (event.key === "Enter" && searchMatches.length > 0 && !isSearchPending) {
       event.preventDefault();
       onStepSearchMatch?.(event.shiftKey ? -1 : 1);
+
       return;
     }
+
     if (event.key === "Escape") {
       event.preventDefault();
+
       if (searchQuery) onSearchClear?.();
       else {
         onSearchClose?.();
@@ -412,6 +439,7 @@ const DiffSourceControls: React.FC<DiffSourceControlsProps> = ({
 }) => {
   const hasWorktreePicker = Boolean(worktrees?.length && onSelectWorktree);
   const hasDiffPicker = Boolean(diffOptions?.length && onSelectDiff);
+
   if (!hasWorktreePicker && !hasDiffPicker) return null;
 
   return (
@@ -525,6 +553,7 @@ const BranchCompareTarget: React.FC<CompareTargetControlsProps> = ({
     availableBranches &&
     activeDiffType &&
     compareTarget?.diffTypes.includes(activeDiffType);
+
   if (!isVisible) return null;
 
   return (
@@ -602,6 +631,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   onSelectSearchMatch,
 }) => {
   if (isSearchPending) return <SearchEmptyState>Searching…</SearchEmptyState>;
+
   if (searchGroups.length === 0) return <SearchEmptyState>No matches found</SearchEmptyState>;
 
   return searchGroups.map((group) => (
@@ -832,6 +862,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     onSelectFile,
   });
   const getAnnotationCount = useAnnotationCountMap(annotations);
+
   const { expandedFolders, toggleFolder, areAllFoldersExpanded, toggleAllFolders } =
     useExpandedFolders({
       tree,
@@ -930,9 +961,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
 function highlightQuery(text: string, query: string) {
   const trimmed = query.trim();
+
   if (!trimmed) return text;
   const regex = new RegExp(`(${trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
   const parts = text.split(regex);
+
   return parts.map((part, index) =>
     index % 2 === 1 ? (
       <mark key={index} className="search-match-highlight">
@@ -952,6 +985,7 @@ const SearchFileGroup: React.FC<{
 }> = ({ group, searchQuery, activeSearchMatchId, onSelectMatch }) => {
   const [collapsed, setCollapsed] = useState(false);
   const fileName = group.filePath.split("/").pop() || group.filePath;
+
   const directoryPath = group.filePath.includes("/")
     ? group.filePath.slice(0, group.filePath.lastIndexOf("/"))
     : "";
@@ -998,6 +1032,7 @@ const SearchMatchRow: React.FC<{
   onSelect: () => void;
 }> = ({ match, searchQuery, isActive, onSelect }) => {
   const sideLabel = getReviewSearchSideLabel(match.side);
+
   const sideColor =
     match.side === "addition"
       ? "text-success"

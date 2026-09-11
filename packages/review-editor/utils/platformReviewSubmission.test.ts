@@ -55,6 +55,7 @@ describe("buildPlatformReviewActionBody", () => {
 describe("selectPlatformReviewTargets", () => {
   test("approves only the active pull request", () => {
     const activeTarget = buildTarget();
+
     const stackedTarget = buildTarget({
       prUrl: "https://github.com/backnotprop/plannotator/pull/41",
       prNumber: 41,
@@ -78,11 +79,13 @@ describe("selectPlatformReviewTargets", () => {
 
   test("retains pending and successful targets when retrying comments", () => {
     const pendingTarget = buildTarget();
+
     const successfulTarget = buildTarget({
       prUrl: "https://github.com/backnotprop/plannotator/pull/41",
       prNumber: 41,
       status: "success",
     });
+
     const targets = [pendingTarget, successfulTarget];
 
     expect(selectPlatformReviewTargets("comment", buildPlan(targets), undefined, prMetadata)).toBe(

@@ -46,10 +46,12 @@ export function getReviewSubmissionShortcutAction(
 ): ReviewSubmissionShortcutAction | null {
   if (state.platformCommentDialog) {
     if (state.submitted || state.isPlatformActioning) return null;
+
     const canSubmit =
       state.platformCommentDialog.action === "approve" ||
       state.platformCommentDialog.plan.targets.length > 0 ||
       state.platformGeneralComment.trim().length > 0;
+
     return canSubmit ? "submit-platform-dialog" : null;
   }
 
@@ -110,10 +112,13 @@ export function useReviewSubmissionShortcut({
         totalAnnotationCount,
         hasBlockingDialog,
       });
+
       if (!action) return;
+
       if (action !== "submit-platform-dialog" && isTypingTarget(event.target)) return;
 
       event.preventDefault();
+
       if (action === "submit-platform-dialog") {
         if (!platformCommentDialog) return;
         void submitPlatformAction(
@@ -133,6 +138,7 @@ export function useReviewSubmissionShortcut({
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     approveReview,

@@ -1210,7 +1210,10 @@ export function resolveAppliedThemeMode(
   requestedMode: "dark" | "light",
 ): "dark" | "light" {
   const modeSupport = BUILT_IN_THEMES.find(({ id }) => id === themeId)?.modeSupport;
+
   if (modeSupport === "dark-only") return "dark";
+
   if (modeSupport === "light-only") return "light";
+
   return requestedMode;
 }

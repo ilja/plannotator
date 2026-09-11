@@ -21,6 +21,7 @@ const PREFIX = "plannotator-bridge-";
 // Collision-proof annotation ids. `Date.now()` alone repeats within a millisecond,
 // so two quick annotations could share a data-bind-id and clobber each other.
 let htmlAnnSeq = 0;
+
 function nextHtmlAnnId(): string {
   return `html-ann-${Date.now().toString(36)}-${(htmlAnnSeq++).toString(36)}`;
 }
@@ -58,6 +59,7 @@ const HtmlBridgeMessageSchema = Schema.Union([
     height: Schema.Finite,
   }),
 ]);
+
 type HtmlBridgeMessage = Schema.Schema.Type<typeof HtmlBridgeMessageSchema>;
 
 export function decodeHtmlBridgeMessage<Input>(value: Input): HtmlBridgeMessage | null {
@@ -122,14 +124,17 @@ export function useHtmlAnnotation({
       document.body.appendChild(div);
       anchorRef.current = div;
     }
+
     return anchorRef.current;
   }, []);
 
   const positionAnchor = useCallback(
     (bridgeRect: { top: number; left: number; width: number; height: number }) => {
       const iframe = iframeRef.current;
+
       if (!iframe) return null;
       const iframeRect = iframe.getBoundingClientRect();
+
       // Fresh anchor per selection. The toolbar/popover recompute position only
       // when their `element` node identity changes, so reusing one anchor div
       // leaves them pinned to the previous selection. Drop the old one first.
@@ -138,6 +143,7 @@ export function useHtmlAnnotation({
       const anchor = getOrCreateAnchor();
       anchor.style.top = `${iframeRect.top + bridgeRect.top}px`;
       anchor.style.left = `${iframeRect.left + bridgeRect.left + bridgeRect.width / 2}px`;
+
       return anchor;
     },
     [iframeRef, getOrCreateAnchor],
@@ -147,9 +153,11 @@ export function useHtmlAnnotation({
     (text: string, rect: { top: number; left: number; width: number; height: number }) => {
       pendingTextRef.current = text;
       const anchor = positionAnchor(rect);
+
       if (!anchor) return;
 
       const currentMode = modeRef.current;
+
       if (currentMode === "redline") {
         const id = nextHtmlAnnId();
         postToIframe(iframeRef.current, {
@@ -168,21 +176,27 @@ export function useHtmlAnnotation({
           createdA: Date.now(),
         });
         pendingTextRef.current = "";
+
         return;
       }
+
       if (currentMode === "comment") {
         // Let the popover textarea receive subsequent typing instead of the iframe.
         iframeRef.current?.blur();
         setCommentPopover({ anchorEl: anchor, contextText: text, selectedText: text });
+
         return;
       }
+
       if (currentMode === "quickLabel") {
         setQuickLabelPicker({
           anchorEl: anchor,
           cursorHint: { x: parseFloat(anchor.style.left), y: parseFloat(anchor.style.top) },
         });
+
         return;
       }
+
       setToolbarState({ element: anchor, source: null, selectionText: text });
     },
     [iframeRef, positionAnchor],
@@ -190,6 +204,7 @@ export function useHtmlAnnotation({
 
   const handleHtmlSelectionClear = useCallback(() => {
     setToolbarState(null);
+
     // Keep text while a comment or quick label is still being composed.
     if (!commentPopoverRef.current && !quickLabelPickerRef.current) {
       pendingTextRef.current = "";
@@ -200,6 +215,7 @@ export function useHtmlAnnotation({
     (rect: { top: number; left: number; width: number; height: number }) => {
       const iframe = iframeRef.current;
       const anchor = anchorRef.current;
+
       if (!iframe || !anchor) return;
       // The iframe scrolled, so its selection anchor needs the updated viewport position.
       const iframeRect = iframe.getBoundingClientRect();
@@ -215,6 +231,7 @@ export function useHtmlAnnotation({
       // Type-to-comment is available only while the markup toolbar is visible.
       if (!toolbarStateRef.current) return;
       const text = pendingTextRef.current;
+
       if (!key || !text) return;
       const anchor = anchorRef.current ?? getOrCreateAnchor();
       // Let the comment popover receive the rest of the user's typing.
@@ -235,21 +252,27 @@ export function useHtmlAnnotation({
       switch (message.type) {
         case `${PREFIX}selection`:
           handleHtmlSelection(message.text, message.rect);
+
           return;
         case `${PREFIX}selection-clear`:
           handleHtmlSelectionClear();
+
           return;
         case `${PREFIX}selection-rect`:
           handleHtmlSelectionRect(message.rect);
+
           return;
         case `${PREFIX}keytype`:
           handleHtmlTypedKey(message.key);
+
           return;
         case `${PREFIX}mark-click`:
           onSelectRef.current?.(message.id);
+
           return;
         case `${PREFIX}resize`:
           onResize?.(message.height);
+
           return;
       }
     },
@@ -266,13 +289,16 @@ export function useHtmlAnnotation({
     function handler(event: MessageEvent) {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const message = decodeHtmlBridgeMessage(event.data);
+
       if (!message) return;
       handleHtmlBridgeMessage(message);
     }
 
     window.addEventListener("message", handler);
+
     return () => {
       window.removeEventListener("message", handler);
+
       if (anchorRef.current) {
         anchorRef.current.remove();
         anchorRef.current = null;
@@ -297,6 +323,7 @@ export function useHtmlAnnotation({
   const handleAnnotate = useCallback(
     (type: AnnotationType) => {
       const text = pendingTextRef.current;
+
       if (!text || type !== AnnotationType.DELETION) return;
 
       const id = nextHtmlAnnId();
@@ -325,6 +352,7 @@ export function useHtmlAnnotation({
   const handleRequestComment = useCallback(
     (initialChar?: string) => {
       const text = pendingTextRef.current;
+
       if (!text) return;
       const anchor = anchorRef.current ?? getOrCreateAnchor();
       setToolbarState(null);
@@ -343,6 +371,7 @@ export function useHtmlAnnotation({
       // Prefer the text captured when the popover opened — it can't be clobbered by
       // a later selection change or clear while the user is composing the comment.
       const text = commentPopoverRef.current?.selectedText || pendingTextRef.current;
+
       if (!text) return;
 
       const id = nextHtmlAnnId();
@@ -383,6 +412,7 @@ export function useHtmlAnnotation({
   const applyQuickLabel = useCallback(
     (label: QuickLabel, clearState: () => void) => {
       const text = pendingTextRef.current;
+
       if (!text) return;
       const id = nextHtmlAnnId();
       postToIframe(iframeRef.current, {

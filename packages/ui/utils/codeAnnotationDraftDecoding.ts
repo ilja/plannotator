@@ -15,15 +15,21 @@ const MissingCodeAnnotationDraftSchema = Schema.Struct({
 });
 
 const DraftItemsSchema = Schema.Array(Schema.Unknown);
+
 const decodeSuccessfulCodeAnnotationDraftEnvelope = Schema.decodeUnknownOption(
   SuccessfulCodeAnnotationDraftSchema,
 );
+
 const decodeMissingCodeAnnotationDraftEnvelope = Schema.decodeUnknownOption(
   MissingCodeAnnotationDraftSchema,
 );
+
 const decodeDraftItems = Schema.decodeUnknownOption(DraftItemsSchema);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeFinite = Schema.decodeUnknownOption(Schema.Finite);
+
 const decodeGeneration = Schema.decodeUnknownOption(Schema.Natural);
 
 export interface DecodedSuccessfulCodeAnnotationDraft {
@@ -43,25 +49,33 @@ function readDraftItems<Input>(value: Input): ReadonlyArray<unknown> | null {
 
 function readCodeAnnotations<Input>(value: Input): CodeAnnotation[] {
   const items = readDraftItems(value);
+
   if (!items) return [];
 
   const annotations: CodeAnnotation[] = [];
+
   for (const item of items) {
     const annotation = Option.getOrNull(decodeCodeAnnotation(item));
+
     if (annotation) annotations.push(annotation);
   }
+
   return annotations;
 }
 
 function readViewedFiles<Input>(value: Input): string[] {
   const items = readDraftItems(value);
+
   if (!items) return [];
 
   const viewedFiles: string[] = [];
+
   for (const item of items) {
     const filePath = Option.getOrNull(decodeString(item));
+
     if (filePath !== null) viewedFiles.push(filePath);
   }
+
   return viewedFiles;
 }
 
@@ -77,6 +91,7 @@ export function decodeSuccessfulCodeAnnotationDraft<Input>(
   value: Input,
 ): DecodedSuccessfulCodeAnnotationDraft | null {
   const envelope = Option.getOrNull(decodeSuccessfulCodeAnnotationDraftEnvelope(value));
+
   if (!envelope) return null;
 
   return {
@@ -91,6 +106,7 @@ export function decodeMissingCodeAnnotationDraft<Input>(
   value: Input,
 ): DecodedMissingCodeAnnotationDraft | null {
   const envelope = Option.getOrNull(decodeMissingCodeAnnotationDraftEnvelope(value));
+
   if (!envelope) return null;
 
   return { draftGeneration: readDraftGeneration(envelope.draftGeneration) };

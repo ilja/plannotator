@@ -126,6 +126,7 @@ describe("decodeSemanticDiffResponse", () => {
       oldFilePath: null,
       fileStatus: null,
     };
+
     const after = {
       changeType: "binary",
       filePath: "after.png",

@@ -49,17 +49,20 @@ export function useGitAdd({ activeDiffBase, onFileViewed }: UseGitAddOptions): U
         });
 
         const result = await readGitAddResponse(res);
+
         if (!result.ok) {
           throw new Error(result.error);
         }
 
         setStagedFiles((prev) => {
           const next = new Set(prev);
+
           if (isUndo) {
             next.delete(filePath);
           } else {
             next.add(filePath);
           }
+
           return next;
         });
 

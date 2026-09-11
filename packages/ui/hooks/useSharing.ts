@@ -88,6 +88,7 @@ interface UseSharingResult {
 // share payload. Everything else is left for Viewer to scroll to (or ignore).
 function looksLikeSharePayload(rawHash: string): boolean {
   const hash = rawHash.replace(/^#/, "").split("?")[0];
+
   return hash.length >= 30 && /^[A-Za-z0-9_-]+$/.test(hash) && /[A-Z]/.test(hash);
 }
 
@@ -96,6 +97,7 @@ const reconcileSharedChoiceAnnotations = (
   markdown: string,
 ): Annotation[] => {
   const blocks = parseMarkdownToBlocks(markdown);
+
   const questions = blocks.flatMap((block) =>
     block.type === "choice-question"
       ? [
@@ -110,6 +112,7 @@ const reconcileSharedChoiceAnnotations = (
         ]
       : [],
   );
+
   return reconcileChoiceAnnotations(annotations, questions).retained;
 };
 
@@ -127,6 +130,7 @@ interface SharedPayloadSetters {
 
 function decodePasteOrigin(params: URLSearchParams): string | undefined {
   const encodedPaste = params.get("paste");
+
   return encodedPaste ? atob(encodedPaste.replace(/-/g, "+").replace(/_/g, "/")) : undefined;
 }
 
@@ -159,6 +163,7 @@ function applySharedPayload(payload: SharePayload, setters: SharedPayloadSetters
     fromShareable(payload.a, payload.d, payload.s, payload.cv, payload.co),
     payload.p ?? "",
   );
+
   setAnnotations(restoredAnnotations);
 
   const parsedGlobalAttachments = parseShareableImages(payload.g) ?? [];
@@ -174,11 +179,13 @@ function getSharePlanTitle(payload: SharePayload): string {
       .trim()
       .split("\n")
       .find((line) => line.startsWith("#"));
+
     if (titleLine) return titleLine.replace(/^#+\s*/, "").trim();
   }
 
   if (payload.h) {
     const titleMatch = payload.h.match(/<title[^>]*>([^<]+)<\/title>/i);
+
     if (titleMatch) return titleMatch[1].trim();
   }
 
@@ -214,27 +221,33 @@ async function loadImportedPayload(
   pasteApiUrl?: string,
 ): Promise<ImportedPayloadResult> {
   const shortMatch = url.match(/\/p\/([A-Za-z0-9]{6,16})(?:#(.*))?(?:\?|$)/);
+
   if (shortMatch) {
     const fragmentParams = new URLSearchParams(shortMatch[2] ?? "");
+
     const payload = await loadFromPasteId(
       shortMatch[1],
       decodePasteOrigin(fragmentParams) ?? pasteApiUrl,
       fragmentParams.get("key") ?? undefined,
     );
+
     return payload
       ? { payload }
       : { error: importFailure("Failed to load from short URL — paste may have expired") };
   }
 
   const hashIndex = url.indexOf("#");
+
   if (hashIndex === -1) {
     return { error: importFailure("Invalid share URL: no hash fragment or short link found") };
   }
 
   const hash = url.slice(hashIndex + 1);
+
   if (!hash) return { error: importFailure("Invalid share URL: empty hash") };
 
   const payload = decodeSharePayload(await decompress(hash));
+
   return payload ? { payload } : { error: importFailure("Invalid share URL: malformed payload") };
 }
 
@@ -261,12 +274,15 @@ export function useSharing(
   const [shortShareUrl, setShortShareUrl] = useState("");
   const [isGeneratingShortUrl, setIsGeneratingShortUrl] = useState(false);
   const [shortUrlError, setShortUrlError] = useState("");
+
   const [pendingSharedAnnotations, setPendingSharedAnnotations] = useState<Annotation[] | null>(
     null,
   );
+
   const [sharedGlobalAttachments, setSharedGlobalAttachments] = useState<ImageAttachment[] | null>(
     null,
   );
+
   const [shareLoadError, setShareLoadError] = useState("");
 
   const clearPendingSharedAnnotations = useCallback(() => {
@@ -281,14 +297,17 @@ export function useSharing(
     try {
       // Check for short URL path pattern: /p/<id>
       const pathMatch = window.location.pathname.match(/^\/p\/([A-Za-z0-9]{6,16})$/);
+
       if (pathMatch) {
         const pasteId = pathMatch[1];
         const params = new URLSearchParams(window.location.hash.slice(1));
+
         const payload = await loadFromPasteId(
           pasteId,
           decodePasteOrigin(params) ?? pasteApiUrl,
           params.get("key") ?? undefined,
         );
+
         if (payload) {
           applySharedPayload(payload, {
             setMarkdown,
@@ -311,9 +330,11 @@ export function useSharing(
 
           return true;
         }
+
         // Paste fetch failed — short URL path can't fall back to hash parsing
         // (the hash contains #key=, not plan data).
         setShareLoadError("Failed to load shared plan — the link may be expired or incomplete.");
+
         return false;
       }
 
@@ -353,10 +374,12 @@ export function useSharing(
           "Failed to load shared plan — the URL may have been truncated by your browser.",
         );
       }
+
       return false;
     } catch (e) {
       console.error("Failed to load from share hash:", e);
       setShareLoadError("Failed to load shared plan — an unexpected error occurred.");
+
       return false;
     }
   }, [
@@ -383,6 +406,7 @@ export function useSharing(
     };
 
     window.addEventListener("hashchange", handleHashChange);
+
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, [loadFromHash]);
 
@@ -396,6 +420,7 @@ export function useSharing(
         shareBaseUrl,
         rawHtml,
       );
+
       setShareUrl(url ?? "");
       setShareUrlSize(url ? formatUrlSize(url) : "");
     } catch (e) {
@@ -417,12 +442,16 @@ export function useSharing(
   useEffect(() => {
     if (isSharedSession) {
       isSharedRef.current = true;
+
       return;
     }
+
     if (isSharedRef.current) {
       isSharedRef.current = false;
+
       return;
     }
+
     setShortShareUrl("");
     setShortUrlError("");
   }, [markdown, annotations, globalAttachments, rawHtml, isSharedSession]);
@@ -442,6 +471,7 @@ export function useSharing(
 
     try {
       const htmlForShare = rawHtml ? ((await resolveRawHtmlForShare?.()) ?? rawHtml) : undefined;
+
       const result = await createShortShareUrl(
         markdown,
         annotations,
@@ -452,15 +482,18 @@ export function useSharing(
 
       if (result) {
         setShortShareUrl(result.shortUrl);
+
         return result.shortUrl;
       } else {
         setShortShareUrl("");
         setShortUrlError("Short URL service unavailable");
+
         return null;
       }
     } catch (e) {
       setShortShareUrl("");
       setShortUrlError(e instanceof Error ? e.message : "Failed to generate short URL");
+
       return null;
     } finally {
       setIsGeneratingShortUrl(false);
@@ -480,7 +513,9 @@ export function useSharing(
     async (url: string): Promise<ImportResult> => {
       try {
         const loaded = await loadImportedPayload(url, pasteApiUrl);
+
         if (loaded.error) return loaded.error;
+
         if (!loaded.payload) return importFailure("Invalid share URL: malformed payload");
 
         const payload = loaded.payload;
@@ -509,11 +544,13 @@ export function useSharing(
           // Merge using functional updater to avoid stale closure
           setAnnotations((prev) => {
             const newAnnotations = getNewAnnotations(prev, importedAnnotations);
+
             if (newAnnotations.length === 0) return prev;
             const merged = [...prev, ...newAnnotations];
             // SAFETY: cast is safe — pending is expected shape
             // Set ALL annotations as pending so DOM highlights include originals
             setPendingSharedAnnotations(merged);
+
             return merged;
           });
 
@@ -523,6 +560,7 @@ export function useSharing(
             setGlobalAttachments((prev) => {
               const existingPaths = new Set(prev.map((g) => g.path));
               const newAttachments = parsed.filter((p) => !existingPaths.has(p.path));
+
               return newAttachments.length > 0 ? [...prev, ...newAttachments] : prev;
             });
             setSharedGlobalAttachments(parsed);
@@ -532,6 +570,7 @@ export function useSharing(
         return { success: true, count: estimatedNew.length, planTitle };
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : "Failed to decompress share URL";
+
         return { success: false, count: 0, planTitle: "", error: errorMessage };
       }
     },

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 const DRAG_THRESHOLD = 3;
+
 const VISIBLE_MIN = 50;
 
 interface DragPosition {
@@ -48,6 +49,7 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
         -((elementRef.current?.offsetHeight ?? 0) - VISIBLE_MIN),
         Math.min(startElRef.current.top + dy, window.innerHeight - VISIBLE_MIN),
       );
+
       const left = Math.max(
         -((elementRef.current?.offsetWidth ?? 0) - VISIBLE_MIN),
         Math.min(startElRef.current.left + dx, window.innerWidth - VISIBLE_MIN),
@@ -58,6 +60,7 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
 
     const onUp = () => {
       setIsDragging(false);
+
       if (thresholdMetRef.current) {
         setWasDragged(true);
       }
@@ -65,6 +68,7 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
 
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
+
     return () => {
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
@@ -78,9 +82,11 @@ export function useDraggable(elementRef: React.RefObject<HTMLElement | null>) {
       // Don't drag if clicking on an interactive element inside the handle
       // SAFETY: pointerdown target is HTMLElement — cast to check closest
       const target = e.target as HTMLElement;
+
       if (target.closest("button, a, input, textarea, select")) return;
 
       const el = elementRef.current;
+
       if (!el) return;
 
       const rect = el.getBoundingClientRect();

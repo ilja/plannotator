@@ -39,6 +39,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   useEffect(() => {
     onEditorHandleReady?.(editorHandleRef.current);
+
     return () => onEditorHandleReady?.(null);
   }, [onEditorHandleReady]);
 

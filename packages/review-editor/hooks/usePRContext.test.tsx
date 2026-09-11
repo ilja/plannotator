@@ -5,7 +5,9 @@ import type { PRMetadata } from "@plannotator/shared/pr-types";
 import { readPRContextResponse, usePRContext } from "./usePRContext";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 const metadata: PRMetadata = {
@@ -47,6 +49,7 @@ function installFetch(responses: Response[]): void {
 
 function HookHarness(): React.JSX.Element {
   const { prContext, isLoading, error, fetchContext } = usePRContext(metadata);
+
   return (
     <div>
       <button type="button" onClick={() => void fetchContext()}>
@@ -78,6 +81,7 @@ async function renderHarness(): Promise<void> {
 async function clickFetch(): Promise<HTMLOutputElement> {
   const output = document.querySelector("output");
   const button = document.querySelector("button");
+
   if (!(output instanceof HTMLOutputElement) || !(button instanceof HTMLButtonElement)) {
     throw new Error("Hook harness did not render");
   }
@@ -95,7 +99,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 

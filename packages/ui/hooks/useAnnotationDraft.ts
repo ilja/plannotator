@@ -47,12 +47,16 @@ interface DraftData {
 
 function formatTimeAgo(ts: number): string {
   const seconds = Math.floor((Date.now() - ts) / 1000);
+
   if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
+
   if (minutes < 60) return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
   const hours = Math.floor(minutes / 60);
+
   if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
   const days = Math.floor(hours / 24);
+
   return `${days} day${days !== 1 ? "s" : ""} ago`;
 }
 
@@ -108,6 +112,7 @@ export function useAnnotationDraft({
     timeAgo: string;
     hasEdits: boolean;
   } | null>(null);
+
   const draftDataRef = useRef<RestoredDraft | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMountedRef = useRef(false);
@@ -123,6 +128,7 @@ export function useAnnotationDraft({
     getEditedDocuments,
     getSavedFileChanges,
   });
+
   latestRef.current = {
     annotations,
     codeAnnotations,
@@ -142,18 +148,23 @@ export function useAnnotationDraft({
     fetch("/api/draft")
       .then(async (res) => {
         const rawData = await res.json().catch(() => null);
+
         if (!res.ok) {
           const generation = decodeStoredDraftGeneration(rawData);
+
           if (generation !== null) {
             draftGenerationRef.current = Math.max(draftGenerationRef.current, generation);
           }
+
           return null;
         }
+
         return decodeStoredAnnotationDraft(rawData);
       })
       .then((data: DecodedStoredAnnotationDraft | null) => {
         if (!data) {
           hasMountedRef.current = true;
+
           return;
         }
 
@@ -163,10 +174,12 @@ export function useAnnotationDraft({
 
         const totalCount =
           data.annotations.length + data.codeAnnotations.length + data.globalAttachments.length;
+
         const hasEdits =
           data.editedMarkdown !== null ||
           data.editedDocuments.length > 0 ||
           data.savedFileChanges.length > 0;
+
         if (totalCount > 0 || hasEdits) {
           draftDataRef.current = {
             annotations: data.annotations,
@@ -182,6 +195,7 @@ export function useAnnotationDraft({
             hasEdits,
           });
         }
+
         hasMountedRef.current = true;
       })
       .catch(() => {
@@ -194,6 +208,7 @@ export function useAnnotationDraft({
     // pending — a save landing after submit would resurrect a draft the
     // server just deleted, ghosting it into the next session for this plan.
     if (!canPersistRef.current) return;
+
     const {
       annotations,
       codeAnnotations,
@@ -202,6 +217,7 @@ export function useAnnotationDraft({
       getEditedDocuments,
       getSavedFileChanges,
     } = latestRef.current;
+
     const editedMarkdown = getEditedMarkdown?.() ?? null;
     const editedDocuments = getEditedDocuments?.() ?? [];
     const savedFileChanges = getSavedFileChanges?.() ?? [];
@@ -222,11 +238,13 @@ export function useAnnotationDraft({
       fetch(`/api/draft?generation=${deletedGeneration}`, { method: "DELETE", keepalive }).catch(
         () => {},
       );
+
       return;
     }
 
     const draftGeneration = draftGenerationRef.current + 1;
     draftGenerationRef.current = draftGeneration;
+
     const payload: DraftData = {
       annotations,
       codeAnnotations,
@@ -234,8 +252,11 @@ export function useAnnotationDraft({
       draftGeneration,
       ts: Date.now(),
     };
+
     if (editedMarkdown !== null) payload.editedMarkdown = editedMarkdown;
+
     if (editedDocuments.length > 0) payload.editedDocuments = editedDocuments;
+
     if (savedFileChanges.length > 0) payload.savedFileChanges = savedFileChanges;
 
     const body = JSON.stringify(payload);
@@ -252,6 +273,7 @@ export function useAnnotationDraft({
 
   const scheduleDraftSave = useCallback(() => {
     if (!canPersistRef.current || !hasMountedRef.current) return;
+
     if (timerRef.current) clearTimeout(timerRef.current);
 
     timerRef.current = setTimeout(() => {
@@ -279,11 +301,14 @@ export function useAnnotationDraft({
       timerRef.current = null;
       persistNow(true);
     };
+
     const onVisibility = () => {
       if (document.visibilityState === "hidden") flush();
     };
+
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", flush);
+
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", flush);
@@ -296,6 +321,7 @@ export function useAnnotationDraft({
   // draft that was just deleted unless the user actually changes feedback again.
   useEffect(() => {
     if (!isApiMode || isSharedSession || submitted) return;
+
     if (!hasMountedRef.current) return;
     scheduleDraftSave();
   }, [
@@ -335,10 +361,12 @@ export function useAnnotationDraft({
   const dismissDraft = useCallback(() => {
     const deletedGeneration = draftGenerationRef.current + 1;
     draftGenerationRef.current = deletedGeneration;
+
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+
     setDraftBanner(null);
     draftDataRef.current = null;
 

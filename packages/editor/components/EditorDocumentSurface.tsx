@@ -264,11 +264,13 @@ function SourceSaveControl({
   onSave,
 }: SourceSaveControlProps) {
   const label = status === "saving" ? "Saving" : hasUnsavedDiskChanges ? "Save" : "Saved";
+
   const textClassName = saveFailed
     ? "text-destructive"
     : emphasizeSave
       ? "text-primary"
       : "text-muted-foreground/50 hover:text-muted-foreground";
+
   const dotClassName = saveFailed
     ? "bg-destructive"
     : emphasizeSave
@@ -321,6 +323,7 @@ function EditModeControl({
     : cancelMode
       ? "Discard your edits and stop editing"
       : "Commit your edits and return to annotating";
+
   const label = !isEditingMarkdown
     ? "Edit"
     : cancelMode
@@ -328,6 +331,7 @@ function EditModeControl({
         ? "Discard?"
         : "Cancel"
       : "Done";
+
   const className = cancelMode
     ? confirmCancelEdits
       ? "text-destructive"
@@ -499,9 +503,11 @@ export function EditorDocumentSurface({
   const documentClassName = isHtmlSurface
     ? "bg-background"
     : `${gridEnabled ? "bg-grid " : "bg-card "}${!sidebarIsOpen && !agentTerminalIsOpen && wideModeType === null ? "lg:pl-[30px]" : ""}`;
+
   const documentFrameClassName = isHtmlSurface
     ? "h-full flex flex-col"
     : "min-h-full flex flex-col items-center px-2 py-3 md:px-10 md:py-8 xl:px-16";
+
   const contentClassName = isHtmlSurface
     ? "flex-1 flex flex-col"
     : `flex justify-center${isEditingMarkdown ? " flex-1 min-h-0" : ""}`;

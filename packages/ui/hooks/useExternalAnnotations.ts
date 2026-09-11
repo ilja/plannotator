@@ -23,7 +23,9 @@ import {
 import { Option } from "effect";
 
 const POLL_INTERVAL_MS = 500;
+
 const STREAM_URL = "/api/external-annotations/stream";
+
 const SNAPSHOT_URL = "/api/external-annotations";
 
 interface UseExternalAnnotationsReturn<T> {
@@ -62,8 +64,10 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
       try {
         const eventData: unknown = JSON.parse(event.data);
         const eventEnvelope = Option.getOrNull(decodeExternalAnnotationEventEnvelope(eventData));
+
         if (!eventEnvelope) return;
         const parsed = parseExternalAnnotationEvent(eventEnvelope, decodeAnnotation);
+
         if (!parsed) return;
 
         switch (parsed.type) {
@@ -122,15 +126,19 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
         const res = await fetch(url);
 
         if (res.status === 304) return; // No changes
+
         if (!res.ok) return;
 
         const data: unknown = await res.json();
         const pollingEnvelope = Option.getOrNull(decodeExternalAnnotationPollingEnvelope(data));
+
         if (!pollingEnvelope) return;
         const snapshot = parseExternalAnnotationPollingSnapshot(pollingEnvelope, decodeAnnotation);
+
         if (!snapshot) return;
 
         setAnnotations(snapshot.annotations);
+
         if (snapshot.version !== null) versionRef.current = snapshot.version;
       } catch {
         // Silent — next poll will retry
@@ -140,6 +148,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
     return () => {
       cancelled = true;
       es.close();
+
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -150,6 +159,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
   const deleteExternalAnnotation = useCallback(async (id: string) => {
     // Optimistic update
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
+
     try {
       await fetch(`${SNAPSHOT_URL}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     } catch {
@@ -160,6 +170,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
   const clearExternalAnnotations = useCallback(async (source?: string) => {
     // Optimistic update
     setAnnotations((prev) => (source ? prev.filter((a) => a.source !== source) : []));
+
     try {
       const qs = source ? `?source=${encodeURIComponent(source)}` : "";
       await fetch(`${SNAPSHOT_URL}${qs}`, { method: "DELETE" });
@@ -170,6 +181,7 @@ export function useExternalAnnotations<T extends { id: string; source?: string }
 
   const updateExternalAnnotation = useCallback(async (id: string, updates: Partial<T>) => {
     setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
+
     try {
       await fetch(`${SNAPSHOT_URL}?id=${encodeURIComponent(id)}`, {
         method: "PATCH",

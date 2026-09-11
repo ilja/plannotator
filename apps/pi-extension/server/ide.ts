@@ -14,6 +14,7 @@ export function openEditorDiff(
     const proc = spawn("code", ["--diff", oldPath, newPath], {
       stdio: ["ignore", "ignore", "pipe"],
     });
+
     let stderr = "";
     proc.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();

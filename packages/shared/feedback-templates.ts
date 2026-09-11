@@ -18,7 +18,9 @@ export const FEEDBACK_DISCUSSION_INSTRUCTION =
 /** Add the mandatory discussion instruction to a feedback prompt. */
 export const appendFeedbackDiscussionInstruction = (prompt: string): string => {
   const trimmedPrompt = prompt.trimEnd();
+
   if (trimmedPrompt.endsWith(FEEDBACK_DISCUSSION_INSTRUCTION)) return trimmedPrompt;
+
   return `${trimmedPrompt}\n\n${FEEDBACK_DISCUSSION_INSTRUCTION}`;
 };
 
@@ -32,6 +34,7 @@ export const annotateFileFeedback = (
   options: AnnotateFileFeedbackOptions,
 ): string => {
   const fileHeader = options.fileHeader ?? "File";
+
   return appendFeedbackDiscussionInstruction(
     `# Markdown Annotations\n\n${fileHeader}: ${options.filePath}\n\n${feedback}\n\nPlease address the annotation feedback above.`,
   );

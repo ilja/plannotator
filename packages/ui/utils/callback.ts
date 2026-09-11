@@ -21,10 +21,12 @@ export interface ToastSuccess {
   readonly type: "success";
   readonly message: string;
 }
+
 export interface ToastError {
   readonly type: "error";
   readonly message: string;
 }
+
 export type ToastPayload = ToastSuccess | ToastError | null;
 
 /**
@@ -47,6 +49,7 @@ export function getCallbackConfig(
 
   if (!cb || !ct) {
     const qIdx = loc.hash.indexOf("?");
+
     if (qIdx !== -1) {
       const hashParams = new URLSearchParams(loc.hash.slice(qIdx + 1));
       cb = cb ?? hashParams.get("cb");
@@ -58,6 +61,7 @@ export function getCallbackConfig(
 
   try {
     const { protocol } = new URL(cb);
+
     if (protocol !== "https:" && protocol !== "http:") return null;
   } catch {
     return null; // malformed URL
@@ -85,12 +89,14 @@ export async function executeCallback(
     action === CallbackAction.Approve
       ? "Plan approved! The bot will proceed to implementation."
       : "Feedback sent! The bot will re-plan with your annotations.";
+
   try {
     const res = await fetch(config.callbackUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, token: config.token, annotated_url: annotatedUrl }),
     });
+
     if (!res.ok) {
       return {
         type: "error",
@@ -100,6 +106,7 @@ export async function executeCallback(
             : "Callback failed.",
       };
     }
+
     return { type: "success", message: successMsg };
   } catch {
     return { type: "error", message: "Callback failed." };

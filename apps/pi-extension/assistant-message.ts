@@ -49,6 +49,7 @@ const SessionEntryTimestamp = Schema.Union([Schema.String, Schema.Number, Schema
     ).compose(
       SchemaGetter.transform((value) => {
         const date = value instanceof Date ? value : new Date(value);
+
         return date.toISOString();
       }),
     ),
@@ -76,6 +77,7 @@ export function getAssistantMessageText(message: AssistantMessage): string | nul
     .filter((block) => block.type === "text")
     .map((block) => block.text ?? "")
     .join("\n");
+
   return text.trim() ? text : null;
 }
 
@@ -89,16 +91,22 @@ export function getLastAssistantMessageSnapshot(
   // "Last" means the active conversation branch, not the newest message anywhere
   // in the append-only session file.
   const branch = getCurrentBranch(ctx);
+
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i];
+
     if (entry.type !== "message" || !entry.message) continue;
+
     const parsed = Option.getOrUndefined(
       Schema.decodeUnknownOption(AssistantMessage)(entry.message),
     );
+
     if (!parsed) continue;
     const text = getAssistantMessageText(parsed);
+
     if (text) return { entryId: entry.id, text };
   }
+
   return null;
 }
 
@@ -111,15 +119,20 @@ export function findAssistantMessageByEntryId(
   entryId: string,
 ): LastAssistantMessageSnapshot | null {
   const branch = getCurrentBranch(ctx);
+
   for (const entry of branch) {
     if (entry.id !== entryId || entry.type !== "message" || !entry.message) continue;
+
     const parsed = Option.getOrUndefined(
       Schema.decodeUnknownOption(AssistantMessage)(entry.message),
     );
+
     if (!parsed) continue;
     const text = getAssistantMessageText(parsed);
+
     if (text) return { entryId: entry.id, text };
   }
+
   return null;
 }
 
@@ -129,20 +142,28 @@ export function getRecentAssistantMessages(
 ): RecentAssistantMessage[] {
   const branch = getCurrentBranch(ctx);
   const out: RecentAssistantMessage[] = [];
+
   for (let i = branch.length - 1; i >= 0 && out.length < limit; i--) {
     const entry = branch[i];
+
     if (entry.type !== "message" || !entry.message) continue;
+
     const parsed = Option.getOrUndefined(
       Schema.decodeUnknownOption(AssistantMessage)(entry.message),
     );
+
     if (!parsed) continue;
     const text = getAssistantMessageText(parsed);
+
     if (!text) continue;
+
     const timestamp = Option.getOrUndefined(
       Schema.decodeUnknownOption(SessionEntryTimestamp)(entry.timestamp),
     );
+
     out.push({ messageId: entry.id, text, timestamp });
   }
+
   return out;
 }
 
@@ -151,6 +172,7 @@ export function hasSessionMovedPastEntry(ctx: SessionBranchReader, entryId: stri
 
   const branch = getCurrentBranch(ctx);
   const index = branch.findIndex((entry) => entry.id === entryId);
+
   if (index === -1) return true;
 
   return branch.slice(index + 1).some((entry) => entry.type === "message");

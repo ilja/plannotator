@@ -5,8 +5,11 @@ import { Schema } from "effect";
 import { OpenInAppButton } from "./OpenInAppButton";
 
 const hasDom = process.env.DOM_TESTS === "1";
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
+
 const containers: HTMLElement[] = [];
 
 const appsResponse = {
@@ -33,6 +36,7 @@ function installFetchResponses(
         if (postResponse) return postResponse;
         throw new Error("Unexpected POST fetch call");
       }
+
       return jsonResponse(appResponse);
     },
     { preconnect: (): void => {} },
@@ -54,7 +58,9 @@ async function renderOpenInAppButton(): Promise<void> {
 
 function primaryOpenButton(): HTMLButtonElement {
   const button = document.querySelector('button[aria-label^="Open in "]');
+
   if (!(button instanceof HTMLButtonElement)) throw new Error("Open-in primary button not found");
+
   return button;
 }
 
@@ -73,6 +79,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   for (const container of containers.splice(0)) container.remove();
 
   globalThis.fetch = realFetch;
@@ -96,6 +103,7 @@ describe("OpenInAppButton response validation", () => {
       await renderOpenInAppButton();
 
       const trigger = document.querySelector('button[aria-label="Choose app to open in"]');
+
       if (!(trigger instanceof HTMLButtonElement))
         throw new Error("Open-in menu trigger not found");
       await act(async () => {
@@ -115,9 +123,11 @@ describe("OpenInAppButton response validation", () => {
 
   test.skipIf(!hasDom)("accepts a valid success response and releases the busy state", async () => {
     let resolvePost = (_response: Response): void => {};
+
     const postResponse = new Promise<Response>((resolve) => {
       resolvePost = resolve;
     });
+
     installFetchResponses(postResponse);
 
     await renderOpenInAppButton();
@@ -178,6 +188,7 @@ describe("OpenInAppButton response validation", () => {
     response.json = async () => {
       throw new Error("Non-OK response body should not be parsed");
     };
+
     installFetchResponses(response);
 
     await renderOpenInAppButton();

@@ -18,7 +18,9 @@ export interface PierreThemeSelection {
 
 export function resolveSyntaxTheme(colorTheme: string, mode: "dark" | "light"): PierreSyntaxTheme {
   const map = SHIKI_THEME_MAP[colorTheme];
+
   if (!map?.[mode]) return DEFAULT_THEMES;
+
   return {
     dark: map.dark ?? DEFAULT_THEMES.dark,
     light: map.light ?? DEFAULT_THEMES.light,
@@ -30,6 +32,7 @@ export function resolvePierreThemeSelection(
   resolvedMode: "dark" | "light",
 ): PierreThemeSelection {
   const type = resolveAppliedThemeMode(colorTheme, resolvedMode);
+
   return { type, syntaxTheme: resolveSyntaxTheme(colorTheme, type) };
 }
 
@@ -101,10 +104,13 @@ export function buildLineBgOverrides(
       background-color: transparent !important;
     }
   `;
+
   if (intensity === "subtle") return hideEmphasisWithoutBg;
   const cfg = INTENSITY_CONFIG[intensity];
+
   const lShift =
     mode === "dark" ? `+ ${EMPHASIS_LIGHTNESS_SHIFT}` : `- ${EMPHASIS_LIGHTNESS_SHIFT}`;
+
   // Targeting `[data-line]` and `[data-no-newline]` only — the actual code
   // lines. Skipping `[data-gutter-buffer]` / `[data-column-number]` keeps the
   // line-number gutter at the page bg (matching the existing
@@ -118,6 +124,7 @@ export function buildLineBgOverrides(
   const changedLine =
     "[data-background] :is([data-line-type='change-addition'], [data-line-type='change-deletion'])" +
     ":is([data-line], [data-no-newline])";
+
   return `
     ${changedLine}:not([data-hovered]) {
       --mix-light: ${cfg.restMixLight}%;
@@ -145,6 +152,7 @@ export function usePierreTheme(options?: {
   const fontSize = options?.fontSize;
   const showFileHeader = options?.showFileHeader ?? false;
   const lineBgIntensity = useConfigValue("diffLineBgIntensity");
+
   const selection = useMemo(
     () => resolvePierreThemeSelection(colorTheme, resolvedMode),
     [colorTheme, resolvedMode],
@@ -154,7 +162,9 @@ export function usePierreTheme(options?: {
     const styles = getComputedStyle(document.documentElement);
     const bg = styles.getPropertyValue("--background").trim();
     const fg = styles.getPropertyValue("--foreground").trim();
+
     if (!bg || !fg) return "";
+
     return `
       :host, [data-diff], [data-file], [data-diffs-header], [data-error-wrapper], [data-virtualizer-buffer] {
         --diffs-bg: ${bg} !important; --diffs-fg: ${fg} !important;
@@ -177,6 +187,7 @@ export function usePierreTheme(options?: {
       const mutedFg = styles.getPropertyValue("--muted-foreground").trim();
       const border = styles.getPropertyValue("--border").trim();
       const primary = styles.getPropertyValue("--primary").trim();
+
       if (!bg || !fg) return;
 
       const fontCSS =

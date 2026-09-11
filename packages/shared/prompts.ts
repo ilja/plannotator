@@ -10,6 +10,7 @@ export function resolveTemplate(
 ): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     const val = vars[key];
+
     return val !== undefined ? val : match;
   });
 }
@@ -41,6 +42,7 @@ export const DEFAULT_ANNOTATE_APPROVED_PROMPT = "The user approved.";
 // ─── Core resolver ───────────────────────────────────────────────────────────
 
 type PromptSection = "review" | "annotate";
+
 type PromptKey =
   | "approved"
   | "approvedWithNotes"
@@ -60,12 +62,14 @@ interface PromptLookupOptions {
 
 function normalizePrompt(prompt: string | undefined): string | undefined {
   if (prompt === undefined) return undefined;
+
   return prompt.trim() ? prompt : undefined;
 }
 
 export function getConfiguredPrompt(options: PromptLookupOptions): string {
   const resolvedConfig = options.config ?? loadConfig();
   const section = resolvedConfig.prompts?.[options.section];
+
   const runtimePrompt = options.runtime
     ? normalizePrompt(
         Option.getOrUndefined(
@@ -75,9 +79,11 @@ export function getConfiguredPrompt(options: PromptLookupOptions): string {
         ),
       )
     : undefined;
+
   const genericPrompt = normalizePrompt(
     Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(section?.[options.key])),
   );
+
   const runtimeFallback = options.runtime ? options.runtimeFallbacks?.[options.runtime] : undefined;
 
   return runtimePrompt ?? genericPrompt ?? runtimeFallback ?? options.fallback;
@@ -131,6 +137,7 @@ export function getAnnotateFileFeedbackPrompt(
     config,
     fallback: DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT,
   });
+
   return appendFeedbackDiscussionInstruction(resolveTemplate(template, vars ?? {}));
 }
 
@@ -146,6 +153,7 @@ export function getAnnotateMessageFeedbackPrompt(
     config,
     fallback: DEFAULT_ANNOTATE_MESSAGE_FEEDBACK_PROMPT,
   });
+
   return appendFeedbackDiscussionInstruction(resolveTemplate(template, vars ?? {}));
 }
 

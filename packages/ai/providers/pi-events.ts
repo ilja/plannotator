@@ -57,11 +57,13 @@ export function mapPiEvent(event: AIJsonObject, sessionId: string): AIMessage[] 
   const parsed: PiEvent | undefined = Option.getOrUndefined(
     Schema.decodeUnknownOption(PiEventSchema)(event),
   );
+
   if (!parsed) return [];
 
   switch (parsed.type) {
     case "message_update": {
       const assistantMessageEvent = parsed.assistantMessageEvent;
+
       if (!assistantMessageEvent) return [];
 
       switch (assistantMessageEvent.type) {
@@ -70,7 +72,9 @@ export function mapPiEvent(event: AIJsonObject, sessionId: string): AIMessage[] 
 
         case "toolcall_end": {
           const toolCall = assistantMessageEvent.toolCall;
+
           if (!toolCall) return [];
+
           return [
             {
               type: "tool_use",
@@ -96,6 +100,7 @@ export function mapPiEvent(event: AIJsonObject, sessionId: string): AIMessage[] 
       const stringResult = Option.getOrUndefined(
         Schema.decodeUnknownOption(Schema.String)(parsed.result),
       );
+
       const resultStr =
         parsed.result == null ? "" : (stringResult ?? JSON.stringify(parsed.result));
 

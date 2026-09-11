@@ -112,6 +112,7 @@ describe("shortcuts", () => {
       altKey: false,
       code: "Enter",
     } as KeyboardEvent;
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const reverseSearchEvent = {
       key: "F3",
@@ -121,6 +122,7 @@ describe("shortcuts", () => {
       altKey: false,
       code: "F3",
     } as KeyboardEvent;
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const typeEvent = {
       key: "A",
@@ -130,6 +132,7 @@ describe("shortcuts", () => {
       altKey: false,
       code: "KeyA",
     } as KeyboardEvent;
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const quickLabelEvent = {
       key: "3",
@@ -139,6 +142,7 @@ describe("shortcuts", () => {
       altKey: true,
       code: "Digit3",
     } as KeyboardEvent;
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const macOptionQuickLabelEvent = {
       key: "£",
@@ -148,6 +152,7 @@ describe("shortcuts", () => {
       altKey: true,
       code: "Digit3",
     } as KeyboardEvent;
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const wrongEvent = {
       key: "Enter",
@@ -168,6 +173,7 @@ describe("shortcuts", () => {
 
   it("dispatches matching registry actions", () => {
     const calls: string[] = [];
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const event = {
       key: "Enter",
@@ -192,6 +198,7 @@ describe("shortcuts", () => {
 
   it("can dispatch guarded annotate submit", () => {
     const calls: string[] = [];
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     // @ts-expect-error — minimal stub missing KeyboardEvent props, intentionally suppressed
     const event = {
@@ -243,6 +250,7 @@ describe("shortcuts", () => {
     });
 
     const calls: string[] = [];
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     // @ts-expect-error — minimal stub missing KeyboardEvent props, intentionally suppressed
     const event = {
@@ -315,6 +323,7 @@ describe("shortcuts", () => {
     });
 
     let preventDefaultCalls = 0;
+
     // SAFETY: event is a minimal keyboard event stub — cast to KeyboardEvent
     const event = {
       key: "s",

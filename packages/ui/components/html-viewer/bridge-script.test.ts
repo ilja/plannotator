@@ -73,11 +73,13 @@ function createBridgeRuntime() {
   let focused = false;
   let removedCount = 0;
   const parentMessages: any[] = [];
+
   const parent: BridgeParent = {
     postMessage: (message: any) => {
       parentMessages.push(message);
     },
   };
+
   const bridgeWindow: BridgeWindow = {
     addEventListener: (type, listener) => {
       if (type === "message") messageListeners.push(listener);
@@ -88,12 +90,15 @@ function createBridgeRuntime() {
     innerHeight: 800,
     requestAnimationFrame: (callback) => {
       callback();
+
       return 1;
     },
   };
+
   const createMark = (): BridgeElement => {
     const attributes = new Map<string, string>();
     let className = "";
+
     return {
       style: { cssText: "", display: "", top: "", left: "" },
       get className() {
@@ -105,6 +110,7 @@ function createBridgeRuntime() {
       classList: {
         add: (...classes) => {
           className = `${className} ${classes.join(" ")}`.trim();
+
           if (classes.includes("focused")) focused = true;
         },
         remove: (...classes) => {
@@ -112,6 +118,7 @@ function createBridgeRuntime() {
             .split(" ")
             .filter((value) => !classes.includes(value))
             .join(" ");
+
           if (classes.includes("focused")) focused = false;
         },
       },
@@ -132,6 +139,7 @@ function createBridgeRuntime() {
       getAttribute: (name) => attributes.get(name) ?? null,
     };
   };
+
   const hoverElement = createMark();
   hoverElement.nodeType = 1;
   hoverElement.tagName = "P";
@@ -139,6 +147,7 @@ function createBridgeRuntime() {
   hoverElement.parentElement = null;
   hoverElement.ownerSVGElement = null;
   hoverElement.getBoundingClientRect = () => ({ top: 100, left: 100, width: 50, height: 20 });
+
   const bridgeDocument: BridgeDocument = {
     body: { scrollHeight: 0, appendChild: () => {} },
     documentElement: {
@@ -163,11 +172,13 @@ function createBridgeRuntime() {
     querySelectorAll: () => marks,
     createTreeWalker: () => {
       let yielded = false;
+
       return {
         currentNode: { textContent: "text", length: 4 },
         nextNode: () => {
           if (yielded) return false;
           yielded = true;
+
           return true;
         },
       };
@@ -176,6 +187,7 @@ function createBridgeRuntime() {
     createElement: () => {
       const mark = createMark();
       createdMarks.push(mark);
+
       return mark;
     },
   };
@@ -187,8 +199,10 @@ function createBridgeRuntime() {
     parent: BridgeParent,
     nodeFilter: { SHOW_TEXT: number },
   ) => void;
+
   executeBridge(bridgeWindow, bridgeDocument, parent, { SHOW_TEXT: 4 });
   marks.push(createMark());
+
   return {
     bridgeWindow,
     bridgeDocument,
@@ -260,6 +274,7 @@ describe("BRIDGE_SCRIPT inbound message validation", () => {
       { type: "plannotator-bridge-focus-mark", id: 42 },
       { type: "plannotator-bridge-find-and-mark", id: "bad-text", originalText: 42 },
     ];
+
     for (const message of malformedMessages)
       runtime.bridgeWindow.dispatchMessage(message, runtime.parent);
 
@@ -289,6 +304,7 @@ describe("BRIDGE_SCRIPT inbound message validation", () => {
   test("handles every mark variant, unknown messages, malformed values, and defaults", () => {
     const runtime = createBridgeRuntime();
     const { bridgeWindow, parentMessages, parent } = runtime;
+
     const messages: any[] = [
       { type: "plannotator-bridge-create-mark", id: "create-1" },
       { type: "plannotator-bridge-find-and-mark", id: "find-1", originalText: "text" },
@@ -324,6 +340,7 @@ describe("BRIDGE_SCRIPT inbound message validation", () => {
       },
       null,
     );
+
     for (const message of messages) bridgeWindow.dispatchMessage(message, parent);
     runtime.bridgeDocument.dispatchEvent("mousemove", { target: runtime.hoverElement });
     expect(runtime.hoverElement.className).toContain("plannotator-pinpoint-hover");

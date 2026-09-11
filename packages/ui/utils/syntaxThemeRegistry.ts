@@ -63,9 +63,11 @@ export const SHIKI_THEME_MAP = {
 
 export function resolveSyntaxTheme(colorTheme: string, mode: "dark" | "light"): SyntaxTheme {
   const entry = SHIKI_THEME_MAP[colorTheme];
+
   if (!entry?.[mode]) {
     return FALLBACK_SYNTAX_THEME;
   }
+
   return {
     dark: entry.dark ?? FALLBACK_SYNTAX_THEME.dark,
     light: entry.light ?? FALLBACK_SYNTAX_THEME.light,
@@ -77,6 +79,7 @@ export function resolveAppliedSyntaxTheme(
   resolvedMode: "dark" | "light",
 ): SyntaxTheme {
   const appliedMode = resolveAppliedThemeMode(colorTheme, resolvedMode);
+
   return resolveSyntaxTheme(colorTheme, appliedMode);
 }
 
@@ -87,5 +90,6 @@ export function resolveAppliedSyntaxTheme(
 export function resolveShikiThemeName(colorTheme: string, resolvedMode: "dark" | "light"): string {
   const appliedMode = resolveAppliedThemeMode(colorTheme, resolvedMode);
   const syntaxTheme = resolveSyntaxTheme(colorTheme, appliedMode);
+
   return syntaxTheme[appliedMode];
 }

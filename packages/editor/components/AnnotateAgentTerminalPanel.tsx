@@ -47,7 +47,9 @@ export type AnnotateAgentTerminalPanelHandle = {
 };
 
 type TerminalStatus = "idle" | "starting" | "running" | "stopping" | "exited";
+
 type AgentTerminalFontFamily = "theme" | "system" | "geist";
+
 type AgentTerminalFontWeight = "light" | "regular" | "medium";
 
 type AgentTerminalDisplaySettings = {
@@ -66,7 +68,9 @@ interface AnnotateAgentTerminalPanelProps {
 }
 
 const DISPLAY_STORAGE_KEY = "plannotator-agent-terminal-display";
+
 const MIN_FONT_SIZE = 10;
+
 const MAX_FONT_SIZE = 24;
 
 export const DEFAULT_DISPLAY_SETTINGS: AgentTerminalDisplaySettings = {
@@ -106,6 +110,7 @@ const FONT_WEIGHT_OPTIONS: {
 ];
 
 const LINE_HEIGHT_OPTIONS = [1, 1.1, 1.2, 1.35];
+
 const AGENT_TERMINAL_FONT_ZOOM = {
   enabled: true,
   min: MIN_FONT_SIZE,
@@ -125,14 +130,18 @@ export const AnnotateAgentTerminalPanel = forwardRef<
   const availableAgents = useMemo(() => agents.filter((agent) => agent.available), [agents]);
   const wsUrl = capability.enabled ? resolveAgentTerminalWebSocketUrl(capability.wsPath) : "";
   const backend = useMemo(() => (wsUrl ? createAgentOnlyBackend(wsUrl) : null), [wsUrl]);
+
   const initialAgentId = useMemo(
     () => resolveAnnotateAgentId(agents, getSavedAnnotateAgentId()),
     [agents],
   );
+
   const [selectedAgentId, setSelectedAgentId] = useState(initialAgentId);
+
   const [saveAsDefault, setSaveAsDefault] = useState(
     () => getSavedAnnotateAgentId() === initialAgentId,
   );
+
   const [startedAgentId, setStartedAgentId] = useState<string | null>(null);
   const [status, setStatus] = useState<TerminalStatus>("idle");
   const [exitLabel, setExitLabel] = useState<string | null>(null);
@@ -146,6 +155,7 @@ export const AnnotateAgentTerminalPanel = forwardRef<
   useEffect(() => {
     setSelectedAgentId((current) => {
       if (availableAgents.some((agent) => agent.id === current)) return current;
+
       return initialAgentId;
     });
   }, [availableAgents, initialAgentId]);
@@ -172,6 +182,7 @@ export const AnnotateAgentTerminalPanel = forwardRef<
 
   const terminalOptions = useMemo(() => {
     const weight = resolveDisplayWeight(displaySettings.fontWeight);
+
     const fontFamily = resolveDisplayFontFamily(
       displaySettings.fontFamily,
       terminalTheme.terminalOptions.fontFamily,
@@ -189,6 +200,7 @@ export const AnnotateAgentTerminalPanel = forwardRef<
 
   useEffect(() => {
     const session = sessionRef.current;
+
     if (!session) return;
     session.terminal.options.theme = terminalOptions.theme;
     session.terminal.options.fontFamily = terminalOptions.fontFamily;
@@ -203,6 +215,7 @@ export const AnnotateAgentTerminalPanel = forwardRef<
     setDisplaySettings((current) => {
       const next = sanitizeDisplaySettings({ ...current, ...updates });
       writeDisplaySettings(next);
+
       return next;
     });
   }, []);
@@ -213,6 +226,7 @@ export const AnnotateAgentTerminalPanel = forwardRef<
   }, []);
 
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentId) ?? null;
+
   const canStart =
     capability.enabled &&
     !!backend &&
@@ -224,6 +238,7 @@ export const AnnotateAgentTerminalPanel = forwardRef<
 
   const handleStart = useCallback(() => {
     if (!canStart || !selectedAgent) return;
+
     if (saveAsDefault) saveAnnotateAgentId(selectedAgent.id);
     stopRequestedRef.current = false;
     closeAfterStopRef.current = false;
@@ -238,19 +253,24 @@ export const AnnotateAgentTerminalPanel = forwardRef<
     (closeAfterStop: boolean) => {
       stopRequestedRef.current = true;
       const session = sessionRef.current;
+
       if (!session) {
         if (startedAgentId) {
           closeAfterStopRef.current = closeAfterStop;
           setStatus("stopping");
+
           return;
         }
+
         clearTimers();
         stopRequestedRef.current = false;
         setStartedAgentId(null);
         setStatus("idle");
         onSessionActiveChange?.(false);
         onSessionReadyChange?.(false);
+
         if (closeAfterStop) onClose();
+
         return;
       }
 
@@ -263,6 +283,7 @@ export const AnnotateAgentTerminalPanel = forwardRef<
       timersRef.current.push(
         window.setTimeout(() => {
           sessionRef.current?.pty.kill();
+
           if (closeAfterStopRef.current) onClose();
         }, 1400),
       );
@@ -273,7 +294,9 @@ export const AnnotateAgentTerminalPanel = forwardRef<
   const sendMessage = useCallback((message: string) => {
     const text = message.trim();
     const session = sessionRef.current;
+
     if (!text || !session) return false;
+
     try {
       return session.sendAgentMessage({ text });
     } catch {
@@ -299,11 +322,14 @@ export const AnnotateAgentTerminalPanel = forwardRef<
       onSessionActiveChange?.(false);
       onSessionReadyChange?.(false);
       setExitLabel(formatExit(event));
+
       if (closeAfterStopRef.current) {
         closeAfterStopRef.current = false;
         onClose();
+
         return;
       }
+
       setStatus("exited");
     },
     [clearTimers, onClose, onSessionActiveChange, onSessionReadyChange],
@@ -372,10 +398,13 @@ export const AnnotateAgentTerminalPanel = forwardRef<
                 session.terminal.options.fontWeightBold = terminalOptions.fontWeightBold;
                 session.terminal.options.lineHeight = terminalOptions.lineHeight;
                 session.setFontSize(terminalOptions.fontSize);
+
                 if (closeAfterStopRef.current || stopRequestedRef.current) {
                   requestStop(closeAfterStopRef.current);
+
                   return;
                 }
+
                 setStatus("running");
                 onSessionReadyChange?.(true);
               }}
@@ -486,6 +515,7 @@ function formatAgentName(id: string, agents: { id: string; name: string }[]): st
 
 function createAgentOnlyBackend(wsUrl: string): PtyBackend {
   const backend = new WebSocketPtyBackend(wsUrl);
+
   return {
     spawn(options) {
       return backend.spawn(buildAgentOnlySpawnOptions(options));
@@ -495,22 +525,29 @@ function createAgentOnlyBackend(wsUrl: string): PtyBackend {
 
 function buildAgentOnlySpawnOptions(options: PtySpawnOptions): PtySpawnOptions {
   const spawnOptions: PtySpawnOptions = {};
+
   if (options.agent) spawnOptions.agent = options.agent;
   const cols = normalizeTerminalDimension(options.cols);
+
   if (cols !== undefined) spawnOptions.cols = cols;
   const rows = normalizeTerminalDimension(options.rows);
+
   if (rows !== undefined) spawnOptions.rows = rows;
+
   return spawnOptions;
 }
 
 export function normalizeTerminalDimension(value: number | undefined): number | undefined {
   if (value === undefined || !Number.isInteger(value) || value <= 0) return undefined;
+
   return Math.min(value, 1_000);
 }
 
 function formatExit(event: PtyExit): string {
   if (event.signal) return `Stopped (${event.signal})`;
+
   if (event.exitCode === null) return "Stopped";
+
   return `Exited ${event.exitCode}`;
 }
 
@@ -618,6 +655,7 @@ function TerminalDisplayStepper({
   onChange: (value: number) => void;
 }) {
   const clamped = clampNumber(value, min, max);
+
   return (
     <div className="flex items-center justify-between gap-3 py-1">
       <span className="text-[11px] text-muted-foreground">{label}</span>
@@ -686,12 +724,15 @@ function TerminalDisplaySegmented<T extends string>({
 
 function readDisplaySettings(): AgentTerminalDisplaySettings {
   const raw = getItem(DISPLAY_STORAGE_KEY);
+
   if (!raw) return DEFAULT_DISPLAY_SETTINGS;
+
   try {
     const serialized =
       Option.getOrUndefined(
         Schema.decodeUnknownOption(SerializedDisplaySettingsSchema)(JSON.parse(raw)),
       ) ?? {};
+
     return sanitizeDisplaySettings(serialized);
   } catch {
     return DEFAULT_DISPLAY_SETTINGS;
@@ -703,9 +744,11 @@ function writeDisplaySettings(settings: AgentTerminalDisplaySettings): void {
 }
 
 const SerializedDisplaySettingsSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 type SerializedDisplaySettings = Schema.Schema.Type<typeof SerializedDisplaySettingsSchema>;
 
 export const AgentTerminalFontFamilySchema = Schema.Literals(["theme", "system", "geist"]);
+
 export const AgentTerminalFontWeightSchema = Schema.Literals(["light", "regular", "medium"]);
 
 export function sanitizeDisplaySettings(
@@ -714,14 +757,19 @@ export function sanitizeDisplaySettings(
   const fontFamily = Option.getOrUndefined(
     Schema.decodeUnknownOption(AgentTerminalFontFamilySchema)(value.fontFamily),
   );
+
   const fontSize = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Number)(value.fontSize));
+
   const fontWeight = Option.getOrUndefined(
     Schema.decodeUnknownOption(AgentTerminalFontWeightSchema)(value.fontWeight),
   );
+
   const lineHeightRaw = Option.getOrUndefined(
     Schema.decodeUnknownOption(Schema.Number)(value.lineHeight),
   );
+
   const lineHeight = lineHeightRaw ?? DEFAULT_DISPLAY_SETTINGS.lineHeight;
+
   return {
     fontFamily: fontFamily ?? DEFAULT_DISPLAY_SETTINGS.fontFamily,
     fontSize: clampNumber(
@@ -741,6 +789,7 @@ function resolveDisplayFontFamily(
   themeFontFamily: string | undefined,
 ): string | undefined {
   const option = FONT_FAMILY_OPTIONS.find((item) => item.value === fontFamily);
+
   return option?.family ?? themeFontFamily;
 }
 
@@ -753,5 +802,6 @@ function resolveDisplayWeight(fontWeight: AgentTerminalFontWeight): {
 
 function clampNumber(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
+
   return Math.min(max, Math.max(min, value));
 }

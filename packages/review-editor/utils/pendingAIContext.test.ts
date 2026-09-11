@@ -59,6 +59,7 @@ index 1111111..2222222 100644
  export { shared };
 `,
     };
+
     const _secondFile = {
       path: "src/second.ts",
       patch: `diff --git a/src/second.ts b/src/second.ts
@@ -96,6 +97,7 @@ index 1111111..2222222 100644
  export { shared };
 `,
     };
+
     const _secondFile = {
       path: "src/second.ts",
       patch: `diff --git a/src/second.ts b/src/second.ts

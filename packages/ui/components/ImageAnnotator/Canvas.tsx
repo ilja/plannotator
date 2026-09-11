@@ -32,6 +32,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
+
     if (!canvas || !ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -54,6 +55,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const handleImageLoad = () => {
     const img = imageRef.current;
     const canvas = canvasRef.current;
+
     if (!img || !canvas) return;
 
     // Match canvas to displayed image size
@@ -67,9 +69,11 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Get point from pointer event relative to canvas
   const getPoint = (e: React.PointerEvent): Point => {
     const canvas = canvasRef.current;
+
     if (!canvas) return { x: 0, y: 0 };
 
     const rect = canvas.getBoundingClientRect();
+
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,

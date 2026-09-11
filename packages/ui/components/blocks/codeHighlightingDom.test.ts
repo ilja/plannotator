@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { highlightCodeElement, invalidateCodeHighlight } from "./codeHighlightingDom";
 import { makeTestLayer } from "./codeHighlighting";
-import { disposeCodeHighlightingRuntime, setCodeHighlightingLayerForTest } from "./codeHighlightingRuntime";
+import {
+  disposeCodeHighlightingRuntime,
+  setCodeHighlightingLayerForTest,
+} from "./codeHighlightingRuntime";
 
 const hasDom = process.env.DOM_TESTS === "1";
 
@@ -15,6 +18,7 @@ describe("codeHighlightingDom", () => {
           lines: [[{ content: input.code, color: "#fff" }]],
         } as const),
     });
+
     setCodeHighlightingLayerForTest(layer);
     const el = document.createElement("code");
     el.setAttribute("data-markdown-code-block", "true");
@@ -60,6 +64,7 @@ describe("codeHighlightingDom", () => {
           lines: [[{ content: input.code, color: "#fff" }]],
         } as const),
     });
+
     setCodeHighlightingLayerForTest(layer);
     const el = document.createElement("code");
     el.setAttribute("data-markdown-code-block", "true");

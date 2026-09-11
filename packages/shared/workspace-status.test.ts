@@ -19,12 +19,15 @@ import {
 } from "./workspace-status";
 
 const tempDirs: string[] = [];
+
 const originalPath = process.env.PATH;
+
 const originalGitTimeout = process.env.PLANNOTATOR_GIT_TIMEOUT_MS;
 
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
+
   return dir;
 }
 
@@ -33,11 +36,13 @@ function tempRepo(): string {
   git(dir, "init", "-b", "main");
   git(dir, "config", "user.email", "test@test");
   git(dir, "config", "user.name", "Test");
+
   return dir;
 }
 
 function git(cwd: string, ...args: string[]): void {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+
   if (result.status !== 0) {
     throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
   }
@@ -46,9 +51,11 @@ function git(cwd: string, ...args: string[]): void {
 function findGit(): string {
   const command = process.platform === "win32" ? "where.exe" : "which";
   const result = spawnSync(command, ["git"], { encoding: "utf8" });
+
   if (result.status !== 0) {
     throw new Error(result.stderr || "Unable to find git");
   }
+
   return result.stdout.split(/\r?\n/).find(Boolean)?.trim() ?? "";
 }
 
@@ -57,6 +64,7 @@ async function waitForFile(path: string): Promise<void> {
     if (existsSync(path)) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
+
   throw new Error(`Timed out waiting for ${path}`);
 }
 
@@ -157,11 +165,13 @@ afterEach(() => {
   } else {
     process.env.PATH = originalPath;
   }
+
   if (originalGitTimeout === undefined) {
     delete process.env.PLANNOTATOR_GIT_TIMEOUT_MS;
   } else {
     process.env.PLANNOTATOR_GIT_TIMEOUT_MS = originalGitTimeout;
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }

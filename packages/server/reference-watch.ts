@@ -21,8 +21,11 @@ interface WatchEntry {
 }
 
 const HEARTBEAT_MS = 30_000;
+
 const DEBOUNCE_MS = 180;
+
 const watchers = new Map<string, WatchEntry>();
+
 const encoder = new TextEncoder();
 
 function serialize(event: FileBrowserChangeEvent): Uint8Array {
@@ -31,7 +34,9 @@ function serialize(event: FileBrowserChangeEvent): Uint8Array {
 
 export function isFileBrowserWatchIgnoredPath(path: string, root: string): boolean {
   const rel = relative(root, path).replace(/\\/g, "/");
+
   if (!rel || rel.startsWith("..") || isAbsolute(rel)) return false;
+
   return isFileBrowserExcludedPath(rel);
 }
 
@@ -51,6 +56,7 @@ function broadcast(entry: WatchEntry, reason: FileBrowserChangeEvent["reason"]):
       reason,
       timestamp: Date.now(),
     });
+
     try {
       subscriber.enqueue(payload);
     } catch {
@@ -71,6 +77,7 @@ function closeWatcher(entry: WatchEntry): void {
   if (entry.debounceTimer) clearTimeout(entry.debounceTimer);
   void entry.contentWatcher?.close();
   void entry.gitWatcher?.close();
+
   if (watchers.get(entry.dirPath) === entry) {
     watchers.delete(entry.dirPath);
   }
@@ -78,11 +85,13 @@ function closeWatcher(entry: WatchEntry): void {
 
 function releaseSubscriber(entry: WatchEntry, controller: ReadableStreamDefaultController): void {
   entry.subscribers.delete(controller);
+
   if (entry.subscribers.size === 0) closeWatcher(entry);
 }
 
 function ensureWatcher(dirPath: string): WatchEntry {
   const existing = watchers.get(dirPath);
+
   if (existing) return existing;
 
   const entry: WatchEntry = {
@@ -106,6 +115,7 @@ function ensureWatcher(dirPath: string): WatchEntry {
   entry.contentWatcher.on("error", () => scheduleBroadcast(entry, "files"));
 
   const gitWatchPaths = getGitMetadataWatchPaths(dirPath);
+
   if (gitWatchPaths.length > 0) {
     entry.gitWatcher = chokidar.watch(gitWatchPaths, {
       ignoreInitial: true,
@@ -120,6 +130,7 @@ function ensureWatcher(dirPath: string): WatchEntry {
   }
 
   watchers.set(dirPath, entry);
+
   return entry;
 }
 
@@ -129,17 +140,21 @@ export function handleFileBrowserFilesStream(
 ): Response {
   const url = new URL(req.url);
   const rawDirPaths = url.searchParams.getAll("dirPath");
+
   if (rawDirPaths.length === 0) {
     return Response.json({ error: "Missing dirPath parameter" }, { status: 400 });
   }
 
   const dirPaths: string[] = [];
   const clientDirPaths: string[] = [];
+
   for (const rawDirPath of rawDirPaths) {
     const dirPath = resolveUserPath(rawDirPath);
+
     if (!isValidDirectory(dirPath)) {
       return Response.json({ error: "Invalid directory path" }, { status: 400 });
     }
+
     if (!dirPaths.includes(dirPath)) {
       dirPaths.push(dirPath);
       clientDirPaths.push(rawDirPath);
@@ -151,9 +166,11 @@ export function handleFileBrowserFilesStream(
 
   let controllerRef: ReadableStreamDefaultController | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
   const stream = new ReadableStream({
     start(controller) {
       controllerRef = controller;
+
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i]!;
         const clientDirPath = clientDirPaths[i] ?? entry.dirPath;
@@ -167,17 +184,20 @@ export function handleFileBrowserFilesStream(
           }),
         );
       }
+
       heartbeatTimer = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": heartbeat\n\n"));
         } catch {
           for (const entry of entries) releaseSubscriber(entry, controller);
+
           if (heartbeatTimer) clearInterval(heartbeatTimer);
         }
       }, HEARTBEAT_MS);
     },
     cancel() {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
+
       if (controllerRef) {
         for (const entry of entries) releaseSubscriber(entry, controllerRef);
       }

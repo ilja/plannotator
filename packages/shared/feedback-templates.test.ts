@@ -11,6 +11,7 @@ describe("feedback-templates", () => {
   test("annotation feedback preserves feedback content verbatim", () => {
     const feedback =
       "## 1. Change intro\n**From:**\n```\nold text\n```\n**To:**\n```\nnew text\n```";
+
     const result = annotationFeedback(feedback);
 
     expect(result).toContain("# Annotation Feedback");

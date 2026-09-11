@@ -12,12 +12,14 @@ const reveal = {
   kind: "file-manager" as const,
   icon: "finder",
 };
+
 const editor = {
   id: "vscode",
   label: "VS Code",
   kind: "editor" as const,
   icon: "vscode",
 };
+
 const terminal = {
   id: "terminal",
   label: "Terminal",
@@ -43,6 +45,7 @@ describe("decodeOpenInAppsResponse", () => {
     const decoded = decodeOpenInAppsResponse(availableResponse([terminal, editor, reveal]));
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         available: true,
@@ -64,6 +67,7 @@ describe("decodeOpenInAppsResponse", () => {
     );
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success.apps).toEqual([terminal, editor, reveal]);
     }
@@ -90,6 +94,7 @@ describe("decodeOpenInAppsResponse", () => {
 
     expect(Result.isSuccess(available)).toBeTrue();
     expect(Result.isSuccess(unavailable)).toBeTrue();
+
     if (Result.isSuccess(available) && Result.isSuccess(unavailable)) {
       expect(available.success).toEqual({ available: true, apps: [] });
       expect(unavailable.success).toEqual({ available: false, apps: [] });
@@ -100,8 +105,10 @@ describe("decodeOpenInAppsResponse", () => {
 describe("createOpenInAppsLoader", () => {
   test("returns unavailable for invalid JSON and retries after the failure", async () => {
     let calls = 0;
+
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
+
       return calls === 1
         ? new Response("not json")
         : jsonResponse({ available: true, apps: [editor] });
@@ -119,6 +126,7 @@ describe("createOpenInAppsLoader", () => {
       jsonCalls += 1;
       throw new Error("JSON should not be parsed");
     };
+
     const loader = createOpenInAppsLoader(async () => response);
 
     expect(await loader()).toEqual({ available: false, apps: [] });
@@ -127,9 +135,12 @@ describe("createOpenInAppsLoader", () => {
 
   test("returns unavailable for a rejected request and retries after the failure", async () => {
     let calls = 0;
+
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
+
       if (calls === 1) throw new Error("Network unavailable");
+
       return jsonResponse({ available: true, apps: [editor] });
     });
 
@@ -140,8 +151,10 @@ describe("createOpenInAppsLoader", () => {
 
   test("returns unavailable for a malformed root and retries after the failure", async () => {
     let calls = 0;
+
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
+
       return calls === 1
         ? jsonResponse({ available: true, apps: {} })
         : jsonResponse({ available: true, apps: [] });
@@ -155,8 +168,10 @@ describe("createOpenInAppsLoader", () => {
   test("memoizes successful responses, including available empty responses", async () => {
     let calls = 0;
     const response: OpenInAppsResponse = { available: true, apps: [] };
+
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
+
       return jsonResponse(response);
     });
 
@@ -171,8 +186,10 @@ describe("createOpenInAppsLoader", () => {
 
   test("memoizes a valid unavailable response", async () => {
     let calls = 0;
+
     const loader = createOpenInAppsLoader(async () => {
       calls += 1;
+
       return jsonResponse({ available: false, apps: [] });
     });
 

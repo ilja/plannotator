@@ -42,17 +42,22 @@ export function buildAppSourceBackedSavePresentation(
 ): AppSourceBackedSavePresentation {
   const activeSourceSave = getEnabledSourceSave(input.activeDocument);
   const activeSaveStatus = input.activeDocument?.saveStatus;
+
   const hasUnsavedDiskChanges =
     activeSaveStatus === "dirty" ||
     activeSaveStatus === "conflict" ||
     activeSaveStatus === "error" ||
     activeSaveStatus === "missing";
+
   const emphasizeSave = hasUnsavedDiskChanges || activeSaveStatus === "saving";
   const saveFailed = activeSaveStatus === "conflict" || activeSaveStatus === "error";
+
   const activeSourceBufferDirty =
     activeSourceSave !== null &&
     input.activeDocument?.currentText !== input.activeDocument?.diskBaseline;
+
   const diskConflict = input.activeDocument?.diskConflict;
+
   const canOverwriteDiskConflict =
     activeSourceSave !== null &&
     diskConflict !== undefined &&

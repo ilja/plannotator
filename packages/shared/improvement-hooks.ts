@@ -48,7 +48,9 @@ export type ImprovementHookName = keyof typeof KNOWN_HOOKS;
 
 export function getImprovementHookExpectedPath(hookName: ImprovementHookName): string | null {
   const entry = KNOWN_HOOKS[hookName];
+
   if (!entry) return null;
+
   return join(HOOKS_BASE_DIR, entry.path);
 }
 
@@ -62,6 +64,7 @@ export interface ImprovementHookResult {
 function fileExists(path: string): boolean {
   try {
     statSync(path);
+
     return true;
   } catch {
     return false;
@@ -75,9 +78,11 @@ function tryReadHookFile(
 ): ImprovementHookResult | null {
   try {
     const stat = statSync(filePath);
+
     if (!stat.isFile() || stat.size === 0 || stat.size > MAX_FILE_SIZE) return null;
 
     const content = readFileSync(filePath, "utf-8").trim();
+
     if (!content) return null;
 
     return { content, hookName, filePath };
@@ -96,6 +101,7 @@ function tryReadHookFile(
  */
 export function readImprovementHook(hookName: ImprovementHookName): ImprovementHookResult | null {
   const entry = KNOWN_HOOKS[hookName];
+
   if (!entry) return null;
 
   const newPath = join(HOOKS_BASE_DIR, entry.path);
@@ -107,5 +113,6 @@ export function readImprovementHook(hookName: ImprovementHookName): ImprovementH
 
   // New path absent — fall back to legacy path
   const legacyFilePath = join(LEGACY_BASE_DIR, entry.legacyPath);
+
   return tryReadHookFile(legacyFilePath, hookName);
 }

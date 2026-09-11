@@ -31,6 +31,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
       patchFile("repo-a/src/index.ts", samplePatch),
       patchFile("repo-b/src/index.ts", samplePatch),
     ];
+
     const index = buildSearchIndex(files);
 
     // All lines should have repo-prefixed file paths
@@ -60,6 +61,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
         ].join("\n"),
       ),
     ];
+
     const matches = findReviewSearchMatches(files, "const");
 
     // Should find matches in both repos
@@ -91,6 +93,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
         ].join("\n"),
       ),
     ];
+
     const matches = findReviewSearchMatches(files, "content");
 
     // Should have separate match entries for each repo
@@ -118,6 +121,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
         ].join("\n"),
       ),
     ];
+
     const matches = findReviewSearchMatches(files, "helper");
 
     expect(matches.length).toBe(2);
@@ -137,6 +141,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
         ].join("\n"),
       ),
     ];
+
     const matches = findReviewSearchMatches(files, "hello");
     const groups = groupReviewSearchMatches(files, matches);
 
@@ -152,6 +157,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
       patchFile("repo-b/src/b.ts", samplePatch),
       patchFile("repo-c/src/c.ts", samplePatch),
     ];
+
     const matches = findReviewSearchMatches(files, "hello");
     const groups = groupReviewSearchMatches(files, matches);
 
@@ -183,6 +189,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
         ),
       ),
     ];
+
     const matches = findReviewSearchMatches(files, "code");
 
     const apiMatch = matches.find((m) => m.filePath === "apps/api/src/server.ts");
@@ -219,6 +226,7 @@ describe("reviewSearch - workspace mode with repo-prefixed paths", () => {
         ].join("\n"),
       ),
     ];
+
     const matches = findReviewSearchMatches(files, "foo");
 
     // Should find 4 matches (2 on old line, 2 on new line)

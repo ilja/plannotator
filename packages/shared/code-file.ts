@@ -21,14 +21,17 @@ const LINE_SUFFIX_RE = /:(\d+)(?:-(\d+))?$/;
 export function parseCodePath(input: string): ParsedCodePath {
   const clean = input.replace(/#.*$/, "");
   const m = clean.match(LINE_SUFFIX_RE);
+
   if (!m) return { filePath: clean };
   let line = Number.parseInt(m[1], 10);
   let lineEnd = m[2] ? Number.parseInt(m[2], 10) : undefined;
+
   if (lineEnd != null && lineEnd < line) {
     const tmp = line;
     line = lineEnd;
     lineEnd = tmp;
   }
+
   return { filePath: clean.replace(LINE_SUFFIX_RE, ""), line, lineEnd };
 }
 
@@ -38,6 +41,7 @@ export function stripLineRef(input: string): string {
 
 export function isCodeFilePath(input: string): boolean {
   if (!isPlausibleCodeFilePath(input)) return false;
+
   return (
     CODE_FILE_REGEX.test(stripLineRef(input)) &&
     !input.startsWith("http://") &&

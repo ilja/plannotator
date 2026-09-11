@@ -31,12 +31,15 @@ export const AISettingsTab: React.FC<AISettingsTabProps> = ({
 }) => {
   const piProviders = providers.filter(isPiProvider);
   const settings = getAIProviderSettings();
+
   const originDefault = resolveAIProviderSelection({
     providers: piProviders,
     origin,
     settings,
   }).providerId;
+
   const effectiveSelection = selectedProviderId ?? originDefault ?? piProviders[0]?.id ?? null;
+
   const [preferredModels, setPreferredModels] = useState<Record<string, string>>(
     () => getAIProviderSettings().preferredModels,
   );

@@ -11,17 +11,8 @@ import {
 } from "./generated/review-core.js";
 import { fileURLToPath } from "node:url";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  reviewRuntime,
-  startAnnotateServer,
-  startReviewServer,
-  type DiffType,
-} from "./server.js";
-import {
-  getGitContext,
-  isGitRepository,
-  runGitDiff,
-} from "./server/git.js";
+import { reviewRuntime, startAnnotateServer, startReviewServer, type DiffType } from "./server.js";
+import { getGitContext, isGitRepository, runGitDiff } from "./server/git.js";
 import { openBrowser, isRemoteSession } from "./server/network.js";
 import { parsePRUrl, checkPRAuth, fetchPR } from "./server/pr.js";
 import { getDisplayRepo } from "./generated/pr-provider.js";
@@ -29,6 +20,7 @@ import { parseRemoteUrl } from "./generated/repo.js";
 import { fetchRef, createWorktree, ensureObjectAvailable } from "./generated/worktree.js";
 import { loadConfig, resolveDefaultDiffType, resolveSharingEnabled } from "./generated/config.js";
 import { WorkspaceReviewSession, type WorkspaceDiffType } from "./generated/review-workspace.js";
+
 export { getLastAssistantMessageText } from "./assistant-message.js";
 
 export type AnnotateMode = "annotate" | "annotate-folder" | "annotate-last";
@@ -40,7 +32,9 @@ export interface BrowserDecisionSession<T> {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
 let annotationHtmlContent = "";
+
 let reviewHtmlContent = "";
 
 try {
@@ -73,6 +67,7 @@ export function getStartupErrorMessage(err: Error): string {
 
 async function openBrowserForServer(serverUrl: string, ctx: ExtensionContext): Promise<void> {
   const browserResult = await openBrowser(serverUrl);
+
   if (isRemoteSession()) {
     ctx.ui.notify(`[Plannotator] ${serverUrl}`, "info");
   } else if (!browserResult.opened) {
@@ -114,6 +109,7 @@ function startBrowserDecisionSession<T>(
   let stopReject: ((err: Error) => void) | undefined;
   let decisionPromise: Promise<T> | undefined;
   const createStoppedError = () => new Error("Plannotator browser session was stopped.");
+
   const stop = () => {
     if (stopped) return;
     stopped = true;
@@ -126,10 +122,12 @@ function startBrowserDecisionSession<T>(
     const stoppedPromise = new Promise<never>((_, reject) => {
       stopReject = reject;
     });
+
     try {
       const result = await Promise.race([waitForResult(), stoppedPromise]);
       stopReject = undefined;
       await delay(1500);
+
       return result;
     } finally {
       stop();
@@ -140,8 +138,10 @@ function startBrowserDecisionSession<T>(
     url: server.url,
     waitForDecision: () => {
       if (decisionPromise) return decisionPromise;
+
       if (stopped) return Promise.reject(createStoppedError());
       decisionPromise = waitForResultOrStop();
+
       return decisionPromise;
     },
     stop,
@@ -196,6 +196,7 @@ function getHttpsRemoteHost(remoteUrl: string): string | null {
 
 function getRemoteHost(remoteUrl: string): string {
   const sshHost = remoteUrl.match(/^[^@]+@([^:]+):/)?.[1];
+
   return (sshHost || getHttpsRemoteHost(remoteUrl) || "").toLowerCase();
 }
 
@@ -207,10 +208,12 @@ async function isSameRepositoryPrCheckout(
     const remoteResult = await reviewRuntime.runGit(["remote", "get-url", "origin"], {
       cwd: repoDir,
     });
+
     if (remoteResult.exitCode !== 0) return false;
     const remoteUrl = remoteResult.stdout.trim();
     const currentRepo = parseRemoteUrl(remoteUrl);
     const prRepo = `${prMetadata.owner}/${prMetadata.repo}`;
+
     return (
       currentRepo?.toLowerCase() === prRepo.toLowerCase() &&
       getRemoteHost(remoteUrl) === prMetadata.host.toLowerCase()
@@ -224,6 +227,7 @@ function validatePrCheckoutMetadata(prMetadata: PrMetadata): void {
   if (prMetadata.baseBranch.includes("..") || prMetadata.baseBranch.startsWith("-")) {
     throw new Error(`Invalid base branch: ${prMetadata.baseBranch}`);
   }
+
   if (!/^[0-9a-f]{40,64}$/i.test(prMetadata.baseSha)) {
     throw new Error(`Invalid base SHA: ${prMetadata.baseSha}`);
   }
@@ -233,6 +237,7 @@ function createPrCheckoutPaths(prMetadata: PrMetadata): PrCheckoutPaths {
   const identifier = `${prMetadata.owner}-${prMetadata.repo}-${prMetadata.number}`;
   const suffix = Math.random().toString(36).slice(2, 8);
   const sessionDir = join(realpathSync(tmpdir()), `plannotator-pr-${identifier}-${suffix}`);
+
   return {
     sessionDir,
     localPath: join(sessionDir, "pool", `pr-${prMetadata.number}`),
@@ -263,8 +268,10 @@ async function createCrossRepositoryCheckout(
   fetchRefStr: string,
 ): Promise<void> {
   const prRepo = `${prMetadata.owner}/${prMetadata.repo}`;
+
   if (prRepo.startsWith("-")) throw new Error(`Invalid repository identifier: ${prRepo}`);
   const cli = "gh";
+
   const cloneEnv =
     prMetadata.host === "github.com"
       ? undefined
@@ -274,23 +281,29 @@ async function createCrossRepositoryCheckout(
         };
 
   console.error(`Cloning ${prRepo} (shallow)...`);
+
   const cloneResult = spawnSync(
     cli,
     ["repo", "clone", prRepo, localPath, "--", "--depth=1", "--no-checkout"],
     { encoding: "utf-8", env: cloneEnv },
   );
+
   if ((cloneResult.status ?? 1) !== 0) {
     throw new Error(`${cli} repo clone failed: ${(cloneResult.stderr ?? "").trim()}`);
   }
 
   console.error("Fetching PR branch...");
+
   const fetchResult = await reviewRuntime.runGit(["fetch", "--depth=200", "origin", fetchRefStr], {
     cwd: localPath,
   });
+
   if (fetchResult.exitCode !== 0) {
     throw new Error(`Failed to fetch PR head ref: ${fetchResult.stderr.trim()}`);
   }
+
   const checkoutResult = await reviewRuntime.runGit(["checkout", "FETCH_HEAD"], { cwd: localPath });
+
   if (checkoutResult.exitCode !== 0) {
     throw new Error(`git checkout FETCH_HEAD failed: ${checkoutResult.stderr.trim()}`);
   }
@@ -299,9 +312,11 @@ async function createCrossRepositoryCheckout(
     ["fetch", "--depth=200", "origin", prMetadata.baseSha],
     { cwd: localPath },
   );
+
   if (baseFetch.exitCode !== 0) {
     console.error("Warning: failed to fetch baseSha, agent diffs may be inaccurate");
   }
+
   await reviewRuntime.runGit(["branch", "--", prMetadata.baseBranch, prMetadata.baseSha], {
     cwd: localPath,
   });
@@ -322,9 +337,12 @@ function registerSameRepositoryCleanup(
         spawnSync("git", ["worktree", "remove", "--force", entry.path], { cwd: repoDir });
       }
     } catch {}
+
     removeSessionDirectory(sessionDir);
   };
+
   process.once("exit", exitHandler);
+
   return async () => {
     process.removeListener("exit", exitHandler);
     await worktreePool.cleanup(reviewRuntime);
@@ -336,7 +354,9 @@ function registerCrossRepositoryCleanup(sessionDir: string): () => void {
   const exitHandler = () => {
     removeSessionDirectory(sessionDir);
   };
+
   process.once("exit", exitHandler);
+
   return () => {
     process.removeListener("exit", exitHandler);
     removeSessionDirectory(sessionDir);
@@ -349,18 +369,22 @@ async function createLocalPrCheckout(
 ): Promise<LocalPrCheckout> {
   validatePrCheckoutMetadata(prMetadata);
   const { sessionDir, localPath } = createPrCheckoutPaths(prMetadata);
+
   try {
     const fetchRefStr = `refs/pull/${prMetadata.number}/head`;
     const isSameRepo = await isSameRepositoryPrCheckout(repoDir, prMetadata);
+
     if (isSameRepo) {
       await createSameRepositoryCheckout(repoDir, localPath, prMetadata, fetchRefStr);
     } else {
       await createCrossRepositoryCheckout(localPath, prMetadata, fetchRefStr);
     }
+
     const worktreePool = createWorktreePool(
       { sessionDir, repoDir, isSameRepo },
       { path: localPath, prUrl: prMetadata.url, number: prMetadata.number, ready: true },
     );
+
     return {
       agentCwd: localPath,
       worktreePool,
@@ -381,10 +405,12 @@ async function prepareOptionalPrCheckout(
   try {
     const checkout = await createLocalPrCheckout(repoDir, prMetadata);
     console.error(`Local checkout ready at ${checkout.agentCwd}`);
+
     return checkout;
   } catch (err) {
     console.error("Warning: local worktree creation failed, falling back to remote diff");
     console.error(err instanceof Error ? err.message : String(err));
+
     return undefined;
   }
 }
@@ -396,6 +422,7 @@ async function fetchPrReview(urlArg: string): Promise<{
   prPatchIncomplete: boolean;
 }> {
   const prRef = parsePRUrl(urlArg);
+
   if (!prRef) {
     throw new Error(
       `Invalid PR URL: ${urlArg}\n` +
@@ -403,17 +430,22 @@ async function fetchPrReview(urlArg: string): Promise<{
         "  GitHub: https://github.com/owner/repo/pull/123",
     );
   }
+
   try {
     await checkPRAuth(prRef);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+
     if (message.includes("not found") || message.includes("ENOENT")) {
       throw new Error("GitHub CLI (gh) is not installed. Install it from https://cli.github.com");
     }
+
     throw err;
   }
+
   console.error(`Fetching PR #${prRef.number} from ${getDisplayRepo(prRef)}...`);
   const pr = await fetchPR(prRef);
+
   return {
     rawPatch: pr.rawPatch,
     gitRef: `PR #${prRef.number}`,
@@ -428,9 +460,11 @@ async function preparePrReview(
   repoDir: string,
 ): Promise<PreparedReview> {
   const review = await fetchPrReview(urlArg);
+
   const checkout = useLocal
     ? await prepareOptionalPrCheckout(repoDir, review.prMetadata)
     : undefined;
+
   return {
     ...review,
     agentCwd: checkout?.agentCwd,
@@ -445,18 +479,23 @@ async function prepareLocalReview(
   requestedBase: string | undefined,
 ): Promise<PreparedReview> {
   const config = loadConfig();
+
   if (await isGitRepository(cwd)) {
     const gitContext = await getGitContext(cwd);
+
     const diffType =
       requestedDiffType &&
       (requestedDiffType.startsWith("worktree:") ||
         gitContext.diffOptions.some((option) => option.id === requestedDiffType))
         ? requestedDiffType
         : resolveDefaultDiffType(config);
+
     const base = requestedBase ?? gitContext.defaultBranch;
+
     const result = await runGitDiff(diffType, base, gitContext.cwd ?? cwd, {
       hideWhitespace: config.diffOptions?.hideWhitespace ?? false,
     });
+
     return {
       rawPatch: result.patch,
       gitRef: result.label,
@@ -466,14 +505,17 @@ async function prepareLocalReview(
       initialBase: base,
     };
   }
+
   const workspace = await buildLocalWorkspaceReview(cwd, {
     requestedDiffType,
     configuredDiffType: resolveDefaultDiffType(config),
     hideWhitespace: config.diffOptions?.hideWhitespace ?? false,
   });
+
   if (workspace.repos.length === 0) {
     throw new Error("Not in a Git repository and no nested Git repositories were found.");
   }
+
   return {
     rawPatch: workspace.rawPatch,
     gitRef: workspace.gitRef,
@@ -500,6 +542,7 @@ export async function openCodeReview(
   exit?: boolean;
 }> {
   const session = await startCodeReviewBrowserSession(ctx, options);
+
   return session.waitForDecision();
 }
 
@@ -526,14 +569,11 @@ export async function startCodeReviewBrowserSession(
 
   const urlArg = options.prUrl;
   const isPRMode = urlArg?.startsWith("http://") || urlArg?.startsWith("https://");
+
   const review =
     isPRMode && urlArg
       ? await preparePrReview(urlArg, shouldUseLocalPrCheckout(options), options.cwd ?? ctx.cwd)
-      : await prepareLocalReview(
-          options.cwd ?? ctx.cwd,
-          options.diffType,
-          options.defaultBranch,
-        );
+      : await prepareLocalReview(options.cwd ?? ctx.cwd, options.diffType, options.defaultBranch);
 
   const server = await startReviewServer({
     rawPatch: review.rawPatch,
@@ -584,6 +624,7 @@ export async function openMarkdownAnnotation(
     sourceConverted,
     gate,
   );
+
   return session.waitForDecision();
 }
 
@@ -614,9 +655,11 @@ export async function startMarkdownAnnotationSession(
   }
 
   let resolvedMarkdown = markdown;
+
   if (!renderHtml && !resolvedMarkdown.trim() && existsSync(filePath)) {
     try {
       const fileStat = statSync(filePath);
+
       if (!fileStat.isDirectory()) {
         resolvedMarkdown = readFileSync(filePath, "utf-8");
       }
@@ -661,6 +704,7 @@ export async function openLastMessageAnnotation(
   feedbackScope?: "message" | "messages";
 }> {
   const session = await startLastMessageAnnotationSession(ctx, lastText, gate, recentMessages);
+
   return session.waitForDecision();
 }
 

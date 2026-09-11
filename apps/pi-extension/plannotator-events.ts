@@ -12,6 +12,7 @@ import {
 } from "./plannotator-browser.js";
 
 export const PLANNOTATOR_REQUEST_CHANNEL = "plannotator:request" as const;
+
 export const PLANNOTATOR_TIMEOUT_MS = 5_000;
 
 export type PlannotatorAction = "code-review" | "annotate" | "annotate-last";
@@ -91,7 +92,9 @@ export type PlannotatorRequestMap = {
     PlannotatorAnnotationResult
   >;
 };
+
 export type PlannotatorRequest = PlannotatorRequestMap[PlannotatorAction];
+
 export type PlannotatorResponseMap = {
   "code-review": PlannotatorResponse<PlannotatorCodeReviewResult>;
   annotate: PlannotatorResponse<PlannotatorAnnotationResult>;
@@ -171,6 +174,7 @@ async function handleCodeReviewRequest(
     useLocal: request.payload?.useLocal,
     prUrl: request.payload?.prUrl,
   });
+
   request.respond({ status: "handled", result });
 }
 
@@ -179,12 +183,16 @@ async function handleAnnotateRequest(
   request: Extract<DecodedPlannotatorRequest, { action: "annotate" }>,
 ): Promise<void> {
   const payload = request.payload;
+
   if (!payload?.filePath) {
     request.respond({ status: "error", error: "Missing filePath for annotate request." });
+
     return;
   }
+
   const sourceConverted =
     /\.html?$/i.test(payload.filePath) || /^https?:\/\//i.test(payload.filePath);
+
   const result = await openMarkdownAnnotation(
     ctx,
     payload.filePath,
@@ -195,6 +203,7 @@ async function handleAnnotateRequest(
     sourceConverted,
     payload.gate,
   );
+
   request.respond({ status: "handled", result });
 }
 
@@ -204,21 +213,26 @@ async function handleAnnotateLastRequest(
 ): Promise<void> {
   const payloadText = request.payload?.markdown;
   const lastText = payloadText?.trim() ? payloadText : getLastAssistantMessageText(ctx);
+
   if (!lastText) {
     request.respond({
       status: "unavailable",
       error: "No assistant message found in session.",
     });
+
     return;
   }
+
   const recent = payloadText?.trim() ? [] : getRecentAssistantMessages(ctx, 25);
   const pickerMessages = recent.length > 1 ? recent : undefined;
+
   const result = await openLastMessageAnnotation(
     ctx,
     lastText,
     request.payload?.gate,
     pickerMessages,
   );
+
   request.respond({ status: "handled", result });
 }
 
@@ -229,12 +243,15 @@ async function handlePlannotatorRequest(
   switch (request.action) {
     case "code-review":
       await handleCodeReviewRequest(ctx, request);
+
       return;
     case "annotate":
       await handleAnnotateRequest(ctx, request);
+
       return;
     case "annotate-last":
       await handleAnnotateLastRequest(ctx, request);
+
       return;
   }
 }
@@ -244,10 +261,13 @@ function respondToRequestFailure(
   error: Error,
 ): void {
   const message = getStartupErrorMessage(error);
+
   if (/unavailable|not available/i.test(message)) {
     respond({ status: "unavailable", error: message });
+
     return;
   }
+
   respond({ status: "error", error: message });
 }
 
@@ -263,14 +283,17 @@ export function registerPlannotatorEventListeners(pi: ExtensionAPI): void {
     const request = Option.getOrUndefined(
       Schema.decodeUnknownOption(PlannotatorRequestMessage)(data),
     );
+
     if (!request || request.respond == null) return;
     const ctx = activeSessionContext.get();
 
     try {
       if (!ctx) {
         request.respond({ status: "unavailable", error: "Plannotator context is not ready yet." });
+
         return;
       }
+
       await handlePlannotatorRequest(ctx, request);
     } catch (err) {
       respondToRequestFailure(request.respond, err instanceof Error ? err : new Error(String(err)));

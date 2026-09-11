@@ -12,7 +12,9 @@ interface FloatingQuickLabelPickerProps {
 }
 
 const PICKER_WIDTH = 192;
+
 const GAP = 6;
+
 const VIEWPORT_PADDING = 12;
 
 interface QuickLabelPosition {
@@ -34,6 +36,7 @@ function computePosition(
 
   // Horizontal: prefer cursor x, fallback to anchor right edge
   let left: number;
+
   if (cursorHint) {
     // Anchor left edge of picker at cursor x, nudge left slightly so
     // the first row's text is directly under the pointer
@@ -63,6 +66,7 @@ export const FloatingQuickLabelPicker: React.FC<FloatingQuickLabelPickerProps> =
     left: number;
     flipAbove: boolean;
   } | null>(null);
+
   const ref = useRef<HTMLDivElement>(null);
   const quickLabels = useMemo(() => getQuickLabels(), []);
 
@@ -72,6 +76,7 @@ export const FloatingQuickLabelPicker: React.FC<FloatingQuickLabelPickerProps> =
     update();
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
+
     return () => {
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
@@ -84,20 +89,26 @@ export const FloatingQuickLabelPicker: React.FC<FloatingQuickLabelPickerProps> =
       if (e.key === "Escape") {
         e.preventDefault();
         onDismiss();
+
         return;
       }
+
       // Accept bare digit or Alt+digit — picker is open so digits mean labels
       const isDigit = (e.code >= "Digit1" && e.code <= "Digit9") || e.code === "Digit0";
+
       if (isDigit && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const digit = parseInt(e.code.slice(5), 10);
         const index = digit === 0 ? 9 : digit - 1;
+
         if (index < quickLabels.length) {
           onSelect(quickLabels[index]);
         }
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onDismiss, onSelect, quickLabels]);
 
@@ -108,10 +119,12 @@ export const FloatingQuickLabelPicker: React.FC<FloatingQuickLabelPickerProps> =
         onDismiss();
       }
     };
+
     // Defer to avoid catching the triggering click
     const timer = setTimeout(() => {
       document.addEventListener("pointerdown", handlePointerDown, true);
     }, 0);
+
     return () => {
       clearTimeout(timer);
       document.removeEventListener("pointerdown", handlePointerDown, true);

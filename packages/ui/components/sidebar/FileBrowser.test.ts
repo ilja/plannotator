@@ -41,6 +41,7 @@ describe("FileBrowser workspace status lookup", () => {
       type: "folder",
       children: [{ name: "a.md", path: "nested/a.md", type: "file" }],
     };
+
     expect(getAggregateWorkspaceChange(node, "C:\\repo\\docs", status)).toEqual({
       additions: 3,
       deletions: 1,
@@ -66,6 +67,7 @@ describe("FileBrowser workspace status lookup", () => {
       },
       totals: { files: 1, additions: 4, deletions: 2 },
     };
+
     const node: VaultNode = {
       name: "docs",
       path: ".",
@@ -119,9 +121,11 @@ describe("FileBrowser workspace status lookup", () => {
       staged: false,
       unstaged: true,
     };
+
     const statuses = new Map([
       ["C:\\repo\\docs\\plan.md", { status: "missing" as const, dirty: false }],
     ]);
+
     const editStatus = getFileEditStatus("C:\\repo\\docs/plan.md", statuses);
 
     expect(editStatus?.status).toBe("missing");
@@ -146,9 +150,11 @@ describe("FileBrowser workspace status lookup", () => {
       },
       totals: { files: 1, additions: 0, deletions: 5 },
     };
+
     const editStatuses = new Map([
       ["/real/docs/plan.md", { status: "missing" as const, dirty: false }],
     ]);
+
     const node: VaultNode = {
       name: "docs",
       path: ".",

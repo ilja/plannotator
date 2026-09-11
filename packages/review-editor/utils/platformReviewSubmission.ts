@@ -9,9 +9,12 @@ export function buildPlatformReviewActionBody(
   generalComment?: string,
 ): string {
   const parts: string[] = [];
+
   if (generalComment) parts.push(generalComment);
   parts.push("Review from Plannotator");
+
   if (target.fileScopedBody) parts.push(target.fileScopedBody);
+
   return parts.join("\n\n");
 }
 
@@ -32,6 +35,7 @@ export function selectPlatformReviewTargets(
   }
 
   const currentTarget = plan.targets.find((target) => target.prUrl === prMetadata?.url);
+
   if (currentTarget) return [currentTarget];
 
   return [

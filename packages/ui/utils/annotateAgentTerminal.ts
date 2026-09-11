@@ -16,14 +16,17 @@ export function resolveAnnotateAgentId(
   savedAgentId: string | null,
 ): string {
   const availableAgents = agents.filter((agent) => agent.available);
+
   if (savedAgentId && availableAgents.some((agent) => agent.id === savedAgentId)) {
     return savedAgentId;
   }
+
   return availableAgents[0]?.id ?? "";
 }
 
 export function resolveAgentTerminalWebSocketUrl(path: string): string {
   const url = new URL(path, window.location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+
   return url.toString();
 }

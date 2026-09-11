@@ -4,11 +4,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { useGitAdd } from "./useGitAdd";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const realSetTimeout = globalThis.setTimeout;
+
 const realClearTimeout = globalThis.clearTimeout;
+
 const roots: Root[] = [];
+
 const timerCallbacks = new Map<number, () => void>();
+
 let nextTimerId = 1;
 
 function installManualTimers(): void {
@@ -17,6 +23,7 @@ function installManualTimers(): void {
     value: (callback: () => void): number => {
       const id = nextTimerId++;
       timerCallbacks.set(id, callback);
+
       return id;
     },
   });
@@ -30,6 +37,7 @@ function installManualTimers(): void {
 
 function runNextTimer(): void {
   const next = timerCallbacks.entries().next();
+
   if (next.done) throw new Error("Expected a pending timer");
   timerCallbacks.delete(next.value[0]);
   next.value[1]();
@@ -42,6 +50,7 @@ function installFetch(
   globalThis.fetch = Object.assign(
     async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       requestBodies?.push(init?.body);
+
       return responses.shift() ?? new Response(null, { status: 500 });
     },
     { preconnect: (): void => {} },
@@ -91,12 +100,15 @@ async function mountHarness(viewedFiles: string[]): Promise<HTMLDivElement> {
 
 function getOutput(host: HTMLDivElement): HTMLOutputElement {
   const output = host.querySelector("output");
+
   if (!(output instanceof HTMLOutputElement)) throw new Error("Hook harness did not render");
+
   return output;
 }
 
 async function clickStage(host: HTMLDivElement): Promise<void> {
   const button = host.querySelector("button");
+
   if (!(button instanceof HTMLButtonElement)) throw new Error("Hook harness did not render");
 
   await act(async () => {
@@ -109,6 +121,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
   Object.defineProperty(globalThis, "setTimeout", { configurable: true, value: realSetTimeout });
   Object.defineProperty(globalThis, "clearTimeout", {
@@ -116,6 +129,7 @@ afterEach(async () => {
     value: realClearTimeout,
   });
   timerCallbacks.clear();
+
   if (hasDom) document.body.innerHTML = "";
 });
 
@@ -149,17 +163,21 @@ describe("useGitAdd response handling", () => {
 
   test.skipIf(!hasDom)("keeps loading state until the response is read", async () => {
     installManualTimers();
+
     let resolveResponse: (response: Response) => void = () => {
       throw new Error("Response resolver was not initialized");
     };
+
     const response = new Promise<Response>((resolve) => {
       resolveResponse = resolve;
     });
+
     installFetch([response]);
     const viewedFiles: string[] = [];
     const host = await mountHarness(viewedFiles);
 
     const button = host.querySelector("button");
+
     if (!(button instanceof HTMLButtonElement)) throw new Error("Hook harness did not render");
     await act(async () => {
       button.click();

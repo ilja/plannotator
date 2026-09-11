@@ -19,6 +19,7 @@ describe("external annotations SSE", () => {
   test("rejects non-object PATCH bodies", async () => {
     const handler = createExternalAnnotationHandler("plan");
     const url = new URL("http://localhost/api/external-annotations?id=missing");
+
     const response = await handler.handle(
       new Request(url, { method: "PATCH", body: JSON.stringify("not an object") }),
       url,
@@ -31,6 +32,7 @@ describe("external annotations SSE", () => {
   test("validates plan patch fields atomically while preserving unknown metadata", async () => {
     const handler = createExternalAnnotationHandler("plan");
     const baseUrl = "http://localhost/api/external-annotations";
+
     const createResponse = await handler.handle(
       new Request(baseUrl, {
         method: "POST",
@@ -38,6 +40,7 @@ describe("external annotations SSE", () => {
       }),
       new URL(baseUrl),
     );
+
     const { ids } = await createResponse!.json();
     const id = ids[0];
 
@@ -48,6 +51,7 @@ describe("external annotations SSE", () => {
       }),
       new URL(`${baseUrl}?id=${id}`),
     );
+
     expect(invalid?.status).toBe(400);
     expect(await invalid?.json()).toEqual({ error: "Invalid JSON" });
 
@@ -68,6 +72,7 @@ describe("external annotations SSE", () => {
       }),
       new URL(`${baseUrl}?id=${id}`),
     );
+
     expect(valid?.status).toBe(200);
     expect(await valid?.json()).toMatchObject({
       annotation: { id, text: "updated", futureMetadata: { preserved: true } },
@@ -77,6 +82,7 @@ describe("external annotations SSE", () => {
   test("validates review line patches atomically", async () => {
     const handler = createExternalAnnotationHandler("review");
     const baseUrl = "http://localhost/api/external-annotations";
+
     const createResponse = await handler.handle(
       new Request(baseUrl, {
         method: "POST",
@@ -90,6 +96,7 @@ describe("external annotations SSE", () => {
       }),
       new URL(baseUrl),
     );
+
     const { ids } = await createResponse!.json();
     const id = ids[0];
 
@@ -100,6 +107,7 @@ describe("external annotations SSE", () => {
       }),
       new URL(`${baseUrl}?id=${id}`),
     );
+
     expect(invalid?.status).toBe(400);
 
     const unchanged = await handler.handle(new Request(baseUrl), new URL(baseUrl));

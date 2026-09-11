@@ -32,6 +32,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const res = await onImport(url.trim());
     setResult(res);
     setLoading(false);
+
     if (res.success && res.count > 0) {
       // Auto-close after successful import
       autoCloseTimer.current = setTimeout(() => {
@@ -48,6 +49,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       clearTimeout(autoCloseTimer.current);
       autoCloseTimer.current = null;
     }
+
     setUrl("");
     setResult(null);
     onClose();

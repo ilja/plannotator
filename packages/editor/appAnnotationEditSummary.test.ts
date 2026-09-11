@@ -111,6 +111,7 @@ describe("editor annotation and edit summary", () => {
         afterText: "after\n",
       }),
     ]);
+
     const summary = buildAppAnnotationEditSummary({
       ...baseAnnotationEditSummaryInput,
       savedFileChanges,
@@ -120,8 +121,10 @@ describe("editor annotation and edit summary", () => {
     });
 
     expect(summary.hasSavedFileChanges).toBe(true);
+
     const panelItems: readonly Readonly<DirectEditPanelItem>[] | null =
       summary.directEditsPanelInfo;
+
     const sidebarPanelItems = copyAnnotationEditSummaryPanelItemsForSidebar(panelItems);
     expect(summary.directEditsPanelInfo).toHaveLength(1);
     expect(panelItems).toHaveLength(1);

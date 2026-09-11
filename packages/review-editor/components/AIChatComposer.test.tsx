@@ -21,6 +21,7 @@ async function mountComposer(overrides: Partial<Props> = {}) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   let root!: Root;
+
   const props: Props = {
     value: "",
     pendingContext: null,
@@ -68,6 +69,7 @@ afterEach(() => {
 describe("AIChatComposer", () => {
   test.skipIf(!hasDom)("renders removable metadata-only pending context", async () => {
     let removed = false;
+
     const session = await mountComposer({
       pendingContext: context,
       onRemoveContext: () => {
@@ -82,6 +84,7 @@ describe("AIChatComposer", () => {
     const remove = session.host.querySelector<HTMLButtonElement>(
       'button[aria-label="Remove AI context"]',
     );
+
     await act(async () => remove?.click());
     expect(removed).toBe(true);
 
@@ -104,6 +107,7 @@ describe("AIChatComposer", () => {
   test.skipIf(!hasDom)("reports input changes and submits with Cmd/Ctrl+Enter", async () => {
     const changes: string[] = [];
     let submitted = 0;
+
     const session = await mountComposer({
       value: "Why?",
       onChange: (value) => changes.push(value),
@@ -167,6 +171,7 @@ describe("AIChatComposer", () => {
     "uses the same composer for attached submit and plain follow-up",
     async () => {
       const submissions: string[] = [];
+
       const session = await mountComposer({
         pendingContext: context,
         value: "Attached?",

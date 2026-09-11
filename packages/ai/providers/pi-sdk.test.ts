@@ -51,12 +51,14 @@ input.on('line', (line) => {
           annotate: { content: "Note", filePath: join(directory, "note.md") },
         },
       });
+
       const result = await Promise.race([
         session.query("Hello").next(),
         new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error("Pi startup timed out")), 1_000);
         }),
       ]);
+
       expect(result.done).toBe(false);
       expect(result.value).toMatchObject({ type: "result", success: true });
     } finally {

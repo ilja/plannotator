@@ -52,6 +52,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
+
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);

@@ -31,6 +31,7 @@ export const decodeSessionInfo = Schema.decodeUnknownSync(SessionInfoSchema);
 function getSessionsDir(): string {
   const dir = join(getPlannotatorDataDir(), "sessions");
   mkdirSync(dir, { recursive: true });
+
   return dir;
 }
 
@@ -44,6 +45,7 @@ function sessionPath(pid: number): string {
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
+
     return true;
   } catch {
     return false;
@@ -62,6 +64,7 @@ export function registerSession(info: SessionInfo): void {
  */
 export function unregisterSession(pid: number = process.pid): void {
   const filePath = sessionPath(pid);
+
   try {
     if (existsSync(filePath)) unlinkSync(filePath);
   } catch {
@@ -77,6 +80,7 @@ export function listSessions(): SessionInfo[] {
   const active: SessionInfo[] = [];
 
   let entries: string[];
+
   try {
     entries = readdirSync(dir);
   } catch {
@@ -87,6 +91,7 @@ export function listSessions(): SessionInfo[] {
     if (!entry.endsWith(".json")) continue;
 
     const filePath = join(dir, entry);
+
     try {
       const data = decodeSessionInfo(JSON.parse(readFileSync(filePath, "utf-8")));
 

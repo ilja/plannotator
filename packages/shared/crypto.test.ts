@@ -17,9 +17,11 @@ function compress(data: JsonValue): string {
   const json = JSON.stringify(data);
   const compressed = deflateSync(new TextEncoder().encode(json));
   let binary = "";
+
   for (let i = 0; i < compressed.length; i++) {
     binary += String.fromCharCode(compressed[i]);
   }
+
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
@@ -29,6 +31,7 @@ function decompress(b64: string): JsonValue {
   const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
   const decompressed = inflateSync(bytes);
   const parsed: JsonValue = JSON.parse(new TextDecoder().decode(decompressed));
+
   return parsed;
 }
 
@@ -85,6 +88,7 @@ describe("encrypt / decrypt round-trip", () => {
 
     // Flip a character in the middle of the ciphertext
     const mid = Math.floor(ciphertext.length / 2);
+
     const tampered =
       ciphertext.slice(0, mid) + (ciphertext[mid] === "A" ? "B" : "A") + ciphertext.slice(mid + 1);
 
@@ -130,6 +134,7 @@ describe("live paste service E2E", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: ciphertext }),
     });
+
     expect(postRes.status).toBe(201);
     const { id }: { id: string } = await postRes.json();
     expect(id).toMatch(/^[A-Za-z0-9]{8}$/);
@@ -164,6 +169,7 @@ describe("live paste service E2E", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: ciphertext }),
     });
+
     const { id }: { id: string } = await postRes.json();
 
     const getRes = await fetch(`${PASTE_API}/api/paste/${id}`);

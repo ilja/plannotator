@@ -84,6 +84,7 @@ export const reviewEditorShortcuts = defineShortcutScope({
 });
 
 export const useReviewEditorShortcuts = createShortcutScopeHook(reviewEditorShortcuts);
+
 export const useReviewEditorDoubleTap = createDoubleTapShortcutsHook(reviewEditorShortcuts);
 
 export const reviewSettingsShortcutRegistry = createShortcutRegistry([

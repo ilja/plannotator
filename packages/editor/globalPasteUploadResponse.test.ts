@@ -9,6 +9,7 @@ const createResponse = (
   ok,
   json: async () => {
     onJson();
+
     return body;
   },
 });
@@ -50,6 +51,7 @@ describe("decodeGlobalPasteUploadResponse", () => {
 
   test("ignores non-OK responses without reading their JSON", async () => {
     let jsonCalls = 0;
+
     const response = createResponse({ path: "/uploads/image.png" }, false, () => {
       jsonCalls += 1;
     });

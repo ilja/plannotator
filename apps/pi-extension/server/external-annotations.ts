@@ -25,6 +25,7 @@ import { json, parseBody, toWebRequest, type ParsedRequestBody } from "./helpers
 // ---------------------------------------------------------------------------
 
 const BASE = "/api/external-annotations";
+
 const STREAM = `${BASE}/stream`;
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,7 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 
   function broadcastMutation(event: ExternalAnnotationEvent<StorableAnnotation>): void {
     const data = serializeSSEEvent(event);
+
     for (const res of subscribers) {
       try {
         res.write(data);
@@ -49,8 +51,10 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 
   function addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
     const parsed = transform(body);
+
     if ("error" in parsed) return { error: parsed.error };
     const created = store.add(parsed.annotations);
+
     return { ids: created.map((annotation: StorableAnnotation) => annotation.id) };
   }
 
@@ -86,14 +90,18 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 
   function handleSnapshotRequest(res: ServerResponse, url: URL): void {
     const since = url.searchParams.get("since");
+
     if (since !== null) {
       const sinceVersion = parseInt(since, 10);
+
       if (!isNaN(sinceVersion) && sinceVersion === store.version) {
         res.writeHead(304);
         res.end();
+
         return;
       }
     }
+
     json(res, {
       annotations: store.getAll(),
       version: store.version,
@@ -103,10 +111,13 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
   async function handleAddRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const result = addAnnotations(await parseBody(req));
+
       if ("error" in result) {
         json(res, { error: result.error }, 400);
+
         return;
       }
+
       json(res, result, 201);
     } catch {
       json(res, { error: "Invalid JSON" }, 400);
@@ -119,21 +130,30 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
     url: URL,
   ): Promise<void> {
     const id = url.searchParams.get("id");
+
     if (!id) {
       json(res, { error: "Missing ?id parameter" }, 400);
+
       return;
     }
+
     try {
       const patch = decodeExternalAnnotationPatch(mode, await toWebRequest(req).json());
+
       if (!patch) {
         json(res, { error: "Invalid JSON" }, 400);
+
         return;
       }
+
       const updated = store.update(id, patch);
+
       if (!updated) {
         json(res, { error: "Not found" }, 404);
+
         return;
       }
+
       json(res, { annotation: updated });
     } catch {
       json(res, { error: "Invalid JSON" }, 400);
@@ -142,16 +162,22 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 
   function handleDeleteRequest(res: ServerResponse, url: URL): void {
     const id = url.searchParams.get("id");
+
     if (id) {
       store.remove(id);
       json(res, { ok: true });
+
       return;
     }
+
     const source = url.searchParams.get("source");
+
     if (source) {
       json(res, { ok: true, removed: store.clearBySource(source) });
+
       return;
     }
+
     json(res, { ok: true, removed: store.clearAll() });
   }
 
@@ -164,24 +190,34 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
     async handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
       if (url.pathname === STREAM && req.method === "GET") {
         handleStreamRequest(res);
+
         return true;
       }
+
       if (url.pathname === BASE && req.method === "GET") {
         handleSnapshotRequest(res, url);
+
         return true;
       }
+
       if (url.pathname === BASE && req.method === "POST") {
         await handleAddRequest(req, res);
+
         return true;
       }
+
       if (url.pathname === BASE && req.method === "PATCH") {
         await handlePatchRequest(req, res, url);
+
         return true;
       }
+
       if (url.pathname === BASE && req.method === "DELETE") {
         handleDeleteRequest(res, url);
+
         return true;
       }
+
       return false;
     },
   };

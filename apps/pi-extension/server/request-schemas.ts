@@ -87,14 +87,18 @@ export const FeedbackRequestSchema = Schema.Struct({
 });
 
 const FeedbackRequestRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 const decodeFeedbackRequestRecord = Schema.decodeUnknownOption(FeedbackRequestRecordSchema);
+
 const decodeFeedbackRequestSchema = Schema.decodeUnknownOption(FeedbackRequestSchema);
 
 export function decodeFeedbackRequest<Input>(
   value: Input,
 ): Schema.Schema.Type<typeof FeedbackRequestSchema> | undefined {
   const record = Option.getOrUndefined(decodeFeedbackRequestRecord(value));
+
   if (!record) return undefined;
+
   return Option.getOrUndefined(decodeFeedbackRequestSchema(record));
 }
 

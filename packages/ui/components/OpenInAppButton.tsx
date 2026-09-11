@@ -38,7 +38,9 @@ const groupApps = (apps: DetectedApp[]): DetectedApp[][] =>
 
 const resolveAppId = (apps: DetectedApp[], currentId: string): string => {
   if (apps.some((app) => app.id === currentId)) return currentId;
+
   if (apps.some((app) => app.id === "reveal")) return "reveal";
+
   return apps[0]?.id ?? "reveal";
 };
 
@@ -217,6 +219,7 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
       setAvailable(data.available);
       setApps(data.apps);
     });
+
     return () => {
       cancelled = true;
     };
@@ -245,6 +248,7 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
 
   const flashError = (msg: string) => {
     setError(msg);
+
     if (errorTimer.current) clearTimeout(errorTimer.current);
     errorTimer.current = setTimeout(() => setError(null), 4000);
   };
@@ -253,13 +257,16 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
     if (!filePath || busy) return;
     setBusy(true);
     setError(null);
+
     try {
       const res = await fetch("/api/open-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filePath, base: base ?? null, appId }),
       });
+
       const data = await readOpenInResponse(res);
+
       if (!data) {
         flashError("Failed to open");
       } else if (data.ok === false) {
@@ -285,6 +292,7 @@ export const OpenInAppButton: React.FC<OpenInAppButtonProps> = ({
     } catch {
       /* ignore */
     }
+
     setMenuOpen(false);
   };
 

@@ -21,6 +21,7 @@ type ChannelResponse = {
 
 function createFakePi() {
   let sessionStartHandler: SessionStartHandler = () => {};
+
   let channelHandler: ChannelHandler = () => {};
 
   const api = {
@@ -30,6 +31,7 @@ function createFakePi() {
     events: {
       on: (channel: string, handler: ChannelHandler) => {
         channelHandler = handler;
+
         return () => {};
       },
     },
@@ -52,6 +54,7 @@ function createFakePi() {
 
 function respondSpy() {
   const responses: ChannelResponse[] = [];
+
   return {
     responses,
     respond: (response: ChannelResponse) => {

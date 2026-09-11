@@ -7,12 +7,14 @@ import type { CodeAnnotation } from "@plannotator/ui/types";
 export function useAnnotationFactory(prMetadata: PRMetadata | null, diffScope?: PRDiffScope) {
   const prContext = useMemo(() => {
     if (!prMetadata) return {};
+
     const base = {
       prUrl: prMetadata.url,
       prNumber: prMetadata.number,
       prTitle: prMetadata.title,
       prRepo: getDisplayRepo(prMetadata),
     };
+
     return diffScope ? { ...base, diffScope } : base;
   }, [prMetadata, diffScope]);
 

@@ -66,6 +66,7 @@ export const LookAndFeelAnnouncementDialog: React.FC<LookAndFeelAnnouncementDial
 }) => {
   const [page, setPage] = useState<1 | 2>(1);
   const [hovered, setHovered] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   return createPortal(
@@ -109,6 +110,7 @@ export const LookAndFeelAnnouncementDialog: React.FC<LookAndFeelAnnouncementDial
                 {LOOK_OPTIONS.map((opt) => {
                   const selected = gridEnabled === opt.value;
                   const isHovered = hovered === opt.key;
+
                   return (
                     <button
                       key={opt.key}

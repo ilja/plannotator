@@ -63,6 +63,7 @@ class ToolbarErrorBoundary extends React.Component<
         </div>
       );
     }
+
     return this.props.children;
   }
 }
@@ -158,6 +159,7 @@ export interface ViewerHandle {
  */
 const FrontmatterCard: React.FC<{ frontmatter: Frontmatter }> = ({ frontmatter }) => {
   const entries = Object.entries(frontmatter);
+
   if (entries.length === 0) return null;
 
   return (
@@ -454,9 +456,11 @@ const ViewerSingleBlock: React.FC<ViewerSingleBlockProps> = ({
   if (block.type === "code" && isMermaidLanguage(block.language)) {
     return <MermaidBlock block={block} />;
   }
+
   if (block.type === "code" && isGraphvizLanguage(block.language)) {
     return <GraphvizBlock block={block} />;
   }
+
   if (block.type === "table") {
     return (
       <TableBlock
@@ -472,8 +476,10 @@ const ViewerSingleBlock: React.FC<ViewerSingleBlockProps> = ({
       />
     );
   }
+
   if (block.type === "code") {
     const isPinpoint = inputMethod === "pinpoint";
+
     return (
       <CodeBlock
         block={block}
@@ -839,23 +845,29 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
         console.error("Failed to copy:", e);
       }
     };
+
     const containerRef = useRef<HTMLDivElement>(null);
     // Per-doc heading slug map with dedup — computed once per blocks array so
     // anchor ids stay stable across re-renders and duplicate heading texts get
     // `-1`/`-2`/... suffixes rather than colliding on the same id.
     const headingSlugMap = useMemo(() => buildHeadingSlugMap(blocks), [blocks]);
     const isTouchDevice = useMemo(() => window.matchMedia("(pointer: coarse)").matches, []);
+
     const [hoveredCodeBlock, setHoveredCodeBlock] = useState<{
       block: Block;
       element: HTMLElement;
     } | null>(null);
+
     const [isCodeBlockToolbarExiting, setIsCodeBlockToolbarExiting] = useState(false);
+
     const [hoveredTable, setHoveredTable] = useState<{ block: Block; element: HTMLElement } | null>(
       null,
     );
+
     const [isTableToolbarExiting, setIsTableToolbarExiting] = useState(false);
     const tableHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [popoutTable, setPopoutTable] = useState<Block | null>(null);
+
     // Viewer-specific comment popover state (global comments + code blocks)
     const [viewerCommentPopover, setViewerCommentPopover] = useState<{
       anchorEl: HTMLElement;
@@ -865,11 +877,13 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       isGlobal: boolean;
       codeBlock?: { block: Block; element: HTMLElement };
     } | null>(null);
+
     // Viewer-specific quick label state (code blocks)
     const [codeBlockQuickLabelPicker, setCodeBlockQuickLabelPicker] = useState<{
       anchorEl: HTMLElement;
       codeBlock: { block: Block; element: HTMLElement };
     } | null>(null);
+
     const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const stickySentinelRef = useRef<HTMLDivElement>(null);
     const lastAutoScrolledHashRef = useRef<string | null>(null);
@@ -916,28 +930,35 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
         const previousChoiceAnnotations = annotations.filter((ann) =>
           isChoiceAnnotationForBlock(ann, block.id),
         );
+
         const lastLocalChoice = lastChoiceAnnotationByBlockRef.current.get(block.id);
+
         const previousChoice = previousChoiceAnnotations.find(
           (ann) => ann.choiceOptionLabel !== undefined,
         );
+
         const currentChoice = previousChoice
           ? { id: previousChoice.id, choiceOptionLabel: previousChoice.choiceOptionLabel }
           : lastLocalChoice
             ? { id: lastLocalChoice.id, choiceOptionLabel: lastLocalChoice.label }
             : undefined;
+
         const choice = selectChoiceOption(
           currentChoice,
           { question: block.content, options: block.choiceOptions ?? [] },
           option,
         );
+
         if (choice.kind === "invalid") return;
         const idsToRemove = new Set(previousChoiceAnnotations.map((ann) => ann.id));
+
         if (lastLocalChoice) idsToRemove.add(lastLocalChoice.id);
         idsToRemove.forEach((id) => onRemoveAnnotation?.(id));
 
         if (choice.kind === "cleared") {
           lastChoiceAnnotationByBlockRef.current.delete(block.id);
           window.getSelection()?.removeAllRanges();
+
           return;
         }
 
@@ -970,7 +991,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     const handlePinpointCodeBlockClick = useCallback(
       (blockId: string, element: HTMLElement) => {
         const codeEl = element.querySelector("code");
+
         if (!codeEl) return;
+
         // In pinpoint mode, apply code block annotation based on current editor mode
         if (modeRef.current === "redline") {
           applyCodeBlockAnnotation(blockId, codeEl, AnnotationType.DELETION);
@@ -1009,6 +1032,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     // Suppress native context menu on touch devices (prevents cut/copy/paste overlay on mobile)
     useEffect(() => {
       const container = containerRef.current;
+
       if (!container || !isTouchDevice) return;
 
       const handleContextMenu = (e: Event) => {
@@ -1016,6 +1040,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       };
 
       container.addEventListener("contextmenu", handleContextMenu);
+
       return () => container.removeEventListener("contextmenu", handleContextMenu);
     }, []);
 
@@ -1025,11 +1050,14 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     const stickyScrollViewport = useScrollViewport();
     useEffect(() => {
       if (!stickyActions || !stickySentinelRef.current || !stickyScrollViewport) return;
+
       const observer = new IntersectionObserver(([entry]) => setIsStuck(!entry.isIntersecting), {
         root: stickyScrollViewport,
         threshold: 0,
       });
+
       observer.observe(stickySentinelRef.current);
+
       return () => observer.disconnect();
     }, [stickyActions, stickyScrollViewport]);
 
@@ -1040,27 +1068,34 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       };
 
       window.addEventListener("hashchange", handleHashChange);
+
       return () => window.removeEventListener("hashchange", handleHashChange);
     }, []);
 
     const scrollToAnchor = useCallback(
       (hash: string) => {
         const anchor = decodeAnchorHash(hash);
+
         if (!anchor) return false;
 
         const container = containerRef.current;
+
         if (!container || !stickyScrollViewport) return false;
 
         const target = document.getElementById(anchor);
+
         if (!target || !container.contains(target)) return false;
 
         const stickyActionsEl = container.querySelector<HTMLElement>("[data-sticky-actions]");
+
         const stickyTop = stickyActionsEl
           ? Number.parseFloat(window.getComputedStyle(stickyActionsEl).top || "0") || 0
           : 0;
+
         const headerOffset = stickyActionsEl
           ? stickyActionsEl.getBoundingClientRect().height + stickyTop
           : 0;
+
         const containerRect = stickyScrollViewport.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
         const relativeTop = targetRect.top - containerRect.top;
@@ -1070,6 +1105,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
           top: Math.max(0, offsetPosition),
           behavior: "smooth",
         });
+
         return true;
       },
       [stickyScrollViewport],
@@ -1082,11 +1118,13 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
         lastAutoScrolledHashRef.current === locationHash
       )
         return;
+
       const timer = window.setTimeout(() => {
         if (scrollToAnchor(locationHash)) {
           lastAutoScrolledHashRef.current = locationHash;
         }
       }, 0);
+
       return () => window.clearTimeout(timer);
     }, [blocks, locationHash, scrollToAnchor, stickyScrollViewport]);
 
@@ -1097,6 +1135,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     useEffect(() => {
       const handleCopy = (e: ClipboardEvent) => {
         const target = e.target;
+
         if (
           target instanceof HTMLElement &&
           (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
@@ -1110,6 +1149,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       };
 
       document.addEventListener("copy", handleCopy);
+
       return () => document.removeEventListener("copy", handleCopy);
     }, [toolbarState]);
 
@@ -1126,17 +1166,21 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
           const manualHighlights = containerRef.current?.querySelectorAll(`[data-bind-id="${id}"]`);
           manualHighlights?.forEach((el) => {
             const parent = el.parentNode;
+
             if (parent && parent.nodeName === "CODE") {
               // SAFETY: parent is CODE element per nodeName check — HTMLElement
               const codeEl = parent as HTMLElement;
               const plainText = el.textContent || "";
               el.remove();
               codeEl.textContent = plainText;
+
               const block = blocks.find(
                 (b) => b.id === codeEl.closest("[data-block-id]")?.getAttribute("data-block-id"),
               );
+
               // Reset to plain state; async re-highlight will replace it
               codeEl.setAttribute("data-syntax-state", "plain");
+
               if (block) {
                 codeEl.setAttribute("data-language", block.language ?? "");
                 // Invalidate any in-flight highlight for this element
@@ -1156,9 +1200,11 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
           const codeBlocksToRestore = Array.from(
             containerRef.current?.querySelectorAll(`code[data-markdown-code-block]`) ?? [],
           ).filter((codeEl) => codeEl.querySelector("mark[data-bind-id]")) as HTMLElement[];
+
           const plainTexts = new Map<HTMLElement, string>();
           codeBlocksToRestore.forEach((codeEl) => {
             const mark = codeEl.querySelector("mark[data-bind-id]");
+
             if (mark) plainTexts.set(codeEl, mark.textContent || codeEl.textContent || "");
           });
 
@@ -1167,9 +1213,11 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
           // Re-highlight affected code blocks
           codeBlocksToRestore.forEach((codeEl) => {
             const plainText = plainTexts.get(codeEl) ?? codeEl.textContent ?? "";
+
             const block = blocks.find(
               (b) => b.id === codeEl.closest("[data-block-id]")?.getAttribute("data-block-id"),
             );
+
             if (block) {
               codeEl.textContent = plainText;
               codeEl.setAttribute("data-syntax-state", "plain");
@@ -1197,6 +1245,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     ) => {
       const id = `codeblock-${Date.now()}`;
       const codeText = codeEl.textContent || "";
+
       // Invalidate any in-flight highlight for this element before mutating
       if (codeEl instanceof HTMLElement) {
         invalidateCodeHighlight(codeEl);
@@ -1223,7 +1272,9 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
         author: getIdentity(),
         images,
       };
+
       if (isQuickLabel) newAnnotation.isQuickLabel = true;
+
       if (quickLabelTip) newAnnotation.quickLabelTip = quickLabelTip;
 
       onAddAnnotationRef.current(newAnnotation);
@@ -1233,6 +1284,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     const handleCodeBlockAnnotate = (type: AnnotationType) => {
       if (!hoveredCodeBlock) return;
       const codeEl = hoveredCodeBlock.element.querySelector("code");
+
       if (!codeEl) return;
       applyCodeBlockAnnotation(hoveredCodeBlock.block.id, codeEl, type);
       setHoveredCodeBlock(null);
@@ -1241,6 +1293,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     const handleCodeBlockQuickLabel = (label: QuickLabel) => {
       if (!hoveredCodeBlock) return;
       const codeEl = hoveredCodeBlock.element.querySelector("code");
+
       if (!codeEl) return;
       applyCodeBlockAnnotation(
         hoveredCodeBlock.block.id,
@@ -1290,9 +1343,11 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
           author: getIdentity(),
           images,
         };
+
         onAddAnnotation(newAnnotation);
       } else if (viewerCommentPopover.codeBlock) {
         const codeEl = viewerCommentPopover.codeBlock.element.querySelector("code");
+
         if (codeEl) {
           applyCodeBlockAnnotation(
             viewerCommentPopover.codeBlock.block.id,
@@ -1313,6 +1368,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
 
     const handleOpenGlobalComment = () => {
       const anchorEl = globalCommentButtonRef.current;
+
       if (!anchorEl) return;
       setViewerCommentPopover({ anchorEl, contextText: "", isGlobal: true });
     };
@@ -1336,6 +1392,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     const handleTableHover = (block: Block, element: HTMLElement) => {
       clearTableHoverTimeout();
       setIsTableToolbarExiting(false);
+
       if (!toolbarState) setHoveredTable({ block, element });
     };
 
@@ -1371,6 +1428,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
     const handleCodeBlockHover = (block: Block, element: HTMLElement) => {
       clearCodeBlockHoverTimeout();
       setIsCodeBlockToolbarExiting(false);
+
       if (!toolbarState) setHoveredCodeBlock({ block, element });
     };
 
@@ -1383,6 +1441,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
       if (!codeBlockQuickLabelPicker) return;
       const { block, element } = codeBlockQuickLabelPicker.codeBlock;
       const codeEl = element.querySelector("code");
+
       if (codeEl) {
         applyCodeBlockAnnotation(
           block.id,
@@ -1394,6 +1453,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(
           label.tip,
         );
       }
+
       setCodeBlockQuickLabelPicker(null);
       window.getSelection()?.removeAllRanges();
     };
@@ -1552,7 +1612,9 @@ const ImageLightbox: React.FC<{ src: string; alt: string; onClose: () => void }>
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
+
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
@@ -1582,18 +1644,22 @@ type RenderGroup =
 function groupBlocks(blocks: Block[]): RenderGroup[] {
   const groups: RenderGroup[] = [];
   let i = 0;
+
   while (i < blocks.length) {
     if (blocks[i].type === "list-item") {
       const listBlocks: Block[] = [];
+
       while (i < blocks.length && blocks[i].type === "list-item") {
         listBlocks.push(blocks[i]);
         i++;
       }
+
       groups.push({ type: "list-group", blocks: listBlocks, key: `list-${listBlocks[0].id}` });
     } else {
       groups.push({ type: "single", block: blocks[i] });
       i++;
     }
   }
+
   return groups;
 }

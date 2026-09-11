@@ -52,6 +52,7 @@ export abstract class BaseSession implements AISession {
     const gen = ++this._queryGen;
     this._isActive = true;
     this._currentAbort = new AbortController();
+
     return { gen, signal: this._currentAbort.signal };
   }
 

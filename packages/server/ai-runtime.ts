@@ -29,8 +29,10 @@ export async function createAIRuntime(options: CreateAIRuntimeOptions = {}): Pro
   try {
     const { PiSDKProvider } = await import("@plannotator/ai/providers/pi-sdk");
     const rawPiPath = Bun.which("pi");
+
     if (rawPiPath) {
       const piPath = resolveWindowsCommandShim(rawPiPath);
+
       // SAFETY: type \"pi-sdk\" addresses the pi-sdk provider whose PiSDKConfig declares the
       // optional piExecutablePath; the remaining PiSDKConfig fields are all optional.
       const provider = await createProvider({
@@ -38,9 +40,11 @@ export async function createAIRuntime(options: CreateAIRuntimeOptions = {}): Pro
         cwd,
         piExecutablePath: piPath,
       } as PiSDKConfig);
+
       if (provider instanceof PiSDKProvider) {
         modelDiscovery.push(provider.fetchModels().catch(() => {}));
       }
+
       registry.register(provider);
     }
   } catch {

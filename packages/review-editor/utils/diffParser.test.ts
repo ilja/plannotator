@@ -85,6 +85,7 @@ describe("parseDiffToFiles — change-type status", () => {
       "-old",
       "+new",
     );
+
     expect(file.status).toBe("modified");
   });
 
@@ -98,6 +99,7 @@ describe("parseDiffToFiles — change-type status", () => {
       "@@ -0,0 +1 @@",
       "+hello",
     );
+
     expect(file.status).toBe("added");
   });
 
@@ -111,6 +113,7 @@ describe("parseDiffToFiles — change-type status", () => {
       "@@ -1 +0,0 @@",
       "-bye",
     );
+
     expect(file.status).toBe("deleted");
   });
 
@@ -126,6 +129,7 @@ describe("parseDiffToFiles — change-type status", () => {
       "-a",
       "+b",
     );
+
     expect(file.status).toBe("renamed");
     expect(file.path).toBe("src/after.ts");
     expect(file.oldPath).toBe("src/before.ts");
@@ -139,6 +143,7 @@ describe("parseDiffToFiles — change-type status", () => {
       "rename to src/new.ts",
       "",
     );
+
     expect(file.status).toBe("renamed");
     expect(file.oldPath).toBe("src/old.ts");
   });
@@ -152,6 +157,7 @@ describe("parseDiffToFiles — change-type status", () => {
       "-a",
       "+b",
     );
+
     expect(file.status).toBe("renamed");
   });
 
@@ -166,6 +172,7 @@ describe("parseDiffToFiles — change-type status", () => {
       "+rename from and rename to lines appear in headers",
       " new file mode is another header",
     );
+
     expect(file.status).toBe("modified");
   });
 });

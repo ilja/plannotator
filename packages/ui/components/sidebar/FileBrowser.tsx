@@ -52,9 +52,12 @@ export function normalizePathForLookup(path: string): string {
 function joinLookupPath(rootPath: string, relativePath: string): string {
   const root = normalizePathForLookup(rootPath);
   const relative = normalizePathForLookup(relativePath).replace(/^\/+/, "");
+
   if (!relative || relative === ".") return root;
+
   if (root === "/" || /^[A-Za-z]:\/$/.test(root))
     return normalizePathForLookup(`${root}${relative}`);
+
   return normalizePathForLookup(`${root}/${relative}`);
 }
 
@@ -64,14 +67,19 @@ export function getPathLookupCandidates(
   workspaceStatus?: WorkspaceStatusPayload,
 ): string[] {
   const candidates = [absolutePath, normalizePathForLookup(absolutePath)];
+
   if (relativePath && workspaceStatus?.rootPath) {
     candidates.push(joinLookupPath(workspaceStatus.rootPath, relativePath));
   }
+
   const seen = new Set<string>();
+
   return candidates.filter((path) => {
     const normalized = normalizePathForLookup(path);
+
     if (seen.has(normalized)) return false;
     seen.add(normalized);
+
     return true;
   });
 }
@@ -83,15 +91,20 @@ function getPathMapValue<T>(
   if (!map) return undefined;
   const candidates = Array.isArray(paths) ? paths : [paths];
   const normalizedCandidates = candidates.map(normalizePathForLookup);
+
   for (let index = 0; index < candidates.length; index += 1) {
     const path = candidates[index];
     const normalized = normalizedCandidates[index];
+
     if (map.has(path)) return map.get(path);
+
     if (map.has(normalized)) return map.get(normalized);
   }
+
   for (const [path, value] of map.entries()) {
     if (normalizedCandidates.includes(normalizePathForLookup(path))) return value;
   }
+
   return undefined;
 }
 
@@ -99,12 +112,15 @@ function pathSetHas(paths: Set<string> | undefined, candidates: string | string[
   if (!paths) return false;
   const candidatePaths = Array.isArray(candidates) ? candidates : [candidates];
   const normalizedCandidates = candidatePaths.map(normalizePathForLookup);
+
   for (let index = 0; index < candidatePaths.length; index += 1) {
     if (paths.has(candidatePaths[index]) || paths.has(normalizedCandidates[index])) return true;
   }
+
   for (const path of paths) {
     if (normalizedCandidates.includes(normalizePathForLookup(path))) return true;
   }
+
   return false;
 }
 
@@ -125,6 +141,7 @@ function normalizeWorkspaceStatus(
 ): WorkspaceStatusPayload | undefined {
   if (!workspaceStatus) return workspaceStatus;
   const files: WorkspaceStatusPayload["files"] = {};
+
   for (const [path, change] of Object.entries(workspaceStatus.files ?? {})) {
     const normalizedPath = normalizePathForLookup(path);
     const normalizedOldPath = change.oldPath ? normalizePathForLookup(change.oldPath) : undefined;
@@ -134,6 +151,7 @@ function normalizeWorkspaceStatus(
       oldPath: normalizedOldPath,
     };
   }
+
   return {
     ...workspaceStatus,
     rootPath: normalizePathForLookup(workspaceStatus.rootPath),
@@ -156,10 +174,13 @@ function getAggregateCount(
       ) ?? 0
     );
   }
+
   let total = 0;
+
   for (const child of node.children ?? []) {
     total += getAggregateCount(child, dirPath, counts, workspaceStatus);
   }
+
   return total;
 }
 
@@ -169,16 +190,21 @@ export function getWorkspaceChange(
   relativePath?: string,
 ): WorkspaceFileChange | undefined {
   const files = workspaceStatus?.files;
+
   if (!files) return undefined;
   const candidates = getPathLookupCandidates(absolutePath, relativePath, workspaceStatus);
   const normalizedCandidates = candidates.map(normalizePathForLookup);
+
   for (let index = 0; index < candidates.length; index += 1) {
     const direct = files[candidates[index]] ?? files[normalizedCandidates[index]];
+
     if (direct) return direct;
   }
+
   for (const [path, change] of Object.entries(files)) {
     if (normalizedCandidates.includes(normalizePathForLookup(path))) return change;
   }
+
   return undefined;
 }
 
@@ -196,13 +222,16 @@ export function getAggregateWorkspaceChange(
 ): AggregateWorkspaceChange {
   if (node.type === "file") {
     const change = getWorkspaceChange(`${dirPath}/${node.path}`, workspaceStatus, node.path);
+
     return change
       ? { additions: change.additions, deletions: change.deletions, files: 1 }
       : { additions: 0, deletions: 0, files: 0 };
   }
+
   return (node.children ?? []).reduce<AggregateWorkspaceChange>(
     (total, child) => {
       const childTotal = getAggregateWorkspaceChange(child, dirPath, workspaceStatus);
+
       return {
         additions: total.additions + childTotal.additions,
         deletions: total.deletions + childTotal.deletions,
@@ -237,9 +266,11 @@ function getEditMarker(editStatus: FileEditStatus | undefined): TreeMarker | nul
   if (editStatus?.status === "conflict") {
     return { label: "!", className: "bg-destructive/15 text-destructive", title: "Save conflict" };
   }
+
   if (editStatus?.status === "error") {
     return { label: "!", className: "bg-destructive/15 text-destructive", title: "Save failed" };
   }
+
   if (editStatus?.status === "missing") {
     return {
       label: "!",
@@ -247,15 +278,19 @@ function getEditMarker(editStatus: FileEditStatus | undefined): TreeMarker | nul
       title: "File missing on disk",
     };
   }
+
   if (editStatus?.status === "saving") {
     return { label: "...", className: "bg-primary/10 text-primary", title: "Saving" };
   }
+
   if (editStatus?.dirty) {
     return { label: "•", className: "bg-primary/10 text-primary", title: "Unsaved edits" };
   }
+
   if (editStatus?.status === "saved") {
     return { label: "✓", className: "bg-success/15 text-success", title: "Saved" };
   }
+
   return null;
 }
 
@@ -265,12 +300,15 @@ function getWorkspaceStatusMarker(
   if (workspaceChange?.status === "added") {
     return { label: "A", className: "text-success", title: "Added file" };
   }
+
   if (workspaceChange?.status === "untracked") {
     return { label: "U", className: "text-primary", title: "Untracked file" };
   }
+
   if (workspaceChange?.status === "deleted") {
     return { label: "D", className: "text-destructive", title: "Deleted file" };
   }
+
   if (workspaceChange?.status === "renamed") {
     return {
       label: "R",
@@ -278,9 +316,11 @@ function getWorkspaceStatusMarker(
       title: workspaceChange.oldPath ? `Renamed from ${workspaceChange.oldPath}` : "Renamed file",
     };
   }
+
   if (workspaceChange?.status === "conflicted") {
     return { label: "!", className: "text-destructive", title: "Git conflict" };
   }
+
   return null;
 }
 
@@ -311,6 +351,7 @@ const FileTreeNode: React.FC<TreeNodeProps> = ({
   const isSelectionDisabled = isFileTreeSelectionDisabled(workspaceChange, editStatus);
   const editMarker = getEditMarker(editStatus);
   const statusMarker = getWorkspaceStatusMarker(workspaceChange);
+
   return (
     <button
       onClick={() => {
@@ -391,9 +432,11 @@ const FolderTreeNode: React.FC<TreeNodeProps> = ({
 
   const folderKey = `${dirPath}:${node.path}`;
   const isExpanded = expandedFolders.has(folderKey);
+
   const aggregateCount = annotationCounts
     ? getAggregateCount(node, dirPath, annotationCounts, workspaceStatus)
     : 0;
+
   const aggregateChange = getAggregateWorkspaceChange(node, dirPath, workspaceStatus);
 
   return (
@@ -459,6 +502,7 @@ const FolderTreeNode: React.FC<TreeNodeProps> = ({
 
 const TreeNode: React.FC<TreeNodeProps> = (props) => {
   if (props.node.type === "folder") return <FolderTreeNode {...props} />;
+
   return <FileTreeNode {...props} />;
 };
 
@@ -559,10 +603,13 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
   const totalCount = annotationCounts
     ? Array.from(annotationCounts.values()).reduce((s, c) => s + c, 0)
     : 0;
+
   const fileCount = annotationCounts?.size ?? 0;
+
   const workspaceTotals = dirs.reduce(
     (total, dir) => {
       if (!dir.workspaceStatus?.available) return total;
+
       return {
         files: total.files + dir.workspaceStatus.totals.files,
         additions: total.additions + dir.workspaceStatus.totals.additions,
@@ -595,6 +642,7 @@ export const FileBrowser: React.FC<FileBrowserProps> = ({
       )}
       {dirs.map((dir) => {
         const isCollapsed = collapsedDirs.has(dir.path);
+
         return (
           <div key={dir.path}>
             <button

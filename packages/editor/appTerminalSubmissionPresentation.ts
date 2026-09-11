@@ -63,9 +63,13 @@ export interface AppTerminalDocumentPresentation {
 
 function getAIDocumentPath(input: BuildAppTerminalDocumentPresentationInput): string {
   if (input.linkedDocumentIsActive) return input.linkedDocumentPath ?? "linked document";
+
   if (input.sourceFilePath) return input.sourceFilePath;
+
   if (input.annotateSource === "message") return "agent message";
+
   if (input.annotateSource === "folder") return "folder document";
+
   return "document";
 }
 
@@ -73,6 +77,7 @@ function getTerminalAskReadableFilePath(
   input: BuildAppTerminalDocumentPresentationInput,
 ): string | null {
   if (input.linkedDocumentIsActive && input.linkedDocumentPath) return input.linkedDocumentPath;
+
   return input.sourceFilePath ?? input.activeFilePath;
 }
 
@@ -128,6 +133,7 @@ export function buildEditorFeedbackRequest(
     annotations: input.annotations,
     codeAnnotations: input.codeAnnotations,
   };
+
   if (input.messageMultiSelectMode && input.annotatedMessageIds.length > 1) {
     return { ...request, feedbackScope: "messages" };
   }
@@ -135,6 +141,7 @@ export function buildEditorFeedbackRequest(
   const selectedMessageId = input.messageMultiSelectMode
     ? input.annotatedMessageIds[0]
     : (input.selectedMessageId ?? undefined);
+
   return selectedMessageId ? { ...request, selectedMessageId } : request;
 }
 

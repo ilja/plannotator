@@ -24,11 +24,13 @@ function createTempProject(
 ): string {
   const root = mkdtempSync(baseDir);
   tempDirs.push(root);
+
   for (const [relativePath, content] of Object.entries(files)) {
     const full = join(root, relativePath);
     mkdirSync(join(full, ".."), { recursive: true });
     writeFileSync(full, content);
   }
+
   return root;
 }
 
@@ -208,6 +210,7 @@ describe("resolveMarkdownFile", () => {
     const root = createTempProject({ "Docs/Specs/Design.MDX": "# Design\n" });
     const result = resolveMarkdownFile("docs/specs/design.mdx", root);
     expect(result.kind).toBe("found");
+
     if (result.kind === "found") {
       expect(await Bun.file(result.path).text()).toBe("# Design\n");
     }
@@ -218,8 +221,10 @@ describe("resolveMarkdownFile", () => {
       "docs/plan.md": "# Plan 1",
       "api/plan.md": "# Plan 2",
     });
+
     const result = resolveMarkdownFile("plan.md", root);
     expect(result.kind).toBe("ambiguous");
+
     if (result.kind === "ambiguous") {
       expect(result.matches).toHaveLength(2);
     }
@@ -230,8 +235,10 @@ describe("resolveMarkdownFile", () => {
       "docs/plan.md": "# Plan 1",
       "api/plan.md": "# Plan 2",
     });
+
     const result = resolveMarkdownFile("@plan.md", root);
     expect(result.kind).toBe("ambiguous");
+
     if (result.kind === "ambiguous") {
       expect(result.input).toBe("@plan.md");
       expect(result.matches).toHaveLength(2);
@@ -244,6 +251,7 @@ describe("resolveMarkdownFile", () => {
     const root = createTempProject({
       "node_modules/pkg/README.md": "# Pkg",
     });
+
     const result = resolveMarkdownFile("readme.md", root);
     expect(result.kind).toBe("not_found");
   });
@@ -252,6 +260,7 @@ describe("resolveMarkdownFile", () => {
     const root = createTempProject({
       ".git/hooks/pre-commit.md": "# hook",
     });
+
     const result = resolveMarkdownFile("pre-commit.md", root);
     expect(result.kind).toBe("not_found");
   });
@@ -300,6 +309,7 @@ describe("resolveMarkdownFile", () => {
     const root = createTempProject({
       "a/b/c/d/deep.md": "# Deep",
     });
+
     const result = resolveMarkdownFile("deep.md", root);
     expect(result).toEqual({
       kind: "found",

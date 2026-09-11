@@ -17,6 +17,7 @@ async function mountActions(overrides: Partial<Props> = {}) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   let root!: Root;
+
   const props: Props = {
     getHoveredLine: () => ({ lineNumber: 7, side: "additions" }),
     aiAvailable: true,
@@ -55,6 +56,7 @@ describe("ReviewGutterActions", () => {
       let currentLine: HoveredDiffLine | undefined = { lineNumber: 7, side: "additions" };
       const comments: SelectedLineRange[] = [];
       const aiLines: HoveredDiffLine[] = [];
+
       const session = await mountActions({
         getHoveredLine: () => currentLine,
         onComment: (range) => comments.push(range),
@@ -78,6 +80,7 @@ describe("ReviewGutterActions", () => {
   test.skipIf(!hasDom)("does nothing when no hovered line is available", async () => {
     let comments = 0;
     let ai = 0;
+
     const session = await mountActions({
       getHoveredLine: () => undefined,
       onComment: () => {
@@ -136,6 +139,7 @@ describe("ReviewGutterActions", () => {
     async () => {
       const session = await mountActions({ aiAvailable: true });
       const [comment, ai] = session.buttons();
+
       const wrapper = session.host.querySelector<HTMLElement>(
         '[data-testid="review-gutter-actions"]',
       );
@@ -146,9 +150,11 @@ describe("ReviewGutterActions", () => {
       expect(wrapper?.style.marginLeft).toBe("calc(-1lh - 2px)");
 
       await session.rerender({ aiAvailable: false });
+
       const compactWrapper = session.host.querySelector<HTMLElement>(
         '[data-testid="review-gutter-actions"]',
       );
+
       expect(session.buttons()).toHaveLength(1);
       expect(session.buttons()[0]!.textContent).toBe("+");
       expect(session.buttons()[0]!.getAttribute("data-gutter-size")).toBe("1lh");
@@ -164,6 +170,7 @@ describe("ReviewGutterActions", () => {
     const secondComments: SelectedLineRange[] = [];
     const firstAiLines: HoveredDiffLine[] = [];
     const secondAiLines: HoveredDiffLine[] = [];
+
     const session = await mountActions({
       getHoveredLine: () => ({ lineNumber: 3, side: "additions" }),
       onComment: (range) => firstComments.push(range),
@@ -235,6 +242,7 @@ describe("ReviewGutterActions", () => {
   test.skipIf(!hasDom)("creates a DOM gutter element for Pierre CodeView options", () => {
     const comments: SelectedLineRange[] = [];
     const aiLines: HoveredDiffLine[] = [];
+
     const element = createReviewGutterActionsElement({
       getHoveredLine: () => ({ lineNumber: 13, side: "deletions" }),
       aiAvailable: true,

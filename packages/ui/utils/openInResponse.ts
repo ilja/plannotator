@@ -35,5 +35,6 @@ export async function readOpenInResponse(response: Response): Promise<OpenInResp
 
   const body: unknown = await response.json().catch(() => null);
   const decoded = decodeOpenInResponse(body);
+
   return Result.isSuccess(decoded) ? decoded.success : null;
 }

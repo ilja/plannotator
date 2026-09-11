@@ -127,8 +127,11 @@ export const SaveNotesResponseSchema = Schema.Struct({
 });
 
 export type PlanResponse = Schema.Schema.Type<typeof PlanResponseSchema>;
+
 export type ShareHtmlResponse = Schema.Schema.Type<typeof ShareHtmlResponseSchema>;
+
 export type SaveNotesResponse = Schema.Schema.Type<typeof SaveNotesResponseSchema>;
+
 export type AICapabilitiesResponse = Schema.Schema.Type<typeof AICapabilitiesResponseSchema>;
 
 export function parsePlanResponse(input: JsonInput): PlanResponse {

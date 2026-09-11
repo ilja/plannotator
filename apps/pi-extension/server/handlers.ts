@@ -59,7 +59,9 @@ const UPLOAD_DIR = join(tmpdir(), "plannotator");
 
 function getExtension(filePath: string): string {
   const lastDot = filePath.lastIndexOf(".");
+
   if (lastDot === -1) return "";
+
   return filePath.slice(lastDot + 1).toLowerCase();
 }
 
@@ -97,6 +99,7 @@ function validateImagePath(rawPath: string): ImagePathValidation {
 
 function validateUploadExtension(fileName: string): UploadExtensionValidation {
   const ext = getExtension(fileName) || "png";
+
   if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
     return {
       valid: false,
@@ -118,20 +121,25 @@ function isUploadFile(file: FormDataEntryValue | null): file is File {
 
 export function handleImageRequest(res: Res, url: URL): void {
   const imagePath = url.searchParams.get("path");
+
   if (!imagePath) {
     send(res, "Missing path parameter", 400, { "Content-Type": "text/plain" });
+
     return;
   }
 
   const tryServePath = (candidate: string): boolean => {
     const validation = validateImagePath(candidate);
+
     if (!validation.valid) return false;
+
     try {
       if (!existsSync(validation.resolved)) return false;
       const data = readFileSync(validation.resolved);
       send(res, data, 200, {
         "Content-Type": getImageContentType(validation.resolved),
       });
+
       return true;
     } catch {
       return false;
@@ -141,15 +149,18 @@ export function handleImageRequest(res: Res, url: URL): void {
   if (tryServePath(imagePath)) return;
 
   const base = url.searchParams.get("base");
+
   if (base && !imagePath.startsWith("/") && tryServePath(resolvePath(base, imagePath))) {
     return;
   }
 
   const validation = validateImagePath(imagePath);
+
   if (!validation.valid) {
     send(res, validation.error || "Invalid image path", 403, {
       "Content-Type": "text/plain",
     });
+
     return;
   }
 
@@ -161,14 +172,18 @@ export async function handleUploadRequest(req: IncomingMessage, res: Res): Promi
     const request = toWebRequest(req);
     const formData = await request.formData();
     const file = formData.get("file");
+
     if (!isUploadFile(file)) {
       json(res, { error: "No file provided" }, 400);
+
       return;
     }
 
     const extResult = validateUploadExtension(file.name);
+
     if (!extResult.valid) {
       json(res, { error: extResult.error }, 400);
+
       return;
     }
 
@@ -194,10 +209,13 @@ export function handleDraftRequest(
       .catch(() => ({}))
       .then((rawBody) => {
         const body = decodeDraftEnvelope(rawBody);
+
         if (body === null) {
           json(res, { error: "Invalid draft" }, 400);
+
           return;
         }
+
         saveDraft(draftKey, body);
         json(res, { ok: true });
       })
@@ -211,13 +229,17 @@ export function handleDraftRequest(
     json(res, { ok: true });
   } else {
     const draft = loadDraft(draftKey);
+
     if (!draft) {
       const draftGeneration = getDraftGeneration(draftKey);
       const notFoundResponse: DraftNotFoundResponse = { found: false };
+
       if (draftGeneration !== null) notFoundResponse.draftGeneration = draftGeneration;
       json(res, notFoundResponse, 404);
+
       return;
     }
+
     json(res, draft);
   }
 }
@@ -225,8 +247,10 @@ export function handleDraftRequest(
 function readDraftGenerationFromUrl(req: IncomingMessage): number | undefined {
   const url = new URL(req.url ?? "/", "http://localhost");
   const raw = url.searchParams.get("generation") ?? url.searchParams.get("draftGeneration");
+
   if (raw === null) return undefined;
   const value = Number(raw);
+
   return Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
@@ -256,24 +280,31 @@ const SaveNotesBodySchema = Schema.Record(Schema.String, Schema.Unknown);
 
 export async function handleSaveNotesRequest(req: IncomingMessage, res: Res): Promise<void> {
   const results: SaveNotesResults = {};
+
   try {
     const body = Option.getOrUndefined(
       Schema.decodeUnknownOption(SaveNotesBodySchema)(await toWebRequest(req).json()),
     );
+
     if (!body) {
       json(res, { error: "Invalid JSON" }, 400);
+
       return;
     }
+
     if (Object.keys(body).some((target) => target !== "obsidian")) {
       json(res, { error: "Unsupported save target" }, 400);
+
       return;
     }
 
     const promises: Promise<void>[] = [];
+
     if (Object.hasOwn(body, "obsidian")) {
       const obsConfig = Option.getOrUndefined(
         Schema.decodeUnknownOption(ObsidianConfigSchema)(body.obsidian),
       );
+
       if (!obsConfig) {
         results.obsidian = { success: false, error: "Invalid Obsidian save configuration" };
       } else if (obsConfig.vaultPath && obsConfig.plan) {
@@ -284,14 +315,18 @@ export async function handleSaveNotesRequest(req: IncomingMessage, res: Res): Pr
         );
       }
     }
+
     await Promise.allSettled(promises);
+
     for (const [name, result] of Object.entries(results)) {
       if (!result?.success && result) console.error(`[${name}] Save failed: ${result.error}`);
     }
   } catch (err) {
     console.error(`[Save Notes] Error:`, err);
     json(res, { error: "Save failed" }, 500);
+
     return;
   }
+
   json(res, { ok: true, results });
 }

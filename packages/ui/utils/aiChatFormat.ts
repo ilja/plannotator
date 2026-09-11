@@ -5,6 +5,7 @@ import DOMPurify from "dompurify";
 export function renderChatMarkdown(text: string): ReactNode {
   // SAFETY: marked.parse with async:false returns string — cast to string
   const html = marked.parse(text, { async: false, breaks: true }) as string;
+
   const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "p",
@@ -42,8 +43,11 @@ export function formatRelativeTime(ts: number): string {
   const days = Math.floor(hours / 24);
 
   if (seconds < 60) return "now";
+
   if (minutes < 60) return `${minutes}m`;
+
   if (hours < 24) return `${hours}h`;
+
   if (days < 7) return `${days}d`;
 
   return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });

@@ -37,9 +37,11 @@ export const TableToolbar: React.FC<TableToolbarProps> = ({
         right: window.innerWidth - rect.right,
       });
     };
+
     updatePosition();
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
+
     return () => {
       window.removeEventListener("scroll", updatePosition, true);
       window.removeEventListener("resize", updatePosition);

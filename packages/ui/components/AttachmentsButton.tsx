@@ -17,7 +17,9 @@ export function deriveImageName(originalName: string, existingNames: string[]): 
 
   if (generic.includes(base.toLowerCase())) {
     let n = 1;
+
     while (existingNames.includes(`image-${n}`)) n++;
+
     return `image-${n}`;
   }
 
@@ -30,12 +32,15 @@ export function deriveImageName(originalName: string, existingNames: string[]): 
 
   if (!name) {
     let n = 1;
+
     while (existingNames.includes(`image-${n}`)) n++;
+
     return `image-${n}`;
   }
 
   if (existingNames.includes(name)) {
     let n = 2;
+
     while (existingNames.includes(`${name}-${n}`)) n++;
     name = `${name}-${n}`;
   }
@@ -154,6 +159,7 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
     blobUrl: string;
     initialName: string;
   } | null>(null);
+
   const [editingImage, setEditingImage] = useState<{ path: string; name: string } | null>(null);
 
   // Update popover position when opened
@@ -174,7 +180,9 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
         setIsOpen(false);
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
@@ -183,20 +191,27 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
   // App.tsx from also processing the same event.
   useEffect(() => {
     if (!isOpen || annotatorImage) return;
+
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
+
       if (!items) return;
+
       for (const item of items) {
         if (item.type.startsWith("image/")) {
           e.preventDefault();
           e.stopPropagation();
           const file = item.getAsFile();
+
           if (file) handleFileSelect(file);
+
           return;
         }
       }
     };
+
     document.addEventListener("paste", handlePaste, true);
+
     return () => document.removeEventListener("paste", handlePaste, true);
   }, [isOpen, annotatorImage]);
 
@@ -206,6 +221,7 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
       file.name,
       images.map((i) => i.name),
     );
+
     const blobUrl = URL.createObjectURL(file);
     setAnnotatorImage({ file, blobUrl, initialName });
     setIsOpen(false); // Close popover when annotator opens
@@ -213,13 +229,16 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
 
   const handleAnnotatorAccept = async (blob: Blob, hasDrawings: boolean, name: string) => {
     setUploading(true);
+
     try {
       const formData = new FormData();
+
       // Use annotated blob if drawings exist, otherwise original file
       if (annotatorImage) {
         const fileToUpload = hasDrawings
           ? new File([blob], "annotated.png", { type: "image/png" })
           : annotatorImage.file;
+
         formData.append("file", fileToUpload);
       } else if (editingImage) {
         // Re-editing: always upload the new blob
@@ -228,11 +247,13 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
 
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = decodeAttachmentUploadResponse(await res.json());
+
       if (data.path) {
         // If re-editing, remove old path first
         if (editingImage) {
           onRemove(editingImage.path);
         }
+
         // Use the name from the annotator (user may have edited it)
         onAdd({ path: data.path, name });
       }
@@ -240,11 +261,13 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
       console.error("Upload failed:", err);
     } finally {
       setUploading(false);
+
       // Cleanup
       if (annotatorImage) {
         URL.revokeObjectURL(annotatorImage.blobUrl);
         setAnnotatorImage(null);
       }
+
       setEditingImage(null);
     }
   };
@@ -254,14 +277,17 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
       URL.revokeObjectURL(annotatorImage.blobUrl);
       setAnnotatorImage(null);
     }
+
     setEditingImage(null);
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (file) {
       handleFileSelect(file);
     }
+
     e.target.value = ""; // Reset for re-selection
   };
 
@@ -269,6 +295,7 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
+
     if (file && file.type.startsWith("image/")) {
       handleFileSelect(file);
     }
@@ -276,11 +303,13 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
 
   const handleManualAdd = () => {
     const trimmed = manualPath.trim();
+
     if (trimmed) {
       const name = deriveImageName(
         trimmed.split("/").pop() || "image",
         images.map((i) => i.name),
       );
+
       onAdd({ path: trimmed, name });
       setManualPath("");
     }
@@ -293,8 +322,10 @@ export const AttachmentsButton: React.FC<AttachmentsButtonProps> = ({
 
   // Determine annotator props
   const annotatorOpen = !!annotatorImage || !!editingImage;
+
   const annotatorSrc =
     annotatorImage?.blobUrl ?? (editingImage ? getImageSrc(editingImage.path) : "");
+
   const annotatorInitialName = annotatorImage?.initialName ?? editingImage?.name ?? "";
 
   return (

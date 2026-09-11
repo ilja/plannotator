@@ -8,6 +8,7 @@ import {
 } from "./network";
 
 const savedEnv: Record<string, string | undefined> = {};
+
 const envKeys = [
   "PLANNOTATOR_REMOTE",
   "PLANNOTATOR_PORT",

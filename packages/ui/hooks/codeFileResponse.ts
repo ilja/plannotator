@@ -4,13 +4,21 @@ const CodeFileEnvelopeSchema = Schema.Struct({
   contents: Schema.String,
   filepath: Schema.String,
 });
+
 const CodeFileErrorEnvelopeSchema = Schema.Struct({ error: Schema.String });
+
 const StringRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 const decodeCodeFileEnvelope = Schema.decodeUnknownOption(CodeFileEnvelopeSchema);
+
 const decodeCodeFileErrorEnvelope = Schema.decodeUnknownOption(CodeFileErrorEnvelopeSchema);
+
 const decodeRecord = Schema.decodeUnknownOption(StringRecordSchema);
+
 const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
 
 export interface CodeFileResponse {
@@ -25,9 +33,11 @@ export interface CodeFileResponse {
 /** Decodes a successful `/api/doc` code-file response. */
 export function decodeCodeFileSuccessResponse<Input>(input: Input): CodeFileResponse | undefined {
   const envelope = Option.getOrUndefined(decodeCodeFileEnvelope(input));
+
   if (!envelope) return undefined;
 
   const record = Option.getOrUndefined(decodeRecord(input));
+
   if (!record) return envelope;
 
   const codeFile = Option.getOrUndefined(decodeBoolean(record.codeFile));

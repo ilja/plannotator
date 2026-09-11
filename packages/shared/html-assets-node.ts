@@ -24,25 +24,33 @@ export function inlineHtmlLocalAssets(html: string, htmlFilePath: string): strin
     const dataUrlFor = (assetPath: string): string | null => {
       try {
         const contentType = htmlAssetContentType(assetPath);
+
         if (!contentType) return null;
 
         const resolved = resolvePath(root, assetPath);
+
         if (!isWithinDirectory(resolved, root)) return null;
+
         if (!existsSync(resolved)) return null;
 
         const stat = statSync(resolved);
+
         if (!stat.isFile() || stat.size > MAX_HTML_ASSET_BYTES) return null;
 
         let bytes = readFileSync(resolved);
+
         if (contentType.startsWith("text/css") && !activeCss.has(assetPath)) {
           activeCss.add(assetPath);
+
           try {
             const cssBase = pathPosix.dirname(assetPath);
+
             const rewrittenCss = rewriteCssAssetReferences(
               bytes.toString("utf-8"),
               dataUrlFor,
               cssBase === "." ? "" : cssBase,
             );
+
             bytes = Buffer.from(rewrittenCss, "utf-8");
           } finally {
             activeCss.delete(assetPath);
@@ -71,21 +79,26 @@ export function inlineHtmlLocalAssets(html: string, htmlFilePath: string): strin
  */
 export function isWithinDirectory(filePath: string, root: string): boolean {
   let resolvedRoot: string;
+
   try {
     resolvedRoot = realpathSync(resolvePath(root));
   } catch {
     return false;
   }
+
   // Resolve symlinks on the asset so an in-directory symlink pointing outside
   // the root (e.g. evil.css -> ~/.ssh/id_rsa) is rejected, not followed. A
   // nonexistent target keeps the lexical path; the later read simply fails.
   let resolved = resolvePath(filePath);
+
   try {
     resolved = realpathSync(resolved);
   } catch {
     // asset does not exist yet — fall through with the lexical path
   }
+
   const rel = relative(resolvedRoot, resolved);
+
   return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel));
 }
 
@@ -109,6 +122,7 @@ export function resolveOpenInTarget(
   resolveRoot?: () => string | string[],
 ): string | null {
   const provided = resolveRoot?.();
+
   const roots = (
     provided == null
       ? [
@@ -124,13 +138,16 @@ export function resolveOpenInTarget(
   )
     .filter((r): r is string => !!r)
     .map((r) => resolvePath(r));
+
   // Resolve against each root and return the first that contains its own
   // resolution. For an absolute filePath the resolution is identical for every
   // root (a pure containment check); for a relative filePath this avoids the
   // duplicate-basename trap of resolving only against roots[0].
   for (const root of roots) {
     const abs = resolvePath(root, filePath);
+
     if (isWithinDirectory(abs, root)) return abs;
   }
+
   return null;
 }

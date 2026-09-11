@@ -62,6 +62,7 @@ describe("resolveAnnotateAgentTerminalTheme", () => {
       foreground: "rgb(87, 82, 121)",
       primary: "rgb(144, 122, 169)",
     };
+
     const theme = resolveAnnotateAgentTerminalTheme("rose-pine", "light", lightPalette);
 
     expect(theme.background).toBe(lightPalette.background);

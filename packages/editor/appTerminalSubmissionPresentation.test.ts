@@ -22,12 +22,14 @@ const baseTerminalDocumentInput = {
 describe("editor terminal and submission presentation", () => {
   test("shows terminal delivery only when the current feedback payload was delivered", () => {
     const delivery = { terminalSessionId: 4, feedbackKey: "feedback", targetPath: "/repo/plan.md" };
+
     const delivered = buildAppTerminalFeedbackPresentation({
       annotateMode: true,
       hasFeedbackContent: true,
       deliveredTerminalFeedback: delivery,
       currentTerminalFeedback: delivery,
     });
+
     const stale = buildAppTerminalFeedbackPresentation({
       annotateMode: true,
       hasFeedbackContent: true,
@@ -93,6 +95,7 @@ describe("editor terminal and submission presentation", () => {
   test("scopes single and multi-message feedback requests without mutation", () => {
     const annotations = Object.freeze([]);
     const codeAnnotations = Object.freeze([]);
+
     const singleMessageRequest = buildEditorFeedbackRequest({
       draftGeneration: 1,
       feedback: "Fix the introduction",
@@ -102,6 +105,7 @@ describe("editor terminal and submission presentation", () => {
       annotatedMessageIds: ["message-1"],
       selectedMessageId: "message-2",
     });
+
     const multipleMessageRequest = buildEditorFeedbackRequest({
       draftGeneration: 1,
       feedback: "Fix the introduction",
@@ -111,6 +115,7 @@ describe("editor terminal and submission presentation", () => {
       annotatedMessageIds: ["message-1", "message-2"],
       selectedMessageId: "message-1",
     });
+
     const selectedMessageRequest = buildEditorFeedbackRequest({
       draftGeneration: 1,
       feedback: "Fix the introduction",
@@ -145,6 +150,7 @@ describe("editor terminal and submission presentation", () => {
       hasDirectEdits: true,
       hasSavedFileChanges: false,
     });
+
     const callbackWithUrl = buildAppSubmissionCompletionPresentation({
       submitted: null,
       agentName: "Ada",
@@ -159,6 +165,7 @@ describe("editor terminal and submission presentation", () => {
       hasDirectEdits: false,
       hasSavedFileChanges: false,
     });
+
     const unavailableConfiguredCallback = buildAppSubmissionCompletionPresentation({
       submitted: null,
       agentName: "Ada",
@@ -173,6 +180,7 @@ describe("editor terminal and submission presentation", () => {
       hasDirectEdits: false,
       hasSavedFileChanges: false,
     });
+
     const unconfigured = buildAppSubmissionCompletionPresentation({
       submitted: null,
       agentName: "Ada",

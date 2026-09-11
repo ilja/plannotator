@@ -3,9 +3,11 @@ import { Option, Schema } from "effect";
 import { join } from "path";
 
 const ObsidianVaultEntries = Schema.Record(Schema.String, Schema.Unknown);
+
 const ObsidianConfigFile = Schema.Struct({
   vaults: ObsidianVaultEntries,
 });
+
 const ObsidianVaultEntry = Schema.Struct({
   path: Schema.NonEmptyString,
 });
@@ -53,14 +55,17 @@ export function detectObsidianVaults(): string[] {
     const configContent = readFileSync(configPath, "utf-8");
     const parsed: unknown = JSON.parse(configContent);
     const config = Option.getOrUndefined(Schema.decodeUnknownOption(ObsidianConfigFile)(parsed));
+
     if (!config) return [];
 
     // Extract vault paths, filter to ones that exist
     const vaults: string[] = [];
+
     for (const [, vaultValue] of Object.entries(config.vaults)) {
       const vault = Option.getOrUndefined(
         Schema.decodeUnknownOption(ObsidianVaultEntry)(vaultValue),
       );
+
       if (vault && existsSync(vault.path)) {
         vaults.push(vault.path);
       }
@@ -80,6 +85,7 @@ export function detectObsidianVaults(): string[] {
 export function generateFrontmatter(tags: string[]): string {
   const now = new Date().toISOString();
   const tagList = tags.map((t) => t.toLowerCase()).join(", ");
+
   return `---
 created: ${now}
 source: plannotator
@@ -92,6 +98,7 @@ tags: [${tagList}]
  */
 export function extractTitle(markdown: string): string {
   const h1Match = markdown.match(/^#\s+(?:Implementation\s+Plan:|Plan:)?\s*(.+)$/im);
+
   if (h1Match) {
     // Clean up the title for use as filename
     return h1Match[1]
@@ -101,6 +108,7 @@ export function extractTitle(markdown: string): string {
       .trim() // Re-trim after stripping
       .slice(0, 50); // Limit length
   }
+
   return "Plan";
 }
 

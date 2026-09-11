@@ -105,6 +105,7 @@ export interface GitDiffOptions {
 
 export async function getCurrentBranch(runtime: ReviewGitRuntime, cwd?: string): Promise<string> {
   const result = await runtime.runGit(["rev-parse", "--abbrev-ref", "HEAD"], { cwd });
+
   return result.exitCode === 0 ? result.stdout.trim() || "HEAD" : "HEAD";
 }
 
@@ -113,8 +114,10 @@ export async function getDefaultBranch(runtime: ReviewGitRuntime, cwd?: string):
   // the upstream tip, not a potentially stale local copy. Only fall back to
   // a local ref when there's no remote configured at all.
   const remoteHead = await runtime.runGit(["symbolic-ref", "refs/remotes/origin/HEAD"], { cwd });
+
   if (remoteHead.exitCode === 0) {
     const ref = remoteHead.stdout.trim();
+
     if (ref) {
       // `symbolic-ref` only tells us what origin/HEAD *points at* — it does
       // not guarantee that the target ref was actually fetched. In narrow
@@ -122,11 +125,13 @@ export async function getDefaultBranch(runtime: ReviewGitRuntime, cwd?: string):
       // missing, in which case a later `git diff origin/main..HEAD` would
       // error. Verify the target exists before trusting it.
       const verify = await runtime.runGit(["show-ref", "--verify", "--quiet", ref], { cwd });
+
       if (verify.exitCode === 0) return ref.replace("refs/remotes/", "");
     }
   }
 
   const mainBranch = await runtime.runGit(["show-ref", "--verify", "refs/heads/main"], { cwd });
+
   if (mainBranch.exitCode === 0) return "main";
 
   return "master";
@@ -150,14 +155,18 @@ export async function detectRemoteDefaultBranch(
       cwd,
       timeoutMs: 5000,
     });
+
     if (lsRemote.exitCode !== 0) return null;
     const match = lsRemote.stdout.match(/^ref:\s+refs\/heads\/(\S+)\s+HEAD/m);
+
     if (!match) return null;
     const remoteBranch = `origin/${match[1]}`;
+
     const refExists = await runtime.runGit(
       ["show-ref", "--verify", "--quiet", `refs/remotes/${remoteBranch}`],
       { cwd },
     );
+
     return refExists.exitCode === 0 ? remoteBranch : null;
   } catch {
     return null;
@@ -165,6 +174,7 @@ export async function detectRemoteDefaultBranch(
 }
 
 const RECENT_COMMIT_LIMIT_DEFAULT = 20;
+
 // US (\x1F) separator avoids collisions with commit subjects, author names, and
 // dates while staying compatible with `git log --pretty=format`.
 const COMMIT_FIELD_SEP = "\x1f";
@@ -179,16 +189,20 @@ export async function listRecentCommits(
   limit: number = RECENT_COMMIT_LIMIT_DEFAULT,
 ): Promise<RecentCommit[]> {
   const fmt = ["%H", "%h", "%s", "%cr", "%an"].join(COMMIT_FIELD_SEP);
+
   const result = await runtime.runGit(
     ["log", `--max-count=${limit}`, `--pretty=format:${fmt}`, "HEAD"],
     { cwd },
   );
+
   if (result.exitCode !== 0) return [];
 
   const commits: RecentCommit[] = [];
+
   for (const line of result.stdout.split("\n")) {
     if (!line) continue;
     const parts = line.split(COMMIT_FIELD_SEP);
+
     if (parts.length < 5) continue;
     // If a subject contains a literal US byte the split over-divides. sha/
     // shortSha are fixed-shape at the start and relativeDate/author at the
@@ -200,6 +214,7 @@ export async function listRecentCommits(
     const subject = parts.slice(2, parts.length - 2).join(COMMIT_FIELD_SEP);
     commits.push({ sha, shortSha, subject, relativeDate, author });
   }
+
   return commits;
 }
 
@@ -214,6 +229,7 @@ export async function listBranches(
     ["for-each-ref", "--format=%(refname)\t%(refname:short)", "refs/heads", "refs/remotes"],
     { cwd },
   );
+
   if (result.exitCode !== 0) return { local: [], remote: [] };
 
   const local: string[] = [];
@@ -221,8 +237,11 @@ export async function listBranches(
 
   for (const line of result.stdout.split("\n")) {
     const [fullRef, shortName] = line.split("\t");
+
     if (!fullRef || !shortName) continue;
+
     if (shortName.endsWith("/HEAD")) continue;
+
     if (fullRef.startsWith("refs/heads/")) {
       local.push(shortName);
     } else if (fullRef.startsWith("refs/remotes/")) {
@@ -260,6 +279,7 @@ export async function getWorktrees(
   cwd?: string,
 ): Promise<WorktreeInfo[]> {
   const result = await runtime.runGit(["worktree", "list", "--porcelain"], { cwd });
+
   if (result.exitCode !== 0) return [];
 
   const entries: WorktreeInfo[] = [];
@@ -274,6 +294,7 @@ export async function getWorktrees(
           branch: current.branch ?? null,
         });
       }
+
       current = { path: line.slice("worktree ".length) };
     } else if (line.startsWith("HEAD ")) {
       current.head = line.slice("HEAD ".length);
@@ -374,6 +395,7 @@ async function getUntrackedFileDiffs(
   const lsResult = await runtime.runGit(["ls-files", "--others", "--exclude-standard"], {
     cwd: rootCwd,
   });
+
   if (lsResult.exitCode !== 0) return "";
 
   const files = lsResult.stdout
@@ -398,6 +420,7 @@ async function getUntrackedFileDiffs(
         ],
         { cwd: rootCwd },
       );
+
       return diffResult.stdout;
     }),
   );
@@ -438,8 +461,10 @@ export function parseWorktreeDiffType(diffType: string): { path: string; subType
 
   const rest = diffType.slice("worktree:".length);
   const lastColon = rest.lastIndexOf(":");
+
   if (lastColon !== -1) {
     const maybeSub = rest.slice(lastColon + 1);
+
     if (WORKTREE_SUB_TYPES.has(maybeSub)) {
       return { path: rest.slice(0, lastColon), subType: maybeSub };
     }
@@ -454,6 +479,7 @@ export function resolveGitDiffCwd(diffType: string, fallbackCwd?: string): strin
 
 export function canStageGitFiles(diffType: string): boolean {
   const effectiveDiffType = parseWorktreeDiffType(diffType)?.subType ?? diffType;
+
   return effectiveDiffType === "uncommitted" || effectiveDiffType === "unstaged";
 }
 
@@ -471,7 +497,9 @@ function resolveDiffExecutionContext(
   }
 
   const parsed = parseWorktreeDiffType(diffType);
+
   if (!parsed) return null;
+
   return { cwd: parsed.path, effectiveDiffType: parsed.subType };
 }
 
@@ -484,6 +512,7 @@ function gitDiffFailureResult(
   // first meaningful line so the UI doesn't vomit a wall of text.
   const firstLine = raw.split("\n").find((line) => line.trim().length > 0) ?? raw;
   const message = firstLine.length > 200 ? `${firstLine.slice(0, 200)}…` : firstLine;
+
   return {
     patch: "",
     label: cwd ? "Worktree error" : `Error: ${diffType}`,
@@ -499,6 +528,7 @@ export async function runGitDiff(
   options?: GitDiffOptions,
 ): Promise<DiffResult> {
   const context = resolveDiffExecutionContext(diffType, externalCwd);
+
   if (!context) {
     return {
       patch: "",
@@ -506,6 +536,7 @@ export async function runGitDiff(
       error: "Could not parse worktree diff type",
     };
   }
+
   const { cwd, effectiveDiffType } = context;
   let patch = "";
   let label = "";
@@ -523,11 +554,14 @@ export async function runGitDiff(
           "--src-prefix=a/",
           "--dst-prefix=b/",
         ];
+
         const hasHead =
           (await runtime.runGit(["rev-parse", "--verify", "HEAD"], { cwd })).exitCode === 0;
+
         const trackedPatch = hasHead
           ? assertGitSuccess(await runtime.runGit(trackedDiffArgs, { cwd }), trackedDiffArgs).stdout
           : "";
+
         const untrackedDiff = await getUntrackedFileDiffs(runtime, "a/", "b/", cwd, options);
         patch = trackedPatch + untrackedDiff;
         label = "Uncommitted changes";
@@ -543,10 +577,12 @@ export async function runGitDiff(
           "--src-prefix=a/",
           "--dst-prefix=b/",
         ];
+
         const stagedDiff = assertGitSuccess(
           await runtime.runGit(stagedDiffArgs, { cwd }),
           stagedDiffArgs,
         );
+
         patch = stagedDiff.stdout;
         label = "Staged changes";
         break;
@@ -560,10 +596,12 @@ export async function runGitDiff(
           "--src-prefix=a/",
           "--dst-prefix=b/",
         ];
+
         const trackedDiff = assertGitSuccess(
           await runtime.runGit(trackedDiffArgs, { cwd }),
           trackedDiffArgs,
         );
+
         const untrackedDiff = await getUntrackedFileDiffs(runtime, "a/", "b/", cwd, options);
         patch = trackedDiff.stdout + untrackedDiff;
         label = "Unstaged changes";
@@ -572,6 +610,7 @@ export async function runGitDiff(
 
       case "last-commit": {
         const hasParent = await runtime.runGit(["rev-parse", "--verify", "HEAD~1"], { cwd });
+
         const args =
           hasParent.exitCode === 0
             ? [
@@ -591,6 +630,7 @@ export async function runGitDiff(
                 "--src-prefix=a/",
                 "--dst-prefix=b/",
               ];
+
         const lastCommitDiff = assertGitSuccess(await runtime.runGit(args, { cwd }), args);
         patch = lastCommitDiff.stdout;
         label = "Last commit";
@@ -611,10 +651,12 @@ export async function runGitDiff(
           "--end-of-options",
           `${defaultBranch}..HEAD`,
         ];
+
         const branchDiff = assertGitSuccess(
           await runtime.runGit(branchDiffArgs, { cwd }),
           branchDiffArgs,
         );
+
         patch = branchDiff.stdout;
         label = `Changes vs ${displayRef(defaultBranch)}`;
         break;
@@ -622,11 +664,14 @@ export async function runGitDiff(
 
       case "merge-base": {
         const mergeBaseLookupArgs = ["merge-base", "--end-of-options", defaultBranch, "HEAD"];
+
         const mergeBaseResult = assertGitSuccess(
           await runtime.runGit(mergeBaseLookupArgs, { cwd }),
           mergeBaseLookupArgs,
         );
+
         const mergeBase = mergeBaseResult.stdout.trim();
+
         const mergeBaseDiffArgs = [
           "diff",
           "--no-ext-diff",
@@ -636,10 +681,12 @@ export async function runGitDiff(
           "--end-of-options",
           `${mergeBase}..HEAD`,
         ];
+
         const mergeBaseDiff = assertGitSuccess(
           await runtime.runGit(mergeBaseDiffArgs, { cwd }),
           mergeBaseDiffArgs,
         );
+
         patch = mergeBaseDiff.stdout;
         label = `PR diff vs ${displayRef(defaultBranch)}`;
         break;
@@ -650,10 +697,12 @@ export async function runGitDiff(
         const emptyTreeResult = await runtime.runGit(["hash-object", "-t", "tree", "/dev/null"], {
           cwd,
         });
+
         const emptyTree =
           emptyTreeResult.exitCode === 0
             ? emptyTreeResult.stdout.trim()
             : "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
         const allDiffArgs = [
           "diff",
           "--no-ext-diff",
@@ -663,6 +712,7 @@ export async function runGitDiff(
           "--end-of-options",
           `${emptyTree}..HEAD`,
         ];
+
         const allDiff = assertGitSuccess(await runtime.runGit(allDiffArgs, { cwd }), allDiffArgs);
         patch = allDiff.stdout;
         label = "All files";
@@ -674,6 +724,7 @@ export async function runGitDiff(
     }
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
+
     return gitDiffFailureResult(raw, cwd, diffType);
   }
 
@@ -716,9 +767,11 @@ export async function runGitDiffWithContext(
 /** djb2-xor hash — cheap change-detection fingerprint, not cryptographic. */
 export function hashFingerprintPart(value: string): string {
   let hash = 5381;
+
   for (let i = 0; i < value.length; i++) {
     hash = ((hash * 33) ^ value.charCodeAt(i)) >>> 0;
   }
+
   return hash.toString(36);
 }
 
@@ -736,6 +789,7 @@ export async function getGitDiffFingerprint(
   options?: GitDiffOptions,
 ): Promise<string | null> {
   const context = resolveDiffExecutionContext(diffType, externalCwd);
+
   if (!context) return null;
   const { cwd, effectiveDiffType } = context;
 
@@ -755,8 +809,10 @@ export async function getGitDiffFingerprint(
 
     const hashDiffOutput = async (args: string[]): Promise<boolean> => {
       const result = await runReadOnlyGit(["diff", "--no-ext-diff", ...wFlag, ...args]);
+
       if (result.exitCode !== 0) return false;
       parts.push(hashFingerprintPart(result.stdout));
+
       return true;
     };
 
@@ -766,41 +822,51 @@ export async function getGitDiffFingerprint(
     // existence-only detection rather than unbounded reads.
     const hashUntracked = async (): Promise<boolean> => {
       const status = await runReadOnlyGit(["status", "--porcelain"]);
+
       if (status.exitCode !== 0) return false;
       parts.push(hashFingerprintPart(status.stdout));
+
       const untracked = status.stdout
         .split("\n")
         .filter((line) => line.startsWith("?? "))
         .map((line) => line.slice(3).trim())
         .slice(0, MAX_UNTRACKED_FINGERPRINT_FILES);
+
       for (const path of untracked) {
         const content = await runtime.readTextFile(cwd ? resolvePath(cwd, path) : path);
         parts.push(content != null ? hashFingerprintPart(content) : "unreadable");
       }
+
       return true;
     };
 
     switch (effectiveDiffType) {
       case "uncommitted": {
         if (headSha !== "no-head" && !(await hashDiffOutput(["HEAD"]))) return null;
+
         if (!(await hashUntracked())) return null;
         break;
       }
+
       case "staged": {
         if (!(await hashDiffOutput(["--staged"]))) return null;
         break;
       }
+
       case "unstaged": {
         if (!(await hashDiffOutput([]))) return null;
+
         if (!(await hashUntracked())) return null;
         break;
       }
+
       case "branch":
       case "merge-base": {
         const baseTip = await runReadOnlyGit(["rev-parse", "--end-of-options", defaultBranch]);
         parts.push(baseTip.exitCode === 0 ? baseTip.stdout.trim() : "no-base");
         break;
       }
+
       case "last-commit":
       case "all":
         // HEAD alone identifies these.
@@ -808,6 +874,7 @@ export async function getGitDiffFingerprint(
       default:
         return null;
     }
+
     return parts.join(":");
   } catch {
     return null;
@@ -826,8 +893,10 @@ export async function getFileContentsForDiff(
 
   // SAFETY: DiffType is a string union; widening to string for worktree prefix check is intentional
   let effectiveDiffType = diffType as string;
+
   if (diffType.startsWith("worktree:")) {
     const parsed = parseWorktreeDiffType(diffType);
+
     if (!parsed) return { oldContent: null, newContent: null };
     cwd = parsed.path;
     effectiveDiffType = parsed.subType;
@@ -836,11 +905,13 @@ export async function getFileContentsForDiff(
   async function gitShow(ref: string, path: string): Promise<string | null> {
     // `--end-of-options` hardens against user-supplied refs starting with `-`.
     const result = await runtime.runGit(["show", "--end-of-options", `${ref}:${path}`], { cwd });
+
     return result.exitCode === 0 ? result.stdout : null;
   }
 
   async function readWorkingTree(path: string): Promise<string | null> {
     const fullPath = cwd ? resolvePath(cwd, path) : path;
+
     return runtime.readTextFile(fullPath);
   }
 
@@ -875,12 +946,15 @@ export async function getFileContentsForDiff(
         ["merge-base", "--end-of-options", defaultBranch, "HEAD"],
         { cwd },
       );
+
       const mb = mbResult.exitCode === 0 ? mbResult.stdout.trim() : defaultBranch;
+
       return {
         oldContent: await gitShow(mb, oldFilePath),
         newContent: await gitShow("HEAD", filePath),
       };
     }
+
     case "all":
       return {
         oldContent: null,
@@ -903,6 +977,7 @@ async function ensureGitSuccess(
   cwd?: string,
 ): Promise<void> {
   const result = await runtime.runGit(args, { cwd });
+
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || `git ${args.join(" ")} failed`);
   }

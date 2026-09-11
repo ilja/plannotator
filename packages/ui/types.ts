@@ -104,6 +104,7 @@ export interface DiffResult {
 
 // Code Review Types
 export type CodeAnnotationType = "comment" | "suggestion" | "concern";
+
 // 'general' is a review-level comment tied to no file and no line. For 'general'
 // (and the file-less case) filePath is "" and lineStart/lineEnd are 0 — consumers
 // must branch on scope, never read those sentinels as a real path or row.

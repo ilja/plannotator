@@ -7,6 +7,7 @@ describe("decodeOpenInResponse", () => {
     const decoded = decodeOpenInResponse({ ok: true });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) expect(decoded.success).toEqual({ ok: true });
   });
 
@@ -14,6 +15,7 @@ describe("decodeOpenInResponse", () => {
     const decoded = decodeOpenInResponse({ ok: false, error: "" });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) expect(decoded.success).toEqual({ ok: false, error: "" });
   });
 
@@ -55,6 +57,7 @@ describe("readOpenInResponse", () => {
     const response = new Response(JSON.stringify({ ok: false, error: "Do not trust this" }), {
       status: 500,
     });
+
     let jsonCalls = 0;
     response.json = async () => {
       jsonCalls += 1;

@@ -133,6 +133,7 @@ function buildDiffSwitchRequest(
   hideWhitespace: boolean,
 ): DiffSwitchRequest {
   const base = baseOverride ?? selectedBase;
+
   return {
     diffType,
     ...(base && { base }),
@@ -201,12 +202,14 @@ const ReviewApp: React.FC = () => {
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [annotations, setAnnotations] = useState<CodeAnnotation[]>([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+
   // Sidebar-initiated "scroll to this comment" signal. The token bumps on every
   // sidebar click so re-selecting the same comment re-navigates. Selecting a
   // comment in the diff sets selectedAnnotationId but NOT this — so it never
   // moves the viewport.
   const [scrollTargetAnnotation, setScrollTargetAnnotation] =
     useState<AnnotationScrollTarget | null>(null);
+
   const [isAllFilesActive, setIsAllFilesActive] = useState(false);
   // Mirror ref: handlers captured by Pierre slot portals (which only republish
   // on item version bumps) and early-declared callbacks read the CURRENT value
@@ -251,11 +254,13 @@ const ReviewApp: React.FC = () => {
     } else {
       document.documentElement.style.removeProperty("--diff-font-override");
     }
+
     if (diffFontSize) {
       document.documentElement.style.setProperty("--diff-font-size-override", diffFontSize);
     } else {
       document.documentElement.style.removeProperty("--diff-font-size-override");
     }
+
     document.documentElement.style.setProperty("--diffs-tab-size", String(diffTabSize));
   }, [diffFontFamily, diffFontSize, diffTabSize]);
 
@@ -305,9 +310,11 @@ const ReviewApp: React.FC = () => {
     prPatchUpgradeAvailable,
     updatePRSession,
   } = usePRSession();
+
   const { withPRContext } = useAnnotationFactory(prMetadata, prStackInfo ? prDiffScope : undefined);
 
   const prStackCallbacksRef = useRef<import("./hooks/usePRStack").PRStackCallbacks | null>(null);
+
   const {
     isSwitchingPRScope,
     isLoadingFullDiff,
@@ -315,6 +322,7 @@ const ReviewApp: React.FC = () => {
     handleLoadFullDiff,
     handlePRSwitch,
   } = usePRStack(prStackCallbacksRef);
+
   const prNumberLabel = prMetadata ? `#${prMetadata.number}` : "";
   const displayRepo = prMetadata ? getDisplayRepo(prMetadata) : "";
   const appVersion = __APP_VERSION__;
@@ -336,6 +344,7 @@ const ReviewApp: React.FC = () => {
   // so this should be addressed as a broader refactor.
   const { externalAnnotations, updateExternalAnnotation, deleteExternalAnnotation } =
     useExternalAnnotations(decodeCodeAnnotation, { enabled: !!origin });
+
   // Dockview center panel API for the review workspace.
   const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
   const filesRef = useRef(files);
@@ -356,29 +365,38 @@ const ReviewApp: React.FC = () => {
   const openDiffFile = useCallback(
     (filePath: string) => {
       const file = files.find((candidate) => candidate.path === filePath);
+
       if (!file) return;
       semanticDiffAutoFallbackPending.current = false;
 
       if (!dockApi) {
         const fileIndex = files.findIndex((candidate) => candidate.path === filePath);
+
         if (fileIndex !== -1) {
           setActiveFileIndex(fileIndex);
         }
+
         return;
       }
 
       const existing = dockApi.getPanel(REVIEW_DIFF_PANEL_ID);
+
       if (existing) {
         const existingFilePath = getReviewDiffPanelFilePath(existing.params);
+
         if (existingFilePath === filePath) {
           if (dockApi.activePanel?.id !== REVIEW_DIFF_PANEL_ID) {
             existing.api.setActive();
           }
+
           const fileIndex = files.findIndex((candidate) => candidate.path === filePath);
+
           if (fileIndex !== -1) {
             setActiveFileIndex(fileIndex);
           }
+
           needsInitialDiffPanel.current = false;
+
           return;
         }
 
@@ -414,6 +432,7 @@ const ReviewApp: React.FC = () => {
       if (dockApi && isAllFilesActiveRef.current) {
         return;
       }
+
       openDiffFile(match.filePath);
     },
     [dockApi, openDiffFile],
@@ -468,6 +487,7 @@ const ReviewApp: React.FC = () => {
 
     const local = annotations.filter((a) => {
       if (!a.source) return true;
+
       return !externalAnnotations.some(
         (ext) =>
           ext.source === a.source &&
@@ -481,6 +501,7 @@ const ReviewApp: React.FC = () => {
 
     return [...local, ...externalAnnotations];
   }, [annotations, externalAnnotations]);
+
   const allAnnotationsRef = useRef(allAnnotations);
   allAnnotationsRef.current = allAnnotations;
 
@@ -520,12 +541,15 @@ const ReviewApp: React.FC = () => {
 
   const handleRestoreDraft = useCallback(() => {
     const restored = restoreDraft();
+
     if (restored.annotations.length > 0) setAnnotations(restored.annotations);
+
     if (restored.viewedFiles.length > 0) setViewedFiles(new Set(restored.viewedFiles));
   }, [restoreDraft]);
 
   // AI Chat
   const [aiAvailable, setAiAvailable] = useState(false);
+
   const [aiProviders, setAiProviders] = useState<
     Array<{
       id: string;
@@ -534,7 +558,9 @@ const ReviewApp: React.FC = () => {
       models?: Array<{ id: string; label: string; default?: boolean }>;
     }>
   >([]);
+
   const [aiDefaultProvider, setAiDefaultProvider] = useState<string | null>(null);
+
   interface AiConfigState {
     providerId: string | null;
     model: string | null;
@@ -544,29 +570,35 @@ const ReviewApp: React.FC = () => {
   const [aiConfig, setAiConfig] = useState(() => {
     const saved = getAIProviderSettings();
     const pid = saved.providerId;
+
     const config: AiConfigState = {
       providerId: pid,
       model: pid ? (saved.preferredModels[pid] ?? null) : null,
       reasoningEffort: null,
     };
+
     return config;
   });
+
   const [showDiffTypeSetup, setShowDiffTypeSetup] = useState(false);
   const [diffTypeSetupPending, setDiffTypeSetupPending] = useState(false);
   // The 0.20.0 release / look-and-feel announcement also runs in code review.
   // Seen-state is a shared cookie (host-scoped), so dismissing it in either app
   // suppresses it in the other — it appears once across both.
   const [showLookAndFeel, setShowLookAndFeel] = useState(needsLookAndFeelAnnouncement);
+
   const dismissLookAndFeel = useCallback(() => {
     markLookAndFeelAnnouncementSeen();
     setShowLookAndFeel(false);
   }, []);
+
   const aiChat = useAIChat({
     patch: diffData?.rawPatch ?? "",
     providerId: aiConfig.providerId,
     model: aiConfig.model,
     reasoningEffort: aiConfig.reasoningEffort,
   });
+
   const {
     messages: aiMessages,
     isCreatingSession: aiIsCreatingSession,
@@ -587,11 +619,15 @@ const ReviewApp: React.FC = () => {
           description: "Re-run with --local for PR reviews",
           duration: 4000,
         });
+
         return;
       }
+
       codeNav.resolve(request);
+
       if (!dockApi) return;
       const existing = dockApi.getPanel(REVIEW_CODE_NAV_PANEL_ID);
+
       if (existing) {
         existing.api.setTitle(`References: ${request.symbol}`);
         existing.api.setActive();
@@ -601,6 +637,7 @@ const ReviewApp: React.FC = () => {
           : isAllFilesActive
             ? REVIEW_ALL_FILES_PANEL_ID
             : REVIEW_DIFF_PANEL_ID;
+
         dockApi.addPanel({
           id: REVIEW_CODE_NAV_PANEL_ID,
           component: REVIEW_PANEL_TYPES.CODE_NAV,
@@ -630,6 +667,7 @@ const ReviewApp: React.FC = () => {
     if (!aiAvailable || aiProviders.length === 0) return;
     setAiConfig((prev) => {
       const saved = getAIProviderSettings();
+
       const selection = resolveAIProviderSelection({
         providers: aiProviders,
         origin,
@@ -652,9 +690,12 @@ const ReviewApp: React.FC = () => {
       setAiConfig((prev) => {
         const saved = getAIProviderSettings();
         const providerId = config.providerId !== undefined ? config.providerId : prev.providerId;
+
         const providerChanged =
           config.providerId !== undefined && config.providerId !== prev.providerId;
+
         const provider = aiProviders.find((p) => p.id === providerId) ?? null;
+
         const model = providerChanged
           ? config.model !== undefined
             ? config.model
@@ -662,6 +703,7 @@ const ReviewApp: React.FC = () => {
           : config.model !== undefined
             ? config.model
             : prev.model;
+
         const next = { ...prev, ...config, providerId, model };
         saveAIProviderSelection({
           providerId: next.providerId,
@@ -669,6 +711,7 @@ const ReviewApp: React.FC = () => {
           origin,
           settings: saved,
         });
+
         return next;
       });
       resetAISession();
@@ -679,6 +722,7 @@ const ReviewApp: React.FC = () => {
   const handleAttachAIContextForFile = useCallback(
     (filePath: string, lineNumber: number, side: "additions" | "deletions") => {
       const file = files.find((candidate) => candidate.path === filePath);
+
       if (!file) return;
 
       setPendingAIContext(buildPendingAIContext(file, lineNumber, side));
@@ -703,6 +747,7 @@ const ReviewApp: React.FC = () => {
 
   // Click AI marker in diff → scroll sidebar to that Q&A
   const [scrollToQuestionId, setScrollToQuestionId] = useState<string | null>(null);
+
   const handleClickAIMarker = useCallback((questionId: string) => {
     setScrollToQuestionId(questionId);
     reviewSidebar.open("ai");
@@ -729,6 +774,7 @@ const ReviewApp: React.FC = () => {
     storageKey: "plannotator-review-panel-width",
     onSnapClose: () => reviewSidebar.close(),
   });
+
   const fileTreeResize = useResizablePanel({
     storageKey: "plannotator-filetree-width",
     defaultWidth: 256,
@@ -737,6 +783,7 @@ const ReviewApp: React.FC = () => {
     side: "left",
     onSnapClose: () => setIsFileTreeOpen(false),
   });
+
   const isResizing = panelResize.isDragging || fileTreeResize.isDragging;
 
   // Dockview ready handler — stores API and wires active panel tracking.
@@ -750,15 +797,20 @@ const ReviewApp: React.FC = () => {
         setIsAllFilesActive(false);
         setIsSemanticDiffActive(false);
         setIsDiffPanelActive(false);
+
         return;
       }
+
       setIsAllFilesActive(panel.id === REVIEW_ALL_FILES_PANEL_ID);
       setIsSemanticDiffActive(panel.id === REVIEW_SEMANTIC_DIFF_PANEL_ID);
       setIsDiffPanelActive(isReviewDiffPanelId(panel.id));
+
       if (!isReviewDiffPanelId(panel.id)) return;
       const filePath = getReviewDiffPanelFilePath(panel.params);
+
       if (!filePath) return;
       const fileIndex = filesRef.current.findIndex((file) => file.path === filePath);
+
       if (fileIndex !== -1) {
         setActiveFileIndex(fileIndex);
       }
@@ -772,14 +824,17 @@ const ReviewApp: React.FC = () => {
         event.api.totalPanels === 1 && event.api.groups.length === 1
           ? event.api.groups[0]?.panels[0]
           : undefined;
+
       const hideHeaders =
         lonePanel?.id === REVIEW_DIFF_PANEL_ID ||
         lonePanel?.id === REVIEW_SEMANTIC_DIFF_PANEL_ID ||
         lonePanel?.id === REVIEW_ALL_FILES_PANEL_ID;
+
       for (const group of event.api.groups) {
         group.header.hidden = hideHeaders;
       }
     };
+
     event.api.onDidAddPanel(updateHeaders);
     event.api.onDidRemovePanel(updateHeaders);
     event.api.onDidAddGroup(updateHeaders);
@@ -793,7 +848,9 @@ const ReviewApp: React.FC = () => {
   const handleOpenPRPanel = useCallback(
     (type: "summary" | "comments" | "checks") => {
       const api = dockApi;
+
       if (!api) return;
+
       const config = {
         summary: {
           id: REVIEW_PR_SUMMARY_PANEL_ID,
@@ -811,11 +868,15 @@ const ReviewApp: React.FC = () => {
           title: "PR Checks",
         },
       }[type];
+
       const existing = api.getPanel(config.id);
+
       if (existing) {
         existing.api.setActive();
+
         return;
       }
+
       api.addPanel({
         id: config.id,
         component: config.component,
@@ -829,10 +890,13 @@ const ReviewApp: React.FC = () => {
     if (!dockApi) return;
     semanticDiffAutoFallbackPending.current = false;
     const existing = dockApi.getPanel(REVIEW_ALL_FILES_PANEL_ID);
+
     if (existing) {
       existing.api.setActive();
+
       return;
     }
+
     dockApi.addPanel({
       id: REVIEW_ALL_FILES_PANEL_ID,
       component: REVIEW_PANEL_TYPES.ALL_FILES,
@@ -844,15 +908,21 @@ const ReviewApp: React.FC = () => {
     (options?: { autoFallbackOnError?: boolean }) => {
       if (!dockApi) return;
       semanticDiffAutoFallbackPending.current = options?.autoFallbackOnError === true;
+
       if (!semanticDiffAvailable) {
         openAllFilesPanel();
+
         return;
       }
+
       const existing = dockApi.getPanel(REVIEW_SEMANTIC_DIFF_PANEL_ID);
+
       if (existing) {
         existing.api.setActive();
+
         return;
       }
+
       dockApi.addPanel({
         id: REVIEW_SEMANTIC_DIFF_PANEL_ID,
         component: REVIEW_PANEL_TYPES.SEMANTIC_DIFF,
@@ -875,14 +945,18 @@ const ReviewApp: React.FC = () => {
 
   const handleSemanticDiffLoadError = useCallback(() => {
     if (!semanticDiffAutoFallbackPending.current) return false;
+
     if (dockApi?.activePanel?.id !== REVIEW_SEMANTIC_DIFF_PANEL_ID) {
       // The user has already moved on; don't steal focus by auto-opening All files.
       semanticDiffAutoFallbackPending.current = false;
+
       return false;
     }
+
     semanticDiffAutoFallbackPending.current = false;
     dockApi?.getPanel(REVIEW_SEMANTIC_DIFF_PANEL_ID)?.api.close();
     openAllFilesPanel();
+
     return true;
   }, [dockApi, openAllFilesPanel]);
 
@@ -891,9 +965,11 @@ const ReviewApp: React.FC = () => {
       if (!semanticDiff) return;
       const available = semanticDiff.available === true;
       setSemanticDiffAvailable(available);
+
       if (!available) {
         semanticDiffAutoFallbackPending.current = false;
         dockApi?.getPanel(REVIEW_SEMANTIC_DIFF_PANEL_ID)?.api.close();
+
         if (isSemanticDiffActive) openAllFilesPanel();
       }
     },
@@ -947,8 +1023,10 @@ const ReviewApp: React.FC = () => {
   const initializeInitialGitContext = (data: InitialDiffResponse): void => {
     if (!data.gitContext) return;
     setGitContext(data.gitContext);
+
     const initial =
       data.base || data.gitContext.defaultBranch || data.gitContext.compareTarget?.fallback || null;
+
     setSelectedBase(initial);
     setCommittedBase(initial);
   };
@@ -982,11 +1060,13 @@ const ReviewApp: React.FC = () => {
     fetch("/api/diff")
       .then((res) => {
         if (!res.ok) throw new Error("Not in API mode");
+
         return loadInitialDiffResponse(() => res.json());
       })
       .then((result) => {
         if (result.source === "demo") {
           fallbackToDemo();
+
           return;
         }
 
@@ -1009,18 +1089,26 @@ const ReviewApp: React.FC = () => {
         setFiles(apiFiles);
         setReviewMode(data.mode ?? null);
         setWorkspaceDiffOptions(data.mode === "workspace" ? (data.diffOptions ?? []) : null);
+
         if (data.origin) setOrigin(data.origin);
+
         if (data.diffType) setDiffType(data.diffType);
         initializeInitialGitContext(data);
+
         if (data.agentCwd !== undefined) setAgentCwd(data.agentCwd);
+
         if (data.sharingEnabled !== undefined) setSharingEnabled(data.sharingEnabled);
+
         if (data.repoInfo) setRepoInfo(data.repoInfo);
         initializeInitialPRSession(data);
+
         if (data.platformUser) setPlatformUser(data.platformUser);
+
         // Initialize viewed files from GitHub's state (set before draft restore so draft takes precedence)
         if (data.viewedFiles && data.viewedFiles.length > 0) {
           setViewedFiles(new Set(data.viewedFiles));
         }
+
         if (data.error) setDiffError(data.error);
         setSemanticDiffAvailable(data.semanticDiff?.available === true);
         // Mark diff type setup as pending on first run (local mode only)
@@ -1061,6 +1149,7 @@ const ReviewApp: React.FC = () => {
       if (!pendingSelection) return;
       const lineStart = Math.min(pendingSelection.start, pendingSelection.end);
       const lineEnd = Math.max(pendingSelection.start, pendingSelection.end);
+
       const newAnnotation: CodeAnnotation = {
         id: generateId(),
         type,
@@ -1082,6 +1171,7 @@ const ReviewApp: React.FC = () => {
         conventionalLabel,
         decorations,
       };
+
       setAnnotations((prev) => [...prev, withPRContext(newAnnotation)]);
       setPendingSelection(null);
     },
@@ -1117,6 +1207,7 @@ const ReviewApp: React.FC = () => {
     (text: string) => {
       const activeFile = files[activeFileIndex];
       const trimmed = text.trim();
+
       if (!activeFile || !trimmed) return;
 
       const newAnnotation: CodeAnnotation = {
@@ -1140,6 +1231,7 @@ const ReviewApp: React.FC = () => {
   const handleAddFileCommentForFile = useCallback(
     (filePath: string, text: string) => {
       const trimmed = text.trim();
+
       if (!trimmed) return;
 
       const newAnnotation: CodeAnnotation = {
@@ -1171,6 +1263,7 @@ const ReviewApp: React.FC = () => {
       decorations?: ConventionalDecoration[],
     ) => {
       const ann = allAnnotationsRef.current.find((a) => a.id === id);
+
       const updates: Partial<CodeAnnotation> = {
         ...(text !== undefined && { text }),
         ...(suggestedCode !== undefined && { suggestedCode }),
@@ -1181,10 +1274,13 @@ const ReviewApp: React.FC = () => {
         }),
         ...(decorations !== undefined && { decorations }),
       };
+
       if (ann?.source && externalAnnotations.some((e) => e.id === id)) {
         updateExternalAnnotation(id, updates);
+
         return;
       }
+
       setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
     },
     [updateExternalAnnotation, externalAnnotations],
@@ -1198,11 +1294,14 @@ const ReviewApp: React.FC = () => {
   const handleDeleteAnnotation = useCallback(
     (id: string) => {
       const ann = allAnnotationsRef.current.find((a) => a.id === id);
+
       if (ann?.source && externalAnnotations.some((e) => e.id === id)) {
         deleteExternalAnnotation(id);
         setSelectedAnnotationId((prev) => (prev === id ? null : prev));
+
         return;
       }
+
       setAnnotations((prev) => prev.filter((a) => a.id !== id));
       setSelectedAnnotationId((prev) => (prev === id ? null : prev));
     },
@@ -1220,6 +1319,7 @@ const ReviewApp: React.FC = () => {
   const handleFilePreview = useCallback(
     (index: number) => {
       const file = files[index];
+
       if (!file) return;
       openDiffFile(file.path);
     },
@@ -1230,6 +1330,7 @@ const ReviewApp: React.FC = () => {
   const handleFilePinned = useCallback(
     (index: number) => {
       const file = files[index];
+
       if (!file) return;
       openDiffFile(file.path);
     },
@@ -1240,6 +1341,7 @@ const ReviewApp: React.FC = () => {
   const handleFileSwitch = useCallback(
     (index: number) => {
       const file = files[index];
+
       if (file) {
         openDiffFile(file.path);
       }
@@ -1252,11 +1354,13 @@ const ReviewApp: React.FC = () => {
       setViewedFiles((prev) => {
         const next = new Set(prev);
         const willBeViewed = !prev.has(filePath);
+
         if (willBeViewed) {
           next.add(filePath);
         } else {
           next.delete(filePath);
         }
+
         // Sync viewed state to GitHub (fire and forget — best effort)
         // Capture willBeViewed inside the callback to ensure correctness with React batching
         if (prMetadata) {
@@ -1268,6 +1372,7 @@ const ReviewApp: React.FC = () => {
             // Silently ignore — viewed sync is best-effort
           });
         }
+
         return next;
       });
     },
@@ -1279,8 +1384,10 @@ const ReviewApp: React.FC = () => {
     if (diffType.startsWith("worktree:")) {
       const rest = diffType.slice("worktree:".length);
       const lastColon = rest.lastIndexOf(":");
+
       if (lastColon !== -1) {
         const sub = rest.slice(lastColon + 1);
+
         if (
           [
             "uncommitted",
@@ -1295,8 +1402,10 @@ const ReviewApp: React.FC = () => {
           return { activeWorktreePath: rest.slice(0, lastColon), activeDiffBase: sub };
         }
       }
+
       return { activeWorktreePath: rest, activeDiffBase: "uncommitted" };
     }
+
     return { activeWorktreePath: null, activeDiffBase: diffType };
   }, [diffType]);
 
@@ -1305,6 +1414,7 @@ const ReviewApp: React.FC = () => {
     (path: string) => setViewedFiles((prev) => new Set(prev).add(path)),
     [],
   );
+
   const {
     stagedFiles,
     stagingFile,
@@ -1316,6 +1426,7 @@ const ReviewApp: React.FC = () => {
     activeDiffBase,
     onFileViewed: handleFileViewedFromStage,
   });
+
   // Staging is never available in PR review mode — the server rejects it and the UI shouldn't offer it.
   const { canStageFiles } = buildReviewPresentationFlags(
     files,
@@ -1329,8 +1440,10 @@ const ReviewApp: React.FC = () => {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || isTypingTarget(e.target)) return;
+
       if (!isDiffPanelActive) return;
       const filePath = files[activeFileIndex]?.path;
+
       if (!filePath) return;
 
       if (e.key === "v") {
@@ -1341,7 +1454,9 @@ const ReviewApp: React.FC = () => {
         stageFile(filePath);
       }
     };
+
     window.addEventListener("keydown", handler);
+
     return () => window.removeEventListener("keydown", handler);
   }, [files, activeFileIndex, isDiffPanelActive, handleToggleViewed, canStageFiles, stageFile]);
 
@@ -1365,6 +1480,7 @@ const ReviewApp: React.FC = () => {
       prev ? { ...prev, rawPatch: data.rawPatch, gitRef: data.gitRef } : prev,
     );
     setFiles(nextFiles);
+
     if (isPRSwitch) {
       setActiveFileIndex(0);
     } else {
@@ -1372,6 +1488,7 @@ const ReviewApp: React.FC = () => {
       const preserved = currentFile ? nextFiles.findIndex((f) => f.path === currentFile.path) : -1;
       setActiveFileIndex(preserved >= 0 ? preserved : 0);
     }
+
     setPendingSelection(null);
     updatePRSession({
       ...(data.prMetadata && { prMetadata: data.prMetadata }),
@@ -1384,12 +1501,16 @@ const ReviewApp: React.FC = () => {
       prPatchIncomplete: data.prPatchIncomplete === true,
       prPatchUpgradeAvailable: data.prPatchUpgradeAvailable === true,
     });
+
     if (data.repoInfo) setRepoInfo(data.repoInfo);
+
     if (data.prMetadata) {
       setViewedFiles(data.viewedFiles ? new Set(data.viewedFiles) : new Set());
     }
+
     setDiffError(data.error || null);
     applySemanticDiffAdvert(data.semanticDiff);
+
     // The PR's local checkout changes on switch (and warms in later). Use the
     // server's value when present; otherwise clear it on a switch so the Open-in
     // button can't keep pointing at the previous PR's checkout (the 5s freshness
@@ -1399,6 +1520,7 @@ const ReviewApp: React.FC = () => {
     } else if (isPRSwitch) {
       setAgentCwd(null);
     }
+
     resetStagedFiles();
   }
 
@@ -1417,6 +1539,7 @@ const ReviewApp: React.FC = () => {
       options?: { preserveFile?: boolean },
     ): Promise<boolean> => {
       setIsLoadingDiff(true);
+
       try {
         const res = await fetch("/api/diff/switch", {
           method: "POST",
@@ -1432,6 +1555,7 @@ const ReviewApp: React.FC = () => {
 
         const rawData: unknown = await res.json();
         const data = decodeDiffSwitchResponse(rawData);
+
         if (!data) throw new Error("Failed to switch diff");
 
         const nextFiles = parseDiffToFiles(data.rawPatch);
@@ -1444,16 +1568,19 @@ const ReviewApp: React.FC = () => {
           setDiffData((prev) =>
             prev ? { ...prev, rawPatch: data.rawPatch, gitRef: data.gitRef } : prev,
           );
+
           if (data.diffOptions) setWorkspaceDiffOptions(data.diffOptions);
           setFiles(nextFiles);
           const currentPath = files[activeFileIndex]?.path;
           const nextIdx = currentPath ? nextFiles.findIndex((f) => f.path === currentPath) : -1;
+
           if (nextIdx !== -1) {
             setActiveFileIndex(nextIdx);
           } else if (nextFiles.length > 0) {
             setActiveFileIndex(0);
             openDiffFile(nextFiles[0].path);
           }
+
           // Line numbers can shift when whitespace handling changes, so a
           // selection anchored to the old patch is stale — clear it (the
           // non-preserve branch below already does).
@@ -1468,11 +1595,14 @@ const ReviewApp: React.FC = () => {
           );
           setFiles(nextFiles);
           setDiffType(data.diffType);
+
           if (data.diffOptions) setWorkspaceDiffOptions(data.diffOptions);
+
           if (data.base) {
             setSelectedBase(data.base);
             setCommittedBase(data.base);
           }
+
           // Merge only the per-cwd fields so the sidebar reflects the worktree
           // we're now in. Keep the original `worktrees` list (already filtered to
           // exclude the server's startup cwd — replacing it with the new context's
@@ -1489,6 +1619,7 @@ const ReviewApp: React.FC = () => {
           if (data.gitContext) {
             setGitContext((prev) => {
               if (!prev) return data.gitContext!;
+
               return {
                 ...prev,
                 defaultBranch: data.gitContext!.defaultBranch,
@@ -1499,15 +1630,19 @@ const ReviewApp: React.FC = () => {
               };
             });
           }
+
           setActiveFileIndex(0);
           setPendingSelection(null);
           resetStagedFiles();
         }
+
         setDiffError(data.error || null);
+
         return true;
       } catch (err) {
         console.error("Failed to switch diff:", err);
         setDiffError(err instanceof Error ? err.message : "Failed to switch diff");
+
         return false;
       } finally {
         setIsLoadingDiff(false);
@@ -1534,11 +1669,10 @@ const ReviewApp: React.FC = () => {
       if (branch === selectedBase) return;
       const previous = selectedBase;
       setSelectedBase(branch);
-      if (
-        activeDiffBase === "branch" ||
-        activeDiffBase === "merge-base"
-      ) {
+
+      if (activeDiffBase === "branch" || activeDiffBase === "merge-base") {
         const ok = await fetchDiffSwitch(diffType, branch);
+
         if (!ok) setSelectedBase(previous);
       }
     },
@@ -1551,6 +1685,7 @@ const ReviewApp: React.FC = () => {
       const fullDiffType = activeWorktreePath
         ? `worktree:${activeWorktreePath}:${baseDiffType}`
         : baseDiffType;
+
       if (fullDiffType === diffType) return;
       await fetchDiffSwitch(fullDiffType);
     },
@@ -1564,9 +1699,11 @@ const ReviewApp: React.FC = () => {
   const handleWorktreeSwitch = useCallback(
     async (worktreePath: string | null) => {
       if (worktreePath === activeWorktreePath) return;
+
       const fullDiffType = worktreePath
         ? `worktree:${worktreePath}:${activeDiffBase}`
         : activeDiffBase;
+
       await fetchDiffSwitch(fullDiffType);
     },
     [activeWorktreePath, activeDiffBase, fetchDiffSwitch],
@@ -1577,10 +1714,13 @@ const ReviewApp: React.FC = () => {
   const hideWhitespaceInitialized = useRef(false);
   useEffect(() => {
     if (!origin || (!gitContext && reviewMode !== "workspace")) return;
+
     if (!hideWhitespaceInitialized.current) {
       hideWhitespaceInitialized.current = true;
+
       return;
     }
+
     fetchDiffSwitch(diffType, selectedBase ?? undefined, { preserveFile: true });
   }, [diffHideWhitespace, origin, reviewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1601,8 +1741,10 @@ const ReviewApp: React.FC = () => {
       // Only the full-stack scope can go stale locally — the layer diff is
       // computed by GitHub and its fingerprint never flips.
       if (prDiffScope === "full-stack") handlePRDiffScopeSelect("full-stack");
+
       return;
     }
+
     // Same params, fresh snapshot. preserveFile keeps the reviewer on the
     // file they were reading.
     void fetchDiffSwitch(diffType, selectedBase ?? undefined, { preserveFile: true });
@@ -1631,19 +1773,25 @@ const ReviewApp: React.FC = () => {
     (id: string | null) => {
       if (!id) {
         setSelectedAnnotationId(null);
+
         return;
       }
+
       const annotation = allAnnotationsRef.current.find((a) => a.id === id);
+
       // Ignore navigation to an annotation that's gone (deleted) or filtered out of
       // the active PR/diff-scope — there's nothing in the current diff to scroll to
       // or highlight, so don't fake a selection.
       if (!annotation || !annotationMatchesPrScope(annotation, prMetadata?.url, prDiffScope)) {
         return;
       }
+
       if (!isAllFilesActiveRef.current) {
         const fileIndex = files.findIndex((f) => f.path === annotation.filePath);
+
         if (fileIndex !== -1) handleFileSwitch(fileIndex);
       }
+
       setSelectedAnnotationId(id);
       setScrollTargetAnnotation((prev) => ({ id, token: (prev?.token ?? 0) + 1 }));
     },
@@ -1672,9 +1820,11 @@ const ReviewApp: React.FC = () => {
 
   const prReviewScopeLabel = useMemo(() => {
     if (!prMetadata || !prStackInfo) return undefined;
+
     if (prDiffScope === "full-stack") {
       return `Diff vs \`${prMetadata.defaultBranch ?? "default branch"}\``;
     }
+
     return `Diff vs \`${prMetadata.baseBranch}\``;
   }, [prMetadata, prStackInfo, prDiffScope]);
 
@@ -1700,8 +1850,7 @@ const ReviewApp: React.FC = () => {
       // the new patch to arrive before refetching — otherwise the viewer can
       // briefly pair an old patch with the new base's content.
       reviewBase:
-        activeDiffBase === "branch" ||
-        activeDiffBase === "merge-base"
+        activeDiffBase === "branch" || activeDiffBase === "merge-base"
           ? (committedBase ?? undefined)
           : undefined,
       activeDiffBase,
@@ -1837,6 +1986,7 @@ const ReviewApp: React.FC = () => {
   // Copy raw diff to clipboard
   const handleCopyDiff = useCallback(async () => {
     if (!diffData) return;
+
     try {
       await navigator.clipboard.writeText(diffData.rawPatch);
       setCopyRawDiffStatus("success");
@@ -1852,8 +2002,10 @@ const ReviewApp: React.FC = () => {
   const handleCopyFeedback = useCallback(async () => {
     if (allAnnotations.length === 0) {
       setShowNoAnnotationsDialog(true);
+
       return;
     }
+
     try {
       const feedback = exportReviewFeedback(
         allAnnotations,
@@ -1861,6 +2013,7 @@ const ReviewApp: React.FC = () => {
         feedbackDiffContext,
         prReviewScopeLabel,
       );
+
       await navigator.clipboard.writeText(feedback);
       setCopyFeedback("Feedback copied!");
       setTimeout(() => setCopyFeedback(null), 2000);
@@ -1878,9 +2031,11 @@ const ReviewApp: React.FC = () => {
       feedbackDiffContext,
       prReviewScopeLabel,
     );
+
     if (editorAnnotations.length > 0) {
       output += exportEditorAnnotations(editorAnnotations);
     }
+
     return output;
   }, [allAnnotations, prMetadata, feedbackDiffContext, prReviewScopeLabel, editorAnnotations]);
 
@@ -1947,16 +2102,20 @@ const ReviewApp: React.FC = () => {
   const handleRequestApprove = useCallback(() => {
     if (totalAnnotationCount > 0) {
       setShowApproveWarning(true);
+
       return;
     }
+
     handleApprove();
   }, [totalAnnotationCount, handleApprove]);
 
   const handleRequestExit = useCallback(() => {
     if (totalAnnotationCount > 0) {
       setShowExitWarning(true);
+
       return;
     }
+
     handleExit();
   }, [totalAnnotationCount, handleExit]);
 
@@ -2037,6 +2196,7 @@ const ReviewApp: React.FC = () => {
   const handleCompleteDiffTypeSetup = useCallback(
     (selectedDiffType: string) => {
       setShowDiffTypeSetup(false);
+
       if (selectedDiffType !== diffType) handleDiffSwitch(selectedDiffType);
     },
     [diffType, handleDiffSwitch],
@@ -2072,8 +2232,10 @@ const ReviewApp: React.FC = () => {
   const handleToggleSidebar = useCallback(() => {
     if (reviewSidebar.isOpen) {
       reviewSidebar.close();
+
       return;
     }
+
     reviewSidebar.open();
   }, [reviewSidebar]);
 

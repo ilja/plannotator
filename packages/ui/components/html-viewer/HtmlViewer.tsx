@@ -23,6 +23,7 @@ import { postHtmlBridgeMessage } from "./bridgeMessages";
 import { ANNOTATION_HIGHLIGHT_CSS, BRIDGE_SCRIPT } from "./bridge-script";
 
 const PREFIX = "plannotator-bridge-";
+
 const decodeHtmlBridgeReadyMessage = Schema.decodeUnknownOption(
   Schema.Struct({
     type: Schema.Literal(`${PREFIX}ready`),
@@ -61,6 +62,7 @@ const THEME_TOKENS = [
 interface ThemeTokens {
   [key: string]: string;
 }
+
 interface TypographyTokens {
   [key: string]: string;
 }
@@ -72,20 +74,25 @@ function isStringValue(value: any): value is string {
 function readThemeTokens(): ThemeTokens {
   const style = getComputedStyle(document.documentElement);
   const tokens: ThemeTokens = {};
+
   for (const key of THEME_TOKENS) {
     const val = style.getPropertyValue(key).trim();
+
     if (val) tokens[key] = val;
   }
+
   return tokens;
 }
 
 function readTypographyTokens(typographyStyle?: React.CSSProperties): TypographyTokens {
   const tokens: TypographyTokens = {};
+
   for (const [key, value] of Object.entries(typographyStyle ?? {})) {
     if (key.startsWith("--") && isStringValue(value) && value.trim()) {
       tokens[key] = value;
     }
   }
+
   return tokens;
 }
 
@@ -115,6 +122,7 @@ function isLightTheme(): boolean {
 function extractFontFamily(cssVarValue: string | undefined): string | undefined {
   if (!isStringValue(cssVarValue) || !cssVarValue.trim()) return undefined;
   const m = cssVarValue.trim().match(/^'([^']+)'/);
+
   return m ? m[1] : undefined;
 }
 
@@ -166,6 +174,7 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     const globalCommentButtonRef = useRef<HTMLButtonElement>(null);
     const [iframeHeight, setIframeHeight] = useState(600);
     const [iframeReady, setIframeReady] = useState(false);
+
     const [globalCommentPopover, setGlobalCommentPopover] = useState<{
       anchorEl: HTMLElement;
       contextText: string;
@@ -174,26 +183,33 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     const srcdoc = useMemo(() => {
       const tokens = { ...readThemeTokens(), ...readTypographyTokens(typographyStyle) };
       let themeCSS = ":root {\n";
+
       for (const [key, val] of Object.entries(tokens)) {
         themeCSS += `  ${key}: ${val};\n`;
       }
+
       themeCSS += "}\n";
+
       if (isLightTheme()) themeCSS += ":root { color-scheme: light; }\n:root.light, :root { }\n";
 
       let fontLinks = "";
       const proseFamily = extractFontFamily(tokens["--annotation-prose-font-family"]);
       const codeFamily = extractFontFamily(tokens["--annotation-code-font-family"]);
+
       for (const fam of [proseFamily, codeFamily]) {
         if (!fam) continue;
         const url = getFontUrl(fam);
+
         if (url) fontLinks += `<link rel="stylesheet" href="${url}">`;
       }
 
       const injection = `${fontLinks}<style>${themeCSS}${HTML_TYPOGRAPHY_CSS}${ANNOTATION_HIGHLIGHT_CSS}</style><script>${BRIDGE_SCRIPT}</script>`;
       const headClose = rawHtml.indexOf("</head>");
+
       if (headClose !== -1) {
         return rawHtml.slice(0, headClose) + injection + rawHtml.slice(headClose);
       }
+
       return injection + rawHtml;
     }, [rawHtml, typographyStyle]);
 
@@ -214,16 +230,20 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
     useEffect(() => {
       function handler(event: MessageEvent) {
         if (event.source !== iframeRef.current?.contentWindow) return;
+
         if (Option.isSome(decodeHtmlBridgeReadyMessage(event.data))) {
           setIframeReady(true);
         }
       }
+
       window.addEventListener("message", handler);
+
       return () => window.removeEventListener("message", handler);
     }, []);
 
     useEffect(() => {
       if (!iframeReady) return;
+
       if (annotations.length > 0) {
         hook.applyAnnotations(annotations);
       }
@@ -241,6 +261,7 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
 
     useEffect(() => {
       if (!iframeReady) return;
+
       function sendTheme() {
         const tokens = { ...readThemeTokens(), ...readTypographyTokens(typographyStyle) };
         postHtmlBridgeMessage(iframeRef.current, {
@@ -249,12 +270,14 @@ export const HtmlViewer = forwardRef<ViewerHandle, HtmlViewerProps>(
           isLight: isLightTheme(),
         });
       }
+
       sendTheme();
       const observer = new MutationObserver(sendTheme);
       observer.observe(document.documentElement, {
         attributes: true,
         attributeFilter: ["class", "style"],
       });
+
       return () => observer.disconnect();
     }, [iframeReady, typographyStyle]);
 

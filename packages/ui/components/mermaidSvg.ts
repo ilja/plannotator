@@ -14,7 +14,9 @@ export function normalizeMermaidSvgMarkup(markup: string): string {
           .split(";")
           .map((s) => s.trim())
           .filter((s) => s.length > 0 && !/^max-width\s*:/i.test(s));
+
         rules.push("max-width: none");
+
         return `style="${rules.join("; ")}"`;
       });
     } else {
@@ -24,6 +26,7 @@ export function normalizeMermaidSvgMarkup(markup: string): string {
     if (!/\bpreserveAspectRatio\s*=/i.test(next)) {
       next += ' preserveAspectRatio="xMidYMid meet"';
     }
+
     if (!/\bheight\s*=/i.test(next)) {
       next += ' height="100%"';
     }

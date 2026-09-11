@@ -7,7 +7,9 @@ import { useFileBrowser, type UseFileBrowserReturn } from "./useFileBrowser";
 import type { VaultNode } from "../types";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const realEventSource = globalThis.EventSource;
 
 class MockEventSource {
@@ -51,8 +53,10 @@ function installFetchResponses(responses: Response[]): string[] {
   // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
+
     return nextFetch();
   }) as typeof fetch;
+
   return calls;
 }
 
@@ -64,14 +68,18 @@ interface DeferredFetch {
 function installDeferredFetch(): DeferredFetch {
   const calls: string[] = [];
   let resolve: (response: Response) => void = () => {};
+
   const pending = new Promise<Response>((next) => {
     resolve = next;
   });
+
   // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls.push(String(input));
+
     return pending;
   }) as typeof fetch;
+
   return { calls, resolve };
 }
 
@@ -93,10 +101,12 @@ interface Deferred<T> {
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
   let reject!: (reason?: any) => void;
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
+
   return { promise, resolve, reject };
 }
 
@@ -106,6 +116,7 @@ interface HarnessProps {
 
 function Harness({ resultRef }: HarnessProps) {
   resultRef.current = useFileBrowser();
+
   return null;
 }
 
@@ -115,6 +126,7 @@ async function mountHook(): Promise<{
 }> {
   const host = document.createElement("div");
   document.body.appendChild(host);
+
   interface MountResultRef {
     current: UseFileBrowserReturn | null;
   }
@@ -125,6 +137,7 @@ async function mountHook(): Promise<{
     root = createRoot(host);
     root.render(<Harness resultRef={resultRef} />);
   });
+
   return {
     result: resultRef,
     unmount: async () => {
@@ -152,12 +165,15 @@ const tick = (ms: number) => act(async () => new Promise((resolve) => setTimeout
 
 afterEach(() => {
   globalThis.fetch = realFetch;
+
   if (realEventSource) globalThis.EventSource = realEventSource;
   else {
     // SAFETY: globalThis is untyped in test — any is intentional
     delete (globalThis as any).EventSource;
   }
+
   MockEventSource.instances = [];
+
   if (hasDom) document.body.innerHTML = "";
 });
 
@@ -226,6 +242,7 @@ describe("useFileBrowser", () => {
       // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
       globalThis.fetch = (async (input: RequestInfo | URL) => {
         calls.push(String(input));
+
         return pending.promise;
       }) as typeof fetch;
 
@@ -270,6 +287,7 @@ describe("useFileBrowser", () => {
       // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
       globalThis.fetch = (async (input: RequestInfo | URL) => {
         calls.push(String(input));
+
         return pending.shift() ?? response({ error: "unexpected fetch" }, 500);
       }) as typeof fetch;
 
@@ -369,10 +387,12 @@ describe("useFileBrowser", () => {
     installMockEventSource();
     const dirPath = "/tmp/plannotator-docs";
     const initialTree: VaultNode[] = [{ type: "file", name: "a.md", path: "a.md" }];
+
     const reconnectedTree: VaultNode[] = [
       { type: "file", name: "a.md", path: "a.md" },
       { type: "file", name: "b.md", path: "b.md" },
     ];
+
     const calls = installFetchResponses([
       response({ tree: initialTree }),
       response({ tree: reconnectedTree }),
@@ -404,6 +424,7 @@ describe("useFileBrowser", () => {
     installMockEventSource();
     const firstDir = "/tmp/plannotator-docs-a";
     const secondDir = "/tmp/plannotator-docs-b";
+
     const calls = installFetchResponses([
       response({ tree: [] }),
       response({ tree: [] }),

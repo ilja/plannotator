@@ -125,6 +125,7 @@ const reconcileLinkedDocumentAnnotations = (
   annotations: Annotation[],
 ): Annotation[] => {
   const blocks = parseMarkdownToBlocks(markdown ?? "");
+
   const questions = blocks.flatMap((block) =>
     block.type === "choice-question"
       ? [
@@ -139,6 +140,7 @@ const reconcileLinkedDocumentAnnotations = (
         ]
       : [],
   );
+
   return reconcileChoiceAnnotations(annotations, questions).retained;
 };
 
@@ -157,6 +159,7 @@ function getCachedDocumentState({
 }: CachedDocumentStateOptions): CachedDocState {
   const markdown =
     getDocumentMarkdown?.(linkedDoc.filepath, linkedDoc.markdown) ?? linkedDoc.markdown;
+
   return {
     annotations: reconcileLinkedDocumentAnnotations(markdown, [...annotations]),
     globalAttachments: [...globalAttachments],
@@ -170,11 +173,13 @@ function countCachedDocumentAnnotations(
   excludedFilepath?: string,
 ): number {
   let total = 0;
+
   for (const [filepath, cached] of docs) {
     if (filepath !== excludedFilepath) {
       total += cached.annotations.length + cached.globalAttachments.length;
     }
   }
+
   return total;
 }
 
@@ -232,6 +237,7 @@ function saveDocumentBeforeActivation({
         root.globalAttachments.length +
         countCachedDocumentAnnotations(docCache.current, destinationFilepath),
     );
+
     return;
   }
 
@@ -273,11 +279,14 @@ function getLinkedDocumentContent({
   onDocumentLoaded,
 }: LinkedDocumentContentOptions): LinkedDocumentContent {
   const renderAs = data.renderAs === "html" ? "html" : "markdown";
+
   const hostMarkdown =
     renderAs === "html" || !notifyDocumentLoaded ? undefined : onDocumentLoaded?.(data);
+
   const markdown = notifyDocumentLoaded
     ? (hostMarkdown ?? cached?.markdown ?? data.markdown ?? "")
     : (data.markdown ?? cached?.markdown ?? "");
+
   return {
     renderAs,
     markdown,
@@ -402,10 +411,12 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     // Restore plan state (including render mode — an HTML base restores to HTML)
     const saved = savedPlanState.current;
     setRenderAs(saved.renderAs);
+
     const restoredAnnotations = reconcileLinkedDocumentAnnotations(
       saved.markdown,
       saved.annotations,
     );
+
     setRawHtml(saved.rawHtml);
     setShareHtml(saved.shareHtml);
     setMarkdown(saved.markdown);
@@ -446,6 +457,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
     ) => {
       const snapshotCurrent = options.snapshotCurrent ?? true;
       const notifyDocumentLoaded = options.notifyDocumentLoaded ?? true;
+
       if (snapshotCurrent) onBeforeNavigate?.();
 
       // Backlink detection: if a linked doc links back to the source file (e.g.,
@@ -459,6 +471,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
       // annotations intact.
       if (sourceFilePath && data.filepath === sourceFilePath && savedPlanState.current) {
         back();
+
         return;
       }
 
@@ -496,6 +509,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
         notifyDocumentLoaded,
         onDocumentLoaded,
       });
+
       applyLinkedDocumentState({
         data,
         cached,
@@ -566,16 +580,21 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
         const res = await fetch(url);
         const body: unknown = await res.json();
         const serverError = decodeLinkedDocErrorResponse(body);
+
         if (!res.ok || serverError) {
           setError(serverError || "Failed to load document");
+
           return;
         }
 
         const data = decodeLinkedDocResponse(body);
+
         if (!data?.filepath) {
           setError("Failed to load document");
+
           return;
         }
+
         activateDocument(data, targetTab, { snapshotCurrent: false });
       } catch {
         setError("Failed to connect to server");
@@ -590,6 +609,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
 
   const snapshotSession = useCallback((): LinkedDocSessionState => {
     const docs = new Map(docCache.current);
+
     if (linkedDoc) {
       docs.set(linkedDoc.filepath, {
         annotations: [...annotations],
@@ -653,6 +673,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
         state.root.markdown,
         state.root.annotations,
       );
+
       setMarkdown(state.root.markdown);
       setRenderAs(state.root.renderAs);
       setRawHtml(state.root.rawHtml);
@@ -681,6 +702,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
 
   const getDocAnnotations = useCallback((): Map<string, CachedDocState> => {
     const result = new Map(docCache.current);
+
     // Include stashed original-file annotations when viewing a linked doc
     if (linkedDoc && savedPlanState.current && sourceFilePath) {
       result.set(sourceFilePath, {
@@ -693,6 +715,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
         isConverted: !!sourceConverted,
       });
     }
+
     if (linkedDoc) {
       result.set(linkedDoc.filepath, {
         annotations: [...annotations],
@@ -702,6 +725,7 @@ export function useLinkedDoc(options: UseLinkedDocOptions): UseLinkedDocReturn {
         isConverted: linkedDoc.isConverted,
       });
     }
+
     return result;
   }, [
     linkedDoc,

@@ -21,17 +21,20 @@ export function parseRemoteUrl(url: string): string | null {
 
   // SSH with port: ssh://git@host:22/path.git — strip scheme+host+port
   const sshPortMatch = url.match(/^ssh:\/\/[^/]+(?::\d+)?\/(.+?)(?:\.git)?$/);
+
   if (sshPortMatch) return sshPortMatch[1];
 
   // SSH format: git@host:path.git — capture full path after ':'
   // Reject URLs with :// scheme (HTTPS with non-standard ports like :8443)
   if (!url.includes("://")) {
     const sshMatch = url.match(/:([^/][^:]*?)(?:\.git)?$/);
+
     if (sshMatch) return sshMatch[1];
   }
 
   // HTTPS format: https://host/path.git — capture full path after host
   const httpsMatch = url.match(/^https?:\/\/[^/]+\/(.+?)(?:\.git)?$/);
+
   if (httpsMatch) return httpsMatch[1];
 
   return null;
@@ -47,15 +50,21 @@ export function parseRemoteHost(url: string): string | null {
   if (!url) return null;
   // ssh://git@host:port/path
   const sshPort = url.match(/^ssh:\/\/(?:[^@]+@)?([^:/]+)/i);
+
   if (sshPort) return sshPort[1];
+
   // git@host:path
   if (!url.includes("://")) {
     const ssh = url.match(/^[^@\s]+@([^:\s]+):/);
+
     if (ssh) return ssh[1];
   }
+
   // https://host/path or http://host/path
   const https = url.match(/^https?:\/\/([^/:]+)/i);
+
   if (https) return https[1];
+
   return null;
 }
 
@@ -66,5 +75,6 @@ export function getDirName(path: string): string | null {
   if (!path) return null;
   const trimmed = path.trim().replace(/\/+$/, "");
   const parts = trimmed.split("/");
+
   return parts[parts.length - 1] || null;
 }

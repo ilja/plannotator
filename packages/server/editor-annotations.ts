@@ -21,8 +21,11 @@ const EditorAnnotationRequestSchema = Schema.Struct({
   lineStart: Schema.Number,
   lineEnd: Schema.Number,
 });
+
 const decodeEditorAnnotationRequest = Schema.decodeUnknownOption(EditorAnnotationRequestSchema);
+
 const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown));
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 export function createEditorAnnotationHandler(): EditorAnnotationHandler {
@@ -40,6 +43,7 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
         try {
           const body = await req.json();
           const decoded = Option.getOrUndefined(decodeEditorAnnotationRequest(body));
+
           if (
             !decoded ||
             !decoded.filePath ||
@@ -52,6 +56,7 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
 
           const record = Option.getOrUndefined(decodeRecord(body));
           const comment = record ? Option.getOrUndefined(decodeString(record.comment)) : undefined;
+
           const annotation: EditorAnnotation = {
             id: crypto.randomUUID(),
             filePath: decoded.filePath,
@@ -63,6 +68,7 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
           };
 
           annotations.push(annotation);
+
           return Response.json({ id: annotation.id });
         } catch {
           return Response.json({ error: "Invalid JSON" }, { status: 400 });
@@ -72,13 +78,17 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
       // DELETE /api/editor-annotation?id=xxx — remove one
       if (url.pathname === "/api/editor-annotation" && req.method === "DELETE") {
         const id = url.searchParams.get("id");
+
         if (!id) {
           return Response.json({ error: "Missing id parameter" }, { status: 400 });
         }
+
         const idx = annotations.findIndex((a) => a.id === id);
+
         if (idx !== -1) {
           annotations.splice(idx, 1);
         }
+
         return Response.json({ ok: true });
       }
 

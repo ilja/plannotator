@@ -13,6 +13,7 @@ import {
 } from "./semanticDiffShared";
 
 type SemanticDiffOkResponse = Extract<SemanticDiffResponse, { status: "ok" }>;
+
 type SemanticDiffErrorResponse = Extract<SemanticDiffResponse, { status: "error" }>;
 
 type LoadState =
@@ -23,16 +24,23 @@ type LoadState =
 
 function formatSummary(data: SemanticDiffOkResponse): string {
   const summary = data.summary;
+
   const parts = [
     `${summary.added} added`,
     `${summary.modified} modified`,
     `${summary.deleted} deleted`,
   ];
+
   if (summary.renamed > 0) parts.push(`${summary.renamed} renamed`);
+
   if (summary.moved > 0) parts.push(`${summary.moved} moved`);
+
   if (summary.reordered > 0) parts.push(`${summary.reordered} reordered`);
+
   if (summary.binary > 0) parts.push(`${summary.binary} binary`);
+
   if (summary.orphan > 0) parts.push(`${summary.orphan} orphans`);
+
   return `Summary: ${parts.join(", ")} across ${summary.fileCount} files`;
 }
 
@@ -47,12 +55,15 @@ interface SplitFilePath {
 
 function splitFilePath(filePath: string): SplitFilePath {
   const lastSlash = filePath.lastIndexOf("/");
+
   if (lastSlash === -1) return { dir: "", name: filePath };
+
   return { dir: filePath.slice(0, lastSlash + 1), name: filePath.slice(lastSlash + 1) };
 }
 
 export function ReviewSemanticDiffPanel() {
   const state = useReviewState();
+
   const {
     rawPatch,
     semanticDiffAvailable,
@@ -62,6 +73,7 @@ export function ReviewSemanticDiffPanel() {
     openDiffFile,
     onLineSelection,
   } = state;
+
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [retryCount, setRetryCount] = useState(0);
 
@@ -75,19 +87,25 @@ export function ReviewSemanticDiffPanel() {
       .then(async (res) => {
         if (!res.ok) throw new Error("Semantic diff failed");
         const data: unknown = await res.json();
+
         return decodeSemanticDiffResponse(data);
       })
       .then((data) => {
         if (controller.signal.aborted) return;
+
         if (data.status === "unavailable") {
           onSemanticDiffUnavailable();
+
           return;
         }
+
         if (data.status === "error") {
           if (onSemanticDiffLoadError()) return;
           setLoadState({ status: "error", error: data });
+
           return;
         }
+
         onSemanticDiffLoadSuccess();
         setLoadState(
           data.changes.length === 0 && data.binaryChanges.length === 0
@@ -98,6 +116,7 @@ export function ReviewSemanticDiffPanel() {
       .catch((error) => {
         if (controller.signal.aborted) return;
         console.error("Failed to load semantic diff:", error);
+
         if (onSemanticDiffLoadError()) return;
         setLoadState({
           status: "error",
@@ -117,6 +136,7 @@ export function ReviewSemanticDiffPanel() {
 
   const groupedChanges = useMemo(() => {
     if (loadState.status !== "ready" && loadState.status !== "empty") return [];
+
     return groupSemanticChangesByFile(loadState.data.changes, loadState.data.binaryChanges);
   }, [loadState]);
 
@@ -176,6 +196,7 @@ export function ReviewSemanticDiffPanel() {
               <span className="semantic-diff-path" title={group.filePath}>
                 {(() => {
                   const { dir, name } = splitFilePath(group.filePath);
+
                   return (
                     <>
                       {dir && <span className="semantic-diff-path-dir">{dir}</span>}

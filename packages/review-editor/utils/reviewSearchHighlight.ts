@@ -1,10 +1,15 @@
 import type { ReviewSearchMatch } from "./reviewSearch";
 
 const PASSIVE_MATCH_BACKGROUND = "#fef08a";
+
 const ACTIVE_MATCH_BACKGROUND = "#f59e0b";
+
 const MATCH_FOREGROUND = "#1f2937";
+
 const PASSIVE_MATCH_RING = "0 0 0 1px rgba(161, 98, 7, 0.18)";
+
 const ACTIVE_MATCH_RING = "0 0 0 1px rgba(180, 83, 9, 0.35)";
+
 const MAX_SCROLL_ATTEMPTS = 10;
 
 function escapeRegExp(value: string): string {
@@ -23,6 +28,7 @@ export function getSearchRoots(root: ParentNode): ParentNode[] {
       // double all clear/apply work over its subtree).
       roots.push(...getSearchRoots(current.shadowRoot));
     }
+
     current = walker.nextNode();
   }
 
@@ -39,6 +45,7 @@ export function clearSearchHighlights(root: ParentNode) {
   const marks = root.querySelectorAll("mark[data-review-search-match]");
   marks.forEach((mark) => {
     const parent = mark.parentNode;
+
     if (!parent) return;
     parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
     parent.normalize();
@@ -73,6 +80,7 @@ function decorateSearchMatch(mark: HTMLElement, isActive: boolean) {
   mark.style.borderRadius = "3px";
   mark.style.padding = "0 1px";
   mark.style.boxShadow = isActive ? ACTIVE_MATCH_RING : PASSIVE_MATCH_RING;
+
   if (isActive) {
     mark.dataset.reviewSearchActive = "";
   } else {
@@ -92,6 +100,7 @@ export function applySearchHighlights(
 ) {
   clearSearchHighlights(root);
   const trimmed = query.trim();
+
   if (!trimmed || searchMatches.length === 0) return;
 
   const regex = new RegExp(escapeRegExp(trimmed), "gi");
@@ -102,19 +111,23 @@ export function applySearchHighlights(
   searchMatches.forEach((match) => {
     const key = lineKey(match);
     const group = lineGroups.get(key);
+
     if (group) group.push(match);
     else lineGroups.set(key, [match]);
   });
 
   lineGroups.forEach((matches) => {
     const lineEl = root.querySelector(getLineSelector(matches[0]));
+
     if (!lineEl) return;
 
     const textWalker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
+
         if (node.parentElement?.closest("mark[data-review-search-match]"))
           return NodeFilter.FILTER_REJECT;
+
         return NodeFilter.FILTER_ACCEPT;
       },
     });
@@ -138,6 +151,7 @@ export function applySearchHighlights(
       matchesInNode.forEach((nodeMatch) => {
         const index = nodeMatch.index ?? 0;
         const len = nodeMatch[0].length;
+
         if (index > cursor) {
           fragment.appendChild(document.createTextNode(value.slice(cursor, index)));
         }
@@ -191,21 +205,25 @@ export function applyItemSearchHighlights(
 ): void {
   const trimmed = query.trim();
   const idle = !trimmed || matchesForItem.length === 0;
+
   // Idle fast path: this runs on EVERY item render (every scroll frame) — when
   // search is not in use and this node was never marked, there is nothing to
   // clear, so skip the shadow-root walk entirely.
   if (idle && !markedItemNodes.has(itemNode)) return;
 
   const roots = getSearchRoots(itemNode);
+
   // Clear first so a node with stale marks (recycled element, query changed)
   // is reset even when this item now has no matches.
   for (const root of roots) clearSearchHighlights(root);
   markedItemNodes.delete(itemNode);
+
   if (idle) return;
 
   for (const root of roots) {
     applySearchHighlights(root, query, matchesForItem, activeSearchMatchId);
   }
+
   markedItemNodes.add(itemNode);
 }
 
@@ -214,6 +232,7 @@ export function applyItemSearchHighlights(
 export function clearItemSearchHighlights(itemNode: HTMLElement): void {
   if (!markedItemNodes.has(itemNode)) return;
   const roots = getSearchRoots(itemNode);
+
   for (const root of roots) clearSearchHighlights(root);
   markedItemNodes.delete(itemNode);
 }
@@ -223,11 +242,14 @@ export function swapActiveSearchHighlight(
   newActiveId: string | null,
 ): void {
   const roots = getSearchRoots(container);
+
   for (const root of roots) {
     const prev = root.querySelector<HTMLElement>("mark[data-review-search-active]");
+
     if (prev) {
       decorateSearchMatch(prev, false);
     }
+
     if (newActiveId) {
       // Match ids embed file paths — CSS.escape so a path character that is
       // special inside an attribute selector can't throw from querySelector
@@ -235,6 +257,7 @@ export function swapActiveSearchHighlight(
       const next = root.querySelector<HTMLElement>(
         `mark[data-review-search-match="${CSS.escape(newActiveId)}"]`,
       );
+
       if (next) {
         decorateSearchMatch(next, true);
       }
@@ -272,13 +295,16 @@ export function scrollToSearchMatch(
   match: ReviewSearchMatch,
 ): boolean {
   const lineEl = root.querySelector<HTMLElement>(getLineSelector(match));
+
   if (!lineEl) return false;
 
   const mark = root.querySelector<HTMLElement>(
     `mark[data-review-search-match="${CSS.escape(match.id)}"]`,
   );
+
   scrollSearchTargetIntoContainer(scrollContainer, mark ?? lineEl);
   mark?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+
   return true;
 }
 
@@ -295,9 +321,11 @@ export function retryScrollToSearchMatch(
     const didScroll = getSearchRoots(container).some((root) =>
       scrollToSearchMatch(container, root, match),
     );
+
     if (didScroll) return;
 
     attempts += 1;
+
     if (attempts < MAX_SCROLL_ATTEMPTS) {
       requestAnimationFrame(tryScroll);
     }

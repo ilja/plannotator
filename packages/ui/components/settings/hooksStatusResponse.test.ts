@@ -18,6 +18,7 @@ describe("decodeHooksStatusResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         pfmReminder: { enabled: true },
@@ -31,6 +32,7 @@ describe("decodeHooksStatusResponse", () => {
     const decoded = decodeHooksStatusResponse({});
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         pfmReminder: { enabled: false },
@@ -53,6 +55,7 @@ describe("decodeHooksStatusResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         pfmReminder: { enabled: true },
@@ -75,6 +78,7 @@ describe("decodeHooksStatusResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         pfmReminder: { enabled: false },
@@ -97,6 +101,7 @@ describe("decodeHooksStatusResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual({
         pfmReminder: { enabled: false },
@@ -122,6 +127,7 @@ describe("decodeHooksStatusResponse", () => {
     });
 
     expect(Result.isSuccess(nullable)).toBeTrue();
+
     if (Result.isSuccess(nullable)) {
       expect(nullable.success.improvementHook).toEqual({
         present: true,

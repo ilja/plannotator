@@ -46,6 +46,7 @@ async function runGit(
   });
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+
   if (options?.timeoutMs) {
     timer = setTimeout(() => proc.kill(), options.timeoutMs);
   }

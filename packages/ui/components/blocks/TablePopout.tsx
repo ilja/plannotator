@@ -47,10 +47,12 @@ const TablePopoutImpl: React.FC<TablePopoutProps> = ({
 
   const columnIds = useMemo(() => {
     const seen = new Map<string, number>();
+
     return headers.map((h, i) => {
       const base = h.trim() || `col-${i}`;
       const n = (seen.get(base) ?? 0) + 1;
       seen.set(base, n);
+
       return n === 1 ? base : `${base}-${n}`;
     });
   }, [headers]);
@@ -62,6 +64,7 @@ const TablePopoutImpl: React.FC<TablePopoutProps> = ({
         columnIds.forEach((id, i) => {
           obj[id] = row[i] ?? "";
         });
+
         return obj;
       }),
     [rows, columnIds],
@@ -69,6 +72,7 @@ const TablePopoutImpl: React.FC<TablePopoutProps> = ({
 
   const columns = useMemo<ColumnDef<Row, string>[]>(() => {
     const helper = createColumnHelper<Row>();
+
     return columnIds.map((id, i) =>
       helper.accessor((row) => row[id], {
         id,
@@ -242,6 +246,7 @@ const TablePopoutImpl: React.FC<TablePopoutProps> = ({
               <tr key={headerGroup.id} className="border-b border-border">
                 {headerGroup.headers.map((header) => {
                   const sort = header.column.getIsSorted();
+
                   return (
                     <th
                       key={header.id}
@@ -307,6 +312,7 @@ export const TablePopout = React.memo(
 const SortIndicator: React.FC<{ dir: false | "asc" | "desc" }> = ({ dir }) => {
   const activeUp = dir === "asc";
   const activeDown = dir === "desc";
+
   return (
     <span className="inline-flex flex-col leading-none text-[9px]">
       <span className={activeUp ? "text-foreground" : "text-muted-foreground/40"}>▲</span>

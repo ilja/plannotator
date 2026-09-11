@@ -44,9 +44,11 @@ export interface ExternalAnnotationHandler {
 // ---------------------------------------------------------------------------
 
 const BASE = "/api/external-annotations";
+
 const STREAM = `${BASE}/stream`;
 
 const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
+
 type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,7 @@ export function createExternalAnnotationHandler(
   // Wire store mutations → SSE broadcast
   store.onMutation((event: ExternalAnnotationEvent<StorableAnnotation>) => {
     const data = encoder.encode(serializeSSEEvent(event));
+
     for (const controller of subscribers) {
       try {
         controller.enqueue(data);
@@ -89,6 +92,7 @@ export function createExternalAnnotationHandler(
           type: "snapshot",
           annotations: store.getAll(),
         };
+
         controller.enqueue(encoder.encode(serializeSSEEvent(snapshot)));
 
         subscribers.add(controller);
@@ -121,12 +125,15 @@ export function createExternalAnnotationHandler(
 
   const handleSnapshot = (url: URL): Response => {
     const since = url.searchParams.get("since");
+
     if (since !== null) {
       const sinceVersion = parseInt(since, 10);
+
       if (!isNaN(sinceVersion) && sinceVersion === store.version) {
         return new Response(null, { status: 304 });
       }
     }
+
     return Response.json({
       annotations: store.getAll(),
       version: store.version,
@@ -138,9 +145,11 @@ export function createExternalAnnotationHandler(
       const body = Option.getOrUndefined(
         Schema.decodeUnknownOption(ParsedRequestBodySchema)(await req.json()),
       );
+
       if (!body) {
         return Response.json({ error: "Invalid JSON" }, { status: 400 });
       }
+
       const parsed = transform(body);
 
       if ("error" in parsed) {
@@ -148,6 +157,7 @@ export function createExternalAnnotationHandler(
       }
 
       const created = store.add(parsed.annotations);
+
       return Response.json({ ids: created.map((a) => a.id) }, { status: 201 });
     } catch {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
@@ -156,18 +166,24 @@ export function createExternalAnnotationHandler(
 
   const handleUpdate = async (req: Request, url: URL): Promise<Response> => {
     const id = url.searchParams.get("id");
+
     if (!id) {
       return Response.json({ error: "Missing ?id parameter" }, { status: 400 });
     }
+
     try {
       const patch = decodeExternalAnnotationPatch(mode, await req.json());
+
       if (!patch) {
         return Response.json({ error: "Invalid JSON" }, { status: 400 });
       }
+
       const updated = store.update(id, patch);
+
       if (!updated) {
         return Response.json({ error: "Not found" }, { status: 404 });
       }
+
       return Response.json({ annotation: updated });
     } catch {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
@@ -180,23 +196,28 @@ export function createExternalAnnotationHandler(
 
     if (id) {
       store.remove(id);
+
       return Response.json({ ok: true });
     }
 
     if (source) {
       const count = store.clearBySource(source);
+
       return Response.json({ ok: true, removed: count });
     }
 
     const count = store.clearAll();
+
     return Response.json({ ok: true, removed: count });
   };
 
   return {
     addAnnotations(body: ParsedRequestBody): { ids: string[] } | { error: string } {
       const parsed = transform(body);
+
       if ("error" in parsed) return { error: parsed.error };
       const created = store.add(parsed.annotations);
+
       return { ids: created.map((a) => a.id) };
     },
 

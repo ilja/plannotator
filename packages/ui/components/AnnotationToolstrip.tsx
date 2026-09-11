@@ -316,9 +316,13 @@ type ButtonColor = keyof typeof colorStyles;
 /* ─── Constants ─── */
 
 const ICON_SIZE = 28; // collapsed button width (px)
+
 const H_PAD = 10; // horizontal padding when expanded (px) — matches px-2.5
+
 const GAP = 6; // gap between icon and label (px) — matches gap-1.5
+
 const ICON_INNER = 14; // icon element width (px)
+
 const DURATION = 180; // transition ms
 
 /* ─── Button ─── */

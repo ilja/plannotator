@@ -27,6 +27,7 @@ import { saveDraft, loadDraft, deleteDraft, getDraftGeneration } from "../shared
 const hasDom = globalThis.document !== undefined;
 
 const DRAFT_KEY = "code-annotation-draft-test";
+
 const DEBOUNCE_WAIT_MS = 650; // hook debounce is 500ms
 
 // SAFETY: test constructs CodeAnnotation shape for draft round-trip.
@@ -47,8 +48,11 @@ const ANNOTATION = {
 // ---------------------------------------------------------------------------
 
 const realFetch = globalThis.fetch;
+
 let dataDir = "";
+
 let prevDataDirEnv: string | undefined;
+
 // Records every /api/draft request so tests can assert on what the hook actually
 // sent (e.g. that an external-annotation clear issued no DELETE).
 const draftCalls: { method: string; url: string }[] = [];
@@ -57,12 +61,15 @@ function installFetchShim() {
   // SAFETY: fetch shim matches typeof fetch signature; globalThis.fetch is Fetch.
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request || input instanceof URL ? input.toString() : String(input);
+
     if (url.startsWith("/api/draft")) {
       const parsedUrl = new URL(url, "http://localhost");
       const method = init?.method ?? "GET";
       draftCalls.push({ method, url });
+
       if (method === "GET") {
         const data = loadDraft(DRAFT_KEY);
+
         return data
           ? new Response(JSON.stringify(data), {
               status: 200,
@@ -73,17 +80,22 @@ function installFetchShim() {
                 (() => {
                   const body: any = { found: false };
                   const dg = getDraftGeneration(DRAFT_KEY);
+
                   if (dg !== null) body.draftGeneration = dg;
+
                   return body;
                 })(),
               ),
               { status: 404, headers: { "Content-Type": "application/json" } },
             );
       }
+
       if (method === "POST") {
         saveDraft(DRAFT_KEY, JSON.parse(String(init?.body)));
+
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
+
       if (method === "DELETE") {
         const rawGeneration = parsedUrl.searchParams.get("generation");
         const generation = rawGeneration === null ? undefined : Number(rawGeneration);
@@ -91,9 +103,11 @@ function installFetchShim() {
           DRAFT_KEY,
           Number.isFinite(generation) && generation >= 0 ? generation : undefined,
         );
+
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
     }
+
     return new Response("Not found", { status: 404 });
   }) as typeof fetch;
 }
@@ -109,6 +123,7 @@ beforeAll(() => {
 afterAll(() => {
   if (!hasDom) return;
   globalThis.fetch = realFetch;
+
   if (prevDataDirEnv === undefined) delete process.env.PLANNOTATOR_DATA_DIR;
   else process.env.PLANNOTATOR_DATA_DIR = prevDataDirEnv;
   rmSync(dataDir, { recursive: true, force: true });
@@ -125,6 +140,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 type HookOptions = Parameters<typeof useCodeAnnotationDraft>[0];
+
 type HookResult = ReturnType<typeof useCodeAnnotationDraft>;
 
 const options = (over: Partial<HookOptions> = {}): HookOptions => ({
@@ -143,6 +159,7 @@ function Harness({
   resultRef: { current: HookResult | null };
 }) {
   resultRef.current = useCodeAnnotationDraft(opts);
+
   return null;
 }
 
@@ -157,9 +174,11 @@ const tick = (ms: number) => act(async () => new Promise((r) => setTimeout(r, ms
 async function mountSession(opts: HookOptions): Promise<Session> {
   const host = document.createElement("div");
   document.body.appendChild(host);
+
   interface ResultRef {
     current: HookResult | null;
   }
+
   const resultRef: ResultRef = { current: null };
   let root: Root;
   await act(async () => {
@@ -167,6 +186,7 @@ async function mountSession(opts: HookOptions): Promise<Session> {
     root.render(<Harness opts={opts} resultRef={resultRef} />);
   });
   await tick(0); // let the on-mount GET .then chain settle (sets hasMountedRef)
+
   return {
     result: resultRef,
     rerender: async (next: HookOptions) => {

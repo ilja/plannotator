@@ -19,7 +19,9 @@ export const AnnotationSidebar: React.FC<SidebarProps> = ({
   const sortedAnnotations = [...annotations].sort((a, b) => {
     const blockA = blocks.findIndex((blk) => blk.id === a.blockId);
     const blockB = blocks.findIndex((blk) => blk.id === b.blockId);
+
     if (blockA !== blockB) return blockA - blockB;
+
     return a.startOffset - b.startOffset;
   });
 

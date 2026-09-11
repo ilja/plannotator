@@ -54,10 +54,13 @@ export function dispatchShortcutEvent<TScope extends ShortcutScopeDefinition<any
     [ShortcutActionId<TScope>, ShortcutDefinition]
   >) {
     const handler = handlers[actionId];
+
     if (!handler) continue;
+
     if (!shortcut.bindings.some((binding) => matchesShortcutBinding(event, binding))) continue;
 
     const { when, handle } = normalizeShortcutHandler(handler);
+
     if (when && !when(event)) continue;
 
     if (shortcut.preventDefault) {
@@ -79,9 +82,11 @@ function getEventTarget(target: ShortcutEventTarget): EventTarget | null {
   if (target === "window") {
     return globalThis.window === undefined ? null : window;
   }
+
   if (target === "document") {
     return globalThis.document === undefined ? null : document;
   }
+
   return target;
 }
 
@@ -99,6 +104,7 @@ export function useShortcutScope<TScope extends ShortcutScopeDefinition<any>>({
 
   useEffect(() => {
     const eventTarget = getEventTarget(target);
+
     if (!eventTarget || !("addEventListener" in eventTarget)) return;
 
     const handleKeyDown = (event: Event) => {
@@ -108,6 +114,7 @@ export function useShortcutScope<TScope extends ShortcutScopeDefinition<any>>({
 
     // SAFETY: handleKeyDown is (event: Event) => void compatible with EventListener — cast to EventListener
     eventTarget.addEventListener("keydown", handleKeyDown as EventListener);
+
     return () => {
       // SAFETY: handleKeyDown is (event: Event) => void compatible with EventListener — cast to EventListener
       eventTarget.removeEventListener("keydown", handleKeyDown as EventListener);
@@ -173,12 +180,14 @@ export function useDoubleTapShortcuts<TScope extends ShortcutScopeDefinition<any
   useEffect(() => {
     // Pre-parse which actions have double-tap bindings
     const doubleTapActions: Array<{ actionId: ShortcutActionId<TScope>; keyName: string }> = [];
+
     // SAFETY: Object.entries loses tuple typing for Record — cast to typed entries
     for (const [actionId, shortcut] of Object.entries(scope.shortcuts) as Array<
       [ShortcutActionId<TScope>, ShortcutDefinition]
     >) {
       for (const binding of shortcut.bindings) {
         const keyName = parseDoubleTapBinding(binding);
+
         if (keyName) {
           doubleTapActions.push({ actionId, keyName });
         }
@@ -195,13 +204,16 @@ export function useDoubleTapShortcuts<TScope extends ShortcutScopeDefinition<any
         if (!matchesKeyName(event, keyName)) continue;
 
         const handler = handlersRef.current[actionId];
+
         if (!handler) continue;
 
         const { when, handle } = normalizeShortcutHandler(handler);
+
         if (when && !when(event)) continue;
 
         const now = Date.now();
         const prev = lastKeyUp.get(keyName) ?? 0;
+
         if (now - prev < tapWindow) {
           handle(event);
           lastKeyUp.set(keyName, 0); // reset so triple-tap doesn't re-fire
@@ -212,6 +224,7 @@ export function useDoubleTapShortcuts<TScope extends ShortcutScopeDefinition<any
     };
 
     window.addEventListener("keyup", handleKeyUp);
+
     return () => window.removeEventListener("keyup", handleKeyUp);
   }, [scope, tapWindow]);
 }

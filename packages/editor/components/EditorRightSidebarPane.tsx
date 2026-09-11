@@ -115,6 +115,7 @@ function EditorAnnotationSidebar({
   readonly actions: EditorRightSidebarActions;
 }) {
   const isOpen = model.isOpen && model.activeTab === "annotations";
+
   const directEdits = model.directEdits?.map((item) => ({
     id: item.id,
     title: item.title,

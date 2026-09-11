@@ -15,11 +15,17 @@ const LinkedDocResponseEnvelopeSchema = Schema.Struct({
 });
 
 const LinkedDocErrorEnvelopeSchema = Schema.Struct({ error: Schema.String });
+
 const decodeLinkedDocResponseEnvelope = Schema.decodeUnknownOption(LinkedDocResponseEnvelopeSchema);
+
 const decodeLinkedDocErrorEnvelope = Schema.decodeUnknownOption(LinkedDocErrorEnvelopeSchema);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeRenderAs = Schema.decodeUnknownOption(Schema.Literals(["markdown", "html"]));
+
 const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
+
 const decodeSourceSave = Schema.decodeUnknownOption(SourceSaveCapabilitySchema);
 
 export interface LinkedDocResponse {
@@ -35,6 +41,7 @@ export interface LinkedDocResponse {
 /** Decodes the /api/doc success payload while isolating malformed optional fields. */
 export function decodeLinkedDocResponse<Input>(input: Input): LinkedDocResponse | undefined {
   const response = Option.getOrUndefined(decodeLinkedDocResponseEnvelope(input));
+
   if (!response) return undefined;
 
   const markdown = Option.getOrUndefined(decodeString(response.markdown));
@@ -45,12 +52,19 @@ export function decodeLinkedDocResponse<Input>(input: Input): LinkedDocResponse 
   const sourceSave = Option.getOrUndefined(decodeSourceSave(response.sourceSave));
 
   const decodedResponse: LinkedDocResponse = { filepath: response.filepath };
+
   if (markdown !== undefined) decodedResponse.markdown = markdown;
+
   if (rawHtml !== undefined) decodedResponse.rawHtml = rawHtml;
+
   if (shareHtml !== undefined) decodedResponse.shareHtml = shareHtml;
+
   if (renderAs !== undefined) decodedResponse.renderAs = renderAs;
+
   if (isConverted !== undefined) decodedResponse.isConverted = isConverted;
+
   if (sourceSave !== undefined) decodedResponse.sourceSave = sourceSave;
+
   return decodedResponse;
 }
 

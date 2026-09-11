@@ -3,6 +3,7 @@ import type { EditorAnnotation } from "../types";
 import { loadEditorAnnotationsResponse } from "./editorAnnotationsResponse";
 
 const POLL_INTERVAL = 500;
+
 // SAFETY: VSCode webview injects __PLANNOTATOR_VSCODE — cast to access flag
 const IS_VSCODE =
   globalThis.window !== undefined && (globalThis.window as any).__PLANNOTATOR_VSCODE === true;
@@ -27,10 +28,12 @@ export function useEditorAnnotations(): UseEditorAnnotationsReturn {
     try {
       const res = await fetch("/api/editor-annotations");
       const incoming = await loadEditorAnnotationsResponse(res);
+
       if (!incoming) return;
       setAnnotations((prev) => {
         if (prev.length === incoming.length && prev.every((a, i) => a.id === incoming[i].id))
           return prev;
+
         return incoming;
       });
     } catch {
@@ -55,6 +58,7 @@ export function useEditorAnnotations(): UseEditorAnnotationsReturn {
 
   const deleteEditorAnnotation = useCallback(async (id: string) => {
     if (!IS_VSCODE) return;
+
     try {
       await fetch(`/api/editor-annotation?id=${encodeURIComponent(id)}`, { method: "DELETE" });
       setAnnotations((prev) => prev.filter((a) => a.id !== id));

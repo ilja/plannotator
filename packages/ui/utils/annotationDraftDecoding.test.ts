@@ -135,6 +135,7 @@ describe("decodeStoredAnnotationDraft", () => {
       startMeta: { parentTagName: "P", parentIndex: 1, textOffset: 2 },
       endMeta: { parentTagName: "P", parentIndex: 1, textOffset: 6 },
     };
+
     const fullCodeAnnotation: CodeAnnotation = {
       ...codeAnnotation,
       type: "suggestion",
@@ -188,6 +189,7 @@ describe("decodeStoredAnnotationDraft", () => {
 
   test("inherits document source metadata for historical nested saved changes", () => {
     const { sourceSave: _sourceSave, ...historicalSavedChange } = savedFileChange;
+
     const decoded = decodeStoredAnnotationDraft({
       annotations: [],
       globalAttachments: [],

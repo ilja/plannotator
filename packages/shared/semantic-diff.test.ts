@@ -45,10 +45,13 @@ function makeRuntime(
     async runCommand(command, args, runOptions) {
       calls.push({ command, args, input: runOptions?.input });
       const mock = commands[command];
+
       if (!mock) return { stdout: "", stderr: "not found", exitCode: 1, error: "not found" };
+
       if (args.includes("--version")) {
         return { stdout: mock.version ?? "", stderr: "", exitCode: mock.version ? 0 : 1 };
       }
+
       return {
         stdout: mock.diff ?? "",
         stderr: mock.stderr ?? "",
@@ -162,6 +165,7 @@ describe("semantic diff runner", () => {
 
   test("does not run a sem package from the reviewed cwd", async () => {
     const repoSem = "/repo/node_modules/@ataraxy-labs/sem/vendor/sem";
+
     const runtime = makeRuntime({
       cwd: "/server",
       files: [repoSem],
@@ -243,6 +247,7 @@ describe("semantic diff runner", () => {
 
   test("uses managed sidecar before PATH fallback", async () => {
     const managed = getManagedSemBinaryPath("/home/user/.plannotator", "linux");
+
     const runtime = makeRuntime({
       files: [managed],
       commands: {
@@ -281,6 +286,7 @@ describe("semantic diff runner", () => {
 
   test("resolves an absolute sem.exe from PATH on Windows", async () => {
     const semPath = "C:/tools/sem.exe";
+
     const runtime = makeRuntime({
       platform: "win32",
       pathDelimiter: ";",
@@ -319,11 +325,13 @@ describe("semantic diff runner", () => {
 
   test("response cache clears when the patch changes and evicts oldest entries", () => {
     const cache = new SemanticDiffResponseCache(1);
+
     const first: SemanticDiffResponse = {
       status: "unavailable",
       reason: "sem-not-found",
       message: "missing",
     };
+
     const second: SemanticDiffResponse = {
       status: "error",
       reason: "sem-exit",
@@ -340,6 +348,7 @@ describe("semantic diff runner", () => {
 
   test("failures are memoized within their TTL and retryable after it", () => {
     const cache = new SemanticDiffResponseCache();
+
     const failure: SemanticDiffResponse = {
       status: "error",
       reason: "sem-exit",

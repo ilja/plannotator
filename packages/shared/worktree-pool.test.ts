@@ -10,15 +10,18 @@ interface FakeRuntimeResult {
 
 function fakeRuntime(): FakeRuntimeResult {
   const commands: string[][] = [];
+
   const runtime: ReviewGitRuntime = {
     async runGit(args) {
       commands.push(args);
+
       return { stdout: "", stderr: "", exitCode: 0 };
     },
     async readTextFile() {
       return null;
     },
   };
+
   return { runtime, commands };
 }
 
@@ -45,6 +48,7 @@ describe("worktree-pool", () => {
       repoDir: "/repo",
       isSameRepo: true,
     });
+
     expect(pool.resolve("https://github.com/acme/widgets/pull/99")).toBeUndefined();
   });
 
@@ -55,10 +59,12 @@ describe("worktree-pool", () => {
       number: 3,
       ready: true,
     };
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
       initial,
     );
+
     expect(pool.resolve("https://github.com/acme/widgets/pull/3")).toBe("/tmp/session/pool/pr-3");
   });
 
@@ -69,16 +75,19 @@ describe("worktree-pool", () => {
       number: 3,
       ready: true,
     };
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
       initial,
     );
+
     expect(pool.has("https://github.com/acme/widgets/pull/3")).toBe(true);
     expect(pool.has("https://github.com/acme/widgets/pull/99")).toBe(false);
   });
 
   test("ensure creates worktree on first call", async () => {
     const { runtime, commands } = fakeRuntime();
+
     const pool = createWorktreePool({
       sessionDir: "/tmp/session",
       repoDir: "/repo",
@@ -107,6 +116,7 @@ describe("worktree-pool", () => {
 
   test("ensure returns cached entry on second call", async () => {
     const { runtime, commands } = fakeRuntime();
+
     const pool = createWorktreePool({
       sessionDir: "/tmp/session",
       repoDir: "/repo",
@@ -123,6 +133,7 @@ describe("worktree-pool", () => {
 
   test("ensure creates separate entries for different PRs", async () => {
     const { runtime } = fakeRuntime();
+
     const pool = createWorktreePool({
       sessionDir: "/tmp/session",
       repoDir: "/repo",
@@ -140,12 +151,14 @@ describe("worktree-pool", () => {
 
   test("cross-repo pool returns matching entry", async () => {
     const { runtime } = fakeRuntime();
+
     const initial = {
       path: "/tmp/session/pool/pr-3",
       prUrl: "https://github.com/acme/widgets/pull/3",
       number: 3,
       ready: true,
     };
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false },
       initial,
@@ -157,12 +170,14 @@ describe("worktree-pool", () => {
 
   test("cross-repo pool rejects different PR", async () => {
     const { runtime } = fakeRuntime();
+
     const initial = {
       path: "/tmp/session/pool/pr-3",
       prUrl: "https://github.com/acme/widgets/pull/3",
       number: 3,
       ready: true,
     };
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false },
       initial,
@@ -175,6 +190,7 @@ describe("worktree-pool", () => {
 
   test("cross-repo pool throws when empty", async () => {
     const { runtime } = fakeRuntime();
+
     const pool = createWorktreePool({
       sessionDir: "/tmp/session",
       repoDir: "/repo",
@@ -188,6 +204,7 @@ describe("worktree-pool", () => {
 
   test("cleanup removes all entries", async () => {
     const { runtime, commands } = fakeRuntime();
+
     const pool = createWorktreePool({
       sessionDir: "/tmp/session",
       repoDir: "/repo",
@@ -213,10 +230,12 @@ describe("worktree-pool", () => {
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (err: any) => void;
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
+
   return { promise, resolve, reject };
 }
 
@@ -229,6 +248,7 @@ function notReadyInitial() {
 describe("worktree-pool seeded warmup", () => {
   test("resolve returns undefined while the warmup is in flight, then the path once it lands", async () => {
     const warmup = deferred<{ path: string; prUrl: string; number: number; ready: boolean }>();
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
       notReadyInitial(),
@@ -249,6 +269,7 @@ describe("worktree-pool seeded warmup", () => {
   test("ensure during warmup awaits the seeded promise instead of starting a duplicate creation", async () => {
     const { runtime, commands } = fakeRuntime();
     const warmup = deferred<{ path: string; prUrl: string; number: number; ready: boolean }>();
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
       notReadyInitial(),
@@ -269,6 +290,7 @@ describe("worktree-pool seeded warmup", () => {
 
   test("failed warmup keeps the entry not-ready so resolve never hands out the dead path", async () => {
     const warmup = deferred<{ path: string; prUrl: string; number: number; ready: boolean }>();
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
       notReadyInitial(),
@@ -285,6 +307,7 @@ describe("worktree-pool seeded warmup", () => {
   test("same-repo ensure retries creation after a failed warmup", async () => {
     const { runtime, commands } = fakeRuntime();
     const warmup = deferred<{ path: string; prUrl: string; number: number; ready: boolean }>();
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
       notReadyInitial(),
@@ -305,6 +328,7 @@ describe("worktree-pool seeded warmup", () => {
   test("cross-repo ensure rejects after a failed warmup — pool cannot rebuild a clone", async () => {
     const { runtime } = fakeRuntime();
     const warmup = deferred<{ path: string; prUrl: string; number: number; ready: boolean }>();
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: false },
       notReadyInitial(),
@@ -320,6 +344,7 @@ describe("worktree-pool seeded warmup", () => {
   test("creation for another PR queues behind the in-flight warmup (FETCH_HEAD serialization)", async () => {
     const { runtime, commands } = fakeRuntime();
     const warmup = deferred<{ path: string; prUrl: string; number: number; ready: boolean }>();
+
     const pool = createWorktreePool(
       { sessionDir: "/tmp/session", repoDir: "/repo", isSameRepo: true },
       notReadyInitial(),
@@ -348,16 +373,19 @@ describe("worktree-pool seeded warmup", () => {
     // Runtime that yields between commands — interleaving would surface here
     // if creations ran concurrently instead of through the serialization chain.
     const commands: string[][] = [];
+
     const runtime: ReviewGitRuntime = {
       async runGit(args) {
         await Bun.sleep(1);
         commands.push(args);
+
         return { stdout: "", stderr: "", exitCode: 0 };
       },
       async readTextFile() {
         return null;
       },
     };
+
     const pool = createWorktreePool({
       sessionDir: "/tmp/session",
       repoDir: "/repo",
@@ -377,9 +405,11 @@ describe("worktree-pool seeded warmup", () => {
     const firstPr4Index = commands.findIndex(
       (c) => c.join(" ").includes("pr-4") || c.join(" ").includes("refs/pull/4"),
     );
+
     const pr3AddIndex = commands.findIndex(
       (c) => c[0] === "worktree" && c[3] === "/tmp/session/pool/pr-3",
     );
+
     expect(pr3AddIndex).toBeGreaterThanOrEqual(0);
     expect(firstPr4Index).toBeGreaterThan(pr3AddIndex);
   });

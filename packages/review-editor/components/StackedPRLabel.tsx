@@ -25,14 +25,19 @@ interface StackedPRLabelProps {
 
 function nodeLabel(node: PRStackNode): string {
   if (node.isDefaultBranch) return node.branch;
+
   if (node.number != null && node.title) return `#${node.number} ${node.title}`;
+
   if (node.number != null) return `#${node.number}`;
+
   return node.branch;
 }
 
 function shortNodeLabel(node: PRStackNode): string {
   if (node.isDefaultBranch) return node.branch;
+
   if (node.number != null) return `#${node.number}`;
+
   return node.branch;
 }
 
@@ -40,7 +45,9 @@ type NodeAction = { kind: "full-stack" } | { kind: "current" } | { kind: "naviga
 
 function classifyNode(node: PRStackNode): NodeAction {
   if (node.isCurrent) return { kind: "current" };
+
   if (node.isDefaultBranch) return { kind: "full-stack" };
+
   return { kind: "navigate", url: node.url ?? "" };
 }
 
@@ -67,16 +74,21 @@ function createStackLabelModel(
 ): StackLabelModel {
   const tree =
     stackTree ?? (stackInfo ? buildMinimalStackTree(metadata, stackInfo) : { nodes: [] });
+
   const currentIndex = tree.nodes.findIndex((node) => node.isCurrent);
   const parentNode = currentIndex > 0 ? tree.nodes[currentIndex - 1] : null;
   const rootNode = tree.nodes[0];
+
   const mergedNodes = tree.nodes.filter(
     (node) => !node.isDefaultBranch && !node.isCurrent && node.state === "merged",
   );
+
   const hasStateInfo = tree.nodes.some((node) => !node.isDefaultBranch && node.state !== undefined);
+
   const fullStackTarget = rootNode?.isDefaultBranch
     ? rootNode.branch
     : (stackInfo?.defaultBranch ?? "main");
+
   const layerTarget = parentNode ? shortNodeLabel(parentNode) : (stackInfo?.baseBranch ?? "base");
 
   return {
@@ -101,11 +113,13 @@ function getStackNodeTooltip(
   fullStackOption?: PRDiffScopeOption,
 ): string | undefined {
   const action = classifyNode(node);
+
   if (action.kind === "full-stack") {
     return fullStackOption?.enabled
       ? "Switch to full-stack diff"
       : "Full-stack diff requires local checkout";
   }
+
   return action.kind === "navigate" && action.url ? `Review ${shortNodeLabel(node)}` : undefined;
 }
 
@@ -117,20 +131,27 @@ function isStackNodeDisabled(
   onNavigatePR: ((url: string) => void) | undefined,
 ): boolean {
   if (isMergedStackNode(node) || action.kind === "current") return true;
+
   if (action.kind === "full-stack") return !fullStackOption?.enabled || isSwitchingScope;
+
   return !action.url || isSwitchingScope || !onNavigatePR;
 }
 
 function getStackNodeIndicatorClass(node: PRStackNode, merged: boolean): string {
   if (node.isCurrent) return "bg-annotation-comment";
+
   if (node.isDefaultBranch) return "bg-muted-foreground/30";
+
   return merged ? "bg-muted-foreground/20" : "bg-muted-foreground/40";
 }
 
 function getStackNodeClass(node: PRStackNode, merged: boolean, disabled: boolean): string {
   if (node.isCurrent) return "text-annotation-comment font-medium cursor-default";
+
   if (merged) return "text-muted-foreground/40 cursor-default";
+
   if (disabled) return "text-muted-foreground/40 cursor-not-allowed";
+
   return classifyNode(node).kind === "navigate"
     ? "text-muted-foreground hover:text-foreground hover:bg-muted/30 cursor-pointer"
     : "text-muted-foreground hover:text-annotation-comment hover:bg-muted/30 cursor-pointer";
@@ -155,6 +176,7 @@ const StackTreeNodeItem: React.FC<{
 }) => {
   const merged = isMergedStackNode(node);
   const action = classifyNode(node);
+
   const disabled = isStackNodeDisabled(
     node,
     action,
@@ -165,6 +187,7 @@ const StackTreeNodeItem: React.FC<{
 
   function handleClick() {
     if (action.kind === "full-stack") onSelectFullStack();
+
     if (action.kind === "navigate" && action.url && onNavigatePR) onNavigatePR(action.url);
   }
 
@@ -303,6 +326,7 @@ export function StackedPRLabel({
   const [open, setOpen] = useState(false);
 
   const [hideMerged, setHideMerged] = useState(() => getItem(HIDE_MERGED_KEY) === "true");
+
   function toggleHideMerged() {
     const next = !hideMerged;
     setHideMerged(next);
@@ -316,6 +340,7 @@ export function StackedPRLabel({
   if (!hasStack) return null;
 
   const model = createStackLabelModel(metadata, stackInfo, stackTree, scope, scopeOptions);
+
   const visibleNodes =
     hideMerged && model.showToggle
       ? model.tree.nodes.filter((node) => !isMergedStackNode(node))
@@ -324,8 +349,10 @@ export function StackedPRLabel({
   function handleSelect(nextScope: PRDiffScope) {
     if (nextScope === scope) {
       setOpen(false);
+
       return;
     }
+
     onSelectScope(nextScope);
     setOpen(false);
   }

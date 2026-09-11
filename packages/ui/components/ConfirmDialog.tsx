@@ -33,20 +33,25 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 }) => {
   useEffect(() => {
     if (!isOpen) return;
+
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         event.stopPropagation();
+
         if (onConfirm) onConfirm();
         else onClose();
       }
+
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         onClose();
       }
     };
+
     window.addEventListener("keydown", handleKey);
+
     return () => window.removeEventListener("keydown", handleKey);
   }, [isOpen, onConfirm, onClose]);
 

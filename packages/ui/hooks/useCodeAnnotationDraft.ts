@@ -29,12 +29,16 @@ interface RestoredDraftData {
 
 function formatTimeAgo(ts: number): string {
   const seconds = Math.floor((Date.now() - ts) / 1000);
+
   if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
+
   if (minutes < 60) return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
   const hours = Math.floor(minutes / 60);
+
   if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
   const days = Math.floor(hours / 24);
+
   return `${days} day${days !== 1 ? "s" : ""} ago`;
 }
 
@@ -63,6 +67,7 @@ export function useCodeAnnotationDraft({
     viewedCount: number;
     timeAgo: string;
   } | null>(null);
+
   const draftDataRef = useRef<RestoredDraftData | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMountedRef = useRef(false);
@@ -80,30 +85,38 @@ export function useCodeAnnotationDraft({
     fetch("/api/draft")
       .then(async (res) => {
         const data = await res.json().catch(() => null);
+
         if (res.status === 404) {
           const missingDraft = decodeMissingCodeAnnotationDraft(data);
+
           if (missingDraft && missingDraft.draftGeneration !== null) {
             draftGenerationRef.current = Math.max(
               draftGenerationRef.current,
               missingDraft.draftGeneration,
             );
           }
+
           return null;
         }
+
         if (!res.ok) return null;
+
         return decodeSuccessfulCodeAnnotationDraft(data);
       })
       .then((data: DecodedSuccessfulCodeAnnotationDraft | null) => {
         if (!data) {
           hasMountedRef.current = true;
+
           return;
         }
 
         if (data.draftGeneration !== null) {
           draftGenerationRef.current = Math.max(draftGenerationRef.current, data.draftGeneration);
         }
+
         const annotationCount = data.codeAnnotations.length;
         const viewedCount = data.viewedFiles.length;
+
         if (annotationCount > 0 || viewedCount > 0) {
           draftDataRef.current = {
             codeAnnotations: data.codeAnnotations,
@@ -115,6 +128,7 @@ export function useCodeAnnotationDraft({
             timeAgo: formatTimeAgo(data.ts),
           });
         }
+
         hasMountedRef.current = true;
       })
       .catch(() => {
@@ -125,6 +139,7 @@ export function useCodeAnnotationDraft({
   // Debounced auto-save on annotation/viewed changes
   useEffect(() => {
     if (!isApiMode || submitted) return;
+
     if (!hasMountedRef.current) return;
 
     // Track engagement on USER-AUTHORED annotations only. Two things that arrive
@@ -137,6 +152,7 @@ export function useCodeAnnotationDraft({
     if (annotations.some((a) => !a.source)) hasHadAnnotationsRef.current = true;
 
     const isEmpty = annotations.length === 0 && viewedFiles.size === 0;
+
     // Leave the server alone for an empty state until the user has actually had
     // annotations this session. This preserves an unrestored draft sitting on disk
     // at mount (the draft-recovery banner can still offer it).
@@ -155,6 +171,7 @@ export function useCodeAnnotationDraft({
         fetch(`/api/draft?generation=${draftGeneration}`, { method: "DELETE" }).catch(() => {
           // Silent failure
         });
+
         return;
       }
 
@@ -186,6 +203,7 @@ export function useCodeAnnotationDraft({
     const data = draftDataRef.current;
     setDraftBanner(null);
     draftDataRef.current = null;
+
     return {
       annotations: data?.codeAnnotations ?? [],
       viewedFiles: data?.viewedFiles ?? [],

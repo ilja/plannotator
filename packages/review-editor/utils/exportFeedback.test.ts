@@ -57,6 +57,7 @@ describe("exportReviewFeedback", () => {
       mode: "branch",
       base: "develop",
     });
+
     expect(result).toContain("**Diff:** Branch diff vs `develop`");
   });
 
@@ -65,6 +66,7 @@ describe("exportReviewFeedback", () => {
       mode: "merge-base",
       base: "release/v2",
     });
+
     expect(result).toContain("**Diff:** Committed changes vs `release/v2`");
   });
 
@@ -73,6 +75,7 @@ describe("exportReviewFeedback", () => {
       mode: "uncommitted",
       worktreePath: "/tmp/feature-wt",
     });
+
     expect(result).toContain("**Diff:** Uncommitted changes _(worktree: /tmp/feature-wt)_");
   });
 
@@ -81,6 +84,7 @@ describe("exportReviewFeedback", () => {
       mode: "branch",
       base: "develop",
     });
+
     // The PR-style branches line must appear.
     expect(result).toContain("Branch: `fix/widget` → `main`");
     // The local-mode Diff line must not.
@@ -124,6 +128,7 @@ describe("exportReviewFeedback", () => {
       ann({ filePath: "a.ts", lineStart: 5, lineEnd: 5, text: "first" }),
       ann({ filePath: "b.ts", lineStart: 1, lineEnd: 1, text: "second" }),
     ]);
+
     expect(result).toContain("## a.ts");
     expect(result).toContain("## b.ts");
   });
@@ -133,6 +138,7 @@ describe("exportReviewFeedback", () => {
       ann({ lineStart: 20, lineEnd: 20, text: "later" }),
       ann({ lineStart: 5, lineEnd: 5, text: "earlier" }),
     ]);
+
     const earlierIdx = result.indexOf("earlier");
     const laterIdx = result.indexOf("later");
     expect(earlierIdx).toBeLessThan(laterIdx);
@@ -143,6 +149,7 @@ describe("exportReviewFeedback", () => {
       ann({ lineStart: 1, lineEnd: 1, text: "line comment" }),
       ann({ scope: "file", text: "file comment" }),
     ]);
+
     const fileIdx = result.indexOf("File Comment");
     const lineIdx = result.indexOf("Line 1");
     expect(fileIdx).toBeLessThan(lineIdx);
@@ -197,6 +204,7 @@ describe("exportReviewFeedback", () => {
         filePath: "src/other.ts",
       }),
     ]);
+
     expect(result).toContain("### src/index.ts");
     expect(result).toContain("#### Line 10 (new)");
     expect(result).not.toMatch(/^### Line/m);
@@ -209,6 +217,7 @@ describe("exportReviewFeedback", () => {
       url: "https://github.com/acme/widgets/pull/99",
       title: "different PR",
     };
+
     const result = exportReviewFeedback(
       [
         ann({
@@ -220,6 +229,7 @@ describe("exportReviewFeedback", () => {
       ],
       prMetaB,
     );
+
     expect(result).not.toContain("#99");
     expect(result).toContain("#42");
     expect(result).not.toContain("Multi-PR");
@@ -245,6 +255,7 @@ describe("exportReviewFeedback", () => {
         diffScope: "full-stack",
       }),
     ]);
+
     expect(result).toContain("Review scope: layer");
     expect(result).toContain("Review scope: full-stack");
   });
@@ -265,6 +276,7 @@ describe("exportReviewFeedback", () => {
         filePath: "src/other.ts",
       }),
     ]);
+
     expect(result).not.toContain("Review scope:");
   });
 
@@ -279,6 +291,7 @@ describe("exportReviewFeedback", () => {
       [ann({ diffScope: "layer" }), ann({ filePath: "src/other.ts", diffScope: "layer" })],
       prMeta,
     );
+
     expect(result).toContain("Review scope: layer");
     expect(result).not.toContain("full-stack");
   });
@@ -291,6 +304,7 @@ describe("exportReviewFeedback", () => {
       ],
       prMeta,
     );
+
     // Should have separate scope sections, not comma-joined
     expect(result).not.toContain("layer, full-stack");
     // Each scope should be a heading
@@ -311,6 +325,7 @@ describe("exportReviewFeedback", () => {
       [ann({ diffScope: "full-stack", text: "finding" })],
       prMeta,
     );
+
     expect(result).toContain("Review scope: full-stack");
     // No scope sub-headings when all annotations share the same scope
     expect(result).not.toContain("## Full-stack");
@@ -325,6 +340,7 @@ describe("exportReviewFeedback", () => {
       undefined,
       "full-stack",
     );
+
     // Should use annotation's diffScope, not the passed-in prReviewScope
     expect(result).toContain("Review scope: layer");
     expect(result).not.toContain("Review scope: full-stack");
@@ -341,6 +357,7 @@ describe("exportReviewFeedback", () => {
         text: "the overall approach is off",
       }),
     ]);
+
     expect(result).toContain("## General");
     expect(result).toContain("the overall approach is off");
     // No bogus line heading for a review-level comment.
@@ -359,6 +376,7 @@ describe("exportReviewFeedback", () => {
         text: "review-wide note",
       }),
     ]);
+
     expect(result).toContain("line issue");
     expect(result).toContain("## General");
     expect(result).toContain("review-wide note");

@@ -45,6 +45,7 @@ export const AIProviderBar: React.FC<AIProviderBarProps> = ({
         >
           {providers.map((provider) => {
             const providerMeta = getProviderMeta(provider.name);
+
             return (
               <option key={provider.id} value={provider.id}>
                 {providerMeta.label}

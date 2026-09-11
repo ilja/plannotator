@@ -112,6 +112,7 @@ export function buildReviewPresentationFlags(
   isPullRequestReview: boolean,
 ): ReviewPresentationFlags {
   const hasSearchableFiles = files.length > 0;
+
   const hasWorkspaceStaging = workspaceDiffOptions?.some(
     (option) => option.id === "workspace-staged",
   );
@@ -276,10 +277,7 @@ function buildReviewFileTreeCompareTarget(
 ): Readonly<
   Pick<
     ReviewFileTreeViewModel,
-    | "availableBranches"
-    | "selectedBase"
-    | "detectedBase"
-    | "recentCommits"
+    "availableBranches" | "selectedBase" | "detectedBase" | "recentCommits"
   >
 > {
   const isPullRequestReview = input.prMetadata !== null;

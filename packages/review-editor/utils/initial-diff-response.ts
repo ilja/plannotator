@@ -162,9 +162,13 @@ const ServerAnnotationOptionsFieldsSchema = Schema.Struct({
 });
 
 const ServerDiffStyleSchema = Schema.Literals(["split", "unified"]);
+
 const ServerOverflowSchema = Schema.Literals(["scroll", "wrap"]);
+
 const ServerDiffIndicatorsSchema = Schema.Literals(["bars", "classic", "none"]);
+
 const ServerLineDiffTypeSchema = Schema.Literals(["word-alt", "word", "char", "none"]);
+
 const ServerDefaultDiffTypeSchema = Schema.Literals([
   "uncommitted",
   "unstaged",
@@ -173,6 +177,7 @@ const ServerDefaultDiffTypeSchema = Schema.Literals([
   "all",
   "branch",
 ]);
+
 const ServerLineBgIntensitySchema = Schema.Literals(["subtle", "normal", "strong"]);
 
 const ServerConfigFieldsSchema = Schema.Struct({
@@ -247,42 +252,70 @@ export interface InitialDiffResponse {
 }
 
 const decodeRoot = Schema.decodeUnknownResult(InitialDiffResponseRootSchema);
+
 const decodeSafeRecord = Schema.decodeUnknownOption(SafeRecordSchema);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeOrigin = Schema.decodeUnknownOption(Schema.Literals(AGENT_ORIGINS));
+
 const decodeMode = Schema.decodeUnknownOption(Schema.String);
+
 const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
+
 const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
+
 const decodeNullableString = Schema.decodeUnknownOption(Schema.NullOr(Schema.String));
+
 const decodeGitContextFields = Schema.decodeUnknownOption(GitContextFieldsSchema);
+
 const decodeRepoInfoFields = Schema.decodeUnknownOption(
   Schema.Struct({
     display: Schema.String,
     branch: Schema.optionalKey(Schema.Unknown),
   }),
 );
+
 const decodeAvailableBranchesFields = Schema.decodeUnknownOption(AvailableBranchesFieldsSchema);
+
 const decodePRMetadataFields = Schema.decodeUnknownOption(PRMetadataSchema);
+
 const decodePRStackInfoFields = Schema.decodeUnknownOption(Schema.NullOr(PRStackInfoSchema));
+
 const decodePRStackTreeSchema = Schema.decodeUnknownOption(Schema.NullOr(PRStackTreeSchema));
+
 const decodePRDiffScope = Schema.decodeUnknownOption(PRDiffScopeSchema);
+
 const decodeSemanticDiffFields = Schema.decodeUnknownOption(SemanticDiffAdvertSchema);
+
 const decodeServerConfigFields = Schema.decodeUnknownOption(ServerConfigFieldsSchema);
+
 const decodeServerDiffOptionsFields = Schema.decodeUnknownOption(ServerDiffOptionsFieldsSchema);
+
 const decodeServerAnnotationOptionsFields = Schema.decodeUnknownOption(
   ServerAnnotationOptionsFieldsSchema,
 );
+
 const decodeServerDiffStyle = Schema.decodeUnknownOption(ServerDiffStyleSchema);
+
 const decodeServerOverflow = Schema.decodeUnknownOption(ServerOverflowSchema);
+
 const decodeServerDiffIndicators = Schema.decodeUnknownOption(ServerDiffIndicatorsSchema);
+
 const decodeServerLineDiffType = Schema.decodeUnknownOption(ServerLineDiffTypeSchema);
+
 const decodeServerDefaultDiffType = Schema.decodeUnknownOption(ServerDefaultDiffTypeSchema);
+
 const decodeServerLineBgIntensity = Schema.decodeUnknownOption(ServerLineBgIntensitySchema);
+
 const decodeRecentCommitFields = Schema.decodeUnknownOption(RecentCommitSchema);
+
 const decodeConventionalLabelFields = Schema.decodeUnknownOption(ConventionalLabelSchema);
+
 const decodeNullableUnknownArray = Schema.decodeUnknownOption(
   Schema.NullOr(Schema.Array(Schema.Unknown)),
 );
+
 const decodeUnknownArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
 
 function decodeValidArrayItems<T>(
@@ -290,9 +323,12 @@ function decodeValidArrayItems<T>(
   decodeItem: (item: Schema.Schema.Type<typeof Schema.Unknown>) => Option.Option<T>,
 ): T[] | undefined {
   const items = Option.getOrUndefined(decodeUnknownArray(value));
+
   if (items === undefined) return undefined;
+
   return items.flatMap((item) => {
     const decoded = decodeItem(item);
+
     return Option.isSome(decoded) ? [decoded.value] : [];
   });
 }
@@ -306,6 +342,7 @@ function decodeOptionalItem<T>(
   item: Schema.Schema.Type<typeof Schema.Unknown>,
 ): Option.Option<T> {
   const decoded = decodeItem(item);
+
   return decoded === undefined ? Option.none() : Option.some(decoded);
 }
 
@@ -315,7 +352,9 @@ function decodeRecord(value: Schema.Schema.Type<typeof Schema.Unknown>): SafeRec
 
 function withoutKnownFields(record: SafeRecord, knownFields: readonly string[]): SafeRecord {
   const unknownFields = { ...record };
+
   for (const field of knownFields) delete unknownFields[field];
+
   return unknownFields;
 }
 
@@ -323,9 +362,12 @@ function decodeDiffOption(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): DiffOption | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(DiffOptionSchema)(record));
+
   if (!fields) return undefined;
+
   return {
     ...withoutKnownFields(record, ["id", "label"]),
     ...fields,
@@ -336,9 +378,12 @@ function decodeWorktreeInfo(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): NonNullable<GitContext["worktrees"]>[number] | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(WorktreeInfoSchema)(record));
+
   if (!fields) return undefined;
+
   return {
     ...withoutKnownFields(record, ["path", "branch", "head"]),
     ...fields,
@@ -349,9 +394,12 @@ function decodeRecentCommit(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): NonNullable<GitContext["recentCommits"]>[number] | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeRecentCommitFields(record));
+
   if (!fields) return undefined;
+
   return {
     ...withoutKnownFields(record, ["sha", "shortSha", "subject", "relativeDate", "author"]),
     ...fields,
@@ -362,17 +410,23 @@ function decodeCompareTarget(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): GitContext["compareTarget"] | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
+
   const fields = Option.getOrUndefined(
     Schema.decodeUnknownOption(CompareTargetConfigSchema)(record),
   );
+
   if (!fields) return undefined;
 
   const pickerRecord = decodeRecord(fields.picker);
+
   if (!pickerRecord) return undefined;
+
   const pickerFields = Option.getOrUndefined(
     Schema.decodeUnknownOption(CompareTargetPickerCopySchema)(pickerRecord),
   );
+
   if (!pickerFields) return undefined;
 
   return {
@@ -398,11 +452,14 @@ function decodeRepository(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): NonNullable<GitContext["repository"]> | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(RepositoryContextSchema)(record));
+
   if (!fields) return undefined;
 
   const displayFallback = Option.getOrUndefined(decodeString(fields.displayFallback));
+
   return {
     ...withoutKnownFields(record, ["displayFallback"]),
     ...(displayFallback !== undefined && { displayFallback }),
@@ -413,17 +470,21 @@ function decodePRStackNode(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): PRStackNode | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(Schema.decodeUnknownOption(PRStackNodeSchema)(record));
+
   if (!fields) return undefined;
 
   const { number, title, url, state, ...required } = fields;
   const decodedNumber = Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Int)(number));
   const decodedTitle = Option.getOrUndefined(decodeString(title));
   const decodedUrl = Option.getOrUndefined(decodeString(url));
+
   const decodedState = Option.getOrUndefined(
     Schema.decodeUnknownOption(Schema.Literals(["open", "merged", "closed"]))(state),
   );
+
   return {
     ...withoutKnownFields(record, [
       "branch",
@@ -446,8 +507,10 @@ function decodeAvailableBranches(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): GitContext["availableBranches"] {
   const record = decodeRecord(value);
+
   const fields =
     record === undefined ? undefined : Option.getOrUndefined(decodeAvailableBranchesFields(record));
+
   return {
     ...(record !== undefined && withoutKnownFields(record, ["local", "remote"])),
     local: decodeStringArray(fields?.local) ?? [],
@@ -459,11 +522,14 @@ function decodeRepoInfo(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): { display: string; branch?: string } | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeRepoInfoFields(record));
+
   if (!fields) return undefined;
 
   const branch = Option.getOrUndefined(decodeString(fields.branch));
+
   return {
     ...withoutKnownFields(record, ["display", "branch"]),
     display: fields.display,
@@ -475,21 +541,26 @@ function decodeGitContext(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): GitContext | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const context = Option.getOrUndefined(decodeGitContextFields(record));
+
   if (!context) return undefined;
 
   const diffOptions =
     decodeValidArrayItems(context.diffOptions, (item) =>
       decodeOptionalItem(decodeDiffOption, item),
     ) ?? [];
+
   const worktrees =
     decodeValidArrayItems(context.worktrees, (item) =>
       decodeOptionalItem(decodeWorktreeInfo, item),
     ) ?? [];
+
   const compareTarget = decodeCompareTarget(context.compareTarget);
   const repository = decodeRepository(context.repository);
   const cwd = Option.getOrUndefined(decodeString(context.cwd));
+
   const recentCommits = decodeValidArrayItems(context.recentCommits, (item) =>
     decodeOptionalItem(decodeRecentCommit, item),
   );
@@ -511,14 +582,17 @@ function decodePRMetadata(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): PRMetadata | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodePRMetadataFields(record));
+
   if (!fields) return undefined;
 
   const { prNodeId, defaultBranch, mergeBaseSha, ...required } = fields;
   const decodedPrNodeId = Option.getOrUndefined(decodeString(prNodeId));
   const decodedDefaultBranch = Option.getOrUndefined(decodeString(defaultBranch));
   const decodedMergeBaseSha = Option.getOrUndefined(decodeString(mergeBaseSha));
+
   return {
     ...withoutKnownFields(record, [
       "host",
@@ -548,12 +622,15 @@ function decodePRStackInfo(
 ): PRStackInfo | null | undefined {
   if (value === null) return null;
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodePRStackInfoFields(record));
+
   if (fields === undefined || fields === null) return fields;
 
   const { defaultBranch, ...required } = fields;
   const decodedDefaultBranch = Option.getOrUndefined(decodeString(defaultBranch));
+
   return {
     ...withoutKnownFields(record, ["isStacked", "baseBranch", "defaultBranch", "label", "source"]),
     ...required,
@@ -565,13 +642,16 @@ function decodeSemanticDiff(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): SemanticDiffAdvert | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeSemanticDiffFields(record));
+
   if (!fields) return undefined;
 
   const { semVersion, semSource, ...required } = fields;
   const decodedSemVersion = Option.getOrUndefined(decodeString(semVersion));
   const decodedSemSource = Option.getOrUndefined(decodeString(semSource));
+
   return {
     ...withoutKnownFields(record, ["available", "semVersion", "semSource"]),
     ...required,
@@ -585,17 +665,22 @@ function decodePRStackTree(
 ): PRStackTree | null | undefined {
   if (value === null) return null;
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const tree = Option.getOrUndefined(decodePRStackTreeSchema(record));
+
   if (tree === undefined || tree === null) return tree;
 
   const rawNodes = Option.getOrUndefined(decodeUnknownArray(tree.nodes));
+
   if (rawNodes === undefined) return undefined;
 
   const nodes = rawNodes.flatMap((node) => {
     const decoded = decodePRStackNode(node);
+
     return decoded === undefined ? [] : [decoded];
   });
+
   return rawNodes.length > 0 && nodes.length === 0
     ? undefined
     : {
@@ -624,8 +709,10 @@ function decodeServerDiffOptions(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): DiffOptions | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeServerDiffOptionsFields(record));
+
   if (!fields) return undefined;
 
   const diffStyle = Option.getOrUndefined(decodeServerDiffStyle(fields.diffStyle));
@@ -639,10 +726,13 @@ function decodeServerDiffOptions(
   const tabSize = Option.getOrUndefined(decodeNumber(fields.tabSize));
   const hideWhitespace = Option.getOrUndefined(decodeBoolean(fields.hideWhitespace));
   const expandUnchanged = Option.getOrUndefined(decodeBoolean(fields.expandUnchanged));
+
   const defaultDiffType = Option.getOrUndefined(
     decodeServerDefaultDiffType(fields.defaultDiffType),
   );
+
   const canonicalDefaultDiffType = defaultDiffType === "branch" ? "merge-base" : defaultDiffType;
+
   const lineBgIntensity = Option.getOrUndefined(
     decodeServerLineBgIntensity(fields.lineBgIntensity),
   );
@@ -683,8 +773,10 @@ function decodeServerAnnotationOptions(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): AnnotationOptions | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeServerAnnotationOptionsFields(record));
+
   if (!fields) return undefined;
 
   const proseFontFamily = Option.getOrUndefined(decodeString(fields.proseFontFamily));
@@ -710,9 +802,12 @@ function decodeConventionalLabel(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): CCLabelConfig | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeConventionalLabelFields(record));
+
   if (!fields) return undefined;
+
   return {
     ...withoutKnownFields(record, ["label", "display", "blocking"]),
     ...fields,
@@ -723,10 +818,12 @@ function decodeConventionalLabels(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): CCLabelConfig[] | null | undefined {
   const labels = Option.getOrUndefined(decodeNullableUnknownArray(value));
+
   if (labels === undefined || labels === null) return labels;
 
   return labels.flatMap((label) => {
     const decoded = decodeConventionalLabel(label);
+
     return decoded === undefined ? [] : [decoded];
   });
 }
@@ -735,8 +832,10 @@ function decodeServerConfig(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): InitialDiffServerConfig | undefined {
   const record = decodeRecord(value);
+
   if (!record) return undefined;
   const fields = Option.getOrUndefined(decodeServerConfigFields(record));
+
   if (!fields) return undefined;
 
   const displayName = Option.getOrUndefined(decodeString(fields.displayName));
@@ -771,6 +870,7 @@ export function decodeInitialDiffResponse(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): Result.Result<InitialDiffResponse, Schema.SchemaError> {
   const root = decodeRoot(value);
+
   if (Result.isFailure(root)) return Result.fail(root.failure);
 
   const data = root.success;
@@ -797,9 +897,11 @@ export function decodeInitialDiffResponse(
     const sharingEnabled = Option.getOrUndefined(decodeBoolean(data.sharingEnabled));
     const prDiffScope = Option.getOrUndefined(decodePRDiffScope(data.prDiffScope));
     const prPatchIncomplete = Option.getOrUndefined(decodeBoolean(data.prPatchIncomplete));
+
     const prPatchUpgradeAvailable = Option.getOrUndefined(
       decodeBoolean(data.prPatchUpgradeAvailable),
     );
+
     const platformUser = Option.getOrUndefined(decodeString(data.platformUser));
     const error = Option.getOrUndefined(decodeString(data.error));
 
@@ -874,10 +976,13 @@ export function decodeDiffSwitchResponse(
   value: Schema.Schema.Type<typeof Schema.Unknown>,
 ): DiffSwitchResponse | undefined {
   const decoded = decodeInitialDiffResponse(value);
+
   if (Result.isFailure(decoded)) return undefined;
 
   const { diffType } = decoded.success;
+
   if (diffType === undefined) return undefined;
+
   return { ...decoded.success, diffType };
 }
 
@@ -890,6 +995,7 @@ export async function loadInitialDiffResponse(
 ): Promise<InitialDiffLoadResult> {
   try {
     const decoded = decodeInitialDiffResponse(await readJson());
+
     return Result.isSuccess(decoded)
       ? { source: "api", data: decoded.success }
       : { source: "demo" };

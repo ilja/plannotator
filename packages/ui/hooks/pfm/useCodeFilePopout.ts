@@ -47,11 +47,13 @@ export function useCodeFilePopout(options: UseCodeFilePopoutOptions): UseCodeFil
     async (codePath: string) => {
       setIsLoading(true);
       const parsed = parseCodePath(codePath);
+
       try {
         const res = await fetch(buildUrl(codePath));
         const rawData: unknown = await res.json();
         const data = decodeCodeFileSuccessResponse(rawData);
         const error = decodeCodeFileErrorResponse(rawData);
+
         if (!res.ok || error || !data || data.codeFile !== true) {
           setState({
             filepath: codePath,
@@ -60,8 +62,10 @@ export function useCodeFilePopout(options: UseCodeFilePopoutOptions): UseCodeFil
             requestedPath: codePath,
           });
           setIsLoading(false);
+
           return;
         }
+
         setState({
           filepath: data.filepath,
           contents: data.contents,

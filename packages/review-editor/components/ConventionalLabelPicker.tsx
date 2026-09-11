@@ -95,15 +95,18 @@ export const CONVENTIONAL_LABELS: LabelDef[] = [
 /** Resolve which labels to show based on user config (null = all defaults; empty array = user cleared all) */
 export function getEnabledLabels(configJson: string | null): LabelDef[] {
   const configuredLabels = decodeConventionalLabelJsonArray(configJson);
+
   if (!configuredLabels) return CONVENTIONAL_LABELS;
 
   return configuredLabels.flatMap((entry) => {
     const fields = decodeConventionalLabelEntryFields(entry);
     const label = decodeConventionalLabelString(fields?.label);
     const display = decodeConventionalLabelString(fields?.display);
+
     if (label === undefined || display === undefined) return [];
 
     const builtIn = CONVENTIONAL_LABELS.find((candidate) => candidate.label === label);
+
     return [
       {
         label,
@@ -140,6 +143,7 @@ export const ConventionalLabelPicker: React.FC<ConventionalLabelPickerProps> = (
       } else {
         onSelect(label);
         const def = enabledLabels.find((l) => l.label === label);
+
         // If blocking toggle is enabled for this label, default to non-blocking
         if (def?.showBlockingToggle) {
           onDecorationsChange(["non-blocking"]);
@@ -165,6 +169,7 @@ export const ConventionalLabelPicker: React.FC<ConventionalLabelPickerProps> = (
       <div className="cc-row">
         {enabledLabels.map((def, idx) => {
           const isActive = selected === def.label;
+
           return (
             <button
               key={`${idx}-${def.label}`}

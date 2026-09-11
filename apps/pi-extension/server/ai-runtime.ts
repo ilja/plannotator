@@ -20,10 +20,12 @@ interface CreatePiAIRuntimeOptions {
 function whichCmd(cmd: string): string | null {
   try {
     const bin = process.platform === "win32" ? "where" : "which";
+
     const output = execFileSync(bin, [cmd], {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
+
     return resolveCommandFromWhichOutput(output);
   } catch {
     return null;
@@ -43,13 +45,16 @@ export async function createPiAIRuntime(
     try {
       await import("../generated/ai/providers/pi-sdk-node.js");
       const piPath = whichCmd("pi");
+
       if (piPath) {
         const providerConfig: PiSDKConfig = {
           type: "pi-sdk",
           cwd,
           piExecutablePath: piPath,
         };
+
         const provider = await ai.createProvider(providerConfig);
+
         if (provider && "fetchModels" in provider && provider.fetchModels instanceof Function) {
           const fetchModels = provider.fetchModels;
           modelDiscovery.push(
@@ -58,6 +63,7 @@ export async function createPiAIRuntime(
               .catch(() => {}),
           );
         }
+
         registry.register(provider);
       }
     } catch {
@@ -94,15 +100,20 @@ export async function handlePiAIRequest(
   if (!runtime) {
     if (url.pathname === "/api/ai/capabilities" && req.method === "GET") {
       json(res, { available: false, providers: [], defaultProvider: null });
+
       return true;
     }
+
     json(res, { error: "AI backend not available" }, 503);
+
     return true;
   }
 
   const handler = runtime.endpoints[url.pathname];
+
   if (!handler) {
     json(res, { error: "Not found" }, 404);
+
     return true;
   }
 
@@ -114,6 +125,7 @@ export async function handlePiAIRequest(
       headers[key] = value;
     });
     res.writeHead(webRes.status, headers);
+
     if (webRes.body) {
       const body = webRes.body;
       // SAFETY: Node and DOM stream declarations differ only in their buffer generic.

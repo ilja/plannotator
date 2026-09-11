@@ -156,6 +156,7 @@ describe("isSameProject", () => {
     repo: "widgets",
     number: 1,
   };
+
   test("same GitHub project", () => {
     expect(isSameProject(ghRef, { ...ghRef, number: 99 })).toBe(true);
   });

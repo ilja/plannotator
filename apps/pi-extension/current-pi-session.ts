@@ -1,7 +1,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 type SendUserMessageContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
+
 type SendUserMessageOptions = Parameters<ExtensionAPI["sendUserMessage"]>[1];
+
 type NotificationType = "info" | "warning" | "error";
 
 type CurrentPiSession = {
@@ -38,6 +40,7 @@ const globalStore = globalThis as PlannotatorGlobal;
 
 function getStore(): CurrentPiSessionStore {
   globalStore.__plannotatorCurrentPiSession ??= {};
+
   return globalStore.__plannotatorCurrentPiSession;
 }
 
@@ -59,8 +62,11 @@ function isDifferentSession(
   current: PiSessionIdentity | undefined,
 ): boolean {
   if (!current) return false;
+
   if (origin.sessionId && current.sessionId) return origin.sessionId !== current.sessionId;
+
   if (origin.sessionFile && current.sessionFile) return origin.sessionFile !== current.sessionFile;
+
   return false;
 }
 
@@ -71,18 +77,22 @@ function setCurrentPiSession(token: symbol, pi: ExtensionAPI, ctx?: ExtensionCon
       pi.sendUserMessage(content, options);
     },
   };
+
   if (ctx) {
     current.notify = (message, type = "info") => {
       ctx.ui.notify(message, type);
     };
+
     current.identity = getPiSessionIdentity(ctx);
   }
+
   getStore().current = current;
 }
 
 export function registerCurrentPiSession(pi: ExtensionAPI): CurrentPiSessionRegistration {
   const token = Symbol("plannotator-current-pi-session");
   setCurrentPiSession(token, pi);
+
   return {
     token,
     update: (ctx) => {
@@ -90,6 +100,7 @@ export function registerCurrentPiSession(pi: ExtensionAPI): CurrentPiSessionRegi
     },
     clear: () => {
       const store = getStore();
+
       if (store.current?.token === token) {
         store.current = undefined;
       }
@@ -103,14 +114,19 @@ export function notifyCurrentPiSession(
   origin?: PiSessionIdentity,
 ): boolean {
   const current = getStore().current;
+
   if (!current?.notify) return false;
+
   if (origin && !isDifferentSession(origin, current.identity)) return false;
+
   try {
     current.notify(message, type);
+
     return true;
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     console.error(`Plannotator current-session notification failed: ${getErrorMessage(error)}`);
+
     return false;
   }
 }
@@ -121,7 +137,9 @@ export function isCurrentPiSessionDifferentFrom(origin: PiSessionIdentity): bool
 
 function getCurrentPiSessionLabel(): string {
   const identity = getStore().current?.identity;
+
   if (!identity) return "unknown";
+
   return (
     identity.sessionName ||
     identity.sessionFile ||
@@ -134,6 +152,7 @@ export function withCurrentPiSessionFallbackHeader(
   content: SendUserMessageContent,
 ): SendUserMessageContent {
   if (Array.isArray(content)) return content;
+
   return `This Plannotator feedback was submitted from a browser tab opened before Pi switched sessions. It is being delivered to ${getCurrentPiSessionLabel()} because the original Pi session is no longer active.
 
 ${content}`;
@@ -147,6 +166,7 @@ export function sendUserMessageToCurrentPiSession(
   | { ok: true }
   | { ok: false; reason: "no-current" | "same-session" | "send-failed"; error: Error } {
   const current = getStore().current;
+
   if (!current) {
     return {
       ok: false,
@@ -154,6 +174,7 @@ export function sendUserMessageToCurrentPiSession(
       error: new Error("No active Pi session is available."),
     };
   }
+
   if (origin && !isDifferentSession(origin, current.identity)) {
     return {
       ok: false,
@@ -161,8 +182,10 @@ export function sendUserMessageToCurrentPiSession(
       error: new Error("No different active Pi session is available."),
     };
   }
+
   try {
     current.sendUserMessage(content, options);
+
     return { ok: true };
   } catch (err) {
     return {

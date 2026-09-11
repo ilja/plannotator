@@ -72,6 +72,7 @@ interface ThemeColors {
 function getThemeColors(): ThemeColors {
   try {
     const styles = getComputedStyle(document.documentElement);
+
     return {
       bg: styles.getPropertyValue("--background").trim(),
       fg: styles.getPropertyValue("--foreground").trim(),
@@ -83,6 +84,7 @@ function getThemeColors(): ThemeColors {
 
 function buildPierreCSS(mode: "dark" | "light", bg: string, fg: string): string {
   if (!bg || !fg) return "";
+
   return `
     :host {
       color-scheme: ${mode};
@@ -117,16 +119,20 @@ function lineLabel(start: number, end: number): string {
 
 function getLineNumberFromSelectionNode(node: Node | null): number | null {
   let current: Node | null = node;
+
   if (current?.nodeType === Node.TEXT_NODE) current = current.parentNode;
 
   while (current) {
     if (current instanceof HTMLElement) {
       const line = current.closest("[data-line]")?.getAttribute("data-line");
+
       if (line) {
         const parsed = Number(line);
+
         return Number.isFinite(parsed) ? parsed : null;
       }
     }
+
     current = current.parentNode;
   }
 
@@ -135,10 +141,12 @@ function getLineNumberFromSelectionNode(node: Node | null): number | null {
 
 function getPierreSelection(root: HTMLElement | null): Selection | null {
   const shadowRoot = root?.querySelector("diffs-container")?.shadowRoot;
+
   // SAFETY: shadowRoot may expose getSelection in Pierre's shadow DOM
   const shadowSelection = (
     shadowRoot as (ShadowRoot & { getSelection?: () => Selection | null }) | null
   )?.getSelection?.();
+
   return shadowSelection && !shadowSelection.isCollapsed ? shadowSelection : window.getSelection();
 }
 
@@ -334,11 +342,13 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   const { resolvedMode } = useTheme();
   const mode = resolvedMode ?? "dark";
   const colors = getThemeColors();
+
   const [pierreTheme, setPierreTheme] = useState(() => ({
     // SAFETY: resolvedMode is 'dark' | 'light' from theme provider
     type: mode as "dark" | "light",
     css: buildPierreCSS(mode, colors.bg, colors.fg),
   }));
+
   const [copied, setCopied] = useState(false);
   const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
   const fileAreaRef = useRef<HTMLDivElement>(null);
@@ -362,6 +372,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   const displayName = filepath.split("/").pop() || filepath;
   const relativePath = filepath.replace(/.*\/(?=.*\/)/, "");
   const lineCount = useMemo(() => contents.split("\n").length, [contents]);
+
   const selectedCodeAnnotation = useMemo(
     () => annotations.find((ann) => ann.id === selectedAnnotationId),
     [annotations, selectedAnnotationId],
@@ -381,20 +392,25 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
     if (pendingComment) {
       return { start: pendingComment.range.start, end: pendingComment.range.end };
     }
+
     if (selectedCodeAnnotation) {
       return { start: selectedCodeAnnotation.lineStart, end: selectedCodeAnnotation.lineEnd };
     }
+
     return null;
   }, [pendingComment, selectedCodeAnnotation]);
+
   const effectivePrerenderedHTML = lineAnnotations.length === 0 ? prerenderedHTML : undefined;
 
   useEffect(() => {
     if (!selectedAnnotationId || !fileAreaRef.current) return;
+
     const timer = setTimeout(() => {
       fileAreaRef.current
         ?.querySelector(`[data-code-annotation-id="${selectedAnnotationId}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
+
     return () => clearTimeout(timer);
   }, [selectedAnnotationId, filepath]);
 
@@ -422,10 +438,12 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
 
     const selection = getPierreSelection(fileAreaRef.current);
     const selectedText = selection?.toString();
+
     if (!selection || selection.isCollapsed || !selectedText?.trim()) return;
 
     const anchorLine = getLineNumberFromSelectionNode(selection.anchorNode);
     const focusLine = getLineNumberFromSelectionNode(selection.focusNode);
+
     if (anchorLine == null || focusLine == null) return;
 
     openCommentForRange(
@@ -440,6 +458,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   const renderAnnotation = useCallback(
     (annotation: LineAnnotation<CodeAnnotation>) => {
       if (!annotation.metadata) return null;
+
       return (
         <CodeInlineAnnotation
           annotation={annotation.metadata}
@@ -469,6 +488,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             const line = getHoveredLine();
+
             if (!line) return;
             openCommentForRange({ start: line.lineNumber, end: line.lineNumber }, e.currentTarget);
           }}
@@ -483,10 +503,13 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   const handleLineSelectionEnd = useCallback(
     (range: PierreSelectedLineRange | null) => {
       if (!onAddAnnotation) return;
+
       if (!range) return;
+
       if (range.start !== range.end) {
         suppressLineClickUntilRef.current = Date.now() + 300;
       }
+
       openCommentForRange(
         { start: range.start, end: range.end },
         undefined,
@@ -499,6 +522,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
   const handleLineClick = useCallback(
     (props: LineEventBaseProps & { event: PointerEvent }) => {
       if (!onAddAnnotation) return;
+
       if (Date.now() < suppressLineClickUntilRef.current) return;
       openCommentForRange(
         { start: props.lineNumber, end: props.lineNumber },
@@ -526,6 +550,7 @@ export const CodeFilePopout: React.FC<CodeFilePopoutProps> = ({
     // misleading when an optimistic-link click hit an ambiguous response
     // before validation completed.
     const isNotFound = /^file not found/i.test(error);
+
     return (
       <PopoutDialog
         open={open}

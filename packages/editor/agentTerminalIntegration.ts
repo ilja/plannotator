@@ -22,10 +22,12 @@ export type TerminalAskPromptParams = {
 
 export function textKey(value: string): string {
   let hash = 0x811c9dc5;
+
   for (let i = 0; i < value.length; i += 1) {
     hash ^= value.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
+
   return `${value.length}:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
@@ -63,6 +65,7 @@ export function shouldSendAgentTerminalFeedback(
 
 export function buildTerminalAskPrompt(params: TerminalAskPromptParams): string {
   const hasReadableFile = !!params.readableFilePath;
+
   const parts = [
     "# Plannotator Ask",
     hasReadableFile
@@ -75,5 +78,6 @@ export function buildTerminalAskPrompt(params: TerminalAskPromptParams): string 
       : "",
     `Question:\n${params.scopedQuestion}`,
   ];
+
   return parts.filter(Boolean).join("\n\n");
 }

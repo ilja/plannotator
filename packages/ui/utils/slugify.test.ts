@@ -64,6 +64,7 @@ describe("buildHeadingSlugMap", () => {
       { id: "b", type: "paragraph", content: "Intro" },
       h("c", "Intro"),
     ]);
+
     expect(map.get("a")).toBe("intro");
     expect(map.get("b")).toBeUndefined();
     expect(map.get("c")).toBe("intro-1");

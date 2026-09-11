@@ -36,6 +36,7 @@ describe("paste service URL validation", () => {
     // @ts-expect-error — fetch shim intentionally omits the preconnect property.
     globalThis.fetch = (async () => {
       fetchCalls += 1;
+
       return new Response("{}");
     }) as typeof fetch;
 
@@ -49,6 +50,7 @@ describe("paste service URL validation", () => {
         expect(await createShortShareUrl("# Plan", [], undefined, { pasteApiUrl })).toBeNull();
         expect(await loadFromPasteId("paste-id", pasteApiUrl)).toBeNull();
       }
+
       expect(fetchCalls).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;
@@ -61,6 +63,7 @@ describe("paste service URL validation", () => {
     // SAFETY: fetch shim matches the global fetch shape for this test.
     globalThis.fetch = (async (input) => {
       fetchUrls.push(String(input));
+
       return new Response(JSON.stringify({ id: "paste-id" }), { status: 200 });
     }) as typeof fetch;
 
@@ -93,6 +96,7 @@ describe("decodeSharePayload", () => {
       ...validPayload(),
       s: ["eslint", undefined],
     });
+
     const payload = decodeSharePayload(await decompress(compressed));
 
     expect(payload?.s).toEqual(["eslint", null]);
@@ -129,6 +133,7 @@ describe("decodeSharePayload", () => {
         ["I", "context", "inserted", null],
       ],
     });
+
     const annotations = fromShareable(payload?.a ?? []);
 
     expect(annotations.map((annotation) => annotation.type)).toEqual([

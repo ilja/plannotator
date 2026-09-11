@@ -63,6 +63,7 @@ export const ToolbarHost = forwardRef<ToolbarHostHandle, ToolbarHostProps>(funct
 
   const conventionalCommentsEnabled = useConfigValue("conventionalComments");
   const conventionalLabelsJson = useConfigValue("conventionalLabels");
+
   const enabledLabels = useMemo(
     () => getEnabledLabels(conventionalLabelsJson),
     [conventionalLabelsJson],
@@ -74,6 +75,7 @@ export const ToolbarHost = forwardRef<ToolbarHostHandle, ToolbarHostProps>(funct
   const handleMouseMove = toolbar.handleMouseMove;
   useEffect(() => {
     window.addEventListener("mousemove", handleMouseMove);
+
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [handleMouseMove]);
 

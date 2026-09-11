@@ -28,6 +28,7 @@ function buildTrie(files: DiffFile[]): TrieNode {
       if (!current.children.has(segments[j])) {
         current.children.set(segments[j], { children: new Map() });
       }
+
       current = current.children.get(segments[j])!;
     }
 
@@ -85,6 +86,7 @@ function collapseSingleChild(nodes: FileTreeNode[]): FileTreeNode[] {
     if (node.type !== "folder" || !node.children) return node;
 
     let current = node;
+
     while (
       current.children &&
       current.children.length === 1 &&
@@ -137,14 +139,17 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode[] {
 export function getAncestorPaths(filePath: string): string[] {
   const segments = filePath.split("/").filter(Boolean);
   const paths: string[] = [];
+
   for (let i = 1; i < segments.length; i++) {
     paths.push(segments.slice(0, i).join("/"));
   }
+
   return paths;
 }
 
 export function getVisualFileOrder(nodes: FileTreeNode[]): number[] {
   const order: number[] = [];
+
   for (const node of nodes) {
     if (node.type === "file" && node.fileIndex != null) {
       order.push(node.fileIndex);
@@ -152,18 +157,22 @@ export function getVisualFileOrder(nodes: FileTreeNode[]): number[] {
       order.push(...getVisualFileOrder(node.children));
     }
   }
+
   return order;
 }
 
 export function getAllFolderPaths(nodes: FileTreeNode[]): string[] {
   const paths: string[] = [];
+
   for (const node of nodes) {
     if (node.type === "folder") {
       paths.push(node.path);
+
       if (node.children) {
         paths.push(...getAllFolderPaths(node.children));
       }
     }
   }
+
   return paths;
 }

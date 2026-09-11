@@ -11,6 +11,7 @@ import {
 export type Mode = "dark" | "light" | "system";
 
 const decodeMode = Schema.decodeUnknownOption(Schema.Literals(["dark", "light", "system"]));
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
 type ThemeProviderState = {
@@ -40,6 +41,7 @@ const ThemeProviderContext = createContext<ThemeProviderState>({
 /** Resolve the class string for a theme + mode combination */
 function resolveThemeClasses(themeId: string, resolvedMode: "dark" | "light"): string {
   const appliedMode = resolveAppliedThemeMode(themeId, resolvedMode);
+
   return `theme-${themeId}${appliedMode === "light" ? " light" : ""}`;
 }
 
@@ -54,9 +56,11 @@ function applyThemeClasses(themeId: string, effectiveMode: "dark" | "light"): vo
   for (const cls of Array.from(el.classList)) {
     if (cls.startsWith("theme-")) el.classList.remove(cls);
   }
+
   el.classList.remove("light");
 
   el.classList.add(themeClass);
+
   if (wantLight) el.classList.add("light");
 }
 
@@ -85,11 +89,13 @@ export function ThemeProvider({
 }: ThemeProviderProps) {
   const [mode, setModeState] = useState<Mode>(() => {
     const stored = Option.getOrUndefined(decodeMode(storage.getItem(storageKey)));
+
     return stored ?? defaultTheme;
   });
 
   const [colorTheme, setColorThemeState] = useState<string>(() => {
     const stored = Option.getOrUndefined(decodeString(storage.getItem(colorThemeStorageKey)));
+
     return stored && isKnownThemeId(stored) ? stored : defaultColorTheme;
   });
 
@@ -131,6 +137,7 @@ export function ThemeProvider({
     const handleChange = () => setSystemIsLight(mediaQuery.matches);
 
     mediaQuery.addEventListener("change", handleChange);
+
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [mode]);
 
@@ -169,8 +176,10 @@ export function ThemeProvider({
 
 export const useTheme = () => {
   const context = useContext(ThemeProviderContext);
+
   if (context === undefined) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
+
   return context;
 };

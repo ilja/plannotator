@@ -163,6 +163,7 @@ Recommendation: Option A.`),
   describe("choice evidence persistence", () => {
     test("preserves validation evidence through the shareable envelope", () => {
       const original = annotation();
+
       const restored = fromShareable(
         toShareable([original]),
         null,
@@ -184,26 +185,32 @@ Recommendation: Option A.`),
         if (init?.method === "POST") {
           // SAFETY: init.body is JSON string from fetch init — cast to expected shape
           ciphertext = (JSON.parse(String(init.body)) as { data: string }).data;
+
           return new Response(JSON.stringify({ id: "short-choice" }), { status: 200 });
         }
+
         return new Response(JSON.stringify({ data: ciphertext }), { status: 200 });
       }) as typeof fetch;
 
       try {
         const original = annotation();
+
         const result = await createShortShareUrl(source, [original], [], {
           pasteApiUrl: "https://paste.test",
           shareBaseUrl: "https://share.test",
         });
+
         expect(result?.id).toBe("short-choice");
 
         const fragment = new URL(result!.shortUrl).hash.slice(1);
         const key = new URLSearchParams(fragment).get("key");
+
         const payload = await loadFromPasteId(
           "short-choice",
           "https://paste.test",
           key ?? undefined,
         );
+
         expect(payload?.cv?.[0]).toEqual(original.choiceValidationEvidence);
         expect(payload?.co?.[0]).toBe(original.choiceOptionLabel);
 
@@ -214,6 +221,7 @@ Recommendation: Option A.`),
           payload!.cv,
           payload!.co,
         );
+
         expect(restored[0].id).toMatch(/^ann-choice-/);
         expect(restored[0].choiceOptionLabel).toBe("B");
       } finally {
@@ -225,11 +233,14 @@ Recommendation: Option A.`),
   describe("document integration", () => {
     test("reconciles parsed document versions and remaps the rendering anchor", () => {
       const oldQuestion = choiceQuestionsFromMarkdown(source)[0];
+
       const updatedSource = `# Context\n\n${source.replace(
         "Recommendation: Option B.",
         "Recommendation: Option A.",
       )}`;
+
       const newQuestion = choiceQuestionsFromMarkdown(updatedSource)[0];
+
       const ordinary = annotation({
         id: "ann-comment-1",
         blockId: "block-ordinary",
@@ -254,6 +265,7 @@ Recommendation: Option A.`),
         "- Option B: Add the widget",
         "- Variant B: Add the widget",
       );
+
       expect(choiceQuestionsFromMarkdown(failedSource)).toEqual([]);
 
       const result = reconcileChoiceAnnotations(
@@ -283,6 +295,7 @@ Recommendation: Option A.`),
         choiceOptionLabel: undefined,
         choiceValidationEvidence: undefined,
       });
+
       const legacy = annotation({
         id: "ann-choice-legacy",
         choiceValidationEvidence: undefined,
@@ -306,6 +319,7 @@ Recommendation: Option A.`),
         choiceOptionLabel: undefined,
         choiceValidationEvidence: undefined,
       });
+
       const result = reconcileChoiceAnnotations(
         [ordinary, annotation()],
         [{ ...question, blockId: "block-new" }],
@@ -390,6 +404,7 @@ Recommendation: Option A.`),
         question: 42,
         options: null,
       } as Annotation["choiceValidationEvidence"];
+
       const result = reconcileChoiceAnnotations(
         [annotation({ choiceValidationEvidence: malformedEvidence })],
         [{ ...question, blockId: "block-new" }],

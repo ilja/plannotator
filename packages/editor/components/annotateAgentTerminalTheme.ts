@@ -4,6 +4,7 @@ import { BUILT_IN_THEMES } from "@plannotator/ui/utils/themeRegistry";
 import type { CreateAgentTerminalSessionOptions } from "@plannotator/webtui/browser";
 
 type TerminalOptions = NonNullable<CreateAgentTerminalSessionOptions["terminalOptions"]>;
+
 export type AnnotateAgentTerminalTheme = NonNullable<TerminalOptions["theme"]>;
 
 export type AnnotateAgentTerminalShellStyle = CSSProperties & {
@@ -520,6 +521,7 @@ for (const themeId of ["everforest", "everforest-hard", "everforest-soft"]) {
 export function useAnnotateAgentTerminalTheme(): AnnotateAgentTerminalThemeState {
   const { colorTheme, resolvedMode } = useTheme();
   const terminalMode = resolveActiveAnnotateAgentTerminalMode(colorTheme, resolvedMode);
+
   const [palette, setPalette] = useState<ResolvedTerminalPalette>(() =>
     readResolvedTerminalPalette(terminalMode, colorTheme),
   );
@@ -528,11 +530,13 @@ export function useAnnotateAgentTerminalTheme(): AnnotateAgentTerminalThemeState
     const frame = window.requestAnimationFrame(() => {
       setPalette(readResolvedTerminalPalette(terminalMode, colorTheme));
     });
+
     return () => window.cancelAnimationFrame(frame);
   }, [colorTheme, terminalMode]);
 
   return useMemo(() => {
     const theme = resolveAnnotateAgentTerminalTheme(colorTheme, terminalMode, palette);
+
     return {
       theme,
       terminalOptions: {
@@ -558,8 +562,11 @@ export function resolveAnnotateAgentTerminalMode(
   requestedMode: TerminalThemeMode,
 ): TerminalThemeMode {
   const themeInfo = BUILT_IN_THEMES.find((theme) => theme.id === colorTheme);
+
   if (themeInfo?.modeSupport === "dark-only") return "dark";
+
   if (themeInfo?.modeSupport === "light-only") return "light";
+
   return requestedMode;
 }
 
@@ -581,6 +588,7 @@ function resolveActiveAnnotateAgentTerminalMode(
         ? "light"
         : "dark"
       : resolvedMode;
+
   return resolveAnnotateAgentTerminalMode(colorTheme, domMode);
 }
 
@@ -625,6 +633,7 @@ function readResolvedTerminalPalette(
   colorTheme: string,
 ): ResolvedTerminalPalette {
   const fallbackPalette = createFallbackTerminalPalette(colorTheme, mode);
+
   if (globalThis.document === undefined) return fallbackPalette;
 
   const style = window.getComputedStyle(document.documentElement);
@@ -640,24 +649,30 @@ function readResolvedTerminalPalette(
   try {
     const readToken = (token: ResolvedTerminalPaletteColorKey, cssVar: string) =>
       resolveTokenColor(style, probe, cssVar, fallbackPalette[token]);
+
     const card = readToken("card", "--card");
+
     const foreground = resolveTokenColor(
       style,
       probe,
       "--terminal-foreground",
       readToken("foreground", "--foreground"),
     );
+
     const mutedForeground = readToken("mutedForeground", "--muted-foreground");
+
     const themedBackground = resolveTokenColor(
       style,
       probe,
       "--terminal-background",
       readToken("background", "--background"),
     );
+
     const terminalBackground = resolveTerminalBackground(
       themedBackground,
       fallbackPalette.background,
     );
+
     const terminalForeground = resolveTerminalForeground(
       foreground,
       terminalBackground,
@@ -691,6 +706,7 @@ function readResolvedTerminalPalette(
     };
 
     const derivedTheme = buildAnnotateAgentTerminalTheme(resolvedPalette, mode);
+
     const readTerminalColor = (cssVar: string, fallback: string | undefined): string =>
       resolveTokenColor(style, probe, cssVar, fallback ?? terminalForeground);
 
@@ -743,15 +759,19 @@ function createFallbackTerminalPalette(
   const themeInfo =
     BUILT_IN_THEMES.find((theme) => theme.id === colorTheme) ??
     BUILT_IN_THEMES.find((theme) => theme.id === "plannotator");
+
   const colors = themeInfo?.colors[mode] ?? themeInfo?.colors.dark;
+
   const defaultTheme =
     mode === "light" ? PLANNOTATOR_LIGHT_TERMINAL_THEME : PLANNOTATOR_DARK_TERMINAL_THEME;
+
   const background = normalizeStaticColor(colors?.background, defaultTheme.background!);
   const foreground = normalizeStaticColor(colors?.foreground, defaultTheme.foreground!);
   const primary = normalizeStaticColor(colors?.primary, defaultTheme.blue!);
   const secondary = normalizeStaticColor(colors?.secondary, defaultTheme.cyan!);
   const accent = normalizeStaticColor(colors?.accent, defaultTheme.magenta!);
   const preset = TERMINAL_THEME_PRESETS[colorTheme]?.[mode];
+
   const terminalTheme = preset
     ? {
         ...preset,
@@ -785,6 +805,7 @@ function createFallbackTerminalPalette(
 
 function normalizeStaticColor(value: string | undefined, fallback: string): string {
   if (!value) return fallback;
+
   return normalizeKnownCssColor(value) ?? value;
 }
 
@@ -795,9 +816,12 @@ function resolveTokenColor(
   fallback: string,
 ): string {
   const rawValue = style.getPropertyValue(cssVar).trim();
+
   if (!rawValue) return fallback;
   const normalizedToken = normalizeKnownCssColor(rawValue);
+
   if (normalizedToken) return normalizedToken;
+
   return resolveCssColor(probe, `var(${cssVar})`, fallback);
 }
 
@@ -827,58 +851,76 @@ function resolveCssColor(probe: HTMLElement, value: string, fallback: string): s
   probe.style.color = fallback;
   probe.style.color = value;
   const resolved = window.getComputedStyle(probe).color.trim();
+
   if (!resolved) return fallback;
+
   return normalizeWithCanvas(resolved, fallback);
 }
 
 function normalizeWithCanvas(value: string, fallback: string): string {
   const knownColor = normalizeKnownCssColor(value);
+
   if (knownColor) return knownColor;
 
   const canvas = document.createElement("canvas");
   canvas.width = 1;
   canvas.height = 1;
   const context = canvas.getContext("2d", { willReadFrequently: true });
+
   if (!context) return value;
 
   const sentinel = "#010203";
   context.fillStyle = sentinel;
   context.fillStyle = value;
+
   if (context.fillStyle === sentinel && !isSentinelColor(value)) return fallback;
   context.fillRect(0, 0, 1, 1);
   const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data;
+
   if (a === 0) return fallback;
+
   if (a < 255) return `rgb(${blendChannel(r, a)}, ${blendChannel(g, a)}, ${blendChannel(b, a)})`;
+
   return `rgb(${r}, ${g}, ${b})`;
 }
 
 function normalizeKnownCssColor(value: string): string | null {
   const rgb = parseRgb(value);
+
   if (rgb) return rgbToCss(rgb);
   const hex = parseHex(value);
+
   if (hex) return rgbToCss(hex);
   const oklab = parseOklab(value);
+
   if (oklab) return rgbToCss(oklab);
   const oklch = parseOklch(value);
+
   if (oklch) return rgbToCss(oklch);
+
   return null;
 }
 
 function isSentinelColor(value: string): boolean {
   const normalized = value.replace(/\s+/g, "").toLowerCase();
+
   return normalized === "#010203" || normalized === "rgb(1,2,3)";
 }
 
 function resolveTerminalBackground(color: string, fallback: string): string {
   const rgb = parseRgb(color);
+
   if (!rgb) return fallback;
+
   return color;
 }
 
 function resolveTerminalForeground(color: string, background: string, fallback: string): string {
   const foreground = parseRgb(color);
   const bg = parseRgb(background);
+
   if (!foreground || !bg) return fallback;
+
   return color;
 }
 
@@ -889,13 +931,17 @@ function resolveTerminalMutedForeground(
 ): string {
   const foreground = parseRgb(color);
   const bg = parseRgb(background);
+
   if (!foreground || !bg) return fallback;
+
   return color;
 }
 
 function parseRgb(color: string): [number, number, number] | null {
   const match = color.match(/rgba?\(\s*([\d.]+)(?:,|\s)\s*([\d.]+)(?:,|\s)\s*([\d.]+)/i);
+
   if (!match) return null;
+
   return [
     clampColorChannel(Number(match[1])),
     clampColorChannel(Number(match[2])),
@@ -906,6 +952,7 @@ function parseRgb(color: string): [number, number, number] | null {
 function parseHex(color: string): [number, number, number] | null {
   const trimmed = color.trim();
   const short = trimmed.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+
   if (short) {
     return [
       parseInt(short[1] + short[1], 16),
@@ -913,8 +960,11 @@ function parseHex(color: string): [number, number, number] | null {
       parseInt(short[3] + short[3], 16),
     ];
   }
+
   const long = trimmed.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+
   if (!long) return null;
+
   return [parseInt(long[1], 16), parseInt(long[2], 16), parseInt(long[3], 16)];
 }
 
@@ -924,11 +974,14 @@ function parseOklch(color: string): [number, number, number] | null {
     .match(
       /^oklch\(\s*([+-]?[\d.]+%?)\s+([+-]?[\d.]+%?)\s+([+-]?[\d.]+)(?:deg)?(?:\s*\/\s*[\d.]+%?)?\s*\)$/i,
     );
+
   if (!match) return null;
   const l = parseCssNumber(match[1], 1);
   const c = parseCssNumber(match[2], 0.4);
   const h = Number(match[3]);
+
   if (![l, c, h].every(Number.isFinite)) return null;
+
   return oklchToRgb(l, c, h);
 }
 
@@ -938,16 +991,20 @@ function parseOklab(color: string): [number, number, number] | null {
     .match(
       /^oklab\(\s*([+-]?[\d.]+%?)\s+([+-]?[\d.]+%?)\s+([+-]?[\d.]+%?)(?:\s*\/\s*[\d.]+%?)?\s*\)$/i,
     );
+
   if (!match) return null;
   const l = parseCssNumber(match[1], 1);
   const a = parseCssNumber(match[2], 0.4);
   const b = parseCssNumber(match[3], 0.4);
+
   if (![l, a, b].every(Number.isFinite)) return null;
+
   return oklabToRgb(l, a, b);
 }
 
 function parseCssNumber(value: string, percentScale: number): number {
   if (value.endsWith("%")) return (Number(value.slice(0, -1)) / 100) * percentScale;
+
   return Number(value);
 }
 
@@ -978,6 +1035,7 @@ function oklabToRgb(l: number, a: number, b: number): [number, number, number] {
 function linearSrgbToByte(value: number): number {
   const clamped = Math.min(1, Math.max(0, value));
   const srgb = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055;
+
   return clampColorChannel(srgb * 255);
 }
 
@@ -987,6 +1045,7 @@ function rgbToCss([r, g, b]: [number, number, number]): string {
 
 function clampColorChannel(value: number): number {
   if (!Number.isFinite(value)) return 0;
+
   return Math.min(255, Math.max(0, Math.round(value)));
 }
 

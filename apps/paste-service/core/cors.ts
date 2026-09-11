@@ -20,6 +20,7 @@ export function getAllowedOrigins(envValue?: string): string[] {
   if (envValue) {
     return envValue.split(",").map((o) => o.trim());
   }
+
   return ["https://share.plannotator.ai", "http://localhost:3001"];
 }
 
@@ -28,11 +29,13 @@ export function corsHeaders(
   allowedOrigins: string[],
 ): CorsHeaders | Record<never, never> {
   const isLocalhost = /^https?:\/\/localhost(:\d+)?$/.test(requestOrigin);
+
   if (isLocalhost || allowedOrigins.includes(requestOrigin) || allowedOrigins.includes("*")) {
     return {
       ...BASE_CORS_HEADERS,
       "Access-Control-Allow-Origin": requestOrigin,
     };
   }
+
   return {};
 }

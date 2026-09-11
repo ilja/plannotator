@@ -26,36 +26,47 @@ interface DocumentAIChatPanelProps {
 
 function truncate(text: string, max = 180): string {
   if (text.length <= max) return text;
+
   return `${text.slice(0, max).trimEnd()}...`;
 }
 
 function getToolInputString(input: AIJsonObject, key: string): string | null {
   const value = input[key];
+
   if (value === undefined || value === null || value !== String(value)) return null;
+
   return String(value);
 }
 
 function formatKnownToolInput(toolName: string, input: AIJsonObject): string | null {
   if (toolName === "Bash") return getToolInputString(input, "command");
+
   if (toolName === "Read" || toolName === "Write" || toolName === "Edit") {
     return getToolInputString(input, "file_path");
   }
+
   if (toolName === "Glob") return getToolInputString(input, "pattern");
+
   if (toolName === "Grep") {
     const pattern = getToolInputString(input, "pattern");
+
     if (pattern === null) return null;
     const path = getToolInputString(input, "path");
+
     return path === null ? pattern : `${pattern} in ${path}`;
   }
+
   if (toolName === "WebFetch" || toolName === "WebSearch") {
     return getToolInputString(input, "url");
   }
+
   return null;
 }
 
 function formatToolInput(toolName: string, input: AIJsonObject): string | null {
   if (!input || Object.keys(input).length === 0) return null;
   const knownInput = formatKnownToolInput(toolName, input);
+
   if (knownInput !== null) return knownInput;
 
   try {
@@ -89,6 +100,7 @@ export const DocumentAIChatPanel: React.FC<DocumentAIChatPanelProps> = ({
 
   const handleGeneralSubmit = useCallback(() => {
     const question = generalInput.trim();
+
     if (!question || !onAskGeneral) return;
     onAskGeneral(question);
     setGeneralInput("");
@@ -161,10 +173,12 @@ export const DocumentAIChatPanel: React.FC<DocumentAIChatPanelProps> = ({
 
 const DocumentQAPair = memo<{ entry: AIChatEntry }>(({ entry }) => {
   const { question, response } = entry;
+
   const renderedResponse = useMemo(
     () => (response.text ? renderChatMarkdown(response.text) : null),
     [response.text],
   );
+
   const scope = question.scope;
 
   return (
@@ -260,6 +274,7 @@ const GeneralInput: React.FC<{
 
   useEffect(() => {
     const el = textareaRef.current;
+
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;

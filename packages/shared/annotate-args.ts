@@ -61,6 +61,7 @@ const FLAG_MAP = {
 
 export function parseAnnotateArgs(raw: string): ParsedAnnotateArgs {
   const s = (raw ?? "").trim();
+
   const flags = {
     gate: false,
     json: false,
@@ -71,19 +72,24 @@ export function parseAnnotateArgs(raw: string): ParsedAnnotateArgs {
   };
 
   const segments: Segment[] = [];
+
   for (let i = 0; i < s.length;) {
     const isWs = /\s/.test(s[i]);
     const start = i;
+
     while (i < s.length && /\s/.test(s[i]) === isWs) i++;
     segments.push({ type: isWs ? "ws" : "tok", text: s.slice(start, i) });
   }
 
   const keep = segments.map(() => true);
+
   for (let j = 0; j < segments.length; j++) {
     const seg = segments[j];
+
     if (seg.type !== "tok") continue;
     // SAFETY: FLAG_MAP lookup validates seg.text; non-flag strings return undefined and are skipped.
     const key = FLAG_MAP[seg.text as keyof typeof FLAG_MAP];
+
     if (!key) continue;
 
     flags[key] = true;
@@ -105,8 +111,7 @@ export function parseAnnotateArgs(raw: string): ParsedAnnotateArgs {
   // downstream callers never see tokenization artifacts.
   const rawFilePath = stripWrappingQuotes(
     segments
-      .filter((_, j) => keep[j])
-      .map((seg) => seg.text)
+      .flatMap((seg, j) => (keep[j] ? [seg.text] : []))
       .join("")
       .trim(),
   );

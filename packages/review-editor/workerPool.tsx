@@ -74,6 +74,7 @@ export function useIsWorkerPoolReadyOrDisabled(): boolean {
   const isReadyRef = useRef(isReady);
   useEffect(() => {
     if (workerPool == null) return;
+
     const timeout = setTimeout(() => {
       if (!isReadyRef.current) {
         console.warn(
@@ -83,19 +84,23 @@ export function useIsWorkerPoolReadyOrDisabled(): boolean {
         setIsReady(true);
       }
     }, POOL_READY_TIMEOUT_MS);
+
     // The callback fires immediately with the current state.
     const unsubscribe = workerPool.subscribeToStatChanges((stats) => {
       const ready = stats.managerState === "initialized";
+
       if (ready && !isReadyRef.current) {
         isReadyRef.current = ready;
         setIsReady(ready);
       }
     });
+
     return () => {
       clearTimeout(timeout);
       unsubscribe();
     };
   }, [workerPool]);
+
   return workerPool == null ? true : isReady;
 }
 
@@ -113,6 +118,7 @@ export function useWorkerPoolThemeSync(theme: { dark: string; light: string }): 
   useEffect(() => {
     if (workerPool == null) return;
     const key = `${theme.dark}\0${theme.light}`;
+
     if (key === lastSyncedTheme) return;
     lastSyncedTheme = key;
     workerPool.setRenderOptions({ theme }).catch((err) => {

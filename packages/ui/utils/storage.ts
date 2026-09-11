@@ -15,9 +15,11 @@ const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 export function getItem(key: string): string | null {
   try {
     const match = document.cookie.match(new RegExp(`(?:^|; )${escapeRegex(key)}=([^;]*)`));
+
     return match ? decodeURIComponent(match[1]) : null;
   } catch (_e) {
     void _e;
+
     return null;
   }
 }
@@ -72,8 +74,11 @@ export const AUTO_CLOSE_OPTIONS: { value: AutoCloseDelay; label: string; descrip
 
 export function getAutoCloseDelay(): AutoCloseDelay {
   const val = getItem(AUTO_CLOSE_KEY);
+
   if (val === "0" || val === "3" || val === "5") return val;
+
   if (val === "true") return "0"; // backward compat
+
   return "off";
 }
 

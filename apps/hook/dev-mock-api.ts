@@ -209,9 +209,11 @@ flowchart LR
 `;
 
 const PLAN_V1 = PLAN_V1_DEFAULT;
+
 const PLAN_V2 = PLAN_V2_DEFAULT;
 
 const now = Date.now();
+
 const versions = [
   { version: 1, timestamp: new Date(now - 3600_000 * 4).toISOString() },
   { version: 2, timestamp: new Date(now - 3600_000 * 2).toISOString() },
@@ -231,18 +233,22 @@ const versionPlans: VersionPlanTable = {
 
 async function serveHookStatus(res: ServerResponse): Promise<void> {
   res.setHeader("Content-Type", "application/json");
+
   try {
     const { readImprovementHook, getImprovementHookExpectedPath } =
       await import("@plannotator/shared/improvement-hooks");
+
     const { loadConfig } = await import("@plannotator/shared/config");
     const { composeImproveContext } = await import("@plannotator/shared/pfm-reminder");
     const config = loadConfig();
     const hook = readImprovementHook("enterplanmode-improve");
     const pfmEnabled = config.pfmReminder === true;
+
     const composed = composeImproveContext({
       pfmEnabled,
       improvementHookContent: hook?.content ?? null,
     });
+
     res.end(
       JSON.stringify({
         pfmReminder: { enabled: pfmEnabled },
@@ -283,6 +289,7 @@ function acceptConfigPatch(req: IncomingMessage, res: ServerResponse): void {
     try {
       JSON.parse(body);
     } catch {}
+
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ ok: true }));
   });
@@ -291,36 +298,48 @@ function acceptConfigPatch(req: IncomingMessage, res: ServerResponse): void {
 async function serveDocument(reqUrl: string, res: ServerResponse): Promise<void> {
   const url = new URL(reqUrl, "http://localhost");
   const reqPath = url.searchParams.get("path");
+
   if (!reqPath) {
     res.statusCode = 400;
     res.end(JSON.stringify({ error: "Missing path parameter" }));
+
     return;
   }
+
   const base = url.searchParams.get("base");
   const repoRoot = resolve(import.meta.dirname, "../..");
   const resolved = resolve(base || repoRoot, reqPath);
+
   if (!existsSync(resolved) || statSync(resolved).isDirectory()) {
     res.statusCode = 404;
     res.end(JSON.stringify({ error: `File not found: ${reqPath}` }));
+
     return;
   }
+
   const contents = readFileSync(resolved, "utf-8");
   res.setHeader("Content-Type", "application/json");
+
   if (!isCodeFilePath(reqPath)) {
     res.end(JSON.stringify({ markdown: contents, filepath: resolved }));
+
     return;
   }
+
   const displayName = resolved.split("/").pop() || resolved;
   let prerenderedHTML: string | undefined;
+
   try {
     const result = await preloadFile({
       file: { name: displayName, contents },
       options: { disableFileHeader: true },
     });
+
     prerenderedHTML = result.prerenderedHTML;
   } catch {
     /* fall back to client-side rendering */
   }
+
   res.end(JSON.stringify({ codeFile: true, contents, filepath: resolved, prerenderedHTML }));
 }
 
@@ -331,11 +350,13 @@ export function devMockApi(): Plugin {
       server.middlewares.use(async (req, res, next) => {
         if (req.url === "/api/hooks/status") {
           await serveHookStatus(res);
+
           return;
         }
 
         if (req.url === "/api/config" && req.method === "POST") {
           acceptConfigPatch(req, res);
+
           return;
         }
 
@@ -348,6 +369,7 @@ export function devMockApi(): Plugin {
               sharingEnabled: true,
             }),
           );
+
           return;
         }
 
@@ -360,6 +382,7 @@ export function devMockApi(): Plugin {
               versions,
             }),
           );
+
           return;
         }
 
@@ -367,6 +390,7 @@ export function devMockApi(): Plugin {
           const url = new URL(req.url, "http://localhost");
           const v = Number(url.searchParams.get("v"));
           const plan = versionPlans[v];
+
           if (plan) {
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ plan, version: v }));
@@ -374,11 +398,13 @@ export function devMockApi(): Plugin {
             res.statusCode = 404;
             res.end(JSON.stringify({ error: "Version not found" }));
           }
+
           return;
         }
 
         if (req.url?.startsWith("/api/doc?")) {
           await serveDocument(req.url, res);
+
           return;
         }
 

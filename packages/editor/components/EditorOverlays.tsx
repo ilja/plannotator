@@ -90,6 +90,7 @@ function CodeFileOverlay({
   if (model.codeFilePopoutProps === null) return null;
 
   const codeFilePopoutProps = model.codeFilePopoutProps;
+
   return (
     <CodeFilePopout
       {...codeFilePopoutProps}

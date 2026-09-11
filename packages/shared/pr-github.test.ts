@@ -50,6 +50,7 @@ function githubPullRequestCommandResult(args: string[], opts: GithubRuntimeOptio
       exitCode: opts.prDiff.exitCode,
     };
   }
+
   if (args[0] === "pr" && args[1] === "view") {
     return {
       stdout: opts.view?.stdout ?? VIEW_JSON,
@@ -57,14 +58,17 @@ function githubPullRequestCommandResult(args: string[], opts: GithubRuntimeOptio
       exitCode: opts.view?.exitCode ?? 0,
     };
   }
+
   return null;
 }
 
 function githubApiCommandResult(args: string[], opts: GithubRuntimeOptions) {
   if (args[0] !== "api") return null;
+
   if (args[1]?.includes("/compare/")) {
     return { stdout: `${"c".repeat(40)}\n`, stderr: "", exitCode: 0 };
   }
+
   if (args[1]?.includes("/pulls/123/files")) {
     return {
       stdout: opts.files?.stdout ?? "",
@@ -72,28 +76,37 @@ function githubApiCommandResult(args: string[], opts: GithubRuntimeOptions) {
       exitCode: opts.files?.exitCode ?? 1,
     };
   }
+
   return null;
 }
 
 function githubRuntimeCommandResult(args: string[], opts: GithubRuntimeOptions) {
   const prResult = githubPullRequestCommandResult(args, opts);
+
   if (prResult) return prResult;
+
   if (args[0] === "repo" && args[1] === "view") {
     return { stdout: "main\n", stderr: "", exitCode: 0 };
   }
+
   const apiResult = githubApiCommandResult(args, opts);
+
   if (apiResult) return apiResult;
+
   return { stdout: "", stderr: `unexpected command: ${args.join(" ")}`, exitCode: 1 };
 }
 
 function githubRuntime(opts: GithubRuntimeOptions): GithubRuntimeResult {
   const calls: string[] = [];
+
   const runtime: PRRuntime = {
     async runCommand(command, args) {
       calls.push([command, ...args].join(" "));
+
       return githubRuntimeCommandResult(args, opts);
     },
   };
+
   return { runtime, calls };
 }
 
@@ -119,9 +132,11 @@ describe("fetchGhPR", () => {
     const page1 = JSON.stringify([
       { filename: "src/a.ts", status: "modified", patch: "@@ -1 +1 @@\n-old\n+new" },
     ]);
+
     const page2 = JSON.stringify([
       { filename: "src/b.ts", status: "added", patch: "@@ -0,0 +1 @@\n+hello" },
     ]);
+
     const { runtime, calls } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "diff exceeded the maximum number of lines (20000)" },
       files: { exitCode: 0, stdout: page1 + page2 },
@@ -148,18 +163,22 @@ describe("fetchGhPR", () => {
       { filename: "src/also.zig", status: "modified" },
       { filename: "src/ok.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" },
     ]);
+
     const { runtime } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "406" },
       files: { exitCode: 0, stdout: entries },
     });
 
     const errSpy = spyOn(console, "error").mockImplementation(() => {});
+
     try {
       const result = await fetchGhPR(runtime, REF);
       expect(result.patchIncomplete).toBe(true);
+
       const warned = errSpy.mock.calls.some((args) =>
         String(args[0]).includes("omitted diff content for 2 file(s)"),
       );
+
       expect(warned).toBe(true);
     } finally {
       errSpy.mockRestore();
@@ -171,6 +190,7 @@ describe("fetchGhPR", () => {
       { filename: "src/new.ts", previous_filename: "src/old.ts", status: "renamed" },
       { filename: "src/ok.ts", status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" },
     ]);
+
     const { runtime } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "406" },
       files: { exitCode: 0, stdout: entries },
@@ -228,6 +248,7 @@ describe("fetchGhPR", () => {
   test("warns when the files API returns fewer files than the PR reports (3000-file cap)", async () => {
     const view = JSON.parse(VIEW_JSON);
     view.changedFiles = 3500;
+
     const { runtime } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "406" },
       files: {
@@ -240,13 +261,16 @@ describe("fetchGhPR", () => {
     });
 
     const errSpy = spyOn(console, "error").mockImplementation(() => {});
+
     try {
       const result = await fetchGhPR(runtime, REF);
       expect(result.rawPatch).toContain("diff --git a/a.ts b/a.ts"); // partial diff still served
       expect(result.patchIncomplete).toBe(true); // 3000-file cap → upgrade offered
+
       const warned = errSpy.mock.calls.some((args) =>
         String(args[0]).includes("3500 changed files"),
       );
+
       expect(warned).toBe(true);
     } finally {
       errSpy.mockRestore();
@@ -281,6 +305,7 @@ describe("fetchGhPR", () => {
   test("rejects malformed required metadata fields", async () => {
     const view = JSON.parse(VIEW_JSON);
     view.author.login = 42;
+
     const { runtime, calls } = githubRuntime({
       prDiff: { exitCode: 0, stdout: "diff --git a/a.ts b/a.ts\n" },
       view: { exitCode: 0, stdout: JSON.stringify(view) },
@@ -295,6 +320,7 @@ describe("fetchGhPR", () => {
   test("ignores a malformed optional changedFiles count", async () => {
     const view = JSON.parse(VIEW_JSON);
     view.changedFiles = "many";
+
     const { runtime } = githubRuntime({
       prDiff: { exitCode: 1, stderr: "406" },
       files: {
@@ -399,12 +425,14 @@ describe("fetchGhPRList", () => {
       { stdout: "[]", exitCode: 0 },
       { stdout: "", exitCode: 1 },
     ];
+
     for (const output of outputs) {
       const runtime: PRRuntime = {
         async runCommand() {
           return { ...output, stderr: "failed" };
         },
       };
+
       await expect(fetchGhPRList(runtime, listRef)).resolves.toEqual([]);
     }
 
@@ -413,6 +441,7 @@ describe("fetchGhPRList", () => {
         return { stdout: "not json", stderr: "", exitCode: 0 };
       },
     };
+
     await expect(fetchGhPRList(invalidJson, listRef)).rejects.toThrow();
 
     const nonArray: PRRuntime = {
@@ -420,6 +449,7 @@ describe("fetchGhPRList", () => {
         return { stdout: "{}", stderr: "", exitCode: 0 };
       },
     };
+
     await expect(fetchGhPRList(nonArray, listRef)).rejects.toThrow();
   });
 });
@@ -431,6 +461,7 @@ describe("fetchGhPRStack", () => {
     repo: "r",
     number: 3,
   };
+
   const metadata: PRMetadata = {
     host: "github.com",
     owner: "o",
@@ -450,6 +481,7 @@ describe("fetchGhPRStack", () => {
     const runtime: PRRuntime = {
       async runCommand(command, args) {
         const query = args.find((arg) => arg.includes("RefName=")) ?? "";
+
         if (query === "headRefName=base") {
           return {
             stdout: JSON.stringify({
@@ -475,6 +507,7 @@ describe("fetchGhPRStack", () => {
             exitCode: 0,
           };
         }
+
         if (query === "baseRefName=feature") {
           return {
             stdout: JSON.stringify({
@@ -499,6 +532,7 @@ describe("fetchGhPRStack", () => {
             exitCode: 0,
           };
         }
+
         return {
           stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }),
           stderr: "",
@@ -542,9 +576,11 @@ describe("fetchGhPRStack", () => {
 
   test("returns null without a default branch and preserves empty query results", async () => {
     let calls = 0;
+
     const runtime: PRRuntime = {
       async runCommand() {
         calls++;
+
         return {
           stdout: JSON.stringify({ data: { repository: { pullRequests: { nodes: [] } } } }),
           stderr: "",
@@ -552,6 +588,7 @@ describe("fetchGhPRStack", () => {
         };
       },
     };
+
     const noDefault = { ...metadata, defaultBranch: undefined };
     await expect(fetchGhPRStack(runtime, stackRef, noDefault)).resolves.toBeNull();
     expect(calls).toBe(0);
@@ -568,9 +605,11 @@ describe("fetchGhPRViewedFiles", () => {
 
   test("merges paginated viewed states and filters malformed file nodes", async () => {
     let page = 0;
+
     const runtime: PRRuntime = {
       async runCommand() {
         page++;
+
         if (page === 1) {
           return {
             stdout: JSON.stringify({
@@ -593,6 +632,7 @@ describe("fetchGhPRViewedFiles", () => {
             exitCode: 0,
           };
         }
+
         return {
           stdout: JSON.stringify({
             data: {
@@ -625,6 +665,7 @@ describe("fetchGhPRViewedFiles", () => {
         return { stdout: "", stderr: "boom", exitCode: 1 };
       },
     };
+
     await expect(fetchGhPRViewedFiles(failedCli, viewedRef)).rejects.toThrow(
       /Failed to fetch PR viewed files/,
     );
@@ -638,6 +679,7 @@ describe("fetchGhPRViewedFiles", () => {
         };
       },
     };
+
     await expect(fetchGhPRViewedFiles(graphqlError, viewedRef)).rejects.toThrow(
       "GraphQL error: forbidden",
     );
@@ -655,12 +697,15 @@ describe("fetchGhPRContext envelope", () => {
   test("rejects invalid roots before fetching review threads", async () => {
     for (const stdout of ["not json", "null", "[]"]) {
       let graphqlCalls = 0;
+
       const runtime: PRRuntime = {
         async runCommand(command, args) {
           if (args[0] === "pr" && args[1] === "view") {
             return { stdout, stderr: "", exitCode: 0 };
           }
+
           graphqlCalls++;
+
           return { stdout: "{}", stderr: "", exitCode: 0 };
         },
       };
@@ -691,6 +736,7 @@ describe("fetchGhPRContext envelope", () => {
             exitCode: 0,
           };
         }
+
         return { stdout: JSON.stringify({ data: { repository: null } }), stderr: "", exitCode: 0 };
       },
     };
@@ -713,6 +759,7 @@ describe("fetchGhPRContext review threads", () => {
     repo: "r",
     number: 123,
   };
+
   const contextBody = JSON.stringify({
     body: "Context body",
     state: "OPEN",
@@ -733,6 +780,7 @@ describe("fetchGhPRContext review threads", () => {
         if (args[0] === "pr" && args[1] === "view") {
           return { stdout: contextBody, stderr: "", exitCode: 0 };
         }
+
         if (args[0] === "api" && args[1] === "graphql") {
           return {
             stdout: JSON.stringify({
@@ -792,6 +840,7 @@ describe("fetchGhPRContext review threads", () => {
             exitCode: 0,
           };
         }
+
         return { stdout: "", stderr: "unexpected", exitCode: 1 };
       },
     };
@@ -850,6 +899,7 @@ describe("fetchGhPRContext review threads", () => {
           if (args[0] === "pr" && args[1] === "view") {
             return { stdout: contextBody, stderr: "", exitCode: 0 };
           }
+
           if (args[0] === "api" && args[1] === "graphql") {
             return {
               stdout: graphqlResult.stdout,
@@ -857,6 +907,7 @@ describe("fetchGhPRContext review threads", () => {
               exitCode: graphqlResult.exitCode,
             };
           }
+
           return { stdout: "", stderr: "unexpected", exitCode: 1 };
         },
       };

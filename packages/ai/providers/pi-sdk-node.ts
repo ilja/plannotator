@@ -64,12 +64,15 @@ class PiProcessNode {
 
   async spawn(piPath: string, cwd: string): Promise<void> {
     const commandPath = resolveWindowsCommandShim(piPath);
+
     const command = buildWindowsCommandScriptSpawnCommand(commandPath, ["--mode", "rpc"]) ?? [
       commandPath,
       "--mode",
       "rpc",
     ];
+
     let proc: ChildProcessWithoutNullStreams;
+
     try {
       const [file, ...args] = command;
       proc = spawn(file, args, {
@@ -92,12 +95,14 @@ class PiProcessNode {
         proc.off("spawn", onSpawn);
         proc.off("error", onError);
       };
+
       const onSpawn = () => {
         cleanup();
         this._alive = true;
         this.readStream();
         resolve();
       };
+
       const onError = (err: Error) => {
         cleanup();
         this.handleProcessEnd(err);
@@ -114,10 +119,13 @@ class PiProcessNode {
 
     this._alive = false;
     this.proc = null;
+
     for (const [, pending] of this.pendingRequests) {
       pending.reject(error);
     }
+
     this.pendingRequests.clear();
+
     for (const listener of this.listeners) {
       listener({ type: "process_exited" });
     }
@@ -133,7 +141,9 @@ class PiProcessNode {
 
       for (const line of lines) {
         const trimmed = line.replace(/\r$/, "");
+
         if (!trimmed) continue;
+
         try {
           const parsed = JSON.parse(trimmed);
           this.routeMessage(parsed);
@@ -146,28 +156,37 @@ class PiProcessNode {
 
   private routeMessage(input: PiJsonObject): void {
     const msg = Option.getOrUndefined(Schema.decodeUnknownOption(PiJsonObjectSchema)(input));
+
     if (!msg) return;
     const response = Option.getOrUndefined(Schema.decodeUnknownOption(PiResponseSchema)(msg));
+
     if (response) {
       const pending = this.pendingRequests.get(response.id);
+
       if (pending) {
         this.pendingRequests.delete(response.id);
+
         if (response.success === false) {
           pending.reject(new Error(response.error ?? "RPC error"));
         } else {
           pending.resolve(response.data ?? {});
         }
+
         return;
       }
     }
+
     const responseEnvelope = Option.getOrUndefined(
       Schema.decodeUnknownOption(PiResponseEnvelopeSchema)(msg),
     );
+
     if (responseEnvelope) {
       const pending = this.pendingRequests.get(responseEnvelope.id);
+
       if (pending) {
         this.pendingRequests.delete(responseEnvelope.id);
         pending.reject(new Error("Malformed RPC response"));
+
         return;
       }
     }
@@ -184,6 +203,7 @@ class PiProcessNode {
 
   sendAndWait(command: PiCommand): Promise<PiJsonObject> {
     const id = `req_${++this.nextId}`;
+
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
       const request = Schema.decodeUnknownSync(PiCommandSchema)({ ...command, id });
@@ -193,8 +213,10 @@ class PiProcessNode {
 
   onEvent(listener: EventListener): () => void {
     this.listeners.push(listener);
+
     return () => {
       const idx = this.listeners.indexOf(listener);
+
       if (idx >= 0) this.listeners.splice(idx, 1);
     };
   }
@@ -207,15 +229,19 @@ class PiProcessNode {
     this._alive = false;
     const proc = this.proc;
     this.proc = null;
+
     if (proc) {
       if (!killWindowsProcessTree(proc.pid)) {
         proc.kill();
       }
     }
+
     this.listeners.length = 0;
+
     for (const [, pending] of this.pendingRequests) {
       pending.reject(new Error("Process killed"));
     }
+
     this.pendingRequests.clear();
   }
 }
@@ -249,7 +275,9 @@ export class PiSDKNodeProvider implements AIProvider {
       piExecutablePath: this.config.piExecutablePath ?? "pi",
       model: options.model ?? this.config.model,
     });
+
     this.sessions.set(session.id, session);
+
     return session;
   }
 
@@ -268,22 +296,27 @@ export class PiSDKNodeProvider implements AIProvider {
     for (const session of this.sessions.values()) {
       session.killProcess();
     }
+
     this.sessions.clear();
   }
 
   async fetchModels(): Promise<void> {
     const piPath = this.config.piExecutablePath ?? "pi";
     let proc: PiProcessNode | undefined;
+
     try {
       proc = new PiProcessNode();
       await proc.spawn(piPath, this.config.cwd ?? process.cwd());
+
       const data = await Promise.race([
         proc.sendAndWait({ type: "get_available_models" }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10_000)),
       ]);
+
       const models = Option.getOrUndefined(
         Schema.decodeUnknownOption(PiModelsResponseSchema)(data),
       );
+
       if (models && models.models.length > 0) {
         this.models = models.models.map((m, i) => ({
           id: `${m.provider}/${m.id}`,
@@ -324,10 +357,13 @@ class PiSDKNodeSession extends BaseSession {
     const { mapPiEvent } = await import("./pi-events.ts");
 
     const started = this.startQuery();
+
     if (!started) {
       yield BaseSession.BUSY_ERROR;
+
       return;
     }
+
     const { gen } = started;
 
     try {
@@ -338,6 +374,7 @@ class PiSDKNodeSession extends BaseSession {
         if (this.config.model) {
           const [provider, ...rest] = this.config.model.split("/");
           const modelId = rest.join("/");
+
           if (provider && modelId) {
             try {
               await this.process.sendAndWait({ type: "set_model", provider, modelId });
@@ -349,9 +386,11 @@ class PiSDKNodeSession extends BaseSession {
 
         try {
           const state = await this.process.sendAndWait({ type: "get_state" });
+
           const parsedState = Option.getOrUndefined(
             Schema.decodeUnknownOption(PiStateResponseSchema)(state),
           );
+
           if (parsedState?.sessionId) this.resolveId(parsedState.sessionId);
         } catch {
           /* Continue with placeholder ID */
@@ -364,6 +403,7 @@ class PiSDKNodeSession extends BaseSession {
               "Pi process exited during startup. Check that Pi is configured correctly (API keys, models).",
             code: "pi_startup_error",
           };
+
           return;
         }
       }
@@ -382,6 +422,7 @@ class PiSDKNodeSession extends BaseSession {
         queue.push(msg);
         resolve?.();
       };
+
       const finish = () => {
         done = true;
         resolve?.();
@@ -389,8 +430,10 @@ class PiSDKNodeSession extends BaseSession {
 
       const unsubscribe = this.process.onEvent((event) => {
         const mapped = mapPiEvent(event, this.id);
+
         for (const msg of mapped) {
           push(msg);
+
           if (
             msg.type === "result" ||
             (msg.type === "error" &&
@@ -410,8 +453,10 @@ class PiSDKNodeSession extends BaseSession {
           error: `Pi rejected prompt: ${err instanceof Error ? err.message : String(err)}`,
           code: "pi_prompt_rejected",
         };
+
         return;
       }
+
       this._firstQuerySent = true;
 
       try {
@@ -443,6 +488,7 @@ class PiSDKNodeSession extends BaseSession {
     if (this.process?.alive) {
       this.process.send({ type: "abort" });
     }
+
     super.abort();
   }
 

@@ -42,6 +42,7 @@ describe("bun agent terminal bridge", () => {
   test("node sidecar rebuilds spawn options from the server-owned launch plan", async () => {
     const nodePath = Bun.which("node");
     expect(nodePath).toBeTruthy();
+
     if (!nodePath) return;
 
     const tmp = mkdtempSync(join(tmpdir(), "plannotator-agent-sidecar-"));
@@ -102,6 +103,7 @@ export function createNodePtyWebSocketServer(options) {
     );
 
     const sidecarPath = join(import.meta.dir, "agent-terminal-node-sidecar.mjs");
+
     const proc = Bun.spawn([nodePath, sidecarPath], {
       cwd: tmp,
       env: {
@@ -170,9 +172,11 @@ export function createNodePtyWebSocketServer(options) {
         enabled: true,
         cwd: "/tmp/plannotator-agent-cwd",
       });
+
       if (!bridge.capability.enabled) {
         throw new Error("Expected enabled agent terminal capability");
       }
+
       expect(bridge.capability.wsPath.startsWith(`${AGENT_TERMINAL_WS_BASE_PATH}/`)).toBe(true);
       expect(bridge.capability.wsPath).not.toBe(AGENT_TERMINAL_WS_BASE_PATH);
       expect(bridge.matches(bridge.capability.wsPath)).toBe(true);
@@ -191,6 +195,7 @@ export function createNodePtyWebSocketServer(options) {
     const previousAgentRemote = process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE;
     process.env.PLANNOTATOR_REMOTE = "1";
     delete process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE;
+
     try {
       const bridge = await createBunAgentTerminalBridge({
         enabled: true,
@@ -206,6 +211,7 @@ export function createNodePtyWebSocketServer(options) {
     } finally {
       if (previousRemote === undefined) delete process.env.PLANNOTATOR_REMOTE;
       else process.env.PLANNOTATOR_REMOTE = previousRemote;
+
       if (previousAgentRemote === undefined) delete process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE;
       else process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE = previousAgentRemote;
     }
@@ -216,6 +222,7 @@ export function createNodePtyWebSocketServer(options) {
     const previousAgentRemote = process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE;
     process.env.PLANNOTATOR_REMOTE = "1";
     process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE = "1";
+
     try {
       const bridge = await createBunAgentTerminalBridge({
         enabled: true,
@@ -224,9 +231,11 @@ export function createNodePtyWebSocketServer(options) {
 
       try {
         expect(bridge.capability.enabled).toBe(true);
+
         if (!bridge.capability.enabled) {
           throw new Error("Expected enabled agent terminal capability");
         }
+
         expect(bridge.capability.wsPath.startsWith(`${AGENT_TERMINAL_WS_BASE_PATH}/`)).toBe(true);
         expect(bridge.matches(bridge.capability.wsPath)).toBe(true);
       } finally {
@@ -235,6 +244,7 @@ export function createNodePtyWebSocketServer(options) {
     } finally {
       if (previousRemote === undefined) delete process.env.PLANNOTATOR_REMOTE;
       else process.env.PLANNOTATOR_REMOTE = previousRemote;
+
       if (previousAgentRemote === undefined) delete process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE;
       else process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE = previousAgentRemote;
     }
@@ -243,10 +253,12 @@ export function createNodePtyWebSocketServer(options) {
 
 async function waitForFile(path: string): Promise<void> {
   const started = Date.now();
+
   while (Date.now() - started < 5_000) {
     if (existsSync(path)) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+
   throw new Error(`Timed out waiting for ${path}`);
 }
 
@@ -257,21 +269,27 @@ async function readFirstLine(
   if (!stream) throw new Error("Missing stream");
   const reader = stream.getReader();
   const decoder = new TextDecoder();
+
   const timeout = setTimeout(() => {
     void reader.cancel("Timed out waiting for first line").catch(() => {});
   }, timeoutMs);
+
   let text = "";
+
   try {
     while (true) {
       const { done, value } = await reader.read();
+
       if (done) break;
       text += decoder.decode(value, { stream: true });
       const newline = text.indexOf("\n");
+
       if (newline !== -1) return text.slice(0, newline).trim();
     }
   } finally {
     clearTimeout(timeout);
     reader.releaseLock();
   }
+
   throw new Error("Stream ended before first line");
 }

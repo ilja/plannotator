@@ -15,6 +15,7 @@ import {
   DEFAULT_FILENAME_FORMAT,
   type ObsidianSettings,
 } from "../utils/obsidian";
+
 interface FilenameVars {
   [key: string]: string;
 }
@@ -107,26 +108,31 @@ export const DIFF_STYLE_OPTIONS = [
   { value: "split" as const, label: "Split" },
   { value: "unified" as const, label: "Unified" },
 ];
+
 export const OVERFLOW_OPTIONS = [
   { value: "scroll" as const, label: "Scroll" },
   { value: "wrap" as const, label: "Wrap" },
 ];
+
 export const INDICATOR_OPTIONS = [
   { value: "bars" as const, label: "Bars" },
   { value: "classic" as const, label: "Classic" },
   { value: "none" as const, label: "None" },
 ];
+
 export const LINE_DIFF_OPTIONS = [
   { value: "word-alt" as const, label: "Word-Alt" },
   { value: "word" as const, label: "Word" },
   { value: "char" as const, label: "Char" },
   { value: "none" as const, label: "None" },
 ];
+
 export const LINE_BG_INTENSITY_OPTIONS: { value: DiffLineBgIntensity; label: string }[] = [
   { value: "subtle", label: "Subtle" },
   { value: "normal", label: "Normal" },
   { value: "strong", label: "Strong" },
 ];
+
 const DEFAULT_DIFF_TYPE_OPTIONS = [
   {
     value: "uncommitted" as const,
@@ -229,11 +235,13 @@ const ANNOTATION_PROSE_FONT_OPTIONS = [
 
 function parsePxSize(value: string, fallback: number): number {
   const parsed = parseInt(value, 10);
+
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 const GitTab: React.FC = () => {
   const defaultDiffType = useConfigValue("defaultDiffType");
+
   return (
     <div className="space-y-2">
       <div>
@@ -684,6 +692,7 @@ const DEFAULT_CC_LABELS: CCLabelConfig[] = [
 
 export function parseCCLabels(json: string | null): CCLabelConfig[] {
   const parsed = decodeConventionalLabelJsonArray(json);
+
   if (!parsed || parsed.some((value) => value === null)) return DEFAULT_CC_LABELS;
 
   return parsed.map((value) => {
@@ -691,6 +700,7 @@ export function parseCCLabels(json: string | null): CCLabelConfig[] {
     const labelValue = decodeConventionalLabelString(fields?.label);
     const displayValue = decodeConventionalLabelString(fields?.display);
     const label = labelValue?.trim() ? labelValue : "custom";
+
     return {
       label,
       display: displayValue?.trim() ? displayValue : label,
@@ -725,9 +735,11 @@ const CommentsTab: React.FC = () => {
     const existing = new Set(labels.map((l) => l.label));
     let slug = "custom";
     let n = 2;
+
     while (existing.has(slug)) {
       slug = `custom-${n++}`;
     }
+
     save([...labels, { label: slug, display: slug, blocking: false }]);
   };
 
@@ -1098,6 +1110,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
               const next = AUTO_CLOSE_OPTIONS.find(
                 (option) => option.value === e.currentTarget.value,
               )?.value;
+
               if (next === undefined) return;
               setAutoCloseDelayState(next);
               setAutoCloseDelay(next);
@@ -1279,6 +1292,7 @@ const SavingTab: React.FC<SavingTabProps> = ({
             value={defaultNotesApp}
             onChange={(e) => {
               const app = e.currentTarget.value;
+
               if (app === "ask" || app === "download" || app === "obsidian") {
                 handleDefaultNotesAppChange(app);
               }
@@ -1385,6 +1399,7 @@ const LabelsTab: React.FC<LabelsTabProps> = ({
             const colors = getLabelColors(label.color);
             const hasTip = !!label.tip;
             const isEditingTip = editingTipIndex === index;
+
             return (
               <div
                 key={index}
@@ -1472,6 +1487,7 @@ const LabelsTab: React.FC<LabelsTabProps> = ({
                       const updated = quickLabelsState.filter((_, i) => i !== index);
                       setQuickLabelsState(updated);
                       saveQuickLabels(updated);
+
                       if (editingTipIndex === index) setEditingTipIndex(null);
                     }}
                     className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
@@ -1522,6 +1538,7 @@ const LabelsTab: React.FC<LabelsTabProps> = ({
                           saveQuickLabels(updated);
                           setEditingTipIndex(null);
                         }
+
                         if (e.key === "Escape") setEditingTipIndex(null);
                       }}
                       placeholder="AI instruction tip..."
@@ -1572,6 +1589,7 @@ const LabelsTab: React.FC<LabelsTabProps> = ({
                 text: "New label",
                 color: "blue",
               };
+
               const updated = [...quickLabelsState, newLabel];
               setQuickLabelsState(updated);
               saveQuickLabels(updated);
@@ -1855,6 +1873,7 @@ const ObsidianTab: React.FC<ObsidianTabProps> = ({
                   value={obsidian.filenameSeparator || "space"}
                   onChange={(e) => {
                     const separator = e.currentTarget.value;
+
                     if (
                       separator === "space" ||
                       separator === "dash" ||
@@ -1954,18 +1973,22 @@ tags: [plan, ...]
     )}
   </>
 );
+
 const PlanWidthPreview: React.FC<{ planWidth: UIPreferences["planWidth"] }> = ({ planWidth }) => {
   const active = PLAN_WIDTH_OPTIONS.find((o) => o.id === planWidth) ?? PLAN_WIDTH_OPTIONS[0];
   // Exaggerated proportions so the width difference is visually obvious in the small preview
   const sidebarPct = 14;
   const panelPct = 14;
+
   interface CardPctMap {
     compact: number;
     default: number;
     wide: number;
   }
+
   const cardPctMap: CardPctMap = { compact: 48, default: 70, wide: 94 };
   const cardPct = cardPctMap[active.id];
+
   return (
     <div className="space-y-2">
       <div className="rounded-lg border border-border/40 bg-muted/20 px-2 py-3 overflow-hidden">
@@ -2045,6 +2068,7 @@ const PlanWidthPreview: React.FC<{ planWidth: UIPreferences["planWidth"] }> = ({
 function filenamePreview(obsidian: ObsidianSettings): string {
   const fmt = obsidian.filenameFormat?.trim() || DEFAULT_FILENAME_FORMAT;
   const now = new Date();
+
   const months = [
     "Jan",
     "Feb",
@@ -2059,8 +2083,10 @@ function filenamePreview(obsidian: ObsidianSettings): string {
     "Nov",
     "Dec",
   ];
+
   const h24 = now.getHours();
   const h12 = h24 % 12 || 12;
+
   const vars: FilenameVars = {
     title: "My Plan Title",
     YYYY: String(now.getFullYear()),
@@ -2075,9 +2101,12 @@ function filenamePreview(obsidian: ObsidianSettings): string {
     ss: String(now.getSeconds()).padStart(2, "0"),
     ampm: h24 >= 12 ? "pm" : "am",
   };
+
   let preview = fmt.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m) + ".md";
+
   if (obsidian.filenameSeparator === "dash") preview = preview.replace(/ /g, "-");
   else if (obsidian.filenameSeparator === "underscore") preview = preview.replace(/ /g, "_");
+
   return preview;
 }
 
@@ -2098,6 +2127,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
   useEffect(() => {
     if (!themePreview) return;
+
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -2106,12 +2136,15 @@ export const Settings: React.FC<SettingsProps> = ({
         setShowDialog(true);
       }
     };
+
     document.addEventListener("keydown", handler);
+
     return () => document.removeEventListener("keydown", handler);
   }, [themePreview]);
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const gridEnabled = useConfigValue("gridEnabled");
   const [identity, setIdentity] = useState("");
+
   const [obsidian, setObsidian] = useState<ObsidianSettings>({
     enabled: false,
     vaultPath: "",
@@ -2120,51 +2153,64 @@ export const Settings: React.FC<SettingsProps> = ({
     autoSave: false,
     vaultBrowserEnabled: false,
   });
+
   const [detectedVaults, setDetectedVaults] = useState<string[]>([]);
   const [vaultsLoading, setVaultsLoading] = useState(false);
+
   const [uiPrefs, setUiPrefs] = useState<UIPreferences>({
     tocEnabled: true,
     stickyActionsEnabled: true,
     planWidth: "compact",
   });
+
   const [autoCloseDelay, setAutoCloseDelayState] = useState<AutoCloseDelay>("off");
   const [defaultNotesApp, setDefaultNotesApp] = useState<DefaultNotesApp>("ask");
   const [quickLabelsState, setQuickLabelsState] = useState<QuickLabel[]>([]);
   const [editingTipIndex, setEditingTipIndex] = useState<number | null>(null);
   const [editingTipValue, setEditingTipValue] = useState("");
   const [aiProvider, setAiProvider] = useState<string | null>(null);
+
   const [fileBrowserSettings, setFileBrowserSettings] = useState<FileBrowserSettings>({
     enabled: false,
     directories: [],
   });
+
   const [newDirPath, setNewDirPath] = useState("");
   const piAIProviders = useMemo(() => aiProviders.filter(isPiProvider), [aiProviders]);
 
   const mainTabs = useMemo(() => {
     const t: SettingsNavigationItem[] = [{ id: "general", label: "General" }];
     t.push({ id: "theme", label: "Theme" });
+
     if (mode === "plan") {
       t.push({ id: "display", label: "Display" });
       t.push({ id: "saving", label: "Saving" });
       t.push({ id: "labels", label: "Labels" });
     }
+
     if (mode === "review") {
       t.push({ id: "git", label: "Git" });
       t.push({ id: "display", label: "Display" });
       t.push({ id: "comments", label: "Comments" });
+
       if (piAIProviders.length > 0) {
         t.push({ id: "ai", label: "AI" });
       }
     }
+
     t.push({ id: "shortcuts", label: "Shortcuts" });
+
     if (mode === "plan") {
       t.push({ id: "hooks", label: "Hooks" });
     }
+
     return t;
   }, [mode, piAIProviders.length]);
 
   const integrationTabs: SettingsNavigationItem[] = [{ id: "files", label: "Files" }];
+
   if (mode === "plan") integrationTabs.push({ id: "obsidian", label: "Obsidian" });
+
   const obsidianDefaultSaveAvailable =
     obsidian.enabled && getEffectiveVaultPath(obsidian).trim().length > 0;
 
@@ -2216,6 +2262,7 @@ export const Settings: React.FC<SettingsProps> = ({
         .then((data) => {
           const responseBody: unknown = data;
           const decodedVaults = decodeObsidianVaultsResponse(responseBody);
+
           if (Option.isNone(decodedVaults)) {
             throw new Error("Invalid Obsidian vaults response envelope");
           }
@@ -2224,6 +2271,7 @@ export const Settings: React.FC<SettingsProps> = ({
           setDetectedVaults(vaults);
           // Auto-select first vault if none set
           const firstVault = vaults[0];
+
           if (firstVault !== undefined && !obsidian.vaultPath) {
             handleObsidianChange({ vaultPath: firstVault });
           }
@@ -2237,16 +2285,19 @@ export const Settings: React.FC<SettingsProps> = ({
     const newSettings = { ...fileBrowserSettings, ...updates };
     setFileBrowserSettings(newSettings);
     saveFileBrowserSettings(newSettings);
+
     if (onUIPreferencesChange) onUIPreferencesChange({ ...uiPrefs });
   };
 
   const addDirectory = () => {
     const trimmed = newDirPath.trim();
+
     if (trimmed && !fileBrowserSettings.directories.includes(trimmed)) {
       handleFileBrowserChange({
         directories: [...fileBrowserSettings.directories, trimmed],
       });
     }
+
     setNewDirPath("");
   };
 
@@ -2279,6 +2330,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
   const handleIdentitySave = (newName: string) => {
     const trimmed = newName.trim();
+
     if (!trimmed || trimmed === identity) return;
     const oldIdentity = identity;
     const saved = setCustomIdentity(trimmed);

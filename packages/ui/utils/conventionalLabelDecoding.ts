@@ -13,7 +13,9 @@ export interface StrictConventionalLabelEntry {
 }
 
 const JsonLabelArraySchema = Schema.fromJsonString(Schema.Array(Schema.Unknown));
+
 const LabelRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 const StrictLabelArraySchema = Schema.NullOr(
   Schema.Array(
     Schema.Struct({
@@ -23,11 +25,17 @@ const StrictLabelArraySchema = Schema.NullOr(
     }),
   ),
 );
+
 const StrictLabelJsonSchema = Schema.fromJsonString(StrictLabelArraySchema);
+
 const decodeJsonLabelArray = Schema.decodeUnknownOption(JsonLabelArraySchema);
+
 const decodeLabelRecord = Schema.decodeUnknownOption(LabelRecordSchema);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeStrictLabelArray = Schema.decodeUnknownOption(StrictLabelArraySchema);
+
 const decodeStrictLabelJson = Schema.decodeUnknownOption(StrictLabelJsonSchema);
 
 /** Decode the cookie JSON container without choosing a caller fallback. */
@@ -35,6 +43,7 @@ export function decodeConventionalLabelJsonArray(
   json: string | null,
 ): readonly unknown[] | undefined {
   if (!json) return undefined;
+
   return Option.getOrUndefined(decodeJsonLabelArray(json));
 }
 
@@ -43,7 +52,9 @@ export function decodeConventionalLabelEntryFields(
   value: any,
 ): ConventionalLabelEntryFields | undefined {
   const record = Option.getOrUndefined(decodeLabelRecord(value));
+
   if (!record) return undefined;
+
   return {
     ...(Object.prototype.hasOwnProperty.call(record, "label") && { label: record.label }),
     ...(Object.prototype.hasOwnProperty.call(record, "display") && { display: record.display }),
@@ -60,13 +71,17 @@ export function decodeStrictConventionalLabels(
   value: any,
 ): StrictConventionalLabelEntry[] | null | undefined {
   const decoded = Option.getOrUndefined(decodeStrictLabelArray(value));
+
   if (decoded === null) return null;
+
   if (decoded === undefined) return undefined;
 
   const labels: StrictConventionalLabelEntry[] = [];
+
   for (const { label, display, blocking } of decoded) {
     labels.push({ label, display, blocking });
   }
+
   return labels;
 }
 
@@ -75,12 +90,16 @@ export function decodeStrictConventionalLabelsJson(
   json: string,
 ): StrictConventionalLabelEntry[] | null | undefined {
   const decoded = Option.getOrUndefined(decodeStrictLabelJson(json));
+
   if (decoded === null) return null;
+
   if (decoded === undefined) return undefined;
 
   const labels: StrictConventionalLabelEntry[] = [];
+
   for (const { label, display, blocking } of decoded) {
     labels.push({ label, display, blocking });
   }
+
   return labels;
 }

@@ -29,10 +29,13 @@ export async function compress<T>(data: T): Promise<string> {
   // Loop instead of spread to avoid RangeError on large payloads
   // (String.fromCharCode(...arr) has a ~65K argument limit)
   let binary = "";
+
   for (let i = 0; i < compressed.length; i++) {
     binary += String.fromCharCode(compressed[i]);
   }
+
   const base64 = btoa(binary);
+
   return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
@@ -51,5 +54,6 @@ export async function decompress<T = JsonValue>(b64: string): Promise<T> {
   const json = new TextDecoder().decode(buffer);
 
   const parsed: T = JSON.parse(json);
+
   return parsed;
 }

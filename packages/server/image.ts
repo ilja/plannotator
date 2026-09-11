@@ -19,7 +19,9 @@ const UPLOAD_DIR = join(tmpdir(), "plannotator");
 
 function getExtension(filePath: string): string {
   const lastDot = filePath.lastIndexOf(".");
+
   if (lastDot === -1) return "";
+
   return filePath.slice(lastDot + 1).toLowerCase();
 }
 

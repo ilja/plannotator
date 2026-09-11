@@ -10,18 +10,21 @@ afterEach(() => {
   for (const directory of temporaryDirectories) {
     rmSync(directory, { recursive: true, force: true });
   }
+
   temporaryDirectories.length = 0;
 });
 
 function createDataDirectory(): string {
   const directory = mkdtempSync(join(tmpdir(), "plannotator-pastes-"));
   temporaryDirectories.push(directory);
+
   return directory;
 }
 
 function writePasteFile(directory: string, name: string, contents: string): string {
   const path = join(directory, name);
   writeFileSync(path, contents, "utf-8");
+
   return path;
 }
 
@@ -77,6 +80,7 @@ describe("FsPasteStore", () => {
   test("deletes a paste with a negative fractional expiry timestamp when it is read", async () => {
     const directory = createDataDirectory();
     const store = new FsPasteStore(directory);
+
     const expiredPath = writePasteFile(
       directory,
       "expired.json",
@@ -89,26 +93,31 @@ describe("FsPasteStore", () => {
 
   test("sweeps expired finite timestamps and preserves fresh and corrupt siblings", () => {
     const directory = createDataDirectory();
+
     const negativePath = writePasteFile(
       directory,
       "negative.json",
       JSON.stringify({ data: "negative", expiresAt: -1 }),
     );
+
     const zeroPath = writePasteFile(
       directory,
       "zero.json",
       JSON.stringify({ data: "zero", expiresAt: 0 }),
     );
+
     const fractionalPath = writePasteFile(
       directory,
       "fractional.json",
       JSON.stringify({ data: "fractional", expiresAt: 0.5 }),
     );
+
     const freshPath = writePasteFile(
       directory,
       "fresh.json",
       JSON.stringify({ data: "fresh", expiresAt: Date.now() + 60_000 }),
     );
+
     const corruptPath = writePasteFile(directory, "corrupt.json", "not json");
 
     new FsPasteStore(directory);

@@ -11,6 +11,7 @@ interface PRSummaryTabProps {
 
 /** Check if content contains HTML tags that should be rendered natively. */
 const HTML_TAG_RE = /<[a-z][a-z0-9]*[\s/>]/i;
+
 const containsHtml = (text: string) => HTML_TAG_RE.test(text);
 
 /** Sanitize HTML using DOMPurify — defense-in-depth for GitHub API content. */
@@ -76,6 +77,7 @@ function SafeHtml({ html, as: Tag = "div" }: { html: string; as?: "div" | "span"
       };
     });
   }, [html]);
+
   return <Tag ref={ref} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
@@ -87,6 +89,7 @@ function renderContent(content: string): React.ReactNode {
   if (containsHtml(content)) {
     return <SafeHtml html={sanitizeHtml(content)} as="span" />;
   }
+
   return renderInlineMarkdown(content);
 }
 
@@ -102,6 +105,7 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
             // SAFETY: level is clamped to 1..6, so the template literal is always a valid heading tag.
             const Tag =
               `h${Math.min(Math.max(block.level ?? 1, 1), 6)}` as keyof JSX.IntrinsicElements;
+
             interface HeadingSizeMap {
               [level: number]: string;
             }
@@ -111,6 +115,7 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
               2: "text-sm font-semibold",
               3: "text-xs font-semibold",
             };
+
             return (
               <Tag
                 key={block.id}
@@ -120,6 +125,7 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
               </Tag>
             );
           }
+
           case "code":
             return (
               <pre
@@ -155,10 +161,12 @@ export function MarkdownBody({ markdown }: { markdown: string }) {
             return <hr key={block.id} className="border-border/50" />;
           default:
             if (!block.content) return null;
+
             // If the entire paragraph is HTML, sanitize and render
             if (containsHtml(block.content)) {
               return <SafeHtml key={block.id} html={sanitizeHtml(block.content)} />;
             }
+
             return <p key={block.id}>{renderInlineMarkdown(block.content)}</p>;
         }
       })}

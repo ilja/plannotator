@@ -41,31 +41,41 @@ const REVIEW_STATE_STYLES: ReviewStateStyleMap = {
 function formatRelativeTime(iso: string): string {
   if (!iso) return "";
   const then = new Date(iso).getTime();
+
   if (isNaN(then)) return "";
   const diff = Date.now() - then;
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
+
   if (minutes < 1) return "just now";
+
   if (minutes < 60) return `${minutes}m ago`;
+
   if (hours < 24) return `${hours}h ago`;
+
   if (days < 30) return `${days}d ago`;
+
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function getEntryTime(entry: TimelineEntry): string {
   if (entry.kind === "comment") return entry.data.createdAt;
+
   if (entry.kind === "review") return entry.data.submittedAt;
+
   return entry.data.comments[0]?.createdAt ?? "";
 }
 
 function getEntryAuthor(entry: TimelineEntry): string {
   if (entry.kind === "thread") return entry.data.comments[0]?.author ?? "";
+
   return entry.data.author;
 }
 
 function getEntryBody(entry: TimelineEntry): string {
   if (entry.kind === "thread") return entry.data.comments.map((c) => c.body).join(" ");
+
   return entry.data.body;
 }
 
@@ -73,15 +83,18 @@ function matchesSearch(entry: TimelineEntry, query: string): boolean {
   const q = query.toLowerCase();
   const author = getEntryAuthor(entry).toLowerCase();
   const body = getEntryBody(entry).toLowerCase();
+
   if (entry.kind === "thread") {
     return author.includes(q) || body.includes(q) || entry.data.path.toLowerCase().includes(q);
   }
+
   return author.includes(q) || body.includes(q);
 }
 
 function _isTypingTarget(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
+
   return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
 }
 
@@ -114,9 +127,11 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
           .filter((t) => t.comments.length > 0)
           .map((t): TimelineEntry => ({ kind: "thread", data: t })),
       ];
+
       entries.sort(
         (a, b) => new Date(getEntryTime(a)).getTime() - new Date(getEntryTime(b)).getTime(),
       );
+
       return entries;
     }, [context.comments, context.reviews, context.reviewThreads]);
 
@@ -127,18 +142,23 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
 
     const filteredTimeline = useMemo(() => {
       let result = baseTimeline;
+
       if (hideResolved) {
         result = result.filter((e) => e.kind !== "thread" || !e.data.isResolved);
       }
+
       if (hideOutdated) {
         result = result.filter((e) => e.kind !== "thread" || !e.data.isOutdated);
       }
+
       if (excludedAuthors.size > 0) {
         result = result.filter((e) => !excludedAuthors.has(getEntryAuthor(e)));
       }
+
       if (searchQuery.trim()) {
         result = result.filter((e) => matchesSearch(e, searchQuery.trim()));
       }
+
       return result;
     }, [baseTimeline, searchQuery, excludedAuthors, hideResolved, hideOutdated]);
 
@@ -150,9 +170,11 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
     // --- Scroll to selected ---
     useEffect(() => {
       if (!selectedId || !containerRef.current) return;
+
       const el = containerRef.current.querySelector(
         `[data-comment-id="${CSS.escape(selectedId)}"]`,
       );
+
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     }, [selectedId]);
 
@@ -167,6 +189,7 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
       };
 
       window.addEventListener("keydown", handler);
+
       return () => window.removeEventListener("keydown", handler);
     }, []);
 
@@ -174,8 +197,10 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
     const toggleCollapsed = useCallback((id: string) => {
       setCollapsedIds((prev) => {
         const next = new Set(prev);
+
         if (next.has(id)) next.delete(id);
         else next.add(id);
+
         return next;
       });
     }, []);
@@ -195,6 +220,7 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
           } else {
             if (e.target instanceof HTMLInputElement) e.target.blur();
           }
+
           e.stopPropagation();
         }
       },
@@ -308,8 +334,10 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
                   onClick={() => {
                     setExcludedAuthors((prev) => {
                       const next = new Set(prev);
+
                       if (next.has(author)) next.delete(author);
                       else next.add(author);
+
                       return next;
                     });
                   }}
@@ -410,6 +438,7 @@ export const PRCommentsTab: React.FC<PRCommentsTabProps> = React.memo(
                   }
 
                   const review = entry.kind === "review" ? entry.data : null;
+
                   const style =
                     review && review.state !== "COMMENTED"
                       ? (REVIEW_STATE_STYLES[review.state] ?? null)
@@ -629,6 +658,7 @@ function ThreadCard({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const first = thread.comments[0];
+
   if (!first) return null;
   const replies = thread.comments.slice(1);
   const isDimmed = thread.isResolved || thread.isOutdated;

@@ -24,13 +24,17 @@ interface TableOfContentsProps {
 // hierarchy (depth-first = document order) into a single ordered list.
 function flattenToc(items: TocItem[]): TocItem[] {
   const out: TocItem[] = [];
+
   const walk = (list: TocItem[]) => {
     for (const it of list) {
       out.push(it);
+
       if (it.children.length) walk(it.children);
     }
   };
+
   walk(items);
+
   return out;
 }
 
@@ -39,11 +43,13 @@ function flattenToc(items: TocItem[]): TocItem[] {
 // is a soft neutral surface tint (not a loud primary fill).
 function itemClasses(level: number, isActive: boolean): string {
   const indent = level <= 1 ? "" : level === 2 ? "ml-3" : "ml-6";
+
   const tone = isActive
     ? "bg-surface-1 text-foreground"
     : level <= 1
       ? "text-foreground/80 hover:bg-surface-1/70"
       : "text-muted-foreground hover:bg-surface-1/70";
+
   return `${indent} ${tone}`;
 }
 
@@ -79,13 +85,16 @@ export function TableOfContents({
     (blockId: string) => {
       onNavigate(blockId);
       const target = (scrollViewport ?? document).querySelector(`[data-block-id="${blockId}"]`);
+
       if (target && scrollViewport) {
         const scrollContainer = scrollViewport;
         const headerOffset = 80; // sticky header (h-12) + breathing room
         const containerRect = scrollContainer.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
+
         const offsetPosition =
           scrollContainer.scrollTop + (targetRect.top - containerRect.top) - headerOffset;
+
         scrollContainer.scrollTo({ top: offsetPosition, behavior: "smooth" });
       }
     },
@@ -140,6 +149,7 @@ export function TableOfContents({
         <div className="flex flex-col gap-0.5">
           {tocItems.map((item) => {
             const isActive = item.id === activeId;
+
             return (
               <button
                 key={item.id}

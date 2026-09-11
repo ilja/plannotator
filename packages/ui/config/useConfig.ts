@@ -15,6 +15,8 @@ export function useConfigValue<K extends SettingName>(key: K): SettingValue<K> {
     (onStoreChange: () => void) => configStore.subscribe(onStoreChange),
     [],
   );
+
   const getSnapshot = useCallback(() => configStore.get(key), [key]);
+
   return useSyncExternalStore(subscribe, getSnapshot);
 }

@@ -4,16 +4,20 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 const TEST_HOME = join(tmpdir(), `plannotator-obsidian-vaults-${Date.now()}`);
+
 const TEST_APP_DATA = join(TEST_HOME, "AppData", "Roaming");
+
 const PROJECT_ROOT = join(import.meta.dir, "../..");
 
 function obsidianConfigPath(): string {
   if (process.platform === "darwin") {
     return join(TEST_HOME, "Library/Application Support/obsidian/obsidian.json");
   }
+
   if (process.platform === "win32") {
     return join(TEST_APP_DATA, "obsidian/obsidian.json");
   }
+
   return join(TEST_HOME, ".config/obsidian/obsidian.json");
 }
 
@@ -49,6 +53,7 @@ console.log(JSON.stringify(detectObsidianVaults()));`,
       stderr: "pipe",
     },
   );
+
   const stdout = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
 

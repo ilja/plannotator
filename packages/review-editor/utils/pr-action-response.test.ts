@@ -94,6 +94,7 @@ describe("readPRActionResponse", () => {
 
   test("uses the fallback for malformed envelopes and invalid JSON", async () => {
     const fallback = "Failed to submit";
+
     const malformedResponses = [
       new Response("{"),
       new Response(JSON.stringify({ ok: false, error: 42 })),

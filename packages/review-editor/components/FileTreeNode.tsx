@@ -27,12 +27,14 @@ function hasVisibleChildren(
   hideViewedFiles: boolean,
 ): boolean {
   if (!hideViewedFiles) return true;
+
   if (!node.children) return false;
 
   return node.children.some((child) => {
     if (child.type === "file") {
       return child.fileIndex === activeFileIndex || !viewedFiles.has(child.path);
     }
+
     return hasVisibleChildren(child, viewedFiles, activeFileIndex, hideViewedFiles);
   });
 }
@@ -228,8 +230,10 @@ function FileTreeLeaf({
 
   // File node
   const isActive = node.fileIndex === activeFileIndex;
+
   const isScrollActive =
     !isActive && scrollHighlightIndex != null && node.fileIndex === scrollHighlightIndex;
+
   const isViewed = viewedFiles.has(node.path);
   const isStaged = stagedFiles?.has(node.path) ?? false;
   const annotationCount = getAnnotationCount(node.path);

@@ -43,8 +43,11 @@ const QuickLabelSchema = Schema.Struct({
   color: Schema.String,
   tip: Schema.optionalKey(Schema.String),
 });
+
 const QuickLabelItemsSchema = Schema.Array(Schema.Unknown);
+
 const decodeQuickLabel = Schema.decodeUnknownOption(QuickLabelSchema);
+
 const decodeQuickLabelItems = Schema.decodeUnknownOption(QuickLabelItemsSchema);
 
 export const DEFAULT_QUICK_LABELS: QuickLabel[] = [
@@ -105,12 +108,16 @@ export const DEFAULT_QUICK_LABELS: QuickLabel[] = [
 export function decodeStoredQuickLabels(raw: string): QuickLabel[] {
   try {
     const items = Option.getOrNull(decodeQuickLabelItems(JSON.parse(raw)));
+
     if (!items) return DEFAULT_QUICK_LABELS;
     const labels: QuickLabel[] = [];
+
     for (const item of items) {
       const label = Option.getOrNull(decodeQuickLabel(item));
+
       if (label) labels.push(label);
     }
+
     return labels.length > 0 ? labels : DEFAULT_QUICK_LABELS;
   } catch {
     return DEFAULT_QUICK_LABELS;
@@ -119,6 +126,7 @@ export function decodeStoredQuickLabels(raw: string): QuickLabel[] {
 
 export function getQuickLabels(): QuickLabel[] {
   const raw = storage.getItem(STORAGE_KEY);
+
   return raw ? decodeStoredQuickLabels(raw) : DEFAULT_QUICK_LABELS;
 }
 
@@ -143,7 +151,9 @@ interface LabelColors {
 
 export function getLabelColors(color: string): LabelColors {
   const colors = LABEL_COLOR_MAP[color];
+
   if (!colors) return { bg: "rgba(128,128,128,0.15)", text: "#666" };
   const isDark = document.documentElement.classList.contains("dark");
+
   return { bg: colors.bg, text: isDark ? colors.darkText : colors.text };
 }

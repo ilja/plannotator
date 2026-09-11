@@ -27,6 +27,7 @@ function mergeConfigPatches(current: ConfigPatch, patch: ConfigPatch): ConfigPat
     current.diffOptions || patch.diffOptions
       ? { ...current.diffOptions, ...patch.diffOptions }
       : undefined;
+
   const annotationOptions =
     current.annotationOptions || patch.annotationOptions
       ? { ...current.annotationOptions, ...patch.annotationOptions }
@@ -69,6 +70,7 @@ export class ConfigStore {
       const defaultVal = resolveDefaultValue(definition);
       const resolved = fromCookie ?? defaultVal;
       this.values.set(name, resolved);
+
       // Persist generated defaults to cookie so the value is stable across calls
       if (fromCookie === undefined) {
         definition.toCookie(resolved);
@@ -85,16 +87,20 @@ export class ConfigStore {
    */
   init<Input>(serverConfig?: Input): void {
     const decodedServerConfig = decodeUiServerConfig(serverConfig);
+
     for (const [name, def] of Object.entries(SETTINGS)) {
       const definition: SettingDef<unknown> = def;
+
       if (definition.serverKey && definition.fromServer) {
         const fromServer = definition.fromServer(decodedServerConfig);
+
         if (fromServer !== undefined) {
           this.values.set(name, fromServer);
           definition.toCookie(fromServer);
         }
       }
     }
+
     this.notify();
   }
 
@@ -121,11 +127,13 @@ export class ConfigStore {
   /** Subscribe to changes. Returns unsubscribe function. */
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
+
     return () => this.listeners.delete(listener);
   }
 
   private notify(): void {
     this.version++;
+
     for (const fn of this.listeners) fn();
   }
 
@@ -144,4 +152,5 @@ export class ConfigStore {
 }
 
 export const configStore = new ConfigStore();
+
 export type { SettingValue };

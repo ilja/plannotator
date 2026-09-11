@@ -113,10 +113,15 @@ function getBindingGroups(binding: string): string[][] {
  */
 export function parseDoubleTapBinding(binding: string): string | null {
   const groups = getBindingGroups(binding);
+
   if (groups.length !== 2) return null;
+
   if (groups[0].length !== 1 || groups[1].length !== 1) return null;
+
   if (groups[0][0] !== groups[1][0]) return null;
+
   if (groups[1][0] === "hold") return null;
+
   return groups[0][0];
 }
 
@@ -126,8 +131,11 @@ export function parseDoubleTapBinding(binding: string): string | null {
  */
 export function matchesKeyName(event: KeyboardEvent, keyName: string): boolean {
   if (keyName === "Alt") return event.key === "Alt";
+
   if (keyName === "Shift") return event.key === "Shift";
+
   if (keyName === "Mod") return event.key === "Meta" || event.key === "Control";
+
   return matchesKeyToken(event, keyName);
 }
 
@@ -172,6 +180,7 @@ export function validateShortcutRegistry(registry: ShortcutRegistry): string[] {
     if (scopeIds.has(scope.id)) {
       errors.push(`Duplicate shortcut scope id: ${scope.id}`);
     }
+
     scopeIds.add(scope.id);
 
     for (const [actionId, shortcut] of Object.entries(scope.shortcuts)) {
@@ -213,9 +222,11 @@ export function createShortcutRegistry<TRegistry extends ShortcutRegistry>(
   registry: TRegistry,
 ): TRegistry {
   const errors = validateShortcutRegistry(registry);
+
   if (errors.length > 0) {
     throw new Error(`Invalid shortcut registry:\n- ${errors.join("\n- ")}`);
   }
+
   return registry;
 }
 
@@ -237,6 +248,7 @@ export function getShortcut(
 ): ShortcutEntry | undefined {
   const scope = getShortcutScope(registry, scopeId);
   const shortcut = scope?.shortcuts[actionId];
+
   return scope && shortcut ? normalizeShortcutEntry(scope, actionId, shortcut) : undefined;
 }
 
@@ -255,6 +267,7 @@ export function listShortcutSections(shortcuts: readonly ShortcutEntry[]): Short
 
   for (const shortcut of shortcuts) {
     const existing = sections.get(shortcut.section);
+
     if (existing) {
       existing.push(shortcut);
     } else {
@@ -285,15 +298,21 @@ function formatKeycapToken(
 ): string {
   if (platform === "mac") {
     if (token === "Mod") return "⌘";
+
     if (token === "Alt") return "⌥";
+
     if (token === "Shift") return "⇧";
+
     if (token === "Enter") return "⏎";
+
     if (token === "Escape") return "Esc";
   }
 
   if (platform === "non-mac") {
     if (token === "Mod") return "Ctrl";
+
     if (token === "Enter") return "↵";
+
     if (token === "Escape") return "Esc";
   }
 
@@ -303,7 +322,9 @@ function formatKeycapToken(
 function formatTextToken(token: string, platform: ShortcutPlatform): string {
   if (token === "Mod") {
     if (platform === "mac") return "Cmd";
+
     if (platform === "non-mac") return "Ctrl";
+
     return "Cmd/Ctrl";
   }
 
@@ -312,7 +333,9 @@ function formatTextToken(token: string, platform: ShortcutPlatform): string {
   }
 
   if (token === "Escape") return "Escape";
+
   if (token === "hold") return "hold";
+
   return token;
 }
 
@@ -321,6 +344,7 @@ export function formatShortcutBindingTokens(
   platform: Exclude<ShortcutPlatform, "cross-platform"> = getShortcutPlatform(),
 ): string[] {
   const doubleTapKey = parseDoubleTapBinding(binding);
+
   if (doubleTapKey) {
     return [formatKeycapToken(doubleTapKey, platform), "×2"];
   }
@@ -344,6 +368,7 @@ export function formatShortcutBindingText(
   }
 
   const doubleTapKey = parseDoubleTapBinding(binding);
+
   if (doubleTapKey) {
     return `Double-tap ${formatTextToken(doubleTapKey, platform)}`;
   }
@@ -363,14 +388,17 @@ export function formatShortcutBindingsText(
 function getDigitCode(event: KeyboardEvent): string | null {
   const code = Object.prototype.toString.call(event.code) === "[object String]" ? event.code : "";
   const match = code.match(/^Digit([0-9])$/);
+
   return match ? match[1] : null;
 }
 
 export function getShortcutDigit(event: KeyboardEvent): number | null {
   const parsed = Number.parseInt(event.key, 10);
+
   if (!Number.isNaN(parsed)) return parsed;
 
   const digitCode = getDigitCode(event);
+
   return digitCode === null ? null : Number.parseInt(digitCode, 10);
 }
 
@@ -403,20 +431,25 @@ export function matchesShortcutBinding(event: KeyboardEvent, binding: string): b
   }
 
   const tokens = binding.split("+").filter(Boolean);
+
   if (tokens.length === 0) return false;
 
   const requiresMod = tokens.includes("Mod");
   const requiresShift = tokens.includes("Shift");
   const requiresAlt = tokens.includes("Alt");
   const keyTokens = tokens.filter((token) => !MODIFIER_TOKENS.has(token));
+
   if (keyTokens.length !== 1) return false;
 
   const keyToken = keyTokens[0];
+
   const shiftMatches =
     requiresShift === event.shiftKey || (!requiresShift && keyToken === "A-Z" && event.shiftKey);
 
   if (requiresMod !== (event.metaKey || event.ctrlKey)) return false;
+
   if (!shiftMatches) return false;
+
   if (requiresAlt !== event.altKey) return false;
 
   return matchesKeyToken(event, keyToken);

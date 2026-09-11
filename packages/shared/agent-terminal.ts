@@ -4,6 +4,7 @@ export function buildAgentTerminalWsPath(token: string): string {
   if (!token || token.includes("/") || token.includes("?") || token.includes("#")) {
     throw new Error("Agent terminal WebSocket token must be a non-empty path segment.");
   }
+
   return `${AGENT_TERMINAL_WS_BASE_PATH}/${encodeURIComponent(token)}`;
 }
 

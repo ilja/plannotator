@@ -10,6 +10,7 @@ const originalFetch = globalThis.fetch;
 function mockFetch(response: Response | Error) {
   globalThis.fetch = async () => {
     if (response instanceof Error) throw response;
+
     return response;
   };
 }
@@ -119,6 +120,7 @@ describe("source document client", () => {
     let request: RequestInit | undefined;
     globalThis.fetch = async (_input, init) => {
       request = init;
+
       return Response.json({
         ok: true,
         hash: "sha256:saved",

@@ -26,8 +26,10 @@ export function getIdentity(): string {
  */
 export function setCustomIdentity(name: string): string {
   const trimmed = name.trim();
+
   if (!trimmed) return getIdentity(); // reject empty
   configStore.set("displayName", trimmed);
+
   return trimmed;
 }
 
@@ -38,6 +40,7 @@ export function setCustomIdentity(name: string): string {
 export function regenerateIdentity(): string {
   const identity = generateIdentity();
   configStore.set("displayName", identity);
+
   return identity;
 }
 
@@ -46,5 +49,6 @@ export function regenerateIdentity(): string {
  */
 export function isCurrentUser(author: string | undefined): boolean {
   if (!author) return false;
+
   return author === configStore.get("displayName");
 }

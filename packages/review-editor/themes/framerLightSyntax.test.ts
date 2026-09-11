@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+
 describe("Framer Light Shiki theme", () => {
   test("loads the upstream TypeScript token colors in an isolated highlighter", async () => {
     const themeModule = new URL("./framerLightSyntax.ts", import.meta.url).href;
+
     const script = `
       import { getSharedHighlighter } from "@pierre/diffs";
       import { FRAMER_LIGHT_SYNTAX_THEME_NAME } from ${JSON.stringify(themeModule)};
@@ -22,11 +24,13 @@ function getAnswer() {
         { lang: "typescript", theme: FRAMER_LIGHT_SYNTAX_THEME_NAME },
       ));
     `;
+
     const child = Bun.spawn(["bun", "-e", script], {
       cwd: import.meta.dir,
       stdout: "pipe",
       stderr: "pipe",
     });
+
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),

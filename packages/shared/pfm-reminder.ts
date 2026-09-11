@@ -38,6 +38,7 @@ export function composeImproveContext(input: {
   }
 
   if (sections.length === 0) return null;
+
   return sections.join("\n\n---\n\n");
 }
 

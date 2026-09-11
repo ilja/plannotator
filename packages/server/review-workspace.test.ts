@@ -32,20 +32,25 @@ import { startReviewServer } from "./review";
 import { getGitContext, type GitContext } from "./git";
 
 const tempDirs: string[] = [];
+
 const originalSemPath = process.env.PLANNOTATOR_SEM_PATH;
+
 const originalDataDir = process.env.PLANNOTATOR_DATA_DIR;
 
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
+
   return dir;
 }
 
 function git(cwd: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd, encoding: "utf-8" });
+
   if (result.status !== 0) {
     throw new Error(result.stderr || `git ${args.join(" ")} failed`);
   }
+
   return result.stdout.trim();
 }
 
@@ -117,6 +122,7 @@ function makeMockSem(
     "utf-8",
   );
   chmodSync(semPath, 0o755);
+
   return semPath;
 }
 
@@ -126,11 +132,13 @@ afterEach(() => {
   } else {
     process.env.PLANNOTATOR_SEM_PATH = originalSemPath;
   }
+
   if (originalDataDir === undefined) {
     delete process.env.PLANNOTATOR_DATA_DIR;
   } else {
     process.env.PLANNOTATOR_DATA_DIR = originalDataDir;
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -169,6 +177,7 @@ describe("review-workspace", () => {
         const diffPayload: {
           semanticDiff?: { available: boolean; semVersion?: string; semSource?: string };
         } = await fetch(`${server.url}/api/diff`).then((response) => response.json());
+
         expect(diffPayload.semanticDiff).toMatchObject({
           available: true,
           semVersion: "0.8.0",
@@ -182,6 +191,7 @@ describe("review-workspace", () => {
         } = await fetch(`${server.url}/api/semantic-diff?fileExt=.ts`).then((response) =>
           response.json(),
         );
+
         expect(semanticPayload).toMatchObject({
           status: "ok",
           summary: { added: 1, fileCount: 1 },
@@ -213,6 +223,7 @@ describe("review-workspace", () => {
         const semanticPayload: { status: string } = await fetch(
           `${server.url}/api/semantic-diff`,
         ).then((response) => response.json());
+
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(agentCwd));
       } finally {
@@ -241,6 +252,7 @@ describe("review-workspace", () => {
         const semanticPayload: { status: string } = await fetch(
           `${server.url}/api/semantic-diff`,
         ).then((response) => response.json());
+
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(repoDir));
       } finally {
@@ -284,11 +296,13 @@ describe("review-workspace", () => {
         const diffPayload: { semanticDiff?: { available: boolean } } = await fetch(
           `${server.url}/api/diff`,
         ).then((response) => response.json());
+
         expect(diffPayload.semanticDiff?.available).toBe(false);
 
         const semanticPayload: { status: string } = await fetch(
           `${server.url}/api/semantic-diff`,
         ).then((response) => response.json());
+
         expect(semanticPayload.status).toBe("unavailable");
       } finally {
         server.stop();
@@ -816,6 +830,7 @@ describe("review-workspace", () => {
       const runtime = {
         async getGitContext(cwd?: string): Promise<GitContext> {
           if (cwd === broken) throw new Error("broken repo");
+
           return {
             currentBranch: "main",
             defaultBranch: "main",
@@ -901,6 +916,7 @@ describe("review-workspace", () => {
 
       const workspace = await buildLocalWorkspaceReview(root);
       const aggregate = aggregateWorkspacePatch(workspace.repos);
+
       const server = await startReviewServer({
         rawPatch: aggregate.rawPatch,
         gitRef: aggregate.gitRef,
@@ -914,6 +930,7 @@ describe("review-workspace", () => {
       try {
         const diffResponse = await fetch(`${server.url}/api/diff`);
         expect(diffResponse.status).toBe(200);
+
         const diffPayload: {
           mode?: string;
           rawPatch: string;
@@ -922,6 +939,7 @@ describe("review-workspace", () => {
           agentCwd?: string;
           semanticDiff?: { available: boolean };
         } = await diffResponse.json();
+
         expect(diffPayload.mode).toBe("workspace");
         expect(diffPayload.diffType).toBe("workspace-current");
         expect(diffPayload.diffOptions?.map((option) => option.id)).toEqual([
@@ -939,6 +957,7 @@ describe("review-workspace", () => {
         const semanticPayload: { status: string } = await fetch(
           `${server.url}/api/semantic-diff`,
         ).then((response) => response.json());
+
         expect(semanticPayload.status).toBe("ok");
         expect(realpathSync(readFileSync(cwdLogPath, "utf-8").trim())).toBe(realpathSync(root));
         const semInput = readFileSync(inputLogPath, "utf-8");
@@ -950,13 +969,16 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ diffType: "workspace-last", hideWhitespace: true }),
         });
+
         expect(lastResponse.status).toBe(200);
+
         const lastPayload: {
           diffType?: string;
           rawPatch: string;
           diffOptions?: Array<{ id: string }>;
           semanticDiff?: { available: boolean };
         } = await lastResponse.json();
+
         expect(lastPayload.diffType).toBe("workspace-last");
         expect(lastPayload.diffOptions?.map((option) => option.id)).toContain("workspace-current");
         expect(lastPayload.semanticDiff).toEqual(expect.objectContaining({ available: true }));
@@ -967,6 +989,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ filePath: "api/tracked.txt" }),
         });
+
         expect(stageLastResponse.status).toBe(400);
         expect(await stageLastResponse.json()).toEqual({ error: "Staging not available" });
 
@@ -975,16 +998,20 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ diffType: "workspace-current", hideWhitespace: false }),
         });
+
         expect(currentResponse.status).toBe(200);
 
         const fileContentResponse = await fetch(
           `${server.url}/api/file-content?path=api/tracked.txt`,
         );
+
         expect(fileContentResponse.status).toBe(200);
+
         const fileContent: {
           oldContent: string | null;
           newContent: string | null;
         } = await fileContentResponse.json();
+
         expect(fileContent.oldContent).toBe("before\n");
         expect(fileContent.newContent).toBe("after\n");
 
@@ -993,6 +1020,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ filePath: "web/new.txt" }),
         });
+
         expect(stageResponse.status).toBe(200);
         expect(git(web, ["diff", "--staged", "--name-only"])).toContain("new.txt");
 
@@ -1001,6 +1029,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ filePath: "api/../web/new.txt" }),
         });
+
         expect(invalidStageResponse.status).toBe(400);
       } finally {
         server.stop();
@@ -1018,6 +1047,7 @@ describe("review-workspace", () => {
       writeFileSync(join(api, "tracked.txt"), "after\n", "utf-8");
 
       const workspace = await buildLocalWorkspaceReview(root);
+
       const server = await startReviewServer({
         rawPatch: workspace.rawPatch,
         gitRef: workspace.gitRef,
@@ -1033,6 +1063,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ diffType: 123 }),
         });
+
         expect(diffSwitchMalformed.status).toBe(400);
         expect(await diffSwitchMalformed.json()).toEqual({ error: "Missing diffType" });
 
@@ -1041,6 +1072,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ filePath: 123 }),
         });
+
         expect(gitAddMalformed.status).toBe(400);
         expect(await gitAddMalformed.json()).toEqual({ error: "Missing filePath" });
 
@@ -1049,6 +1081,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ displayName: 123 }),
         });
+
         expect(configMalformed.status).toBe(400);
         expect(await configMalformed.json()).toEqual({ error: "Invalid request" });
 
@@ -1057,6 +1090,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ feedback: 123 }),
         });
+
         expect(feedbackMalformed.status).toBe(400);
         expect(await feedbackMalformed.json()).toEqual({ error: "Invalid request" });
 
@@ -1066,6 +1100,7 @@ describe("review-workspace", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ filePath: "api/tracked.txt" }),
         });
+
         // api/tracked.txt is modified but not yet staged; staging should succeed
         // (workspace mode stages via workspace.stageFile)
         expect(validGitAdd.status).toBe(200);

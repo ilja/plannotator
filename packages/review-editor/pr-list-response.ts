@@ -14,6 +14,7 @@ const PRListResponseEnvelopeSchema = Schema.Struct({
 });
 
 const decodePRListResponseEnvelope = Schema.decodeUnknownResult(PRListResponseEnvelopeSchema);
+
 const decodePRSelectorItem = Schema.decodeUnknownResult(PRSelectorItemSchema);
 
 /** A pull request record with the fields consumed by the PR selector. */
@@ -27,11 +28,13 @@ export function decodePRListResponse<Input>(
   value: Input,
 ): Result.Result<PRSelectorItem[], Schema.SchemaError> {
   const envelope = decodePRListResponseEnvelope(value);
+
   if (Result.isFailure(envelope)) return Result.fail(envelope.failure);
 
   return Result.succeed(
     envelope.success.prs.flatMap((entry) => {
       const decodedEntry = decodePRSelectorItem(entry);
+
       return Result.isSuccess(decodedEntry) ? [decodedEntry.success] : [];
     }),
   );

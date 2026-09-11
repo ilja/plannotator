@@ -50,6 +50,7 @@ const TOOL_ICONS: ToolIconMap = {
 function toolArgument(input: ToolInput, key: string): string | undefined {
   const value = input[key];
   const textual = String(value);
+
   return value === textual ? textual : undefined;
 }
 
@@ -57,16 +58,22 @@ function toolArgument(input: ToolInput, key: string): string | undefined {
 export function formatToolInput(toolName: string, input: ToolInput): string {
   if (toolName === "Bash") {
     const command = toolArgument(input, "command");
+
     if (command !== undefined) return command;
   }
+
   if (toolName === "Read" || toolName === "Write" || toolName === "Edit") {
     const filePath = toolArgument(input, "file_path");
+
     if (filePath !== undefined) return filePath;
   }
+
   if (toolName === "Glob" || toolName === "Grep") {
     const pattern = toolArgument(input, "pattern");
+
     if (pattern !== undefined) return pattern;
   }
+
   return JSON.stringify(input).slice(0, 100);
 }
 

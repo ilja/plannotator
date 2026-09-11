@@ -8,8 +8,11 @@ import { reviewPanelComponents } from "../dock/reviewPanelComponents";
 import { ReviewDockTabRenderer } from "../dock/ReviewDockTabRenderer";
 
 type ReviewHeaderProps = ComponentProps<typeof ReviewHeader>;
+
 type ReviewFileTreeProps = ComponentProps<typeof FileTree>;
+
 type ReviewSidebarProps = ComponentProps<typeof ReviewSidebar>;
+
 type ResizeHandleProps = ComponentProps<typeof ResizeHandle>;
 
 type ReviewResizeHandleViewModel = Readonly<Pick<ResizeHandleProps, "isDragging" | "style">>;
@@ -313,23 +316,26 @@ function getReviewEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
 
 function getUncommittedEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
   const suffix = viewModel.activeWorktreePath ? " in this worktree" : " to review";
+
   return `No uncommitted changes${suffix}.`;
 }
 
 function getLastCommitEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
   const suffix = viewModel.activeWorktreePath ? " in this worktree" : "";
+
   return `No changes in the last commit${suffix}.`;
 }
-
 
 function getReviewBranchEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
   const base = viewModel.selectedBase || viewModel.defaultBranch || "main";
   const worktreeSuffix = viewModel.activeWorktreePath ? " in this worktree" : "";
+
   return `No changes vs ${base}${worktreeSuffix}.`;
 }
 
 function getAllFilesEmptyDiffMessage(viewModel: ReviewDockViewModel): string {
   const location = viewModel.activeWorktreePath ? " in this worktree" : " in this repository";
+
   return `No tracked files${location}.`;
 }
 

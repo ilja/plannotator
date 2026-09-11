@@ -5,11 +5,17 @@ import { storage } from "../utils/storage";
 import { ThemeProvider, useTheme } from "./ThemeProvider";
 
 const hasDom = process.env.DOM_TESTS === "1";
+
 const MODE_STORAGE_KEY = "theme-provider-test-mode";
+
 const COLOR_STORAGE_KEY = "theme-provider-test-color";
+
 const roots: Root[] = [];
+
 const containers: HTMLDivElement[] = [];
+
 const storedValues = new Map<string, string>();
+
 const realStorageMethods = {
   getItem: storage.getItem,
   setItem: storage.setItem,
@@ -18,6 +24,7 @@ const realStorageMethods = {
 
 function ThemeModeProbe({ onMode }: { onMode: (mode: "dark" | "light") => void }) {
   onMode(useTheme().resolvedMode);
+
   return null;
 }
 
@@ -28,6 +35,7 @@ function ThemeStateProbe({
 }) {
   const { mode, colorTheme } = useTheme();
   onState({ mode, colorTheme });
+
   return null;
 }
 
@@ -70,9 +78,11 @@ async function renderStoredTheme(
   storage.setItem = (key, value) => {
     storedValues.set(key, value);
   };
+
   storage.removeItem = (key) => {
     storedValues.delete(key);
   };
+
   storage.setItem(MODE_STORAGE_KEY, storedMode);
   storage.setItem(COLOR_STORAGE_KEY, storedColorTheme);
 
@@ -108,6 +118,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   for (const container of containers.splice(0)) container.remove();
 
   storedValues.clear();

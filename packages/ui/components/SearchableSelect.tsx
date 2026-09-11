@@ -44,10 +44,12 @@ export function SearchableSelect<T extends { id: string }>({
   const handleOpenChange = useCallback(
     (next: boolean) => {
       setOpen(next);
+
       if (!next) {
         setSearch("");
         setFocusedIndex(-1);
       }
+
       onOpenChange?.(next);
     },
     [onOpenChange],
@@ -60,6 +62,7 @@ export function SearchableSelect<T extends { id: string }>({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       const len = filtered.length;
+
       if (len === 0) return;
 
       if (e.key === "ArrowDown") {
@@ -74,6 +77,7 @@ export function SearchableSelect<T extends { id: string }>({
         scrollToIndex(next);
       } else if (e.key === "Enter") {
         e.preventDefault();
+
         if (focusedIndex >= 0 && filtered[focusedIndex]) {
           onSelect(filtered[focusedIndex]);
           handleOpenChange(false);

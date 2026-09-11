@@ -53,6 +53,7 @@ export function renderProseBody(args: {
   const flushPara = () => {
     if (paraLines.length === 0) return;
     const text = paraLines.join("\n");
+
     if (text.trim()) {
       out.push(
         <p key={`p-${key++}`} className={`${paragraphClassName} ${out.length > 0 ? "mt-2" : ""}`}>
@@ -60,8 +61,10 @@ export function renderProseBody(args: {
         </p>,
       );
     }
+
     paraLines = [];
   };
+
   const flushList = () => {
     if (!list) return;
     const Tag = list.ordered ? "ol" : "ul";
@@ -84,21 +87,27 @@ export function renderProseBody(args: {
       flushList();
       continue;
     }
+
     const listMatch = line.match(/^\s*(\*|-|\d+\.)\s+(.*)$/);
+
     if (listMatch) {
       flushPara();
       const ordered = /\d/.test(listMatch[1]);
+
       if (!list || list.ordered !== ordered) {
         flushList();
         list = { ordered, items: [] };
       }
+
       list.items.push(listMatch[2]);
     } else {
       flushList();
       paraLines.push(line);
     }
   }
+
   flushPara();
   flushList();
+
   return out;
 }

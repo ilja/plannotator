@@ -9,6 +9,7 @@ export const ReviewDockTabRenderer: React.FC<IDockviewPanelHeaderProps> = (props
     const titleDisposable = props.api.onDidTitleChange(() => {
       setTitle(props.api.title ?? props.api.id);
     });
+
     return () => titleDisposable.dispose();
   }, [props.api]);
 

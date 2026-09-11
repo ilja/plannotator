@@ -36,6 +36,7 @@ export type {
   PRStackTree,
   PRListItem,
 } from "@plannotator/shared/pr-types";
+
 export { prRefFromMetadata, isSameProject, getDisplayRepo } from "@plannotator/shared/pr-types";
 
 const runtime: PRRuntime = {

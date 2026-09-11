@@ -16,6 +16,7 @@ describe("codeHighlightingRuntime", () => {
           lines: [[{ content: input.code, color: "#fff" }]],
         } as const),
     });
+
     setCodeHighlightingLayerForTest(testLayer);
     const rt1 = getCodeHighlightingRuntime();
     const rt2 = getCodeHighlightingRuntime();
@@ -24,15 +25,19 @@ describe("codeHighlightingRuntime", () => {
     const res1 = await rt1.runPromise(
       Effect.gen(function* () {
         const svc = yield* CodeHighlightingService;
+
         return yield* svc.highlight({ code: "a=1", language: "ruby", themeName: "github-dark" });
       }),
     );
+
     const res2 = await rt2.runPromise(
       Effect.gen(function* () {
         const svc = yield* CodeHighlightingService;
+
         return yield* svc.highlight({ code: "b=2", language: "ruby", themeName: "github-dark" });
       }),
     );
+
     expect(res1._tag).toBe("Highlighted");
     expect(res2._tag).toBe("Highlighted");
 
@@ -55,9 +60,11 @@ describe("codeHighlightingRuntime", () => {
     const layer = makeTestLayer();
     setCodeHighlightingLayerForTest(layer);
     const rts = Array.from({ length: 5 }, () => getCodeHighlightingRuntime());
+
     for (let i = 1; i < rts.length; i++) {
       expect(rts[i]).toBe(rts[0]);
     }
+
     await disposeCodeHighlightingRuntime();
   });
 });

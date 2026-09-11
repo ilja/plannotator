@@ -5,7 +5,9 @@ import { decodeHooksStatusResponse, type HooksStatusResponse } from "./hooksStat
 
 function displayPath(filePath: string): string {
   const idx = filePath.indexOf("/.plannotator/");
+
   if (idx >= 0) return "~" + filePath.slice(idx);
+
   return filePath;
 }
 

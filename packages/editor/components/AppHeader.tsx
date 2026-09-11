@@ -119,6 +119,7 @@ function AppHeaderCallbackActions({
   onCallbackApprove,
 }: AppHeaderCallbackActionsProps) {
   if (!callbackConfig || isApiMode || !isSharedSession) return null;
+
   return (
     <>
       <div className="w-px h-5 bg-border/50 mx-1 hidden md:block" />
@@ -165,6 +166,7 @@ function AppHeaderAnnotateActions({
   onAnnotateApprove,
 }: AppHeaderAnnotateActionsProps) {
   if (!isApiMode || (linkedDocIsActive && !annotateMode)) return null;
+
   return (
     <>
       {annotateMode && (

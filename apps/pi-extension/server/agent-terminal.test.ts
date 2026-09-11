@@ -25,6 +25,7 @@ describe("pi annotate agent terminal capability", () => {
           agent: "claude",
           allowEmptyPromptLaunch: true,
         });
+
         return {
           agent: "claude",
           command: "claude",
@@ -84,7 +85,9 @@ describe("pi annotate agent terminal capability", () => {
         new Set(["pi"]),
         launchPlan,
       );
+
       if (!normalized.ok) throw new Error(normalized.message);
+
       if (expectedCols === undefined) {
         expect(normalized.value).not.toHaveProperty("cols");
       } else {
@@ -114,8 +117,10 @@ describe("pi annotate agent terminal capability", () => {
       bridge.dispose();
     } finally {
       httpServer.close();
+
       if (previousRemote === undefined) delete process.env.PLANNOTATOR_REMOTE;
       else process.env.PLANNOTATOR_REMOTE = previousRemote;
+
       if (previousAgentRemote === undefined) delete process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE;
       else process.env.PLANNOTATOR_AGENT_TERMINAL_REMOTE = previousAgentRemote;
     }
@@ -144,6 +149,7 @@ describe("pi annotate agent terminal capability", () => {
         server.url.replace(/^http/, "ws") + plan.agentTerminal.wsPath,
         { type: "spawn", requestId: "missing-agent", options: {} },
       );
+
       expect(JSON.parse(message)).toEqual({
         type: "error",
         requestId: "missing-agent",
@@ -189,6 +195,7 @@ function websocketRoundTrip(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url);
+
     const timer = setTimeout(() => {
       ws.close();
       reject(new Error("Timed out waiting for WebSocket response"));
@@ -200,6 +207,7 @@ function websocketRoundTrip(
       ws.close();
       resolve(String(event.data));
     };
+
     ws.onerror = () => {
       clearTimeout(timer);
       reject(new Error("WebSocket failed"));

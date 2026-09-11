@@ -18,6 +18,7 @@ const CLOSE_DELAY_MS = 140;
 export const SemanticFileBadge: React.FC<{ filePath: string }> = ({ filePath }) => {
   const state = useReviewStateOptional();
   const available = state?.semanticDiffAvailable === true;
+
   const { loading, changes, binaryChanges } = useFileSemanticChanges(
     filePath,
     state?.rawPatch ?? "",
@@ -33,13 +34,16 @@ export const SemanticFileBadge: React.FC<{ filePath: string }> = ({ filePath }) 
       closeTimer.current = null;
     }
   };
+
   const scheduleClose = () => {
     cancelClose();
     closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
   };
 
   const count = changes.length + binaryChanges.length;
+
   if (!state || !available) return null;
+
   // Sem is available but this file has no named changes (or is still
   // resolving): show a disabled "sem 0" so every header carries the badge in
   // the same spot — consistent look, aligned buttons, no popover.
@@ -61,6 +65,7 @@ export const SemanticFileBadge: React.FC<{ filePath: string }> = ({ filePath }) 
     state.onLineSelection(lineSelectionForChange(change));
     setOpen(false);
   };
+
   const openBinary = (change: SemanticDiffBinaryChange) => {
     state.openDiffFile(change.filePath);
     state.onLineSelection(null);

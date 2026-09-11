@@ -39,6 +39,7 @@ function renderInline(text: string, startKey: number): React.ReactNode[] {
   // Match inline patterns: [text](url), `code`, **bold**, *italic*, _italic_, bare URLs
   const regex =
     /(\[([^\]]+)\]\((https?:\/\/[^)]+)\)|`[^`]+`|\*\*[^*]+\*\*|(?<!\w)_([^_\s](?:[\s\S]*?[^_\s])?)_(?!\w)|\*[^*]+\*|https?:\/\/[^\s<)\]]+)/g;
+
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -49,6 +50,7 @@ function renderInline(text: string, startKey: number): React.ReactNode[] {
     }
 
     const token = match[0];
+
     if (match[1] && match[2] && match[3]) {
       // Markdown link: [text](url)
       nodes.push(

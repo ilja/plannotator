@@ -3,6 +3,7 @@ import { Schema } from "effect";
 import { createEditorAnnotationHandler } from "./editor-annotations";
 
 type JsonValue = Schema.Schema.Type<typeof Schema.Json>;
+
 const decodeJson = Schema.decodeUnknownSync(Schema.Json);
 
 const endpoint = "http://localhost";
@@ -28,6 +29,7 @@ async function responseJson(response: Response): Promise<JsonValue> {
 describe("editor annotation handler", () => {
   test("accepts valid requests, including negative and fractional line numbers, and round-trips through GET", async () => {
     const handler = createEditorAnnotationHandler();
+
     const response = await handlePost(
       handler,
       JSON.stringify({
@@ -46,6 +48,7 @@ describe("editor annotation handler", () => {
       new Request(`${endpoint}/api/editor-annotations`),
       new URL(`${endpoint}/api/editor-annotations`),
     );
+
     expect(await responseJson(getResponse!)).toEqual({
       annotations: [
         {
@@ -84,6 +87,7 @@ describe("editor annotation handler", () => {
 
   test("omits a malformed optional comment without rejecting the annotation", async () => {
     const handler = createEditorAnnotationHandler();
+
     const response = await handlePost(
       handler,
       JSON.stringify({
@@ -96,10 +100,12 @@ describe("editor annotation handler", () => {
     );
 
     expect(response.status).toBe(200);
+
     const getResponse = await handler.handle(
       new Request(`${endpoint}/api/editor-annotations`),
       new URL(`${endpoint}/api/editor-annotations`),
     );
+
     expect(await responseJson(getResponse!)).toEqual({
       annotations: [
         {

@@ -7,6 +7,7 @@ import type {
   PRStackTree,
   PRStackNode,
 } from "./pr-types";
+
 export type {
   PRDiffScope,
   PRDiffScopeOption,
@@ -21,6 +22,7 @@ function branchNameIsSafe(branch: string): boolean {
 
 export function getPRStackInfo(metadata: PRMetadata | undefined): PRStackInfo | null {
   if (!metadata?.defaultBranch) return null;
+
   if (metadata.baseBranch === metadata.defaultBranch) return null;
 
   return {
@@ -38,7 +40,9 @@ export function resolveStackInfo(
   existing?: PRStackInfo | null,
 ): PRStackInfo | null {
   if (existing) return existing;
+
   if (!stackTree || stackTree.nodes.filter((n) => !n.isDefaultBranch).length <= 1) return null;
+
   return (
     getPRStackInfo(metadata) ?? {
       isStacked: true,
@@ -82,16 +86,19 @@ export async function resolvePRFullStackBaseRef(
   cwd?: string,
 ): Promise<string | null> {
   const remoteRef = `origin/${defaultBranch}`;
+
   const remote = await runtime.runGit(
     ["show-ref", "--verify", "--quiet", `refs/remotes/${remoteRef}`],
     { cwd },
   );
+
   if (remote.exitCode === 0) return remoteRef;
 
   const local = await runtime.runGit(
     ["show-ref", "--verify", "--quiet", `refs/heads/${defaultBranch}`],
     { cwd },
   );
+
   if (local.exitCode === 0) return defaultBranch;
 
   return null;
@@ -103,6 +110,7 @@ export async function runPRFullStackDiff(
   cwd?: string,
 ): Promise<DiffResult> {
   const defaultBranch = metadata.defaultBranch;
+
   if (!defaultBranch || !branchNameIsSafe(defaultBranch)) {
     return {
       patch: "",
@@ -112,6 +120,7 @@ export async function runPRFullStackDiff(
   }
 
   const baseRef = await resolvePRFullStackBaseRef(runtime, defaultBranch, cwd);
+
   if (!baseRef) {
     return {
       patch: "",
@@ -128,9 +137,12 @@ export async function runPRFullStackDiff(
     "--end-of-options",
     `${baseRef}...HEAD`,
   ];
+
   const diff = await runtime.runGit(diffArgs, { cwd });
+
   if (diff.exitCode !== 0) {
     const message = diff.stderr.trim() || `git ${diffArgs.join(" ")} failed`;
+
     return {
       patch: "",
       label: "Full stack diff unavailable",
@@ -197,6 +209,7 @@ export async function runPRLayerLocalDiff(
   ];
 
   let range: string[] | null = null;
+
   if (
     metadata.mergeBaseSha &&
     FULL_SHA_RE.test(metadata.mergeBaseSha) &&
@@ -206,15 +219,19 @@ export async function runPRLayerLocalDiff(
   } else if (FULL_SHA_RE.test(metadata.baseSha) && (await ensureObject(metadata.baseSha))) {
     range = [`${metadata.baseSha}...${metadata.headSha}`];
   }
+
   if (!range) {
     return unavailable("Could not resolve the PR base commit in the local checkout.");
   }
 
   const diff = await runtime.runGit(diffArgsFor(range), { cwd });
+
   if (diff.exitCode !== 0) {
     const message = diff.stderr.trim() || "git diff failed";
+
     return unavailable(message.split("\n").find((line) => line.trim().length > 0) ?? message);
   }
+
   if (!diff.stdout.trim()) {
     return unavailable("Local recompute produced an empty diff.");
   }
@@ -238,19 +255,25 @@ export async function getPRFullStackFingerprint(
   cwd?: string,
 ): Promise<string | null> {
   const defaultBranch = metadata.defaultBranch;
+
   if (!defaultBranch || !branchNameIsSafe(defaultBranch)) return null;
   const baseRef = await resolvePRFullStackBaseRef(runtime, defaultBranch, cwd);
+
   if (!baseRef) return null;
 
   // --no-optional-locks: probes run on a background poll and must never take
   // git's index lock alongside concurrent agent git operations.
   const head = await runtime.runGit(["--no-optional-locks", "rev-parse", "HEAD"], { cwd });
+
   if (head.exitCode !== 0) return null;
+
   const mergeBase = await runtime.runGit(
     ["--no-optional-locks", "merge-base", "--end-of-options", baseRef, "HEAD"],
     { cwd },
   );
+
   if (mergeBase.exitCode !== 0) return null;
+
   return `pr-full-stack:${mergeBase.stdout.trim()}:${head.stdout.trim()}`;
 }
 
@@ -266,9 +289,11 @@ export async function checkoutPRHead(
   const refSpec = `refs/pull/${metadata.number}/head`;
 
   const fetch = await runtime.runGit(["fetch", "origin", refSpec], { cwd });
+
   if (fetch.exitCode !== 0) return false;
 
   const checkout = await runtime.runGit(["checkout", "FETCH_HEAD"], { cwd });
+
   return checkout.exitCode === 0;
 }
 

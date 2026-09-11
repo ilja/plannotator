@@ -17,9 +17,11 @@ import { isOrphanChange } from "../dock/panels/semanticDiffShared";
  * for the rest of the session.
  */
 let cacheKey: string | null = null;
+
 let cachePromise: Promise<SemanticDiffResponse> | null = null;
 
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
+
 // After the in-flight retries are exhausted, the failure stays memoized for
 // this long before a fresh attempt is allowed. Badges mount/unmount on every
 // scroll in the virtualized all-files view — clearing the cache immediately
@@ -29,8 +31,10 @@ const FAILURE_RETRY_COOLDOWN_MS = 60_000;
 
 async function fetchSemanticDiff(): Promise<SemanticDiffResponse> {
   const res = await fetch("/api/semantic-diff");
+
   if (!res.ok) throw new Error("Semantic diff failed");
   const data: unknown = await res.json();
+
   return decodeSemanticDiffResponse(data);
 }
 
@@ -41,6 +45,7 @@ function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {
   const attempt = async (): Promise<SemanticDiffResponse> => {
     for (let i = 0; ; i++) {
       let result: SemanticDiffResponse;
+
       try {
         result = await fetchSemanticDiff();
       } catch (error) {
@@ -50,9 +55,11 @@ function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {
           message: error instanceof Error ? error.message : String(error),
         };
       }
+
       // 'unavailable' means sem isn't installed — retrying won't change that.
       if (result.status !== "error" || i >= RETRY_DELAYS_MS.length) return result;
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[i]));
+
       if (cacheKey !== rawPatch) return result; // patch changed mid-retry; let the new fetch win
     }
   };
@@ -66,6 +73,7 @@ function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {
         data.message ?? data.reason ?? data.status,
       );
     }
+
     if (data.status === "error" && cacheKey === rawPatch && cachePromise === promise) {
       setTimeout(() => {
         if (cacheKey === rawPatch && cachePromise === promise) {
@@ -74,9 +82,12 @@ function loadSemanticDiff(rawPatch: string): Promise<SemanticDiffResponse> {
         }
       }, FAILURE_RETRY_COOLDOWN_MS);
     }
+
     return data;
   });
+
   cachePromise = promise;
+
   return promise;
 }
 
@@ -101,6 +112,7 @@ export function useFileSemanticChanges(
   useEffect(() => {
     if (!enabled) {
       setState(EMPTY);
+
       return;
     }
 
@@ -109,10 +121,13 @@ export function useFileSemanticChanges(
 
     loadSemanticDiff(rawPatch).then((data) => {
       if (cancelled) return;
+
       if (data.status !== "ok") {
         setState(EMPTY);
+
         return;
       }
+
       setState({
         loading: false,
         changes: data.changes.filter((c) => c.filePath === filePath && !isOrphanChange(c)),

@@ -10,5 +10,6 @@ export function isMermaidLanguage(language?: string): boolean {
 
 export function isGraphvizLanguage(language?: string): boolean {
   const normalizedLanguage = getFenceLanguage(language);
+
   return normalizedLanguage ? GRAPHVIZ_LANGUAGES.has(normalizedLanguage) : false;
 }

@@ -29,6 +29,7 @@ describe("exportReviewFeedback - workspace mode", () => {
       ann({ filePath: "repo-a/src/index.ts", lineStart: 5, text: "first" }),
       ann({ filePath: "repo-b/src/index.ts", lineStart: 1, text: "second" }),
     ]);
+
     // Different repos with same relative path should be separate groups
     expect(result).toContain("## repo-a/src/index.ts");
     expect(result).toContain("## repo-b/src/index.ts");
@@ -40,6 +41,7 @@ describe("exportReviewFeedback - workspace mode", () => {
       ann({ filePath: "repo-a/src/index.ts", lineStart: 5, text: "earlier" }),
       ann({ filePath: "repo-b/src/index.ts", lineStart: 15, text: "middle in repo-b" }),
     ]);
+
     const earlierIdx = result.indexOf("earlier");
     const laterIdx = result.indexOf("later");
     const middleInRepoB = result.indexOf("middle in repo-b");
@@ -55,6 +57,7 @@ describe("exportReviewFeedback - workspace mode", () => {
       ann({ filePath: "apps/web/src/app.ts", text: "in sibling repo" }),
       ann({ filePath: "apps/src/main.ts", text: "in parent repo" }),
     ]);
+
     expect(result).toContain("## apps/api/src/server.ts");
     expect(result).toContain("## apps/web/src/app.ts");
     expect(result).toContain("## apps/src/main.ts");
@@ -64,6 +67,7 @@ describe("exportReviewFeedback - workspace mode", () => {
     const result = exportReviewFeedback([
       ann({ filePath: "packages/shared/utils/helpers/string.ts", text: "deep path" }),
     ]);
+
     expect(result).toContain("## packages/shared/utils/helpers/string.ts");
     expect(result).toContain("### Line 10 (new)");
   });
@@ -74,6 +78,7 @@ describe("exportReviewFeedback - workspace mode", () => {
       ann({ filePath: "repo-b/src/index.ts", lineStart: 10, text: "second comment" }),
       ann({ filePath: "repo-a/src/index.ts", lineStart: 15, text: "third comment" }),
     ]);
+
     // All repo-a comments should be grouped together
     const repoAHeaderIdx = result.indexOf("## repo-a/src/index.ts");
     const repoBHeaderIdx = result.indexOf("## repo-b/src/index.ts");
@@ -92,6 +97,7 @@ describe("exportReviewFeedback - workspace mode", () => {
       ann({ filePath: "repo-a/src/index.ts", scope: "file", text: "file comment" }),
       ann({ filePath: "repo-a/src/index.ts", lineStart: 1, lineEnd: 1, text: "line comment" }),
     ]);
+
     expect(result).toContain("## repo-a/src/index.ts");
     expect(result).toContain("### File Comment");
     expect(result).toContain("### Line 1");
@@ -104,6 +110,7 @@ describe("exportReviewFeedback - workspace mode", () => {
     const result = exportReviewFeedback([
       ann({ filePath: "my-repo_2.0/src/index.ts", text: "special chars" }),
     ]);
+
     expect(result).toContain("## my-repo_2.0/src/index.ts");
   });
 
@@ -124,6 +131,7 @@ describe("exportReviewFeedback - workspace mode", () => {
       ann({ filePath: "repo-a/src/a.ts" }),
       ann({ filePath: "repo-b/src/b.ts" }),
     ]);
+
     const headingMatches = result.match(/^# /gm) || [];
     expect(headingMatches).toHaveLength(1);
   });

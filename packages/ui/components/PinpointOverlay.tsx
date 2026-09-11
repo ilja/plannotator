@@ -21,6 +21,7 @@ export const PinpointOverlay: React.FC<PinpointOverlayProps> = ({ target, contai
   useLayoutEffect(() => {
     if (!target || !containerRef.current) {
       setPosition(null);
+
       return;
     }
 

@@ -18,6 +18,7 @@ type AgentTerminalSocketData = {
 };
 
 const MAX_PENDING_MESSAGES = 100;
+
 const SIDECAR_READINESS_ERROR = "Agent terminal sidecar did not report a WebSocket URL.";
 
 const AgentTerminalSidecarReadinessSchema = Schema.Union([
@@ -68,6 +69,7 @@ export async function createBunAgentTerminalBridge(args: {
   }
 
   let core: WebTuiCore;
+
   try {
     core = await import("@plannotator/webtui/core");
   } catch (err) {
@@ -79,6 +81,7 @@ export async function createBunAgentTerminalBridge(args: {
   }
 
   const runtime = await resolveAgentTerminalRuntime();
+
   if (!runtime.ok) {
     return createDisabledBridge({
       enabled: false,
@@ -86,6 +89,7 @@ export async function createBunAgentTerminalBridge(args: {
       message: runtime.message,
     });
   }
+
   const resolvedRuntime = runtime;
 
   const wsPath = buildAgentTerminalWsPath(randomBytes(18).toString("hex"));
@@ -94,6 +98,7 @@ export async function createBunAgentTerminalBridge(args: {
   let connectingClients = 0;
   let sidecar: NodeAgentTerminalSidecar | null = null;
   let sidecarPromise: Promise<NodeAgentTerminalSidecar> | null = null;
+
   const capability: AgentTerminalCapability = {
     enabled: true,
     cwd: args.cwd,
@@ -108,6 +113,7 @@ export async function createBunAgentTerminalBridge(args: {
     },
     upgrade(req, server) {
       if (!isAllowedOrigin(req)) return false;
+
       return server.upgrade(req, {
         data: { upstream: null, pending: [] },
       });
@@ -118,10 +124,13 @@ export async function createBunAgentTerminalBridge(args: {
         void getSidecar()
           .then((activeSidecar) => {
             connectingClients = Math.max(0, connectingClients - 1);
+
             if (disposed || ws.readyState !== WebSocket.OPEN) {
               releaseSidecarIfIdle(activeSidecar);
+
               return;
             }
+
             const upstream = new WebSocket(activeSidecar.wsUrl);
             ws.data.upstream = upstream;
             upstreams.add(upstream);
@@ -129,6 +138,7 @@ export async function createBunAgentTerminalBridge(args: {
             upstream.addEventListener("open", () => {
               const queued = ws.data.pending;
               ws.data.pending = [];
+
               for (const payload of queued) upstream.send(payload);
             });
 
@@ -140,23 +150,27 @@ export async function createBunAgentTerminalBridge(args: {
 
             upstream.addEventListener("close", () => {
               upstreams.delete(upstream);
+
               if (ws.readyState === WebSocket.OPEN) ws.close();
               releaseSidecarIfIdle(activeSidecar);
             });
 
             upstream.addEventListener("error", () => {
               upstreams.delete(upstream);
+
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(
                   JSON.stringify({ type: "error", message: "Agent terminal backend failed." }),
                 );
                 ws.close();
               }
+
               releaseSidecarIfIdle(activeSidecar);
             });
           })
           .catch((err) => {
             connectingClients = Math.max(0, connectingClients - 1);
+
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(
                 JSON.stringify({
@@ -171,32 +185,40 @@ export async function createBunAgentTerminalBridge(args: {
       message(ws, raw) {
         const payload = Buffer.isBuffer(raw) ? raw.toString("utf8") : raw;
         const upstream = ws.data.upstream;
+
         if (upstream?.readyState === WebSocket.OPEN) {
           upstream.send(payload);
+
           return;
         }
+
         if (ws.data.pending.length >= MAX_PENDING_MESSAGES) {
           ws.send(
             JSON.stringify({ type: "error", message: "Agent terminal backend is still starting." }),
           );
           ws.close();
+
           return;
         }
+
         ws.data.pending.push(payload);
       },
       close(ws) {
         ws.data.pending = [];
         const upstream = ws.data.upstream;
         ws.data.upstream = null;
+
         if (upstream) {
           upstreams.delete(upstream);
           upstream.close();
         }
+
         releaseSidecarIfIdle();
       },
     },
     dispose() {
       disposed = true;
+
       for (const upstream of upstreams) upstream.close();
       upstreams.clear();
       sidecar?.dispose();
@@ -206,6 +228,7 @@ export async function createBunAgentTerminalBridge(args: {
 
   function getSidecar(): Promise<NodeAgentTerminalSidecar> {
     if (sidecar) return Promise.resolve(sidecar);
+
     if (!sidecarPromise) {
       let promise: Promise<NodeAgentTerminalSidecar>;
       promise = startNodeAgentTerminalSidecar(args.cwd, resolvedRuntime, wsPath)
@@ -214,16 +237,21 @@ export async function createBunAgentTerminalBridge(args: {
             activeSidecar.dispose();
             throw new Error("Agent terminal bridge was disposed.");
           }
+
           sidecar = activeSidecar;
           void activeSidecar.exited.finally(() => {
             const wasCurrent = sidecar === activeSidecar || sidecarPromise === promise;
+
             if (sidecar === activeSidecar) sidecar = null;
+
             if (sidecarPromise === promise) sidecarPromise = null;
+
             if (wasCurrent) {
               for (const upstream of upstreams) upstream.close();
               upstreams.clear();
             }
           });
+
           return activeSidecar;
         })
         .catch((err) => {
@@ -232,12 +260,15 @@ export async function createBunAgentTerminalBridge(args: {
         });
       sidecarPromise = promise;
     }
+
     return sidecarPromise;
   }
 
   function releaseSidecarIfIdle(activeSidecar: NodeAgentTerminalSidecar | null = sidecar): void {
     if (!activeSidecar || disposed) return;
+
     if (connectingClients > 0 || upstreams.size > 0) return;
+
     if (sidecar === activeSidecar) sidecar = null;
     sidecarPromise = null;
     activeSidecar.dispose();
@@ -283,6 +314,7 @@ async function startNodeAgentTerminalSidecar(
     const line = await withTimeout(readFirstLine(proc.stdout), 5_000);
     const wsUrl = parseAgentTerminalReadyLine(line);
     let didDispose = false;
+
     return {
       wsUrl,
       exited: proc.exited.then(
@@ -303,12 +335,14 @@ async function startNodeAgentTerminalSidecar(
 
 export function parseAgentTerminalReadyLine(line: string): string {
   const input: unknown = JSON.parse(line);
+
   return Option.match(Schema.decodeUnknownOption(AgentTerminalSidecarReadinessSchema)(input), {
     onNone: () => {
       throw new Error(SIDECAR_READINESS_ERROR);
     },
     onSome: (readiness) => {
       if (!readiness.ok) throw new Error(readiness.error ?? SIDECAR_READINESS_ERROR);
+
       return readiness.wsUrl;
     },
   });
@@ -319,25 +353,31 @@ async function readFirstLine(stream: ReadableStream<Uint8Array> | null): Promise
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let text = "";
+
   try {
     while (true) {
       const { done, value } = await reader.read();
+
       if (done) break;
       text += decoder.decode(value, { stream: true });
       const newline = text.indexOf("\n");
+
       if (newline !== -1) return text.slice(0, newline).trim();
     }
   } finally {
     reader.releaseLock();
   }
+
   throw new Error("Agent terminal sidecar exited before reporting ready.");
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+
   const timeout = new Promise<T>((_, reject) => {
     timer = setTimeout(() => reject(new Error("Agent terminal sidecar timed out.")), timeoutMs);
   });
+
   return Promise.race([promise, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
   });
@@ -347,18 +387,23 @@ function toWebSocketPayload(
   data: string | ArrayBuffer | Uint8Array | Buffer,
 ): string | ArrayBuffer {
   if (Buffer.isBuffer(data)) return Uint8Array.from(data).buffer;
+
   if (data instanceof ArrayBuffer) return data;
+
   if (data instanceof Uint8Array) {
     return data.buffer instanceof ArrayBuffer
       ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
       : Uint8Array.from(data).buffer;
   }
+
   return data;
 }
 
 function isAllowedOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
+
   if (!origin) return true;
+
   try {
     return new URL(origin).host === new URL(req.url).host;
   } catch {
@@ -369,6 +414,7 @@ function isAllowedOrigin(req: Request): boolean {
 function listAgents(core: WebTuiCore): AgentTerminalAgent[] {
   return core.listBuiltInAgents().map((id) => {
     const config = core.BUILT_IN_AGENTS[id];
+
     return {
       id,
       name: formatAgentName(id),
@@ -391,7 +437,9 @@ function formatAgentName(id: string): string {
     opencode: "OpenCode",
     pi: "Pi",
   };
+
   if (overrides[id]) return overrides[id];
+
   return id
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

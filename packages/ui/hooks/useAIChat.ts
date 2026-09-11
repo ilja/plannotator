@@ -58,8 +58,10 @@ export function buildDefaultPrompt(params: AskAIParams): string {
       params.lineStart === params.lineEnd
         ? `line ${params.lineStart}`
         : `lines ${params.lineStart}-${params.lineEnd}`;
+
     const sideLabel = params.side === "new" ? "new (added)" : "old (removed)";
     const codeBlock = params.selectedCode ? `\n\`\`\`\n${params.selectedCode}\n\`\`\`\n` : "";
+
     return `Re: ${params.filePath}, ${lineRef} (${sideLabel} side)${codeBlock}\n${params.prompt}`;
   }
 
@@ -70,9 +72,11 @@ export function buildDefaultPrompt(params: AskAIParams): string {
   if (params.scope?.kind === "selection") {
     const label = params.scope.label ? `Re: ${params.scope.label}` : "Re: selected text";
     const source = params.scope.sourcePath ? `\nSource: ${params.scope.sourcePath}` : "";
+
     const selection = params.scope.text
       ? `\n\nSelected text:\n\`\`\`\n${params.scope.text}\n\`\`\``
       : "";
+
     return `${label}${source}${selection}\n\n${params.prompt}`;
   }
 
@@ -93,8 +97,10 @@ function createAbortError(message: string): Error {
   if (globalThis.DOMException !== undefined) {
     return new DOMException(message, "AbortError");
   }
+
   const err = new Error(message);
   err.name = "AbortError";
+
   return err;
 }
 
@@ -117,6 +123,7 @@ function updateResponseForQuestion({
 }
 
 type StreamMessageUpdater = (updater: (messages: AIChatEntry[]) => AIChatEntry[]) => void;
+
 type PermissionUpdater = (
   updater: (permissions: PendingPermission[]) => PendingPermission[],
 ) => void;
@@ -145,6 +152,7 @@ function handleAIChatStreamMessage(
         }),
       }),
     );
+
     return;
   }
 
@@ -157,6 +165,7 @@ function handleAIChatStreamMessage(
           response.text ? response : { ...response, text: message.text },
       }),
     );
+
     return;
   }
 
@@ -173,6 +182,7 @@ function handleAIChatStreamMessage(
         toolUseId: message.toolUseId,
       },
     ]);
+
     return;
   }
 
@@ -189,6 +199,7 @@ function handleAIChatStreamMessage(
       }),
     );
     setError(message.error);
+
     return;
   }
 
@@ -212,6 +223,7 @@ async function processAIChatStream(
   handlers: StreamMessageHandlers,
 ): Promise<void> {
   const reader = response.body?.getReader();
+
   if (!reader) throw new Error(`HTTP ${response.status}`);
 
   const decoder = new TextDecoder();
@@ -219,13 +231,16 @@ async function processAIChatStream(
 
   while (true) {
     const { done, value } = await reader.read();
+
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
+
     for (const line of lines) {
       if (!line.startsWith("data: ") || line.slice(6) === "[DONE]") continue;
+
       try {
         handleAIChatStreamMessage(decodeAIChatStreamMessage(JSON.parse(line.slice(6))), handlers);
       } catch {
@@ -277,6 +292,7 @@ export function useAIChat({
 
       const requestId = ++createRequestRef.current;
       setIsCreatingSession(true);
+
       try {
         const res = await fetch("/api/ai/session", {
           method: "POST",
@@ -296,7 +312,9 @@ export function useAIChat({
         }
 
         const sessionId = decodeAIChatSessionId(await res.json());
+
         if (!sessionId) throw new Error("AI session response was malformed");
+
         if (signal.aborted || epoch !== sessionEpochRef.current) {
           fetch("/api/ai/abort", {
             method: "POST",
@@ -305,7 +323,9 @@ export function useAIChat({
           }).catch(() => {});
           throw createAbortError("AI session creation was superseded");
         }
+
         setSessionId(sessionId);
+
         return sessionId;
       } finally {
         if (createRequestRef.current === requestId) {
@@ -328,6 +348,7 @@ export function useAIChat({
       setError(null);
 
       const questionId = generateId("ai-question");
+
       const question: AIQuestion = {
         id: questionId,
         prompt: params.prompt,
@@ -352,6 +373,7 @@ export function useAIChat({
 
       try {
         let sid = sessionIdRef.current;
+
         if (!sid) {
           sid = await createSession(controller.signal, epoch);
         }
@@ -361,6 +383,7 @@ export function useAIChat({
         }
 
         const fullPrompt = buildPrompt(params);
+
         const res = await fetch("/api/ai/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -404,6 +427,7 @@ export function useAIChat({
               }),
             }),
           );
+
           return;
         }
 
@@ -472,10 +496,12 @@ export function useAIChat({
   const resetSession = useCallback(() => {
     sessionEpochRef.current += 1;
     createRequestRef.current += 1;
+
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
+
     setSessionId(null);
     setIsCreatingSession(false);
     setIsStreaming(false);
@@ -484,10 +510,12 @@ export function useAIChat({
   const resetThread = useCallback(() => {
     sessionEpochRef.current += 1;
     createRequestRef.current += 1;
+
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
+
     setThread(createThread(threadTitle));
     setIsCreatingSession(false);
     setIsStreaming(false);
@@ -498,6 +526,7 @@ export function useAIChat({
     return () => {
       sessionEpochRef.current += 1;
       createRequestRef.current += 1;
+
       if (abortRef.current) {
         abortRef.current.abort();
       }

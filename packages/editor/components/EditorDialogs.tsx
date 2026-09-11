@@ -228,8 +228,10 @@ function ExitWarningDialog({
   const isApproving = model.exitWarningAction === "approve";
   const actionLabel = isApproving ? "approve" : "close";
   const hasOnlySavedFileChanges = model.hasSavedFileChanges && !model.hasUnsentFeedback;
+
   const savedFileChangesLabel =
     model.savedFileChangesCount === 1 ? "saved file change" : "saved file changes";
+
   const savedFileChangesVerb = model.savedFileChangesCount === 1 ? "is" : "are";
   const savedFileChangesPronoun = model.savedFileChangesCount === 1 ? "it" : "them";
 

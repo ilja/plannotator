@@ -6,7 +6,9 @@ import { AnnotationType, type Annotation } from "../types";
 import { decodeAnnotation } from "../utils/annotationSchemas";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const realEventSource = globalThis.EventSource;
 
 class MockEventSource {
@@ -36,6 +38,7 @@ class MockEventSource {
 type ExternalAnnotations = ReturnType<typeof useExternalAnnotations<Annotation>>;
 
 let roots: Root[] = [];
+
 let containers: HTMLElement[] = [];
 
 async function mountExternalAnnotations(): Promise<{
@@ -53,10 +56,12 @@ async function mountExternalAnnotations(): Promise<{
     const resultRef = useRef<ExternalAnnotations | null>(null);
     resultRef.current = useExternalAnnotations(decodeAnnotation, { enabled: true });
     latest = resultRef.current;
+
     return null;
   }
 
   await act(async () => root.render(<Harness />));
+
   return {
     current: () => latest,
     unmount: async () => {
@@ -70,13 +75,17 @@ async function mountExternalAnnotations(): Promise<{
 
 afterEach(async () => {
   globalThis.fetch = realFetch;
+
   if (realEventSource) globalThis.EventSource = realEventSource;
   else {
     // SAFETY: globalThis is untyped in test — any is intentional
     delete (globalThis as any).EventSource;
   }
+
   MockEventSource.instances = [];
+
   for (const root of roots.splice(0)) await act(async () => root.unmount());
+
   for (const container of containers.splice(0)) container.remove();
 });
 
@@ -90,10 +99,12 @@ describe("useExternalAnnotations", () => {
     // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
     globalThis.fetch = (async (input, init) => {
       calls.push({ url: String(input), method: init?.method ?? "GET" });
+
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }) as typeof fetch;
 
     const session = await mountExternalAnnotations();
+
     const choice: Annotation = {
       id: "ann-choice-external",
       blockId: "block-0",
@@ -112,6 +123,7 @@ describe("useExternalAnnotations", () => {
         ],
       },
     };
+
     await act(async () => {
       MockEventSource.instances[0]!.emit({ type: "snapshot", annotations: [choice] });
       await Promise.resolve();
@@ -136,6 +148,7 @@ describe("useExternalAnnotations", () => {
     // @ts-expect-error — MockEventSource is incomplete, intentionally suppressed
     globalThis.EventSource = MockEventSource as typeof EventSource;
     const session = await mountExternalAnnotations();
+
     const annotation: Annotation = {
       id: "valid",
       blockId: "block",
@@ -145,6 +158,7 @@ describe("useExternalAnnotations", () => {
       originalText: "A",
       createdA: 1,
     };
+
     await act(async () => {
       MockEventSource.instances[0]!.emit({
         type: "snapshot",
@@ -166,6 +180,7 @@ describe("useExternalAnnotations", () => {
     // SAFETY: MockEventSource matches the EventSource behavior used by this hook.
     // @ts-expect-error — MockEventSource is incomplete, intentionally suppressed
     globalThis.EventSource = MockEventSource as typeof EventSource;
+
     const annotation: Annotation = {
       id: "polled",
       blockId: "block",
@@ -175,6 +190,7 @@ describe("useExternalAnnotations", () => {
       originalText: "A",
       createdA: 1,
     };
+
     // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
     globalThis.fetch = (async (_input: RequestInfo | URL) =>
       new Response(JSON.stringify({ annotations: [annotation], version: 1 }))) as typeof fetch;

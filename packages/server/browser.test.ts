@@ -6,6 +6,7 @@ import {
 } from "./browser";
 
 const savedEnv: Record<string, string | undefined> = {};
+
 const envKeys = ["PLANNOTATOR_BROWSER", "BROWSER"];
 
 function clearEnv() {

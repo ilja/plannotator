@@ -14,6 +14,7 @@ const SemanticDiffSummarySchema = Schema.Struct({
   orphan: Schema.Number,
   total: Schema.Number,
 });
+
 export type SemanticDiffSummary = Schema.Schema.Type<typeof SemanticDiffSummarySchema>;
 
 const SemanticDiffChangeSchema = Schema.Struct({
@@ -30,6 +31,7 @@ const SemanticDiffChangeSchema = Schema.Struct({
   oldEndLine: Schema.NullOr(Schema.Number),
   structuralChange: Schema.NullOr(Schema.Boolean),
 });
+
 export type SemanticDiffChange = Schema.Schema.Type<typeof SemanticDiffChangeSchema>;
 
 const SemanticDiffBinaryChangeSchema = Schema.Struct({
@@ -38,6 +40,7 @@ const SemanticDiffBinaryChangeSchema = Schema.Struct({
   oldFilePath: Schema.NullOr(Schema.String),
   fileStatus: Schema.NullOr(Schema.String),
 });
+
 export type SemanticDiffBinaryChange = Schema.Schema.Type<typeof SemanticDiffBinaryChangeSchema>;
 
 const SemanticDiffOkResponseSchema = Schema.Struct({
@@ -48,6 +51,7 @@ const SemanticDiffOkResponseSchema = Schema.Struct({
   semVersion: Schema.String,
   semSource: Schema.String,
 });
+
 export type SemanticDiffOkResponse = Schema.Schema.Type<typeof SemanticDiffOkResponseSchema>;
 
 const SemanticDiffOkResponseEnvelopeSchema = Schema.Struct({
@@ -64,6 +68,7 @@ const SemanticDiffUnavailableResponseSchema = Schema.Struct({
   reason: Schema.String,
   message: Schema.String,
 });
+
 export type SemanticDiffUnavailableResponse = Schema.Schema.Type<
   typeof SemanticDiffUnavailableResponseSchema
 >;
@@ -77,6 +82,7 @@ const SemanticDiffErrorResponseSchema = Schema.Struct({
   semVersion: Schema.optionalKey(Schema.String),
   semSource: Schema.optionalKey(Schema.String),
 });
+
 export type SemanticDiffErrorResponse = Schema.Schema.Type<typeof SemanticDiffErrorResponseSchema>;
 
 const SemanticDiffResponseSchema = Schema.Union([
@@ -84,6 +90,7 @@ const SemanticDiffResponseSchema = Schema.Union([
   SemanticDiffUnavailableResponseSchema,
   SemanticDiffErrorResponseSchema,
 ]);
+
 export type SemanticDiffResponse = Schema.Schema.Type<typeof SemanticDiffResponseSchema>;
 
 const SemanticDiffResponseEnvelopeSchema = Schema.Union([
@@ -91,14 +98,17 @@ const SemanticDiffResponseEnvelopeSchema = Schema.Union([
   SemanticDiffUnavailableResponseSchema,
   SemanticDiffErrorResponseSchema,
 ]);
+
 type SemanticDiffResponseEnvelope = Schema.Schema.Type<typeof SemanticDiffResponseEnvelopeSchema>;
 
 const decodeSemanticDiffChange = Schema.decodeUnknownResult(SemanticDiffChangeSchema);
+
 const decodeSemanticDiffBinaryChange = Schema.decodeUnknownResult(SemanticDiffBinaryChangeSchema);
 
 function decodeSemanticDiffChanges(changes: ReadonlyArray<unknown>): SemanticDiffChange[] {
   return changes.flatMap((change) => {
     const result = decodeSemanticDiffChange(change);
+
     return Result.isSuccess(result) ? [result.success] : [];
   });
 }
@@ -108,6 +118,7 @@ function decodeSemanticDiffBinaryChanges(
 ): SemanticDiffBinaryChange[] {
   return changes.flatMap((change) => {
     const result = decodeSemanticDiffBinaryChange(change);
+
     return Result.isSuccess(result) ? [result.success] : [];
   });
 }

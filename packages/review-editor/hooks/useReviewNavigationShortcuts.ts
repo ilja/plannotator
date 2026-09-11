@@ -33,11 +33,13 @@ function handleReviewSearchShortcut(
   ) {
     return false;
   }
+
   if (options.hasSearchableFiles) {
     event.preventDefault();
     options.setIsFileTreeOpen(true);
     options.openSearch();
   }
+
   return true;
 }
 
@@ -53,8 +55,10 @@ function handleReviewSearchNavigationShortcut(
   ) {
     return false;
   }
+
   event.preventDefault();
   options.stepSearchMatch(event.shiftKey ? -1 : 1);
+
   return true;
 }
 
@@ -63,6 +67,7 @@ function handleReviewEscapeShortcut(
   options: ReviewNavigationShortcutOptions,
 ): boolean {
   if (event.key !== "Escape") return false;
+
   if (options.showDestinationMenu) {
     options.setShowDestinationMenu(false);
   } else if (options.showExportModal) {
@@ -73,6 +78,7 @@ function handleReviewEscapeShortcut(
   } else if (options.searchQuery) {
     options.clearSearch();
   }
+
   return true;
 }
 
@@ -89,8 +95,10 @@ function handleFileTreeShortcut(
   ) {
     return false;
   }
+
   event.preventDefault();
   setIsFileTreeOpen((previous) => !previous);
+
   return true;
 }
 
@@ -101,7 +109,9 @@ function handleReviewSidebarShortcut(
   if (!(event.metaKey || event.ctrlKey) || event.key !== "." || isTypingTarget(event.target)) {
     return;
   }
+
   event.preventDefault();
+
   if (options.isSidebarOpen) options.closeSidebar();
   else options.openSidebar();
 }
@@ -110,13 +120,17 @@ export function useReviewNavigationShortcuts(options: ReviewNavigationShortcutOp
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (handleReviewSearchShortcut(event, options)) return;
+
       if (handleReviewSearchNavigationShortcut(event, options)) return;
+
       if (handleReviewEscapeShortcut(event, options)) return;
+
       if (handleFileTreeShortcut(event, options.setIsFileTreeOpen)) return;
       handleReviewSidebarShortcut(event, options);
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     options.showExportModal,

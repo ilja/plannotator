@@ -8,11 +8,13 @@ import type { CodeNavLocation } from "@plannotator/shared/code-nav";
 
 function basename(filePath: string): string {
   const i = filePath.lastIndexOf("/");
+
   return i === -1 ? filePath : filePath.slice(i + 1);
 }
 
 function dirname(filePath: string): string {
   const i = filePath.lastIndexOf("/");
+
   return i === -1 ? "" : filePath.slice(0, i);
 }
 
@@ -23,11 +25,14 @@ interface FileGroup {
 
 function groupByFile(locations: CodeNavLocation[]): FileGroup[] {
   const map = new Map<string, CodeNavLocation[]>();
+
   for (const loc of locations) {
     const existing = map.get(loc.filePath);
+
     if (existing) existing.push(loc);
     else map.set(loc.filePath, [loc]);
   }
+
   return Array.from(map.entries()).map(([filePath, locations]) => ({
     filePath,
     locations,
@@ -45,6 +50,7 @@ const CodePreview: React.FC<{
       targetRef.current.scrollIntoView({ block: "center" });
     }
   }, [preview?.targetLine, preview?.filePath]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
@@ -71,6 +77,7 @@ const CodePreview: React.FC<{
             const lineNum = preview.startLine + i;
             const isTarget = lineNum === preview.targetLine;
             const targetStyle = isTarget ? { backgroundColor: "var(--muted)" } : undefined;
+
             return (
               <tr key={lineNum} ref={isTarget ? targetRef : undefined}>
                 <td
@@ -101,8 +108,10 @@ const ReferenceList: React.FC<{
   const toggleCollapse = (filePath: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
+
       if (next.has(filePath)) next.delete(filePath);
       else next.add(filePath);
+
       return next;
     });
   };
@@ -111,6 +120,7 @@ const ReferenceList: React.FC<{
     <div className="text-[11px]">
       {groups.map((group) => {
         const isCollapsed = collapsed.has(group.filePath);
+
         return (
           <div key={group.filePath}>
             <button
@@ -143,6 +153,7 @@ const ReferenceList: React.FC<{
                   const isSelected =
                     selectedLocation?.filePath === loc.filePath &&
                     selectedLocation?.line === loc.line;
+
                   return (
                     <button
                       key={`${loc.line}-${i}`}
@@ -177,6 +188,7 @@ export const ReviewCodeNavPanel: React.FC<IDockviewPanelProps> = (props) => {
 
   const allLocations = useMemo(() => {
     if (!codeNavResult) return [];
+
     return [...codeNavResult.definitions, ...codeNavResult.references];
   }, [codeNavResult]);
 
@@ -205,14 +217,18 @@ export const ReviewCodeNavPanel: React.FC<IDockviewPanelProps> = (props) => {
 
   useEffect(() => {
     const el = containerRef.current;
+
     if (!el) return;
+
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
         props.api.close();
       }
     };
+
     el.addEventListener("keydown", handler);
+
     return () => el.removeEventListener("keydown", handler);
   }, [props.api]);
 

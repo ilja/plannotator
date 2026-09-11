@@ -38,10 +38,12 @@ function gateCodePath(
   | { render: "plain" } {
   if (!validation || !validation.ready) return { render: "link" };
   const entry = validation.validated.get(candidate);
+
   // If the validator is ready but has no entry for this candidate, the
   // extractor intentionally excluded it (e.g., inside an HTML comment or
   // fenced code block). Demote rather than optimistically linking.
   if (!entry) return { render: "plain" };
+
   switch (entry.status) {
     case "found":
       return { render: "link", resolved: entry.resolved };
@@ -62,6 +64,7 @@ interface LanguageMap {
 
 function extToLanguage(filepath: string): string | undefined {
   const ext = filepath.split(".").pop()?.toLowerCase();
+
   const map: LanguageMap = {
     ts: "typescript",
     tsx: "typescript",
@@ -88,6 +91,7 @@ function extToLanguage(filepath: string): string | undefined {
     swift: "swift",
     kt: "kotlin",
   };
+
   return ext ? map[ext] : undefined;
 }
 
@@ -108,9 +112,11 @@ const CodeSnippetPreview: React.FC<{
   const highlightedLines = useMemo(() => {
     const lang = extToLanguage(filepath);
     const lines = snippet.split("\n");
+
     return lines.map((line) => {
       try {
         if (lang) return hljs.highlight(line, { language: lang }).value;
+
         return hljs.highlightAuto(line).value;
       } catch {
         return line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -177,9 +183,11 @@ const CodeFileLink: React.FC<{
   const validation = useCodePathValidation();
   const gate = gateCodePath(candidate, validation);
   const [pickerOpen, setPickerOpen] = useState(false);
+
   const [hoverPreview, setHoverPreview] = useState<{ contents: string; filepath: string } | null>(
     null,
   );
+
   const hoverPreviewRef = useRef(hoverPreview);
   hoverPreviewRef.current = hoverPreview;
   const anchorRef = useRef<HTMLElement | null>(null);
@@ -205,14 +213,18 @@ const CodeFileLink: React.FC<{
   const handleMouseEnter = useCallback(() => {
     if (!hasLineRef || gate.render === "plain") return;
     cancelHide();
+
     if (hoverPreviewRef.current) return;
     showTimerRef.current = setTimeout(async () => {
       try {
         const params = new URLSearchParams({ path: candidate });
+
         if (baseDir) params.set("base", baseDir);
         const res = await fetch(`/api/doc?${params}`);
+
         if (!res.ok) return;
         const data = decodeCodeFileSuccessResponse(await res.json());
+
         if (data?.contents) setHoverPreview({ contents: data.contents, filepath: data.filepath });
       } catch {}
     }, 150);
@@ -223,6 +235,7 @@ const CodeFileLink: React.FC<{
       clearTimeout(showTimerRef.current);
       showTimerRef.current = null;
     }
+
     scheduleHide();
   }, [scheduleHide]);
 
@@ -237,6 +250,7 @@ const CodeFileLink: React.FC<{
   useEffect(() => {
     return () => {
       if (showTimerRef.current) clearTimeout(showTimerRef.current);
+
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
   }, []);
@@ -253,16 +267,21 @@ const CodeFileLink: React.FC<{
   }
 
   const isAmbiguous = gate.render === "ambiguous-link";
+
   const lineSuffix =
     parsed.line != null
       ? `:${parsed.line}${parsed.lineEnd != null ? `-${parsed.lineEnd}` : ""}`
       : "";
+
   const handleClick = () => {
     handleMouseLeave();
+
     if (isAmbiguous) {
       setPickerOpen(true);
+
       return;
     }
+
     const resolvedPath = gate.render === "link" && gate.resolved ? gate.resolved : candidate;
     onOpenCodeFile(gate.render === "link" && gate.resolved ? resolvedPath + lineSuffix : candidate);
   };
@@ -322,8 +341,10 @@ const CodeFileLink: React.FC<{
 };
 
 const DANGEROUS_PROTOCOL = /^\s*(javascript|data|vbscript|file)\s*:/i;
+
 function sanitizeLinkUrl(url: string): string | null {
   if (DANGEROUS_PROTOCOL.test(url)) return null;
+
   return url;
 }
 
@@ -347,20 +368,28 @@ export function trimUrlTail(url: string): string {
   const balanced = (u: string, close: string, open: string): boolean => {
     let opens = 0,
       closes = 0;
+
     for (const c of u) {
       if (c === open) opens++;
       else if (c === close) closes++;
     }
+
     return opens >= closes;
   };
+
   while (url.length > 0) {
     const last = url[url.length - 1];
+
     if (!/[.,;:!?)\]}>"']/.test(last)) break;
+
     if (last === ")" && balanced(url, ")", "(")) break;
+
     if (last === "]" && balanced(url, "]", "[")) break;
+
     if (last === "}" && balanced(url, "}", "{")) break;
     url = url.slice(0, -1);
   }
+
   return url;
 }
 
@@ -381,16 +410,20 @@ function emitPlainTextWithBareUrls(
   type Span =
     | { start: number; end: number; kind: "url"; value: string }
     | { start: number; end: number; kind: "path"; value: string };
+
   const spans: Span[] = [];
 
   // Collect bare URLs
   const urlRe = /https?:\/\/[^\s<>"']+/g;
   let m: RegExpExecArray | null;
+
   while ((m = urlRe.exec(text)) !== null) {
     const before = m.index === 0 ? previousChar : text[m.index - 1];
+
     if (/\w/.test(before)) continue;
     const url = trimUrlTail(m[0]);
     const safe = url.length > 0 ? sanitizeLinkUrl(url) : null;
+
     if (!safe) continue;
     spans.push({ start: m.index, end: m.index + url.length, kind: "url", value: url });
     urlRe.lastIndex = m.index + url.length;
@@ -399,12 +432,16 @@ function emitPlainTextWithBareUrls(
   // Collect bare code file paths (require /)
   if (onOpenCodeFile) {
     const pathRe = new RegExp(CODE_PATH_BARE_REGEX.source, "g");
+
     while ((m = pathRe.exec(text)) !== null) {
       const before = m.index === 0 ? previousChar : text[m.index - 1];
+
       if (/\w/.test(before)) continue;
       const candidate = m[0];
+
       if (!isCodeFilePathStrict(candidate)) continue;
       const overlaps = spans.some((s) => m!.index < s.end && m!.index + candidate.length > s.start);
+
       if (overlaps) continue;
       spans.push({
         start: m.index,
@@ -417,16 +454,19 @@ function emitPlainTextWithBareUrls(
 
   if (spans.length === 0) {
     parts.push(transformPlainText(text));
+
     return;
   }
 
   spans.sort((a, b) => a.start - b.start);
 
   let last = 0;
+
   for (const span of spans) {
     if (span.start > last) {
       parts.push(transformPlainText(text.slice(last, span.start)));
     }
+
     if (span.kind === "url") {
       parts.push(
         <a
@@ -442,6 +482,7 @@ function emitPlainTextWithBareUrls(
     } else {
       const cleanPath = span.value.replace(/#.*$/, "");
       const gate = gateCodePath(cleanPath, validation ?? null);
+
       if (gate.render === "plain") {
         // Bare prose, file doesn't exist — emit as plain text, no link styling.
         parts.push(transformPlainText(span.value));
@@ -457,8 +498,10 @@ function emitPlainTextWithBareUrls(
         );
       }
     }
+
     last = span.end;
   }
+
   if (last < text.length) {
     parts.push(transformPlainText(text.slice(last)));
   }
@@ -527,21 +570,26 @@ function renderNestedMarkdown(
 
 function parseHtmlComment(text: string): TokenResult | null {
   const match = text.match(/^<!--[\s\S]*?-->/);
+
   return match ? tokenResult([], match[0].length, ">") : null;
 }
 
 function parseEscape(text: string): TokenResult | null {
   const match = text.match(/^\\([\\*_`[\]~!.()\-#>+|{}&])/);
+
   return match ? tokenResult([match[1]], 2, match[1]) : null;
 }
 
 function parseBareUrl(text: string, context: TokenParserContext): TokenResult | null {
   if (/\w/.test(context.previousChar)) return null;
   const match = text.match(/^https?:\/\/[^\s<>"']+/);
+
   if (!match) return null;
   const url = trimUrlTail(match[0]);
   const safe = url.length > 0 ? sanitizeLinkUrl(url) : null;
+
   if (!safe) return null;
+
   return tokenResult(
     [
       <a
@@ -561,8 +609,10 @@ function parseBareUrl(text: string, context: TokenParserContext): TokenResult | 
 
 function parseHttpAutolink(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^<(https?:\/\/[^>]+)>/);
+
   if (!match) return null;
   const url = match[1];
+
   return tokenResult(
     [
       <a
@@ -582,8 +632,10 @@ function parseHttpAutolink(text: string, context: TokenParserContext): TokenResu
 
 function parseEmailAutolink(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^<([^@>\s]+@[^>\s]+)>/);
+
   if (!match) return null;
   const email = match[1];
+
   return tokenResult(
     [
       <a
@@ -601,13 +653,16 @@ function parseEmailAutolink(text: string, context: TokenParserContext): TokenRes
 
 function parseCustomAutolink(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^<([A-Za-z][A-Za-z0-9.+-]{0,31}:[^\s<>]*)>/);
+
   if (!match) return null;
   const content = match[1];
+
   return tokenResult([<span key={context.nextKey()}>{`<${content}>`}</span>], match[0].length, ">");
 }
 
 function parseStrikethrough(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^~~([\s\S]+?)~~/);
+
   return match
     ? tokenResult(
         [<del key={context.nextKey()}>{renderNestedMarkdown(match[1], context)}</del>],
@@ -619,6 +674,7 @@ function parseStrikethrough(text: string, context: TokenParserContext): TokenRes
 
 function parseBoldItalic(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^\*\*\*([\s\S]+?)\*\*\*/);
+
   return match
     ? tokenResult(
         [
@@ -634,6 +690,7 @@ function parseBoldItalic(text: string, context: TokenParserContext): TokenResult
 
 function parseBold(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^\*\*([\s\S]+?)\*\*/);
+
   return match
     ? tokenResult(
         [
@@ -649,6 +706,7 @@ function parseBold(text: string, context: TokenParserContext): TokenResult | nul
 
 function parseStarItalic(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^\*([\s\S]+?)\*/);
+
   return match
     ? tokenResult(
         [<em key={context.nextKey()}>{renderNestedMarkdown(match[1], context)}</em>],
@@ -661,6 +719,7 @@ function parseStarItalic(text: string, context: TokenParserContext): TokenResult
 function parseUnderscoreItalic(text: string, context: TokenParserContext): TokenResult | null {
   if (/\w/.test(context.previousChar)) return null;
   const match = text.match(/^_([^_\s](?:[\s\S]*?[^_\s])?)_(?!\w)/);
+
   return match
     ? tokenResult(
         [<em key={context.nextKey()}>{renderNestedMarkdown(match[1], context)}</em>],
@@ -672,8 +731,10 @@ function parseUnderscoreItalic(text: string, context: TokenParserContext): Token
 
 function parseInlineCode(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^`([^`]+)`/);
+
   if (!match) return null;
   const codeContent = match[1];
+
   const node =
     isCodeFilePath(codeContent) && context.onOpenCodeFile ? (
       <CodeFileLink
@@ -692,6 +753,7 @@ function parseInlineCode(text: string, context: TokenParserContext): TokenResult
         {codeContent}
       </code>
     );
+
   return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
 }
 
@@ -699,8 +761,10 @@ function parseColor(text: string, context: TokenParserContext): TokenResult | nu
   const match = text.match(
     /^(#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{4}|(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{3}))(?![0-9a-fA-F\w])/,
   );
+
   if (!match) return null;
   const hex = match[1];
+
   return tokenResult(
     [
       <span key={context.nextKey()} className="inline-flex items-center gap-1 align-middle">
@@ -725,12 +789,16 @@ function parseColor(text: string, context: TokenParserContext): TokenResult | nu
 function parseIssue(text: string, context: TokenParserContext): TokenResult | null {
   if (/\w/.test(context.previousChar)) return null;
   const match = text.match(/^#(\d+)(?!\w)/);
+
   if (!match) return null;
   const num = match[1];
+
   const href = context.githubRepo?.includes("/")
     ? `https://github.com/${context.githubRepo}/issues/${num}`
     : null;
+
   const label = `#${num}`;
+
   const node = href ? (
     <a
       key={context.nextKey()}
@@ -746,16 +814,19 @@ function parseIssue(text: string, context: TokenParserContext): TokenResult | nu
       {label}
     </span>
   );
+
   return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
 }
 
 function parseMention(text: string, context: TokenParserContext): TokenResult | null {
   if (/\w/.test(context.previousChar)) return null;
   const match = text.match(/^@([a-zA-Z][a-zA-Z0-9_-]{0,38})(?!\w)/);
+
   if (!match) return null;
   const handle = match[1];
   const href = context.githubRepo?.includes("/") ? `https://github.com/${handle}` : null;
   const label = `@${handle}`;
+
   const node = href ? (
     <a
       key={context.nextKey()}
@@ -771,15 +842,18 @@ function parseMention(text: string, context: TokenParserContext): TokenResult | 
       {label}
     </span>
   );
+
   return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
 }
 
 function parseWikiLink(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
+
   if (!match) return null;
   const target = match[1].trim();
   const display = match[2]?.trim() || target;
   const targetPath = /\.(mdx?|txt|html?)$/i.test(target) ? target : `${target}.md`;
+
   const node = context.onOpenLinkedDoc ? (
     <a
       key={context.nextKey()}
@@ -812,17 +886,21 @@ function parseWikiLink(text: string, context: TokenParserContext): TokenResult |
       {display}
     </span>
   );
+
   return tokenResult([node], match[0].length, matchPreviousChar(match[0], context.previousChar));
 }
 
 function parseImage(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
+
   if (!match) return null;
   const alt = match[1];
   const src = match[2];
+
   const imgSrc = /^(https?:\/\/|data:|blob:)/i.test(src)
     ? src
     : getImageSrc(src, context.imageBaseDir);
+
   return tokenResult(
     [
       <img
@@ -845,68 +923,87 @@ function parseImage(text: string, context: TokenParserContext): TokenResult | nu
 function findMarkdownLinkTextEnd(text: string): number | null {
   let index = 1;
   let depth = 1;
+
   while (index < text.length && depth > 0) {
     const character = text[index];
+
     if (character === "\\" && index + 1 < text.length) {
       index += 2;
       continue;
     }
+
     if (character === "[") depth++;
     else if (character === "]") depth--;
+
     if (depth === 0) break;
     index++;
   }
+
   return depth === 0 && text[index + 1] === "(" ? index : null;
 }
 
 function findMarkdownLinkDestinationEnd(text: string, textEnd: number): number | null {
   let destinationIndex = textEnd + 2;
   let parenthesisDepth = 1;
+
   while (destinationIndex < text.length && parenthesisDepth > 0) {
     const character = text[destinationIndex];
+
     if (character === "\\" && destinationIndex + 1 < text.length) {
       destinationIndex += 2;
       continue;
     }
+
     if (character === "(") parenthesisDepth++;
     else if (character === ")") {
       parenthesisDepth--;
+
       if (parenthesisDepth === 0) break;
     } else if (character === "\n") {
       return null;
     }
+
     destinationIndex++;
   }
+
   return parenthesisDepth === 0 ? destinationIndex : null;
 }
 
 function parseMarkdownLink(text: string): ParsedMarkdownLink | null {
   if (text[0] !== "[") return null;
   const textEnd = findMarkdownLinkTextEnd(text);
+
   if (textEnd === null) return null;
   const destinationEnd = findMarkdownLinkDestinationEnd(text, textEnd);
+
   if (destinationEnd === null) return null;
   const linkText = text.slice(1, textEnd);
   const linkUrl = text.slice(textEnd + 2, destinationEnd);
+
   return linkText && linkUrl ? { linkText, linkUrl, consumed: destinationEnd + 1 } : null;
 }
 
 function parseMarkdownLinkToken(text: string, context: TokenParserContext): TokenResult | null {
   const parsed = parseMarkdownLink(text);
+
   if (!parsed) return null;
   const { linkText, linkUrl, consumed } = parsed;
   const safeLinkUrl = sanitizeLinkUrl(linkUrl);
+
   if (safeLinkUrl === null) {
     return tokenResult([<span key={context.nextKey()}>{linkText}</span>], consumed, ")");
   }
+
   const isLocalDoc =
     /\.(mdx?|txt|html?)(#.*)?$/i.test(linkUrl) &&
     !linkUrl.startsWith("http://") &&
     !linkUrl.startsWith("https://");
+
   const isCodeFile = !isLocalDoc && isCodeFilePath(linkUrl);
   const linkedDocPath = isLocalDoc ? linkUrl.replace(/#.*$/, "") : linkUrl;
   const codeFilePath = isCodeFile ? linkUrl.replace(/#.*$/, "") : linkUrl;
   const isInPageAnchor = safeLinkUrl.startsWith("#");
+
   const node = isInPageAnchor
     ? renderAnchorLink(linkText, safeLinkUrl, context)
     : isLocalDoc && context.onOpenLinkedDoc
@@ -914,6 +1011,7 @@ function parseMarkdownLinkToken(text: string, context: TokenParserContext): Toke
       : isCodeFile && context.onOpenCodeFile
         ? renderCodeFileLink(linkText, linkUrl, codeFilePath, safeLinkUrl, context)
         : renderExternalLink(linkText, safeLinkUrl, isLocalDoc, context);
+
   return tokenResult([node], consumed, ")");
 }
 
@@ -1023,11 +1121,14 @@ function renderExternalLink(
 
 function parseHardBreak(text: string, context: TokenParserContext): TokenResult | null {
   const match = text.match(/ {2,}\n|\\\n/);
+
   if (!match || match.index === undefined) return null;
   const before = text.slice(0, match.index);
+
   const nodes = before
     ? [renderNestedMarkdown(before, context, context.nextKey()), <br key={context.nextKey()} />]
     : [<br key={context.nextKey()} />];
+
   return tokenResult(nodes, match.index + match[0].length, "\n");
 }
 
@@ -1044,6 +1145,7 @@ function parsePlainText(text: string, context: TokenParserContext): TokenResult 
     context.validation,
     context.imageBaseDir,
   );
+
   return tokenResult(
     nodes,
     plainText.length,
@@ -1092,8 +1194,10 @@ export const InlineMarkdown: React.FC<InlineMarkdownProps> = (props) => {
       validation,
       nextKey: () => key++,
     };
+
     for (const parser of tokenParsers) {
       const token = parser(remaining, context);
+
       if (!token) continue;
       parts.push(...token.nodes);
       remaining = remaining.slice(token.consumed);

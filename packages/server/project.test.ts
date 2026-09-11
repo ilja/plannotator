@@ -95,11 +95,13 @@ describe("extractDirName", () => {
 describe("detectProjectName", () => {
   test("returns a string or null", async () => {
     const result = await detectProjectName();
+
     if (result !== null) expect(result).toBeTypeOf("string");
   });
 
   test("result is sanitized if not null", async () => {
     const result = await detectProjectName();
+
     if (result) {
       expect(result).toMatch(/^[a-z0-9-]+$/);
       expect(result.length).toBeGreaterThanOrEqual(2);

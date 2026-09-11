@@ -49,7 +49,9 @@ interface FileGroup {
 
 function getQuestionScope(q: AIChatEntry["question"]): "general" | "file" | "line" {
   if (!q.filePath) return "general";
+
   if (q.lineStart == null) return "file";
+
   return "line";
 }
 
@@ -96,11 +98,14 @@ export const AITab: React.FC<AITabProps> = ({
     }
 
     const fileGroups: FileGroup[] = [];
+
     for (const [filePath, msgs] of grouped) {
       msgs.sort((a, b) => {
         const aScope = getQuestionScope(a.question);
         const bScope = getQuestionScope(b.question);
+
         if (aScope !== bScope) return aScope === "file" ? -1 : 1;
+
         return (a.question.lineStart ?? 0) - (b.question.lineStart ?? 0);
       });
       fileGroups.push({ filePath, messages: msgs });
@@ -116,6 +121,7 @@ export const AITab: React.FC<AITabProps> = ({
         if (prev.has(activeFilePath)) return prev;
         const next = new Set(prev);
         next.add(activeFilePath);
+
         return next;
       });
     }
@@ -130,9 +136,11 @@ export const AITab: React.FC<AITabProps> = ({
 
     if (filePath) {
       const header = scrollRef.current.querySelector(`[data-file-group="${CSS.escape(filePath)}"]`);
+
       if (header) {
         header.scrollIntoView({ behavior: "smooth", block: "start" });
       }
+
       setHighlightFilePath(filePath);
       setTimeout(() => setHighlightFilePath(null), 1200);
     }
@@ -140,6 +148,7 @@ export const AITab: React.FC<AITabProps> = ({
     if (filePath && expandedFiles.has(filePath)) {
       setTimeout(() => {
         const el = scrollRef.current?.querySelector(`[data-question-id="${scrollToQuestionId}"]`);
+
         if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 300);
     }
@@ -150,10 +159,12 @@ export const AITab: React.FC<AITabProps> = ({
   const latestResponseText = latestMessage?.response.text ?? "";
   useEffect(() => {
     if (!scrollRef.current) return;
+
     if (latestMessage) {
       const latestQA = scrollRef.current.querySelector(
         `[data-question-id="${CSS.escape(latestMessage.question.id)}"]`,
       );
+
       latestQA?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [latestMessage?.question.id, latestResponseText, messages.length]);
@@ -161,8 +172,10 @@ export const AITab: React.FC<AITabProps> = ({
   const toggleFile = (filePath: string) => {
     setExpandedFiles((prev) => {
       const next = new Set(prev);
+
       if (next.has(filePath)) next.delete(filePath);
       else next.add(filePath);
+
       return next;
     });
   };
@@ -471,6 +484,7 @@ const QAPair = memo<{
   onScrollToLines: AITabProps["onScrollToLines"];
 }>(({ question, response, onScrollToLines }) => {
   const scope = getQuestionScope(question);
+
   const renderedResponse = useMemo(
     () => (response.text ? renderChatMarkdown(response.text) : null),
     [response.text],

@@ -8,6 +8,7 @@ const FileContentResponseSchema = Schema.Struct({
 export type FileContentResponse = Schema.Schema.Type<typeof FileContentResponseSchema>;
 
 type UnknownValue = Schema.Schema.Type<typeof Schema.Unknown>;
+
 const decodeResponse = Schema.decodeUnknownOption(FileContentResponseSchema);
 
 /** Decode the unknown successful response from `/api/file-content`. */

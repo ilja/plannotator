@@ -10,6 +10,7 @@ import { compress, type JsonValue } from "@plannotator/shared/compress";
 import { encrypt } from "@plannotator/shared/crypto";
 
 const DEFAULT_SHARE_BASE = "https://share.plannotator.ai";
+
 const DEFAULT_PASTE_API = "https://plannotator-paste.plannotator.workers.dev";
 
 export type RemoteShareFetch = typeof fetch;
@@ -47,6 +48,7 @@ export async function generateRemoteShareUrl(
   options: RemoteShareOptions = {},
 ): Promise<string> {
   const base = shareBaseUrl || DEFAULT_SHARE_BASE;
+
   if (options.rawHtml) {
     // Callers that start from a local file should pass self-contained HTML
     // so sibling assets keep working after the payload leaves the machine.
@@ -57,7 +59,9 @@ export async function generateRemoteShareUrl(
       options.fetchImpl,
     );
   }
+
   const hash = await compress({ p: plan, a: [] });
+
   return `${base}/#${hash}`;
 }
 
@@ -82,16 +86,20 @@ async function generateRemotePasteShareUrl(
   }
 
   const rawResult = await response.json();
+
   const decodedResult = Option.getOrUndefined(
     Schema.decodeUnknownOption(PasteSuccessResponseSchema)(rawResult),
   );
+
   const resultId = decodedResult?.id;
+
   if (!resultId) {
     throw new Error("Paste service response missing id");
   }
 
   const pasteParam =
     pasteApiUrl !== DEFAULT_PASTE_API ? `&paste=${base64UrlEncode(pasteApiUrl)}` : "";
+
   return `${shareBaseUrl}/p/${resultId}#key=${key}${pasteParam}`;
 }
 
@@ -102,10 +110,13 @@ function base64UrlEncode(value: string): string {
 async function readPasteError(response: Response, fallback: string): Promise<string> {
   try {
     const rawBody = await response.json();
+
     const decoded = Option.getOrUndefined(
       Schema.decodeUnknownOption(PasteErrorResponseSchema)(rawBody),
     );
+
     const errorMessage = decoded?.error;
+
     return errorMessage?.trim() ? errorMessage : fallback;
   } catch {
     return fallback;
@@ -118,6 +129,7 @@ async function readPasteError(response: Response, fallback: string): Promise<str
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   const kb = bytes / 1024;
+
   return kb < 100 ? `${kb.toFixed(1)} KB` : `${Math.round(kb)} KB`;
 }
 
@@ -143,9 +155,11 @@ export async function writeRemoteShareLink(
     );
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
+
     const pasteHint = options.rawHtml
       ? " HTML sharing uses the paste service; check PLANNOTATOR_PASTE_URL or try a smaller/self-contained HTML file."
       : "";
+
     process.stderr.write(
       `\n  Warning: could not create remote share link for ${noun}.\n` +
         `  ${reason}.${pasteHint}\n\n`,

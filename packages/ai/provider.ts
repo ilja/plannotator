@@ -14,6 +14,7 @@ import type { AIProvider, AIProviderConfig } from "./types.ts";
 // ---------------------------------------------------------------------------
 
 type ProviderFactory = (config: AIProviderConfig) => Promise<AIProvider>;
+
 const factories = new Map<string, ProviderFactory>();
 
 /** Register a factory function for a provider type. */
@@ -24,12 +25,14 @@ export function registerProviderFactory(type: string, factory: ProviderFactory):
 /** Create a provider from config using a registered factory. Does NOT auto-register. */
 export async function createProvider(config: AIProviderConfig): Promise<AIProvider> {
   const factory = factories.get(config.type);
+
   if (!factory) {
     throw new Error(
       `No AI provider factory registered for type "${config.type}". ` +
         `Available: ${[...factories.keys()].join(", ") || "(none)"}`,
     );
   }
+
   return factory(config);
 }
 
@@ -48,6 +51,7 @@ export class ProviderRegistry {
   register(provider: AIProvider, instanceId?: string): string {
     const id = instanceId ?? provider.name;
     this.instances.set(id, provider);
+
     return id;
   }
 
@@ -59,7 +63,9 @@ export class ProviderRegistry {
   /** Get the first registered provider (convenience for single-provider setups). */
   getDefault(): { id: string; provider: AIProvider } | undefined {
     const first = this.instances.entries().next();
+
     if (first.done) return undefined;
+
     return { id: first.value[0], provider: first.value[1] };
   }
 
@@ -76,6 +82,7 @@ export class ProviderRegistry {
   /** Dispose and remove a single instance. No-op if not found. */
   dispose(instanceId: string): void {
     const provider = this.instances.get(instanceId);
+
     if (provider) {
       provider.dispose();
       this.instances.delete(instanceId);
@@ -87,6 +94,7 @@ export class ProviderRegistry {
     for (const provider of this.instances.values()) {
       provider.dispose();
     }
+
     this.instances.clear();
   }
 

@@ -41,6 +41,7 @@ export const DiffTypeSetupDialog: React.FC<DiffTypeSetupDialogProps> = ({ onComp
   const [selected, setSelected] = useState<DefaultDiffType>(() =>
     configStore.get("defaultDiffType"),
   );
+
   const [imageHovered, setImageHovered] = useState(false);
 
   const handleDone = () => {

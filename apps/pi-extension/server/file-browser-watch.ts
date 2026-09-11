@@ -24,7 +24,9 @@ interface WatchEntry {
 }
 
 const HEARTBEAT_MS = 30_000;
+
 const DEBOUNCE_MS = 180;
+
 const watchers = new Map<string, WatchEntry>();
 
 function serialize(event: FileBrowserChangeEvent): string {
@@ -33,7 +35,9 @@ function serialize(event: FileBrowserChangeEvent): string {
 
 export function isFileBrowserWatchIgnoredPath(path: string, root: string): boolean {
   const rel = relative(root, path).replace(/\\/g, "/");
+
   if (!rel || rel.startsWith("..") || isAbsolute(rel)) return false;
+
   return isFileBrowserExcludedPath(rel);
 }
 
@@ -53,6 +57,7 @@ function broadcast(entry: WatchEntry, reason: FileBrowserChangeEvent["reason"]):
       reason,
       timestamp: Date.now(),
     });
+
     try {
       res.write(payload);
     } catch {
@@ -73,6 +78,7 @@ function closeWatcher(entry: WatchEntry): void {
   if (entry.debounceTimer) clearTimeout(entry.debounceTimer);
   void entry.contentWatcher?.close();
   void entry.gitWatcher?.close();
+
   if (watchers.get(entry.dirPath) === entry) {
     watchers.delete(entry.dirPath);
   }
@@ -80,11 +86,13 @@ function closeWatcher(entry: WatchEntry): void {
 
 function releaseSubscriber(entry: WatchEntry, res: ServerResponse): void {
   entry.subscribers.delete(res);
+
   if (entry.subscribers.size === 0) closeWatcher(entry);
 }
 
 function ensureWatcher(dirPath: string): WatchEntry {
   const existing = watchers.get(dirPath);
+
   if (existing) return existing;
 
   const entry: WatchEntry = {
@@ -108,6 +116,7 @@ function ensureWatcher(dirPath: string): WatchEntry {
   entry.contentWatcher.on("error", () => scheduleBroadcast(entry, "files"));
 
   const gitWatchPaths = getGitMetadataWatchPaths(dirPath);
+
   if (gitWatchPaths.length > 0) {
     entry.gitWatcher = chokidar.watch(gitWatchPaths, {
       ignoreInitial: true,
@@ -122,6 +131,7 @@ function ensureWatcher(dirPath: string): WatchEntry {
   }
 
   watchers.set(dirPath, entry);
+
   return entry;
 }
 
@@ -133,19 +143,25 @@ export function handleFileBrowserStreamRequest(
   if (url.pathname !== "/api/reference/files/stream" || req.method !== "GET") return false;
 
   const rawDirPaths = url.searchParams.getAll("dirPath");
+
   if (rawDirPaths.length === 0) {
     json(res, { error: "Missing dirPath parameter" }, 400);
+
     return true;
   }
 
   const dirPaths: string[] = [];
   const clientDirPaths: string[] = [];
+
   for (const rawDirPath of rawDirPaths) {
     const dirPath = resolveUserPath(rawDirPath);
+
     if (!isValidDirectory(dirPath)) {
       json(res, { error: "Invalid directory path" }, 400);
+
       return true;
     }
+
     if (!dirPaths.includes(dirPath)) {
       dirPaths.push(dirPath);
       clientDirPaths.push(rawDirPath);
@@ -159,6 +175,7 @@ export function handleFileBrowserStreamRequest(
     Connection: "keep-alive",
   });
   res.setTimeout(0);
+
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
     const clientDirPath = clientDirPaths[i] ?? entry.dirPath;
@@ -184,7 +201,9 @@ export function handleFileBrowserStreamRequest(
 
   res.on("close", () => {
     clearInterval(heartbeat);
+
     for (const entry of entries) releaseSubscriber(entry, res);
   });
+
   return true;
 }

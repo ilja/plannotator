@@ -3,7 +3,9 @@ import { getObsidianSettings, saveObsidianSettings } from "./obsidian";
 import { storage } from "./storage";
 
 const STORAGE_KEY = "plannotator-obsidian-filename-separator";
+
 const storedValues = new Map<string, string>();
+
 const realStorageMethods = {
   getItem: storage.getItem,
   setItem: storage.setItem,
@@ -15,6 +17,7 @@ beforeEach(() => {
   storage.setItem = (key, value) => {
     storedValues.set(key, value);
   };
+
   storage.removeItem = (key) => {
     storedValues.delete(key);
   };

@@ -36,6 +36,7 @@ const OpenInRequestSchema = Schema.Struct({
   base: Schema.optionalKey(Schema.String),
   appId: Schema.optionalKey(Schema.String),
 });
+
 type OpenInRequest = Schema.Schema.Type<typeof OpenInRequestSchema>;
 
 function currentPlatform(): OpenInPlatform {
@@ -65,23 +66,30 @@ async function runArgv(
       stderr: "pipe",
       ...(opts?.cwd && { cwd: opts.cwd }),
     });
+
     const exitCode = await proc.exited;
+
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text();
+
       if (/not found|ENOENT/i.test(stderr)) {
         return { ok: false, error: `${friendlyName} not found` };
       }
+
       return {
         ok: false,
         error: `Failed to open ${friendlyName} (exit ${exitCode})${stderr ? `: ${stderr.trim()}` : ""}`,
       };
     }
+
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+
     if (/ENOENT|not found/i.test(msg)) {
       return { ok: false, error: `${friendlyName} not found` };
     }
+
     return { ok: false, error: msg };
   }
 }
@@ -97,12 +105,15 @@ function spawnDetached(
 ): Promise<OpenInLaunchResult> {
   try {
     Bun.spawn([cmd, ...args], { stdout: "ignore", stderr: "ignore" });
+
     return Promise.resolve({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+
     if (/ENOENT|not found/i.test(msg)) {
       return Promise.resolve({ ok: false, error: `${friendlyName} not found` });
     }
+
     return Promise.resolve({ ok: false, error: msg });
   }
 }
@@ -112,9 +123,11 @@ function spawnDetached(
  */
 function openSystemDefault(target: string): Promise<OpenInLaunchResult> {
   const platform = currentPlatform();
+
   if (platform === "mac") {
     return runArgv("open", [target], "default app");
   }
+
   if (platform === "win") {
     // `start` is a cmd builtin; the empty-string title arg avoids the quoted
     // target being treated as a window title.
@@ -122,6 +135,7 @@ function openSystemDefault(target: string): Promise<OpenInLaunchResult> {
       cwd: path.dirname(target),
     });
   }
+
   return runArgv("xdg-open", [target], "default app");
 }
 
@@ -130,13 +144,16 @@ function openSystemDefault(target: string): Promise<OpenInLaunchResult> {
  */
 function revealFile(absPath: string): Promise<OpenInLaunchResult> {
   const platform = currentPlatform();
+
   if (platform === "mac") {
     return runArgv("open", ["-R", absPath], "Finder");
   }
+
   if (platform === "win") {
     // explorer.exe exits non-zero even on success; launch fire-and-forget.
     return spawnDetached("explorer", [`/select,${absPath}`], "Explorer");
   }
+
   return runArgv("xdg-open", [path.dirname(absPath)], "file manager");
 }
 
@@ -151,39 +168,46 @@ function openWithApp(app: OpenInApp, absPath: string): Promise<OpenInLaunchResul
 
   if (platform === "mac") {
     const appName = app.mac?.appName;
+
     if (!appName) {
       return Promise.resolve({
         ok: false,
         error: `${app.label} is not available on macOS`,
       });
     }
+
     return runArgv("open", ["-a", appName, target], app.label);
   }
 
   if (platform === "win") {
     const bin = app.win?.bin;
+
     if (!bin) {
       return Promise.resolve({
         ok: false,
         error: `${app.label} is not available on Windows`,
       });
     }
+
     if (app.kind === "terminal") {
       // Open a new console window for the terminal. The directory is passed via
       // cwd (NOT a cmd argument) so a repo-controlled path never reaches cmd's
       // parser; `start` inherits that cwd. bin is a trusted catalog value.
       return runArgv("cmd", ["/c", "start", "", bin], app.label, { cwd: target });
     }
+
     return runArgv(bin, [target], app.label);
   }
 
   const bin = app.linux?.bin;
+
   if (!bin) {
     return Promise.resolve({
       ok: false,
       error: `${app.label} is not available on Linux`,
     });
   }
+
   return runArgv(bin, [target], app.label);
 }
 
@@ -197,6 +221,7 @@ export async function openFileInApp(absPath: string, appId?: string): Promise<Op
   }
 
   const app = getOpenInApp(appId);
+
   if (!app) {
     // Unknown id — fall back to system default.
     return openSystemDefault(absPath);
@@ -215,6 +240,7 @@ export async function openFileInApp(absPath: string, appId?: string): Promise<Op
  */
 function macAppBundleExists(appName: string): boolean {
   const bundle = `${appName}.app`;
+
   const candidates = [
     path.join("/Applications", bundle),
     path.join(os.homedir(), "Applications", bundle),
@@ -222,6 +248,7 @@ function macAppBundleExists(appName: string): boolean {
     // Terminal.app and other built-ins live in the Utilities subfolder.
     path.join("/System/Applications/Utilities", bundle),
   ];
+
   return candidates.some((p) => {
     try {
       return fs.existsSync(p);
@@ -247,16 +274,19 @@ function isAppAvailable(app: OpenInApp, platform: OpenInPlatform): boolean {
     // bundle is present — a CLI shim on PATH without the bundle would show the
     // app in the menu and then fail to launch.
     const appName = app.mac?.appName;
+
     return !!appName && macAppBundleExists(appName);
   }
 
   if (platform === "win") {
     const bin = app.win?.bin;
+
     return !!bin && !!Bun.which(bin);
   }
 
   // linux
   const bin = app.linux?.bin;
+
   return !!bin && !!Bun.which(bin);
 }
 
@@ -281,6 +311,7 @@ export function getAvailableOpenInApps(): AvailableOpenInApp[] {
 
     let label = app.label;
     let icon = app.icon;
+
     if (app.id === "reveal") {
       label = resolveRevealLabel(platform);
       icon = resolveRevealIcon(platform);
@@ -303,6 +334,7 @@ export function handleOpenInApps(): Response {
   if (isRemoteSession()) {
     return Response.json({ available: false, apps: [] });
   }
+
   return Response.json({ available: true, apps: getAvailableOpenInApps() });
 }
 
@@ -310,7 +342,7 @@ export interface HandleOpenInOptions {
   /**
    * Server-supplied resolution root, used INSTEAD of the client-provided
    * `base`. The review server passes `resolveAgentCwd()` here so repo-relative
-    * `git diff` paths resolve against the Git root rather than the launch cwd
+   * `git diff` paths resolve against the Git root rather than the launch cwd
    * (which differs when `plannotator review` runs from a subdirectory).
    * When omitted, the handler falls back to the client `base`. May return
    * several roots (annotate passes the session's reference roots).
@@ -334,6 +366,7 @@ export async function handleOpenIn(
   }
 
   let body: OpenInRequest;
+
   try {
     body = Schema.decodeUnknownSync(OpenInRequestSchema)(await req.json());
   } catch {
@@ -341,18 +374,22 @@ export async function handleOpenIn(
   }
 
   const filePath = body.filePath ?? "";
+
   if (!filePath) {
     return Response.json({ ok: false, error: "Missing filePath" }, { status: 400 });
   }
+
   const base = body.base ?? null;
   const appId = body.appId;
 
   const abs = resolveOpenInTarget(filePath, base, options.resolveRoot);
+
   if (abs == null) {
     return Response.json({ ok: false, error: "Access denied" }, { status: 403 });
   }
 
   const result = await openFileInApp(abs, appId);
+
   // A failed launch is a valid request with the result in the body (ok:false),
   // not a server error — return 200 and let the client read `ok`. Matches Pi.
   return Response.json(result);

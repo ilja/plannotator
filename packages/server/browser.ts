@@ -12,7 +12,9 @@ import { loadConfig, resolveUseGlimpse } from "@plannotator/shared/config";
 import { Option, Schema } from "effect";
 
 const IPC_REGISTRY = path.join(getPlannotatorDataDir(), "vscode-ipc.json");
+
 const VscodeIpcRegistrySchema = Schema.Record(Schema.String, Schema.Unknown);
+
 const VscodeIpcPortSchema = Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)));
 
 /**
@@ -26,6 +28,7 @@ const NOOP_BROWSER_VALUES = new Set(["true", "false", "none", ":", "0", "1"]);
 
 export function isNoOpBrowserSentinel(value: string | undefined): boolean {
   if (!value) return false;
+
   return NOOP_BROWSER_VALUES.has(value.trim().toLowerCase());
 }
 
@@ -37,17 +40,21 @@ export function decodeVscodeIpcRegistry(raw: string) {
     const parsedRegistry = Option.getOrUndefined(
       Schema.decodeUnknownOption(VscodeIpcRegistrySchema)(JSON.parse(raw)),
     );
+
     if (!parsedRegistry) return {};
 
     const registry: Record<string, number> = {};
+
     for (const [workspace, port] of Object.entries(parsedRegistry)) {
       const decodedPort = Option.getOrUndefined(
         Schema.decodeUnknownOption(VscodeIpcPortSchema)(port),
       );
+
       if (decodedPort !== undefined) {
         registry[workspace] = decodedPort;
       }
     }
+
     return registry;
   } catch {
     return {};
@@ -65,16 +72,19 @@ async function tryVscodeIpc(url: string): Promise<boolean> {
     // Find the best matching workspace (longest prefix match)
     let bestMatch = "";
     let bestPort = 0;
+
     for (const [workspace, port] of Object.entries(registry)) {
       if (cwd.startsWith(workspace) && workspace.length > bestMatch.length) {
         bestMatch = workspace;
         bestPort = port;
       }
     }
+
     if (!bestPort) return false;
     const ipcUrl = new URL("/open", `http://127.0.0.1:${bestPort}`);
     ipcUrl.searchParams.set("url", url);
     const resp = await fetch(ipcUrl.toString());
+
     return resp.ok;
   } catch {
     return false;
@@ -96,13 +106,16 @@ export async function isWSL(): Promise<boolean> {
   // Fallback: check /proc/version for WSL signature (if available)
   try {
     const file = Bun.file("/proc/version");
+
     if (await file.exists()) {
       const content = await file.text();
+
       return content.toLowerCase().includes("wsl") || content.toLowerCase().includes("microsoft");
     }
   } catch {
     // Ignore errors reading /proc/version
   }
+
   return false;
 }
 
@@ -119,16 +132,19 @@ export function shouldTryRemoteBrowserFallback(isRemote: boolean): boolean {
   if (!isRemote) return false;
   const plannotatorBrowser = process.env.PLANNOTATOR_BROWSER;
   const browser = process.env.BROWSER;
+
   // Treat headless sentinels (e.g. BROWSER=true from Claude Code's agent view)
   // as if no real browser handler were configured, so the IPC fallback still runs.
   const hasRealHandler =
     (plannotatorBrowser && !isNoOpBrowserSentinel(plannotatorBrowser)) ||
     (browser && !isNoOpBrowserSentinel(browser));
+
   return !hasRealHandler;
 }
 
 function buildGlimpseHtml(url: string): string {
   const encodedUrl = JSON.stringify(url);
+
   return `<!doctype html>
 <html>
   <head>
@@ -149,6 +165,7 @@ function buildGlimpseHtml(url: string): string {
 
 async function openGlimpse(url: string): Promise<boolean> {
   const glimpseCli = Bun.which("glimpseui");
+
   if (!glimpseCli) return false;
 
   const args = [
@@ -160,6 +177,7 @@ async function openGlimpse(url: string): Promise<boolean> {
     "Plannotator",
     "--open-links",
   ];
+
   const html = buildGlimpseHtml(url);
 
   // On Windows, `glimpseui` resolves to an npm script shim, not an exe, which
@@ -167,8 +185,10 @@ async function openGlimpse(url: string): Promise<boolean> {
   // HTML pipe below, so run the package entry with node directly instead.
   let command = glimpseCli;
   let spawnArgs = args;
+
   if (process.platform === "win32" && !/\.exe$/i.test(glimpseCli)) {
     const node = Bun.which("node");
+
     const entry = path.join(
       path.dirname(glimpseCli),
       "node_modules",
@@ -176,6 +196,7 @@ async function openGlimpse(url: string): Promise<boolean> {
       "bin",
       "glimpse.mjs",
     );
+
     if (node && fs.existsSync(entry)) {
       command = node;
       spawnArgs = [entry, ...args];
@@ -185,9 +206,11 @@ async function openGlimpse(url: string): Promise<boolean> {
   return await new Promise<boolean>((resolve) => {
     let settled = false;
     let successTimer: ReturnType<typeof setTimeout> | undefined;
+
     const finish = (opened: boolean) => {
       if (settled) return;
       settled = true;
+
       if (successTimer) clearTimeout(successTimer);
       resolve(opened);
     };
@@ -196,6 +219,7 @@ async function openGlimpse(url: string): Promise<boolean> {
       detached: true,
       stdio: ["pipe", "ignore", "ignore"],
     });
+
     successTimer = setTimeout(() => {
       child.unref();
       finish(true);
@@ -221,11 +245,13 @@ async function openConfiguredBrowser(
     } else {
       await $`open -a ${plannotatorBrowser} ${url}`.quiet();
     }
+
     return;
   }
 
   if ((platform === "win32" || wsl) && plannotatorBrowser) {
     await $`cmd.exe /c start "" ${plannotatorBrowser} ${url}`.quiet();
+
     return;
   }
 
@@ -239,12 +265,16 @@ async function openSystemBrowser(
 ): Promise<void> {
   if (platform === "win32" || wsl) {
     await $`cmd.exe /c start ${url}`.quiet();
+
     return;
   }
+
   if (platform === "darwin") {
     await $`open ${url}`.quiet();
+
     return;
   }
+
   await $`xdg-open ${url}`.quiet();
 }
 
@@ -255,14 +285,18 @@ export async function openBrowser(
   try {
     const rawPlannotatorBrowser = process.env.PLANNOTATOR_BROWSER;
     const rawBrowser = process.env.BROWSER;
+
     const plannotatorBrowser = isNoOpBrowserSentinel(rawPlannotatorBrowser)
       ? undefined
       : rawPlannotatorBrowser;
+
     const envBrowser = isNoOpBrowserSentinel(rawBrowser) ? undefined : rawBrowser;
     const browser = plannotatorBrowser || envBrowser;
     const isRemote = options?.isRemote ?? false;
+
     if (shouldTryRemoteBrowserFallback(isRemote)) {
       const openedViaIpc = await tryVscodeIpc(url);
+
       if (openedViaIpc) {
         return true;
       }
@@ -270,6 +304,7 @@ export async function openBrowser(
 
     if (options?.useGlimpse && !browser && !isRemote && resolveUseGlimpse(loadConfig())) {
       const openedViaGlimpse = await openGlimpse(url);
+
       if (openedViaGlimpse) {
         return true;
       }
@@ -283,6 +318,7 @@ export async function openBrowser(
     } else {
       await openSystemBrowser(url, platform, wsl);
     }
+
     return true;
   } catch {
     // Shell-based open failed — try VS Code IPC registry as fallback

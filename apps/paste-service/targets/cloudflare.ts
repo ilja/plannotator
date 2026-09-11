@@ -13,6 +13,7 @@ export default {
     const allowed = getAllowedOrigins(env.ALLOWED_ORIGINS);
     const cors = corsHeaders(origin, allowed);
     const store = new KvPasteStore(env.PASTE_KV);
+
     return handleRequest(request, store, cors);
   },
 };

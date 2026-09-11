@@ -51,6 +51,7 @@ function CompactStepper({
   label: string;
 }) {
   const clamp = (n: number) => Math.max(min, Math.min(max, n));
+
   return (
     <div className="w-full flex items-center justify-between py-1">
       <span className="text-[11px] text-muted-foreground">{label}</span>

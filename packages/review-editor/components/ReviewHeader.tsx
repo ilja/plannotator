@@ -748,6 +748,7 @@ const PlatformSubmissionActions: React.FC<PlatformSubmissionActionsProps> = ({
 }) => {
   const submissionInProgress = isSendingFeedback || isApproving || isPlatformActioning;
   const approvalUnavailable = isOwnPullRequest || submissionInProgress;
+
   const approvalMuted =
     isOwnPullRequest && !isSendingFeedback && !isApproving && !isPlatformActioning;
 

@@ -7,9 +7,13 @@ import { storage } from "../utils/storage";
 import { ExportModal } from "./ExportModal";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
+
 type JsonResponseBody = Schema.Schema.Type<typeof Schema.Json>;
+
 const SaveNotesRequestSchema = Schema.Struct({
   obsidian: Schema.Struct({
     vaultPath: Schema.String,
@@ -17,7 +21,9 @@ const SaveNotesRequestSchema = Schema.Struct({
     plan: Schema.String,
   }),
 });
+
 type SaveNotesRequest = Schema.Schema.Type<typeof SaveNotesRequestSchema>;
+
 const decodeSaveNotesRequest = Schema.decodeUnknownOption(SaveNotesRequestSchema);
 
 if (hasDom) window.location.href = "http://localhost";
@@ -33,8 +39,10 @@ function installSaveNotesFetch(
         const requestBody = Option.getOrUndefined(
           decodeSaveNotesRequest(await new Request(_input, init).json()),
         );
+
         if (requestBody) onRequest(requestBody);
       }
+
       return new Response(JSON.stringify(body), {
         status,
         headers: { "Content-Type": "application/json" },
@@ -54,7 +62,9 @@ function saveButton(): HTMLButtonElement {
   const button = Array.from(document.querySelectorAll("button")).find(
     (candidate) => candidate.textContent?.trim() === "Save",
   );
+
   if (button === undefined) throw new Error("Export modal save button not found");
+
   return button;
 }
 
@@ -69,6 +79,7 @@ async function renderExportModal(storedSeparator = "space"): Promise<void> {
     autoSave: false,
     vaultBrowserEnabled: false,
   });
+
   if (storedSeparator !== "space")
     storage.setItem("plannotator-obsidian-filename-separator", storedSeparator);
 
@@ -107,6 +118,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
 
   if (hasDom) {

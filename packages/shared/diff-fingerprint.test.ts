@@ -13,11 +13,14 @@ const runtime: ReviewGitRuntime = {
       stdout: "pipe",
       stderr: "pipe",
     });
+
     const [stdout, stderr] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
     ]);
+
     const exitCode = await proc.exited;
+
     return { exitCode, stdout, stderr };
   },
   async readTextFile(path) {
@@ -33,6 +36,7 @@ let repo: string;
 
 async function git(...args: string[]): Promise<void> {
   const result = await runtime.runGit(args, { cwd: repo });
+
   if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
 }
 
@@ -122,5 +126,4 @@ describe("getGitDiffFingerprint", () => {
     const staged = await getGitDiffFingerprint(runtime, "staged", "main", repo);
     expect(staged).not.toBe(before!);
   });
-
 });

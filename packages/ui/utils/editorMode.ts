@@ -17,6 +17,7 @@ const DEFAULT_MODE: EditorMode = "selection";
  */
 export function getEditorMode(): EditorMode {
   const stored = storage.getItem(STORAGE_KEY);
+
   if (
     stored === "selection" ||
     stored === "comment" ||
@@ -25,6 +26,7 @@ export function getEditorMode(): EditorMode {
   ) {
     return stored;
   }
+
   return DEFAULT_MODE;
 }
 

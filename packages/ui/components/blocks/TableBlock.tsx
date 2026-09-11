@@ -24,6 +24,7 @@ interface TableContent {
 
 export const parseTableContent = (content: string): TableContent => {
   const lines = content.split("\n").filter((line) => line.trim());
+
   if (lines.length === 0) return { headers: [], rows: [] };
 
   const parseRow = (line: string): string[] =>
@@ -35,11 +36,14 @@ export const parseTableContent = (content: string): TableContent => {
 
   const headers = parseRow(lines[0]);
   const rows: string[][] = [];
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
+
     if (/^[|\-:\s]+$/.test(line)) continue; // separator row
     rows.push(parseRow(line));
   }
+
   return { headers, rows };
 };
 
@@ -49,6 +53,7 @@ const csvEscape = (value: string): string => {
   if (/[",\r\n]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;
   }
+
   return value;
 };
 
@@ -56,6 +61,7 @@ const csvEscape = (value: string): string => {
 // directly with TanStack's visible (filter + sort applied) rows.
 export const buildCsvFromRows = (headers: string[], rows: string[][]): string => {
   const lines = [headers, ...rows].map((row) => row.map(csvEscape).join(","));
+
   return lines.join("\n");
 };
 
@@ -72,6 +78,7 @@ export const buildMarkdownTable = (headers: string[], rows: string[][]): string 
   const headerLine = `| ${headers.map(mdCellEscape).join(" | ")} |`;
   const separator = `| ${headers.map(() => "---").join(" | ")} |`;
   const bodyLines = rows.map((row) => `| ${row.map(mdCellEscape).join(" | ")} |`);
+
   return [headerLine, separator, ...bodyLines].join("\n");
 };
 
@@ -79,6 +86,7 @@ export const buildMarkdownTable = (headers: string[], rows: string[][]): string 
 // The hover toolbar uses this on the raw block content (no filter state).
 export const buildCsv = (markdown: string): string => {
   const { headers, rows } = parseTableContent(markdown);
+
   return buildCsvFromRows(headers, rows);
 };
 

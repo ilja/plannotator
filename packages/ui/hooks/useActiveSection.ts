@@ -17,10 +17,12 @@ export function useActiveSection(
 
   useEffect(() => {
     const container = scrollElement ?? containerRef.current;
+
     if (!container) return;
 
     // Find all heading elements with data-block-id
     const headings = container.querySelectorAll('[data-block-type="heading"]');
+
     if (headings.length === 0) return;
 
     // Track which headings are currently intersecting
@@ -41,6 +43,7 @@ export function useActiveSection(
         for (const [heading, isIntersecting] of intersectingHeadings) {
           if (isIntersecting) {
             const rect = heading.getBoundingClientRect();
+
             if (rect.top < topPosition) {
               topPosition = rect.top;
               topHeading = heading;
@@ -51,6 +54,7 @@ export function useActiveSection(
         // Update active ID
         if (topHeading) {
           const blockId = topHeading.getAttribute("data-block-id");
+
           if (blockId) {
             setActiveId(blockId);
           }

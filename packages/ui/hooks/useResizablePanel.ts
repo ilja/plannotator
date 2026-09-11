@@ -46,10 +46,13 @@ export function useResizablePanel({
 }: UseResizablePanelOptions) {
   const [width, setWidth] = useState(() => {
     const saved = storage.getItem(storageKey);
+
     if (saved) {
       const n = Number(saved);
+
       if (!Number.isNaN(n) && n >= minWidth && n <= maxWidth) return n;
     }
+
     return defaultWidth;
   });
 
@@ -74,11 +77,14 @@ export function useResizablePanel({
   // it. At most one DOM/state write per frame regardless of pointer-event rate.
   const flush = useCallback(() => {
     rafRef.current = null;
+
     if (!draggingRef.current) return;
+
     const delta =
       side === "right" || side === "bottom"
         ? startXRef.current - latestXRef.current
         : latestXRef.current - startXRef.current;
+
     const raw = startWidthRef.current + delta;
 
     // Drag-to-snap-shut.
@@ -91,11 +97,13 @@ export function useResizablePanel({
       setWidth(startWidthRef.current);
       setIsDragging(false);
       onSnapCloseRef.current();
+
       return;
     }
 
     const w = Math.min(maxWidth, Math.max(minWidth, raw));
     widthRef.current = w;
+
     if (applyRef.current) applyRef.current(w);
     else setWidth(w);
   }, [side, minWidth, maxWidth, snapCloseRatio, storageKey]);
@@ -120,27 +128,34 @@ export function useResizablePanel({
       const onMove = (ev: PointerEvent) => {
         if (!draggingRef.current) return;
         latestXRef.current = axis === "y" ? ev.clientY : ev.clientX;
+
         if (rafRef.current == null) rafRef.current = requestAnimationFrame(flush);
       };
+
       const cleanup = () => {
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
       };
+
       function onUp() {
         const wasSnapped = snappedRef.current;
         draggingRef.current = false;
         snappedRef.current = false;
+
         if (rafRef.current != null) {
           cancelAnimationFrame(rafRef.current);
           rafRef.current = null;
         }
+
         setIsDragging(false);
+
         if (!wasSnapped) {
           // Commit the live width to React state + persist.
           setWidth(widthRef.current);
           storage.setItem(storageKey, String(widthRef.current));
         }
+
         cleanup();
       }
 

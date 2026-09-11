@@ -26,9 +26,11 @@ export class FsPasteStore implements PasteStore {
 
   private safePath(id: string): string {
     const filePath = resolve(join(this.dataDir, `${id}.json`));
+
     if (!filePath.startsWith(this.resolvedDir)) {
       throw new Error("Invalid paste ID");
     }
+
     return filePath;
   }
 
@@ -37,17 +39,22 @@ export class FsPasteStore implements PasteStore {
       data,
       expiresAt: Date.now() + ttlSeconds * 1000,
     };
+
     await Bun.write(this.safePath(id), JSON.stringify(entry));
   }
 
   async get(id: string): Promise<string | null> {
     const path = this.safePath(id);
+
     try {
       const entry = decodePasteFile(await Bun.file(path).text());
+
       if (Date.now() > entry.expiresAt) {
         unlinkSync(path);
+
         return null;
       }
+
       return entry.data;
     } catch {
       return null;
@@ -59,11 +66,14 @@ export class FsPasteStore implements PasteStore {
     try {
       const files = readdirSync(this.dataDir).filter((f) => f.endsWith(".json"));
       const now = Date.now();
+
       for (const file of files) {
         const path = join(this.dataDir, file);
+
         try {
           const raw = readFileSync(path, "utf-8");
           const entry = decodePasteFile(raw);
+
           if (now > entry.expiresAt) {
             unlinkSync(path);
           }

@@ -72,12 +72,15 @@ describe("CodeHighlighting service", () => {
   test("highlights Ruby fragment with multiple distinct colors", async () => {
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
+
       const result = yield* svc.highlight({
         code: motivatingFragment,
         language: "ruby",
         themeName: "github-dark",
       });
+
       expect(result._tag).toBe("Highlighted");
+
       if (result._tag === "Highlighted") {
         // Check token distinctions: at least 4 distinct colors
         const colors = new Set(
@@ -86,10 +89,12 @@ describe("CodeHighlighting service", () => {
             .map((t) => t.color)
             .filter(Boolean),
         );
+
         expect(colors.size).toBeGreaterThanOrEqual(4);
         // Check exact reconstruction
         const reconstructed = result.lines.map((l) => l.map((t) => t.content).join("")).join("\n");
         expect(reconstructed).toBe(motivatingFragment);
+
         // Check hostile remains literal
         // Check that variables, method calls etc are distinguished
         // At least one token for amount_total_before, =, and_then, do, end, symbol
@@ -97,28 +102,34 @@ describe("CodeHighlighting service", () => {
           .flat()
           .map((t) => t.content)
           .join("");
+
         expect(allContent).toContain("amount_total_before");
         expect(allContent).toContain("and_then");
       }
     });
+
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("rb alias equivalence", async () => {
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
+
       const r1 = yield* svc.highlight({
         code: motivatingFragment,
         language: "ruby",
         themeName: "github-dark",
       });
+
       const r2 = yield* svc.highlight({
         code: motivatingFragment,
         language: "rb",
         themeName: "github-dark",
       });
+
       expect(r1._tag).toBe("Highlighted");
       expect(r2._tag).toBe("Highlighted");
+
       if (r1._tag === "Highlighted" && r2._tag === "Highlighted") {
         expect(r1.lines.flat().length).toBe(r2.lines.flat().length);
         expect(
@@ -133,17 +144,20 @@ describe("CodeHighlighting service", () => {
         ).toBeTrue();
       }
     });
+
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("exact source reconstruction", async () => {
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
+
       const result = yield* svc.highlight({
         code: fullMethodFixture,
         language: "ruby",
         themeName: "github-dark",
       });
+
       if (result._tag === "Highlighted") {
         const rec = result.lines.map((l) => l.map((t) => t.content).join("")).join("\n");
         expect(rec).toBe(fullMethodFixture);
@@ -151,18 +165,22 @@ describe("CodeHighlighting service", () => {
         throw new Error("expected highlighted");
       }
     });
+
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("fallback for unknown, absent, empty, oversized", async () => {
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
+
       const unknown = yield* svc.highlight({
         code: "hello",
         language: "unknownlang123",
         themeName: "github-dark",
       });
+
       expect(unknown._tag).toBe("PlainText");
+
       if (unknown._tag === "PlainText") expect(unknown.reason).toBe("unsupported-language");
 
       const absent = yield* svc.highlight({
@@ -170,11 +188,14 @@ describe("CodeHighlighting service", () => {
         language: undefined,
         themeName: "github-dark",
       });
+
       expect(absent._tag).toBe("PlainText");
+
       if (absent._tag === "PlainText") expect(absent.reason).toBe("unlabelled");
 
       const empty = yield* svc.highlight({ code: "", language: "ruby", themeName: "github-dark" });
       expect(empty._tag).toBe("PlainText");
+
       if (empty._tag === "PlainText") expect(empty.reason).toBe("empty");
 
       const oversized = yield* svc.highlight({
@@ -182,7 +203,9 @@ describe("CodeHighlighting service", () => {
         language: "ruby",
         themeName: "github-dark",
       });
+
       expect(oversized._tag).toBe("PlainText");
+
       if (oversized._tag === "PlainText") expect(oversized.reason).toBe("too-large");
 
       const oversizedLine = yield* svc.highlight({
@@ -190,28 +213,37 @@ describe("CodeHighlighting service", () => {
         language: "ruby",
         themeName: "github-dark",
       });
+
       expect(oversizedLine._tag).toBe("PlainText");
+
       if (oversizedLine._tag === "PlainText") expect(oversizedLine.reason).toBe("too-large-line");
     });
+
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("hostile source remains literal", async () => {
     const hostile = `<img src=x onerror=alert(1)>`;
+
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
+
       const result = yield* svc.highlight({
         code: hostile,
         language: "ruby",
         themeName: "github-dark",
       });
+
       expect(result._tag).toBe("Highlighted");
+
       if (result._tag === "Highlighted") {
         const rec = result.lines
           .flat()
           .map((t) => t.content)
           .join("");
+
         expect(rec).toBe(hostile);
+
         // Ensure no token contains html injection
         for (const line of result.lines) {
           for (const tok of line) {
@@ -219,6 +251,7 @@ describe("CodeHighlighting service", () => {
             // The hostile string split across tokens, but joined equals hostile
           }
         }
+
         expect(
           result.lines
             .flat()
@@ -227,11 +260,13 @@ describe("CodeHighlighting service", () => {
         ).toBe(hostile);
       }
     });
+
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("Cache.get deduplicates concurrent identical tokenization", async () => {
     let lookupCalls = 0;
+
     const testCache = await Effect.runPromise(
       Effect.gen(function* () {
         const c = yield* Cache.make<string, number>({
@@ -239,12 +274,15 @@ describe("CodeHighlighting service", () => {
           lookup: (k: string) =>
             Effect.sync(() => {
               lookupCalls++;
+
               return k.length;
             }),
         });
+
         return c;
       }),
     );
+
     // Run concurrent gets
     const program = Effect.gen(function* () {
       const [a, b, c] = yield* Effect.all(
@@ -255,8 +293,10 @@ describe("CodeHighlighting service", () => {
         ],
         { concurrency: 3 },
       );
+
       return [a, b, c] as const;
     });
+
     const [a, b, c] = await Effect.runPromise(program);
     expect(a).toBe(5);
     expect(b).toBe(5);
@@ -276,6 +316,7 @@ describe("CodeHighlighting service", () => {
         },
       ),
     );
+
     const e1 = await Effect.runPromise(Effect.exit(Cache.get(cache, "fail")));
     const e2 = await Effect.runPromise(Effect.exit(Cache.get(cache, "fail")));
     expect(Exit.isFailure(e1)).toBeTrue();
@@ -286,11 +327,14 @@ describe("CodeHighlighting service", () => {
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
       const req = { code: motivatingFragment, language: "ruby", themeName: "github-dark" };
+
       const [r1, r2] = yield* Effect.all([svc.highlight(req), svc.highlight(req)], {
         concurrency: 2,
       });
+
       expect(r1._tag).toBe("Highlighted");
       expect(r2._tag).toBe("Highlighted");
+
       if (r1._tag === "Highlighted" && r2._tag === "Highlighted") {
         const c1 = r1.lines.map((l) => l.map((t) => t.content).join("")).join("\n");
         const c2 = r2.lines.map((l) => l.map((t) => t.content).join("")).join("\n");
@@ -298,38 +342,46 @@ describe("CodeHighlighting service", () => {
         expect(c1).toBe(motivatingFragment);
       }
     });
+
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("Fiber interruption remains interruption not fallback", async () => {
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
+
       const fiber = yield* svc
         .highlight({ code: motivatingFragment, language: "ruby", themeName: "github-dark" })
         .pipe(Effect.forkChild);
+
       yield* Fiber.interrupt(fiber);
       const exit = yield* Fiber.await(fiber);
       expect(Exit.isFailure(exit)).toBeTrue();
     });
+
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });
 
   test("one Layer serves multiple requests (no per-block layer)", async () => {
     const program = Effect.gen(function* () {
       const svc = yield* CodeHighlightingService;
+
       const r1 = yield* svc.highlight({
         code: "a = 1",
         language: "ruby",
         themeName: "github-dark",
       });
+
       const r2 = yield* svc.highlight({
         code: "b = 2",
         language: "ruby",
         themeName: "github-dark",
       });
+
       expect(r1._tag).toBe("Highlighted");
       expect(r2._tag).toBe("Highlighted");
     });
+
     // Provide same Live layer for both – proves sharing
     await Effect.runPromise(Effect.provide(program, CodeHighlightingLive));
   });

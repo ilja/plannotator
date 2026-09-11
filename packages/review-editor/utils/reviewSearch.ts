@@ -64,6 +64,7 @@ function buildSearchableLinesForPatch(file: ReviewSearchableDiffFile): Searchabl
 
   for (const line of lines) {
     const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+
     if (hunkMatch) {
       oldLine = parseInt(hunkMatch[1], 10) - 1;
       newLine = parseInt(hunkMatch[2], 10) - 1;
@@ -76,6 +77,7 @@ function buildSearchableLinesForPatch(file: ReviewSearchableDiffFile): Searchabl
 
     const prefix = line[0];
     const text = line.slice(1);
+
     if (prefix === " ") {
       oldLine += 1;
       newLine += 1;
@@ -126,11 +128,13 @@ function buildSnippet(text: string, start: number, end: number): string {
   const snippetEnd = Math.min(text.length, end + SNIPPET_CONTEXT);
   const prefix = snippetStart > 0 ? "..." : "";
   const suffix = snippetEnd < text.length ? "..." : "";
+
   return `${prefix}${text.slice(snippetStart, snippetEnd)}${suffix}`;
 }
 
 export function findMatchesInIndex(index: SearchableLine[], query: string): ReviewSearchMatch[] {
   const trimmedQuery = query.trim();
+
   if (!trimmedQuery) return [];
 
   const normalizedQuery = trimmedQuery.toLowerCase();
@@ -142,6 +146,7 @@ export function findMatchesInIndex(index: SearchableLine[], query: string): Revi
 
     while (fromIndex <= line.normalizedText.length) {
       const matchStart = line.normalizedText.indexOf(normalizedQuery, fromIndex);
+
       if (matchStart === -1) break;
 
       const matchEnd = matchStart + normalizedQuery.length;
@@ -181,8 +186,10 @@ export function groupReviewSearchMatches(
 
   matches.forEach((match) => {
     const existing = groups.get(match.filePath);
+
     if (existing) {
       existing.matches.push(match);
+
       return;
     }
 
@@ -193,18 +200,25 @@ export function groupReviewSearchMatches(
     });
   });
 
-  return files
-    .map((file, _fileIndex) => groups.get(file.path) ?? null)
-    .filter((group): group is ReviewSearchFileGroup => group !== null)
-    .map((group) => ({
-      ...group,
-      fileIndex:
-        group.fileIndex >= 0 ? group.fileIndex : (fileIndexByPath.get(group.filePath) ?? -1),
-    }));
+  return files.flatMap((file) => {
+    const group = groups.get(file.path);
+
+    if (group === undefined) return [];
+
+    return [
+      {
+        ...group,
+        fileIndex:
+          group.fileIndex >= 0 ? group.fileIndex : (fileIndexByPath.get(group.filePath) ?? -1),
+      },
+    ];
+  });
 }
 
 export function getReviewSearchSideLabel(side: ReviewSearchSide): string {
   if (side === "addition") return "new";
+
   if (side === "deletion") return "old";
+
   return "ctx";
 }

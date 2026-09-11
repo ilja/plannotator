@@ -37,6 +37,7 @@ interface SplitFilePath {
 
 function splitFilePath(filePath: string): SplitFilePath {
   const lastSlash = filePath.lastIndexOf("/");
+
   if (lastSlash === -1) {
     return { directory: "", name: filePath };
   }
@@ -49,6 +50,7 @@ function splitFilePath(filePath: string): SplitFilePath {
 
 function frontEllipsize(text: string, visibleChars: number): string {
   if (text.length <= visibleChars) return text;
+
   return `...${text.slice(-visibleChars)}`;
 }
 
@@ -73,6 +75,7 @@ const FileStatusLetter: React.FC<{ status: DiffFileStatus; oldPath?: string }> =
   if (status === "modified") return null;
   const meta = STATUS_LETTER[status];
   const title = status === "renamed" && oldPath ? `Renamed from ${oldPath}` : meta.title;
+
   return (
     <span
       className={`flex-none font-semibold leading-none ${meta.className}`}
@@ -93,10 +96,12 @@ interface ChangeCounts {
 function countChanges(patch: string): ChangeCounts {
   let additions = 0;
   let deletions = 0;
+
   for (const line of patch.split("\n")) {
     if (line[0] === "+" && !line.startsWith("+++")) additions++;
     else if (line[0] === "-" && !line.startsWith("---")) deletions++;
   }
+
   return { additions, deletions };
 }
 
@@ -116,9 +121,13 @@ function getHeaderViewport(width: number): HeaderViewport {
 
 function getTruncatedFilename(name: string, width: number, showFilenameOnly: boolean): string {
   if (!showFilenameOnly) return name;
+
   if (width < 360) return frontEllipsize(name, 14);
+
   if (width < 420) return frontEllipsize(name, 18);
+
   if (width < 500) return frontEllipsize(name, 24);
+
   return frontEllipsize(name, 32);
 }
 
@@ -129,7 +138,9 @@ function getStageLabel(
   isStaged: boolean,
 ): string {
   if (isVeryTight) return "";
+
   if (isCompact) return isStaging ? "Adding" : isStaged ? "Added" : "Add";
+
   return isStaging ? "Adding..." : isStaged ? "Added" : "Git Add";
 }
 
@@ -347,6 +358,7 @@ const FileCommentToggle: React.FC<{
   fileCommentButtonRef?: (el: HTMLButtonElement | null) => void;
 }> = ({ label, onFileComment, fileCommentButtonRef }) => {
   const fileCommentRef = useRef<HTMLButtonElement>(null);
+
   if (!onFileComment) return null;
 
   return (
@@ -406,11 +418,13 @@ export const FileHeader: React.FC<FileHeaderProps> = ({
     if (!headerRef.current || globalThis.ResizeObserver === undefined) return;
 
     const node = headerRef.current;
+
     const observer = new ResizeObserver(([entry]) => {
       setHeaderWidth(entry.contentRect.width);
     });
 
     observer.observe(node);
+
     return () => observer.disconnect();
   }, []);
 

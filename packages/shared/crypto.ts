@@ -69,14 +69,17 @@ export async function decrypt(ciphertext: string, key: string): Promise<string> 
 function bytesToBase64url(bytes: Uint8Array): string {
   // Loop to avoid RangeError on large payloads (same approach as compress.ts)
   let binary = "";
+
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
+
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
 function base64urlToBytes(b64: string): Uint8Array {
   const base64 = b64.replace(/-/g, "+").replace(/_/g, "/");
   const binary = atob(base64);
+
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }

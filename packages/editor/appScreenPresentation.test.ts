@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildAppScreenPresentation } from "./appScreenPresentation";
 
 const onAskAI = () => true;
+
 const onBack = () => {};
 
 const baseInput = {
@@ -29,10 +30,12 @@ const baseInput = {
 describe("editor screen presentation", () => {
   test("keeps inactive screen sections empty without evaluating hidden export feedback", () => {
     let generatedFeedback = false;
+
     const presentation = buildAppScreenPresentation({
       ...baseInput,
       getCurrentFeedbackPayload: () => {
         generatedFeedback = true;
+
         return "feedback";
       },
     });

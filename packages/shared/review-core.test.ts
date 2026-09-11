@@ -21,14 +21,17 @@ const tempDirs: string[] = [];
 function makeTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
+
   return dir;
 }
 
 function git(cwd: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd, encoding: "utf-8" });
+
   if (result.status !== 0) {
     throw new Error(result.stderr || `git ${args.join(" ")} failed`);
   }
+
   return result.stdout.trim();
 }
 
@@ -50,6 +53,7 @@ function makeRuntime(baseCwd: string): ReviewGitRuntime {
     async readTextFile(path: string) {
       try {
         const fullPath = path.startsWith("/") ? path : resolvePath(baseCwd, path);
+
         return readFileSync(fullPath, "utf-8");
       } catch {
         return null;
@@ -201,6 +205,7 @@ describe("review-core", () => {
       context.defaultBranch,
       "tracked.txt",
     );
+
     expect(trackedContents.oldContent).toBe("before\n");
     expect(trackedContents.newContent).toBe("after\n");
 
@@ -210,6 +215,7 @@ describe("review-core", () => {
       context.defaultBranch,
       "new-file.txt",
     );
+
     expect(newFileContents.oldContent).toBeNull();
     expect(newFileContents.newContent).toBe("brand new\n");
   });
@@ -226,6 +232,7 @@ describe("review-core", () => {
     git(repoDir, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/phantom"]);
 
     const runtime = makeRuntime(repoDir);
+
     return getDefaultBranch(runtime).then((result) => {
       expect(result).toBe("main");
     });
@@ -247,6 +254,7 @@ describe("review-core", () => {
     expect(commits[0].subject).toBe("third commit");
     expect(commits[1].subject).toBe("second commit");
     expect(commits[2].subject).toBe("initial");
+
     for (const c of commits) {
       expect(c.sha).toMatch(/^[0-9a-f]{40}$/);
       expect(c.shortSha.length).toBeGreaterThanOrEqual(7);
@@ -283,6 +291,7 @@ describe("review-core", () => {
       "branch",
       "merge-base",
     ] as const;
+
     for (const sub of subTypes) {
       // SAFETY: composite is a valid worktree DiffType built from known sub-type template
       const composite = `worktree:/tmp/my-worktree:${sub}` as DiffType;

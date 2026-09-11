@@ -21,11 +21,14 @@ import { startReviewServer, handleReviewServerReady } from "@plannotator/server/
 // Embed the built HTML at compile time
 // @ts-ignore - Bun import attribute for text
 import indexHtml from "../dist/index.html" with { type: "text" };
+
 const htmlContent: string = indexHtml;
 
 // Parse CLI arguments
 const args = process.argv.slice(2);
+
 const isStaged = args.includes("--staged");
+
 const gitRef = args
   .filter((arg) => arg !== "--staged")
   .join(" ")
@@ -33,6 +36,7 @@ const gitRef = args
 
 // Build git diff command
 let diffCommand: string[];
+
 if (isStaged) {
   diffCommand = ["git", "diff", "--no-ext-diff", "--staged"];
 } else if (gitRef) {
@@ -43,6 +47,7 @@ if (isStaged) {
 
 // Execute git diff
 let rawPatch = "";
+
 try {
   const result = await $`${diffCommand}`.quiet();
   rawPatch = result.text();
@@ -53,6 +58,7 @@ try {
 
 // Determine display ref for UI
 let displayRef: string;
+
 if (isStaged) {
   displayRef = "--staged";
 } else if (gitRef) {
@@ -69,6 +75,7 @@ const server = await startReviewServer({
   onReady: (url, isRemote, port) => {
     handleReviewServerReady(url, isRemote, port);
     console.error(`Code review at ${url}`);
+
     if (isRemote) {
       console.error(
         `(Remote mode detected — if no browser opens automatically, use the URL above)`,

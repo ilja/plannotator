@@ -2,7 +2,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
 type Platform = NodeJS.Platform;
+
 type ExistsFn = (path: string) => boolean;
+
 interface TaskkillResult {
   status: number | null;
   error?: Error;
@@ -20,10 +22,12 @@ function runDefaultTaskkill(
   options: { stdio: "ignore"; windowsHide: boolean },
 ): TaskkillResult {
   const result = spawnSync(command, args, options);
+
   return { status: result.status, error: result.error };
 }
 
 const WINDOWS_EXECUTABLE_EXTENSIONS = [".cmd", ".exe", ".bat", ".com"] as const;
+
 const WINDOWS_SHELL_EXTENSIONS = new Set([".cmd", ".bat"]);
 
 function trimCommandPath(commandPath: string): string {
@@ -32,6 +36,7 @@ function trimCommandPath(commandPath: string): string {
 
 function getKnownWindowsExtension(commandPath: string): string | null {
   const match = trimCommandPath(commandPath).match(/\.(cmd|exe|bat|com)$/i);
+
   return match ? `.${match[1].toLowerCase()}` : null;
 }
 
@@ -41,12 +46,14 @@ export function resolveWindowsCommandShim(
   exists: ExistsFn = existsSync,
 ): string {
   const candidate = trimCommandPath(commandPath);
+
   if (!candidate || platform !== "win32" || getKnownWindowsExtension(candidate)) {
     return candidate;
   }
 
   for (const ext of WINDOWS_EXECUTABLE_EXTENSIONS) {
     const pathWithExtension = `${candidate}${ext}`;
+
     if (exists(pathWithExtension)) return pathWithExtension;
   }
 
@@ -61,10 +68,12 @@ export function resolveCommandFromWhichOutput(
   const candidates = output.split(/\r?\n/).map(trimCommandPath).filter(Boolean);
 
   if (candidates.length === 0) return null;
+
   if (platform !== "win32") return candidates[0] ?? null;
 
   for (const candidate of candidates) {
     const resolved = resolveWindowsCommandShim(candidate, platform, exists);
+
     if (getKnownWindowsExtension(resolved)) return resolved;
   }
 
@@ -77,6 +86,7 @@ export function shouldSpawnViaShell(
 ): boolean {
   if (platform !== "win32") return false;
   const ext = getKnownWindowsExtension(commandPath);
+
   return ext ? WINDOWS_SHELL_EXTENSIONS.has(ext) : false;
 }
 
@@ -84,6 +94,7 @@ function quoteWindowsShellArg(arg: string): string {
   if (!arg || /[\s"&()^|<>]/.test(arg)) {
     return `"${arg.replace(/"/g, '\\"')}"`;
   }
+
   return arg;
 }
 
@@ -117,5 +128,6 @@ export function killWindowsProcessTree(
     stdio: "ignore",
     windowsHide: true,
   });
+
   return !result.error && result.status === 0;
 }

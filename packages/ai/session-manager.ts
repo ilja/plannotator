@@ -73,6 +73,7 @@ export class SessionManager {
       lastActiveAt: Date.now(),
       label,
     };
+
     this.sessions.set(session.id, entry);
 
     // Wire up ID remapping so providers can resolve the real session ID later
@@ -87,6 +88,7 @@ export class SessionManager {
    */
   remapId(oldId: string, newId: string): void {
     const entry = this.sessions.get(oldId);
+
     if (entry) {
       this.sessions.delete(oldId);
       this.sessions.set(newId, entry);
@@ -112,6 +114,7 @@ export class SessionManager {
    */
   touch(sessionId: string): void {
     const entry = this.sessions.get(this.resolve(sessionId));
+
     if (entry) {
       entry.lastActiveAt = Date.now();
     }
@@ -124,6 +127,7 @@ export class SessionManager {
   remove(sessionId: string): void {
     const canonical = this.resolve(sessionId);
     this.sessions.delete(canonical);
+
     // Clean up any aliases pointing to this session
     for (const [alias, target] of this.aliases) {
       if (target === canonical) this.aliases.delete(alias);
@@ -160,6 +164,7 @@ export class SessionManager {
         entry.session.abort();
       }
     }
+
     this.sessions.clear();
     this.aliases.clear();
   }
@@ -173,8 +178,10 @@ export class SessionManager {
 
     // Find the oldest idle session to evict
     let oldest: { id: string; at: number } | null = null;
+
     for (const [id, entry] of this.sessions) {
       if (entry.session.isActive) continue; // don't evict active sessions
+
       if (!oldest || entry.lastActiveAt < oldest.at) {
         oldest = { id, at: entry.lastActiveAt };
       }
@@ -182,6 +189,7 @@ export class SessionManager {
 
     if (oldest) {
       this.sessions.delete(oldest.id);
+
       // Clean up aliases pointing to the evicted session
       for (const [alias, target] of this.aliases) {
         if (target === oldest.id) this.aliases.delete(alias);

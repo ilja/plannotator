@@ -6,11 +6,13 @@ import { decodePRContextError, decodePRContextResponse } from "../utils/pr-conte
 export async function readPRContextResponse(res: Response): Promise<PRContext> {
   if (!res.ok) {
     let data: unknown;
+
     try {
       data = await res.json();
     } catch {
       data = undefined;
     }
+
     throw new Error(decodePRContextError(data) ?? `HTTP ${res.status}`);
   }
 
@@ -26,6 +28,7 @@ export function usePRContext(prMetadata: PRMetadata | null) {
 
   useEffect(() => {
     const url = prMetadata?.url;
+
     if (url !== lastUrl.current) {
       lastUrl.current = url;
       fetched.current = false;
@@ -44,8 +47,10 @@ export function usePRContext(prMetadata: PRMetadata | null) {
 
     try {
       const res = await fetch("/api/pr-context");
+
       if (requestUrl !== lastUrl.current) return;
       const context = await readPRContextResponse(res);
+
       if (requestUrl !== lastUrl.current) return;
       setPRContext(context);
     } catch (err) {

@@ -22,6 +22,7 @@ describe("decodePRListResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual([
         validPullRequest,
@@ -48,6 +49,7 @@ describe("decodePRListResponse", () => {
     });
 
     expect(Result.isSuccess(decoded)).toBeTrue();
+
     if (Result.isSuccess(decoded)) {
       expect(decoded.success).toEqual([
         { ...validPullRequest, id: "pr-3", number: 3 },
@@ -105,6 +107,7 @@ describe("decodePRListResponse", () => {
     for (const entry of missingFieldEntries) {
       const decoded = decodePRListResponse({ prs: [entry] });
       expect(Result.isSuccess(decoded)).toBeTrue();
+
       if (Result.isSuccess(decoded)) expect(decoded.success).toEqual([]);
     }
   });
@@ -122,6 +125,7 @@ describe("decodePRListResponse", () => {
     for (const entry of invalidEntries) {
       const decoded = decodePRListResponse({ prs: [entry] });
       expect(Result.isSuccess(decoded)).toBeTrue();
+
       if (Result.isSuccess(decoded)) expect(decoded.success).toEqual([]);
     }
   });

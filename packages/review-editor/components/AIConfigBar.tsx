@@ -32,6 +32,7 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
   useEffect(() => {
     if (showSessionNote) {
       const t = setTimeout(() => setShowSessionNote(false), 2000);
+
       return () => clearTimeout(t);
     }
   }, [showSessionNote]);
@@ -39,13 +40,16 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
   // Close menu on click outside
   useEffect(() => {
     if (!openMenu) return;
+
     const handler = (e: MouseEvent) => {
       if (barRef.current && e.target instanceof Node && !barRef.current.contains(e.target)) {
         setOpenMenu(null);
         setModelSearch("");
       }
     };
+
     document.addEventListener("mousedown", handler);
+
     return () => document.removeEventListener("mousedown", handler);
   }, [openMenu]);
 
@@ -58,6 +62,7 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
   }
 
   const currentProvider = providers.find((p) => p.id === selectedProviderId) ?? providers[0];
+
   if (!currentProvider) return null;
   const effectiveProviderId = currentProvider.id;
 
@@ -66,6 +71,7 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
   const models = currentProvider.models ?? [];
   const defaultModel = models.find((m) => m.default) ?? models[0];
   const effectiveModel = selectedModel ?? defaultModel?.id;
+
   const currentModelLabel =
     models.find((m) => m.id === effectiveModel)?.label ?? defaultModel?.label;
 
@@ -118,6 +124,7 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
                 const m = getProviderMeta(p.name);
                 const ProvIcon = m.icon;
                 const isActive = p.id === effectiveProviderId;
+
                 return (
                   <button
                     key={p.id}
@@ -187,6 +194,7 @@ export const AIConfigBar: React.FC<AIConfigBarProps> = ({
                     )
                     .map((m) => {
                       const isActive = m.id === effectiveModel;
+
                       return (
                         <button
                           key={m.id}

@@ -34,6 +34,7 @@ const Icon: React.FC<{ kind: AlertKind }> = ({ kind }) => {
     fill: "currentColor",
     "aria-hidden": true as const,
   };
+
   switch (kind) {
     case "note":
       return (

@@ -62,11 +62,13 @@ class PiProcess {
 
   async spawn(piPath: string, cwd: string): Promise<void> {
     const commandPath = resolveWindowsCommandShim(piPath);
+
     const command = buildWindowsCommandScriptSpawnCommand(commandPath, ["--mode", "rpc"]) ?? [
       commandPath,
       "--mode",
       "rpc",
     ];
+
     try {
       this.proc = Bun.spawn(command, {
         cwd,
@@ -79,6 +81,7 @@ class PiProcess {
       this.handleProcessEnd(error);
       throw error;
     }
+
     this._alive = true;
 
     this.readStream();
@@ -93,10 +96,13 @@ class PiProcess {
 
     this._alive = false;
     this.proc = null;
+
     for (const [, pending] of this.pendingRequests) {
       pending.reject(error);
     }
+
     this.pendingRequests.clear();
+
     // Signal active query listeners so the drain loop exits with an error
     for (const listener of this.listeners) {
       listener({ type: "process_exited" });
@@ -105,6 +111,7 @@ class PiProcess {
 
   private async readStream(): Promise<void> {
     const proc = this.proc;
+
     if (!proc) return;
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
@@ -112,6 +119,7 @@ class PiProcess {
     try {
       while (true) {
         const { done, value } = await reader.read();
+
         if (done) break;
 
         this.buffer += decoder.decode(value, { stream: true });
@@ -120,7 +128,9 @@ class PiProcess {
 
         for (const line of lines) {
           const trimmed = line.replace(/\r$/, "");
+
           if (!trimmed) continue;
+
           try {
             const parsed = JSON.parse(trimmed);
             this.routeMessage(parsed);
@@ -136,29 +146,38 @@ class PiProcess {
 
   private routeMessage(input: PiJsonObject): void {
     const msg = Option.getOrUndefined(Schema.decodeUnknownOption(PiJsonObjectSchema)(input));
+
     if (!msg) return;
     const response = Option.getOrUndefined(Schema.decodeUnknownOption(PiResponseSchema)(msg));
+
     // Response to a command we sent
     if (response) {
       const pending = this.pendingRequests.get(response.id);
+
       if (pending) {
         this.pendingRequests.delete(response.id);
+
         if (response.success === false) {
           pending.reject(new Error(response.error ?? "RPC error"));
         } else {
           pending.resolve(response.data ?? {});
         }
+
         return;
       }
     }
+
     const responseEnvelope = Option.getOrUndefined(
       Schema.decodeUnknownOption(PiResponseEnvelopeSchema)(msg),
     );
+
     if (responseEnvelope) {
       const pending = this.pendingRequests.get(responseEnvelope.id);
+
       if (pending) {
         this.pendingRequests.delete(responseEnvelope.id);
         pending.reject(new Error("Malformed RPC response"));
+
         return;
       }
     }
@@ -172,6 +191,7 @@ class PiProcess {
   /** Send a command without waiting for a response. */
   send(command: PiCommand): void {
     const proc = this.proc;
+
     if (!proc) return;
     // Bun.spawn stdin is a FileSink with .write(), not a WritableStream
     proc.stdin.write(`${JSON.stringify(command)}\n`);
@@ -181,6 +201,7 @@ class PiProcess {
   /** Send a command and wait for the correlated response. */
   sendAndWait(command: PiCommand): Promise<PiJsonObject> {
     const id = `req_${++this.nextId}`;
+
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
       const request = Schema.decodeUnknownSync(PiCommandSchema)({ ...command, id });
@@ -191,8 +212,10 @@ class PiProcess {
   /** Register a listener for agent events (non-response messages). */
   onEvent(listener: EventListener): () => void {
     this.listeners.push(listener);
+
     return () => {
       const idx = this.listeners.indexOf(listener);
+
       if (idx >= 0) this.listeners.splice(idx, 1);
     };
   }
@@ -205,15 +228,19 @@ class PiProcess {
     this._alive = false;
     const proc = this.proc;
     this.proc = null;
+
     if (proc) {
       if (!killWindowsProcessTree(proc.pid)) {
         proc.kill();
       }
     }
+
     this.listeners.length = 0;
+
     for (const [, pending] of this.pendingRequests) {
       pending.reject(new Error("Process killed"));
     }
+
     this.pendingRequests.clear();
   }
 }
@@ -247,7 +274,9 @@ export class PiSDKProvider implements AIProvider {
       piExecutablePath: this.config.piExecutablePath ?? "pi",
       model: options.model ?? this.config.model,
     });
+
     this.sessions.set(session.id, session);
+
     return session;
   }
 
@@ -266,6 +295,7 @@ export class PiSDKProvider implements AIProvider {
     for (const session of this.sessions.values()) {
       session.killProcess();
     }
+
     this.sessions.clear();
   }
 
@@ -287,6 +317,7 @@ export class PiSDKProvider implements AIProvider {
       const models = Option.getOrUndefined(
         Schema.decodeUnknownOption(PiModelsResponseSchema)(data),
       );
+
       if (models && models.models.length > 0) {
         this.models = models.models.map((m, i) => ({
           id: `${m.provider}/${m.id}`,
@@ -326,10 +357,13 @@ class PiSDKSession extends BaseSession {
 
   async *query(prompt: string): AsyncIterable<AIMessage> {
     const started = this.startQuery();
+
     if (!started) {
       yield BaseSession.BUSY_ERROR;
+
       return;
     }
+
     const { gen } = started;
 
     try {
@@ -342,6 +376,7 @@ class PiSDKSession extends BaseSession {
         if (this.config.model) {
           const [provider, ...rest] = this.config.model.split("/");
           const modelId = rest.join("/");
+
           if (provider && modelId) {
             try {
               await this.process.sendAndWait({
@@ -358,9 +393,11 @@ class PiSDKSession extends BaseSession {
         // Get session ID
         try {
           const state = await this.process.sendAndWait({ type: "get_state" });
+
           const parsedState = Option.getOrUndefined(
             Schema.decodeUnknownOption(PiStateResponseSchema)(state),
           );
+
           if (parsedState?.sessionId) this.resolveId(parsedState.sessionId);
         } catch {
           // Continue with placeholder ID
@@ -374,6 +411,7 @@ class PiSDKSession extends BaseSession {
               "Pi process exited during startup. Check that Pi is configured correctly (API keys, models).",
             code: "pi_startup_error",
           };
+
           return;
         }
       }
@@ -402,8 +440,10 @@ class PiSDKSession extends BaseSession {
 
       const unsubscribe = this.process.onEvent((event) => {
         const mapped = mapPiEvent(event, this.id);
+
         for (const msg of mapped) {
           push(msg);
+
           if (
             msg.type === "result" ||
             (msg.type === "error" &&
@@ -428,8 +468,10 @@ class PiSDKSession extends BaseSession {
           error: `Pi rejected prompt: ${err instanceof Error ? err.message : String(err)}`,
           code: "pi_prompt_rejected",
         };
+
         return;
       }
+
       this._firstQuerySent = true;
 
       // Drain queue
@@ -462,6 +504,7 @@ class PiSDKSession extends BaseSession {
     if (this.process?.alive) {
       this.process.send({ type: "abort" });
     }
+
     super.abort();
   }
 
@@ -477,6 +520,7 @@ class PiSDKSession extends BaseSession {
 // ---------------------------------------------------------------------------
 
 import { mapPiEvent } from "./pi-events.ts";
+
 export { mapPiEvent } from "./pi-events.ts";
 
 // ---------------------------------------------------------------------------

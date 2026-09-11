@@ -7,14 +7,18 @@ import type { Annotation, ImageAttachment } from "../types";
 import { AnnotationType } from "../types";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const originalUrl = hasDom ? window.location.href : "";
+
 const setHappyDomUrl = (url: string): void => {
   // SAFETY: window is typed with happyDOM in test — cast to access happyDOM
   (window as typeof window & { happyDOM: { setURL: (value: string) => void } }).happyDOM.setURL(
     url,
   );
 };
+
 const markdown = `Pick one
 
 - Option A: Alpha
@@ -35,6 +39,7 @@ const choiceAnnotation = (withEvidence: boolean): Annotation => {
     isQuickLabel: true,
     choiceOptionLabel: "B",
   };
+
   if (withEvidence) {
     annotation.choiceValidationEvidence = {
       question: "Pick one",
@@ -44,10 +49,12 @@ const choiceAnnotation = (withEvidence: boolean): Annotation => {
       ],
     };
   }
+
   return annotation;
 };
 
 type Sharing = ReturnType<typeof useSharing>;
+
 type HarnessState = {
   markdown: string;
   annotations: Annotation[];
@@ -55,6 +62,7 @@ type HarnessState = {
 };
 
 let roots: Root[] = [];
+
 let containers: HTMLElement[] = [];
 
 async function mountSharing(): Promise<{
@@ -82,6 +90,7 @@ async function mountSharing(): Promise<{
       setGlobalAttachments,
     );
     latest = { markdown: currentMarkdown, annotations, sharing: resultRef.current };
+
     return null;
   }
 
@@ -109,20 +118,26 @@ async function createStoredShortShare(
     // SAFETY: init.body is untyped JSON — cast to { data: string }
     // SAFETY: init.body is untyped JSON — cast to { data: string }
     ciphertext = (JSON.parse(String(init?.body)) as { data: string }).data;
+
     return new Response(JSON.stringify({ id: "choice01" }), { status: 200 });
     // SAFETY: fetch shim matches global fetch shape — cast to typeof fetch
   }) as typeof fetch;
+
   const result = await createShortShareUrl(markdown, [annotation], [], {
     pasteApiUrl: "https://paste.test",
     shareBaseUrl: "http://localhost",
   });
+
   return { url: result!.shortUrl, ciphertext };
 }
 
 afterEach(async () => {
   globalThis.fetch = realFetch;
+
   if (hasDom) setHappyDomUrl(originalUrl);
+
   for (const root of roots.splice(0)) await act(async () => root.unmount());
+
   for (const container of containers.splice(0)) container.remove();
 });
 

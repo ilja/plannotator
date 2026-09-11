@@ -48,6 +48,7 @@ export function createWorktreePool(
   // its own fetch and `git worktree add`. Serialize all creations through
   // this chain.
   let creationChain: Promise<unknown> = Promise.resolve();
+
   if (initial) pool.set(initial.prUrl, initial);
 
   // Seeded background warmup: the initial entry starts ready:false while the
@@ -60,6 +61,7 @@ export function createWorktreePool(
     const tracked = initialPending.then(
       (entry) => {
         pool.set(initial.prUrl, entry);
+
         return entry;
       },
       (err) => {
@@ -67,6 +69,7 @@ export function createWorktreePool(
         throw err;
       },
     );
+
     pending.set(initial.prUrl, tracked);
     creationChain = tracked.catch(() => {});
     tracked.then(() => pending.delete(initial.prUrl)).catch(() => {}); // warmup may complete with nobody awaiting it
@@ -81,14 +84,17 @@ export function createWorktreePool(
     },
     resolve(prUrl) {
       const entry = pool.get(prUrl);
+
       return entry?.ready ? entry.path : undefined;
     },
 
     async ensure(runtime, metadata) {
       const existing = pool.get(metadata.url);
+
       if (existing?.ready) return existing;
 
       const inflight = pending.get(metadata.url);
+
       if (inflight) return inflight;
 
       if (!config.isSameRepo) {
@@ -113,6 +119,7 @@ export function createWorktreePool(
 
         const entry: PoolEntry = { path: worktreePath, prUrl: metadata.url, number, ready: true };
         pool.set(metadata.url, entry);
+
         return entry;
       };
 
@@ -120,6 +127,7 @@ export function createWorktreePool(
       creationChain = promise.catch(() => {});
 
       pending.set(metadata.url, promise);
+
       try {
         return await promise;
       } finally {
@@ -138,9 +146,11 @@ export function createWorktreePool(
       while (pending.size > 0) {
         await Promise.all([...pending.values()].map((p) => p.catch(() => {})));
       }
+
       for (const entry of pool.values()) {
         await removeWorktree(runtime, entry.path, { force: true, cwd: config.repoDir });
       }
+
       pool.clear();
     },
   };

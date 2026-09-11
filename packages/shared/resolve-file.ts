@@ -16,6 +16,7 @@ import { existsSync, readdirSync, type Dirent } from "fs";
 const MARKDOWN_PATH_REGEX = /\.(mdx?|txt)$/i;
 
 import { CODE_FILE_REGEX as CODE_FILE_BASENAME_REGEX } from "./code-file";
+
 export { CODE_FILE_REGEX, isCodeFilePath } from "./code-file";
 
 const WINDOWS_DRIVE_PATH_PATTERNS = [/^\/cygdrive\/([a-zA-Z])\/(.+)$/, /^\/([a-zA-Z])\/(.+)$/];
@@ -75,6 +76,7 @@ export function stripWrappingQuotes(input: string): string {
 
   const first = input[0];
   const last = input[input.length - 1];
+
   if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
     return input.slice(1, -1);
   }
@@ -93,11 +95,13 @@ export function normalizeUserPathInput(input: string, platform = process.platfor
 
   for (const pattern of WINDOWS_DRIVE_PATH_PATTERNS) {
     const match = expandedInput.match(pattern);
+
     if (!match) {
       continue;
     }
 
     const [, driveLetter, rest] = match;
+
     return `${driveLetter.toUpperCase()}:/${rest}`;
   }
 
@@ -122,9 +126,11 @@ export function resolveUserPath(
   platform = process.platform,
 ): string {
   const normalizedInput = normalizeUserPathInput(input, platform);
+
   if (!normalizedInput) {
     return "";
   }
+
   return isAbsoluteNormalizedUserPath(normalizedInput, platform)
     ? resolveAbsolutePath(normalizedInput, platform)
     : resolve(baseDir, normalizedInput);
@@ -137,6 +143,7 @@ function normalizeComparablePath(input: string): string {
 export function isWithinProjectRoot(candidate: string, projectRoot: string): boolean {
   const normalizedCandidate = normalizeComparablePath(candidate);
   const normalizedProjectRoot = normalizeComparablePath(projectRoot);
+
   return (
     normalizedCandidate === normalizedProjectRoot ||
     normalizedCandidate.startsWith(`${normalizedProjectRoot}/`)
@@ -145,6 +152,7 @@ export function isWithinProjectRoot(candidate: string, projectRoot: string): boo
 
 function getLowercaseBasename(input: string): string {
   const normalizedInput = normalizeSeparators(input);
+
   return normalizedInput.split("/").pop()!.toLowerCase();
 }
 
@@ -187,9 +195,11 @@ function walkFiles(
 ): void {
   // SAFETY: readdirSync with withFileTypes:true always returns Dirent[]; Node types include string[] fallback
   const entries = readdirSync(dir, { withFileTypes: true }) as Dirent[];
+
   for (const entry of entries) {
     if (entry.isDirectory()) {
       if (ignoredDirs.some((d) => d === entry.name + "/")) continue;
+
       try {
         walkFiles(join(dir, entry.name), root, results, ignoredDirs, fileMatcher);
       } catch {
@@ -199,6 +209,7 @@ function walkFiles(
       const relative = join(dir, entry.name)
         .slice(root.length + 1)
         .replace(/\\/g, "/");
+
       results.push(relative);
     }
   }
@@ -220,6 +231,7 @@ function walkMarkdownFiles(
 // --- Code-file resolution (async, cached) ---
 
 const FILE_LIST_CACHE_TTL_MS = 30_000;
+
 const fileListCache = new Map<string, { promise: Promise<string[] | null>; startedAt: number }>();
 
 function fileListCacheKey(projectRoot: string, kind: string): string {
@@ -233,6 +245,7 @@ function startCodeWalk(projectRoot: string): Promise<string[] | null> {
       walkFiles(projectRoot, projectRoot, results, CODE_IGNORED_DIRS, (name) =>
         CODE_FILE_BASENAME_REGEX.test(name),
       );
+
       return results;
     } catch {
       return null;
@@ -250,11 +263,14 @@ function startCodeWalk(projectRoot: string): Promise<string[] | null> {
 export function warmFileListCache(projectRoot: string, kind: "code"): Promise<string[] | null> {
   const key = fileListCacheKey(projectRoot, kind);
   const entry = fileListCache.get(key);
+
   if (entry && Date.now() - entry.startedAt < FILE_LIST_CACHE_TTL_MS) {
     return entry.promise;
   }
+
   const promise = startCodeWalk(projectRoot);
   fileListCache.set(key, { promise, startedAt: Date.now() });
+
   return promise;
 }
 
@@ -293,25 +309,30 @@ export async function resolveCodeFile(
 
   if (isAbsoluteNormalizedUserPath(normalizedInput)) {
     const absolutePath = resolveAbsolutePath(normalizedInput);
+
     if (fileExists(absolutePath)) {
       return { kind: "found", path: absolutePath };
     }
+
     return { kind: "not_found", input: originalInput };
   }
 
   const fromRoot = resolve(projectRoot, searchInput);
+
   if (isWithinProjectRoot(fromRoot, projectRoot) && fileExists(fromRoot)) {
     return { kind: "found", path: fromRoot };
   }
 
   if (baseDir) {
     const fromBase = resolve(baseDir, searchInput);
+
     if (fileExists(fromBase)) {
       return { kind: "found", path: fromBase };
     }
   }
 
   const fileList = await warmFileListCache(projectRoot, "code");
+
   if (fileList === null) {
     return { kind: "unavailable", input: originalInput };
   }
@@ -322,17 +343,21 @@ export async function resolveCodeFile(
   // not noise. If we can't honor it via baseDir, the input has no
   // suffix-match equivalent in the in-tree file list.
   const cleanedInput = searchInput.replace(/^(?:\.\/)+/, "");
+
   if (!cleanedInput || cleanedInput.startsWith("../")) {
     return { kind: "not_found", input: originalInput };
   }
+
   const target = cleanedInput.toLowerCase();
   const isBareFilename = !cleanedInput.includes("/");
   const matches: string[] = [];
 
   for (const f of fileList) {
     const fl = f.toLowerCase();
+
     if (isBareFilename) {
       const base = fl.split("/").pop();
+
       if (base === target) matches.push(resolve(projectRoot, f));
     } else {
       if (fl === target || fl.endsWith("/" + target)) {
@@ -344,9 +369,11 @@ export async function resolveCodeFile(
   if (matches.length === 1) {
     return { kind: "found", path: matches[0] };
   }
+
   if (matches.length > 1) {
     return { kind: "ambiguous", input: originalInput, matches };
   }
+
   return { kind: "not_found", input: originalInput };
 }
 
@@ -371,14 +398,17 @@ function resolveMarkdownFileCore(input: string, projectRoot: string): ResolveRes
   //    the user explicitly typed the full path)
   if (isAbsoluteNormalizedUserPath(normalizedInput)) {
     const absolutePath = resolveAbsolutePath(normalizedInput);
+
     if (fileExists(absolutePath)) {
       return { kind: "found", path: absolutePath };
     }
+
     return { kind: "not_found", input };
   }
 
   // 2. Exact relative path from project root
   const fromRoot = resolve(projectRoot, searchInput);
+
   if (isWithinProjectRoot(fromRoot, projectRoot) && fileExists(fromRoot)) {
     return { kind: "found", path: fromRoot };
   }
@@ -394,6 +424,7 @@ function resolveMarkdownFileCore(input: string, projectRoot: string): ResolveRes
 
     if (matchLookupKey === targetLookupKey) {
       const full = resolve(projectRoot, normalizedMatch);
+
       if (isWithinProjectRoot(full, projectRoot)) {
         matches.push(full);
       }
@@ -403,11 +434,14 @@ function resolveMarkdownFileCore(input: string, projectRoot: string): ResolveRes
   if (matches.length === 1) {
     return { kind: "found", path: matches[0] };
   }
+
   if (matches.length > 1) {
     const projectRootPrefix = `${normalizeComparablePath(projectRoot)}/`;
+
     const relative = matches.map((match) =>
       normalizeComparablePath(match).replace(projectRootPrefix, ""),
     );
+
     return { kind: "ambiguous", input, matches: relative };
   }
 
@@ -425,9 +459,11 @@ export function resolveMarkdownFile(input: string, projectRoot: string): Resolve
   const unquotedInput = stripWrappingQuotes(originalInput);
 
   const primary = resolveMarkdownFileCore(unquotedInput, projectRoot);
+
   if (primary.kind === "found") {
     return primary;
   }
+
   if (primary.kind === "ambiguous") {
     return { ...primary, input: originalInput };
   }
@@ -437,14 +473,17 @@ export function resolveMarkdownFile(input: string, projectRoot: string): Resolve
   }
 
   const normalizedInput = unquotedInput.replace(/^@+/, "");
+
   if (!normalizedInput) {
     return { kind: "not_found", input: originalInput };
   }
 
   const fallback = resolveMarkdownFileCore(normalizedInput, projectRoot);
+
   if (fallback.kind === "found") {
     return fallback;
   }
+
   if (fallback.kind === "ambiguous") {
     return { ...fallback, input: originalInput };
   }
@@ -467,20 +506,25 @@ export function hasMarkdownFiles(
 ): boolean {
   function walk(dir: string): boolean {
     let entries;
+
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       return false;
     }
+
     for (const entry of entries) {
       if (entry.isDirectory()) {
         if (excludedDirs.some((d) => d === entry.name + "/")) continue;
+
         if (walk(join(dir, entry.name))) return true;
       } else if (entry.isFile() && extensions.test(entry.name)) {
         return true;
       }
     }
+
     return false;
   }
+
   return walk(dirPath);
 }

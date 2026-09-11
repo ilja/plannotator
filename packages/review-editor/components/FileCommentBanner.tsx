@@ -21,8 +21,10 @@ interface FileCommentBannerProps {
 function firstLine(text: string): string {
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
+
     if (trimmed) return trimmed.replace(/^#+\s*/, "").replace(/[*_`>]/g, "");
   }
+
   return text.trim();
 }
 
@@ -64,6 +66,7 @@ export const FileCommentCard: React.FC<{
 
   const saveEdit = () => {
     const trimmed = draft.trim();
+
     if (trimmed && trimmed !== comment.text) onEdit(comment.id, trimmed);
     setIsEditing(false);
   };
@@ -183,6 +186,7 @@ export const FileCommentBanner: React.FC<FileCommentBannerProps> = ({
   onHeightChange,
 }) => {
   if (comments.length === 0) return null;
+
   return (
     <div className="file-comment-banner flex flex-col px-4 pt-1 pb-1">
       {comments.map((comment) => (

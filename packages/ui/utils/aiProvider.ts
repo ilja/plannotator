@@ -11,13 +11,19 @@ import { storage } from "./storage";
 import { AGENT_ORIGINS, getAgentAIProviderTypes, type Origin } from "@plannotator/shared/agents";
 
 const PROVIDER_KEY = "plannotator-ai-provider";
+
 const MODELS_KEY = "plannotator-ai-models";
+
 const PROVIDER_BY_ORIGIN_KEY = "plannotator-ai-provider-by-origin";
 
 const StoredRecordSchema = Schema.Record(Schema.String, Schema.Json);
+
 const OriginSchema = Schema.Literals(AGENT_ORIGINS);
+
 const decodeStoredRecordSchema = Schema.decodeUnknownOption(StoredRecordSchema);
+
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const decodeOrigin = Schema.decodeUnknownOption(OriginSchema);
 
 export interface AIProviderModel {
@@ -75,24 +81,32 @@ function decodeStoredRecord(raw: string) {
 
 export function decodePreferredModels(raw: string) {
   const record = decodeStoredRecord(raw);
+
   if (!record) return {};
   const preferredModels: Record<string, string> = {};
+
   for (const [providerId, value] of Object.entries(record)) {
     const modelId = Option.getOrNull(decodeString(value));
+
     if (modelId !== null) preferredModels[providerId] = modelId;
   }
+
   return preferredModels;
 }
 
 export function decodeProviderByOrigin(raw: string) {
   const record = decodeStoredRecord(raw);
+
   if (!record) return {};
   const providerByOrigin: Partial<Record<Origin, string>> = {};
+
   for (const [key, value] of Object.entries(record)) {
     const origin = Option.getOrNull(decodeOrigin(key));
     const providerId = Option.getOrNull(decodeString(value));
+
     if (origin !== null && providerId !== null) providerByOrigin[origin] = providerId;
   }
+
   return providerByOrigin;
 }
 
@@ -103,6 +117,7 @@ export function getAIProviderSettings(): AIProviderSettings {
   const providerId = storage.getItem(PROVIDER_KEY) || null;
   const preferredModels = storage.getItem(MODELS_KEY);
   const providerByOrigin = storage.getItem(PROVIDER_BY_ORIGIN_KEY);
+
   return {
     providerId,
     preferredModels: preferredModels ? decodePreferredModels(preferredModels) : {},
@@ -119,8 +134,10 @@ export function saveAIProviderSettings(settings: AIProviderSettings): void {
   } else {
     storage.removeItem(PROVIDER_KEY);
   }
+
   storage.setItem(MODELS_KEY, JSON.stringify(settings.preferredModels));
   const providerByOrigin = settings.providerByOrigin ?? {};
+
   if (Object.keys(providerByOrigin).length > 0) {
     storage.setItem(PROVIDER_BY_ORIGIN_KEY, JSON.stringify(providerByOrigin));
   } else {
@@ -133,6 +150,7 @@ export function saveAIProviderSettings(settings: AIProviderSettings): void {
  */
 export function getPreferredModel(providerId: string): string | null {
   const { preferredModels } = getAIProviderSettings();
+
   return preferredModels[providerId] ?? null;
 }
 
@@ -156,12 +174,15 @@ export function findOriginAIProvider(
   const providerTypes = getAgentAIProviderTypes(origin).filter(
     (providerType) => providerType === "pi-sdk",
   );
+
   for (const providerType of providerTypes) {
     const provider = providers.find(
       (p) => isPiProvider(p) && (p.id === providerType || p.name === providerType),
     );
+
     if (provider) return provider;
   }
+
   return null;
 }
 
@@ -173,10 +194,13 @@ export function resolveAIModelForProvider(
   const models = provider.models ?? [];
   const modelIds = new Set(models.map((m) => m.id));
   const preferredModel = preferredModels[provider.id];
+
   if (preferredModel && (modelIds.size === 0 || modelIds.has(preferredModel))) {
     return preferredModel;
   }
+
   const defaultModel = models.find((m) => m.default) ?? models[0];
+
   return defaultModel?.id ?? null;
 }
 
@@ -189,6 +213,7 @@ export function resolveAIProviderSelection(options: {
   const { origin, serverDefaultProvider } = options;
   const settings = options.settings ?? getAIProviderSettings();
   const providers = options.providers.filter(isPiProvider);
+
   if (providers.length === 0) return { providerId: null, model: null };
 
   const byId = (id: string | null | undefined) =>
@@ -228,6 +253,7 @@ export function applyAIProviderSelection(
 ): AIProviderSettings {
   const preferredModels = { ...settings.preferredModels };
   const retainedProviderId = isPiProviderId(options.providerId) ? options.providerId : null;
+
   if (retainedProviderId && options.model) {
     preferredModels[retainedProviderId] = options.model;
   }

@@ -4,7 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { InlineMarkdown } from "./InlineMarkdown";
 
 const hasDom = globalThis.document !== undefined;
+
 const realFetch = globalThis.fetch;
+
 const roots: Root[] = [];
 
 function installFetch(responses: Response | Response[]): void {
@@ -26,12 +28,15 @@ async function mountMarkdown(): Promise<HTMLDivElement> {
   await act(async () => {
     root.render(<InlineMarkdown text="src/example.ts:3" onOpenCodeFile={() => {}} />);
   });
+
   return host;
 }
 
 function getCodeFileLink(host: HTMLDivElement): HTMLElement {
   const link = host.querySelector(".code-file-link");
+
   if (!(link instanceof HTMLElement)) throw new Error("Code file link did not render");
+
   return link;
 }
 
@@ -54,7 +59,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await act(async () => root.unmount());
   }
+
   globalThis.fetch = realFetch;
+
   if (hasDom) document.body.innerHTML = "";
 });
 

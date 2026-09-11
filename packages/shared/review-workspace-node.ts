@@ -12,15 +12,7 @@ import {
 } from "./diff-paths";
 import { validateFilePath } from "./review-core";
 
-const SKIP_DIRS = new Set([
-  ".git",
-  "node_modules",
-  ".turbo",
-  ".next",
-  "dist",
-  "build",
-  "coverage",
-]);
+const SKIP_DIRS = new Set([".git", "node_modules", ".turbo", ".next", "dist", "build", "coverage"]);
 
 const GIT_MARKERS = [".git"] as const;
 
@@ -54,42 +46,60 @@ export function normalizeWorkspacePath(path: string): string {
 function prefixRepoPath(label: string, filePath: string): string {
   if (filePath === "/dev/null") return filePath;
   const normalizedFilePath = normalizeWorkspacePath(filePath);
+
   return `${normalizeWorkspacePath(label)}/${normalizedFilePath}`;
 }
 
 function rewritePatchLine(line: string, label: string): string {
   if (line.startsWith("--- ")) {
     const parsed = parsePatchPathToken(line.slice(4), "a");
+
     if (parsed === "/dev/null") return line;
+
     if (parsed) return `--- ${formatPatchPathToken("a", prefixRepoPath(label, parsed))}`;
+
     return line;
   }
 
   if (line.startsWith("+++ ")) {
     const parsed = parsePatchPathToken(line.slice(4), "b");
+
     if (parsed === "/dev/null") return line;
+
     if (parsed) return `+++ ${formatPatchPathToken("b", prefixRepoPath(label, parsed))}`;
+
     return line;
   }
 
   if (line.startsWith("rename from ")) {
     const parsed = parseDiffMetadataPathToken(line.slice("rename from ".length));
+
     if (parsed === "/dev/null") return line;
+
     return `rename from ${formatDiffMetadataPathToken(prefixRepoPath(label, parsed))}`;
   }
+
   if (line.startsWith("rename to ")) {
     const parsed = parseDiffMetadataPathToken(line.slice("rename to ".length));
+
     if (parsed === "/dev/null") return line;
+
     return `rename to ${formatDiffMetadataPathToken(prefixRepoPath(label, parsed))}`;
   }
+
   if (line.startsWith("copy from ")) {
     const parsed = parseDiffMetadataPathToken(line.slice("copy from ".length));
+
     if (parsed === "/dev/null") return line;
+
     return `copy from ${formatDiffMetadataPathToken(prefixRepoPath(label, parsed))}`;
   }
+
   if (line.startsWith("copy to ")) {
     const parsed = parseDiffMetadataPathToken(line.slice("copy to ".length));
+
     if (parsed === "/dev/null") return line;
+
     return `copy to ${formatDiffMetadataPathToken(prefixRepoPath(label, parsed))}`;
   }
 
@@ -119,6 +129,7 @@ function rewritePatchChunk(chunk: string, label: string): string {
 
 export function prefixWorkspacePatchPaths(rawPatch: string, label: string): string {
   if (!rawPatch.trim()) return rawPatch;
+
   if (!rawPatch.includes("diff --git ")) {
     return rawPatch
       .split("\n")
@@ -128,6 +139,7 @@ export function prefixWorkspacePatchPaths(rawPatch: string, label: string): stri
 
   const chunks = rawPatch.split(/^diff --git /m);
   const prefix = chunks.shift() ?? "";
+
   return prefix + chunks.map((chunk) => rewritePatchChunk(`diff --git ${chunk}`, label)).join("");
 }
 
@@ -143,9 +155,12 @@ export function resolveWorkspaceFilePath<T extends WorkspacePathEntry>(
   for (const repo of sorted) {
     const label = normalizeWorkspacePath(repo.label);
     const prefix = `${label}/`;
+
     if (normalizedPath.startsWith(prefix)) {
       const repoRelativePath = normalizedPath.slice(prefix.length);
+
       if (!repoRelativePath) return null;
+
       return {
         repo,
         repoRelativePath,
@@ -162,6 +177,7 @@ function hasGitMarker(dirPath: string): boolean {
 
 function collectWorkspaceRepos(root: string, current: string, results: string[]): void {
   let entries: Dirent[];
+
   try {
     entries = readdirSync(current, { withFileTypes: true });
   } catch {
@@ -170,11 +186,13 @@ function collectWorkspaceRepos(root: string, current: string, results: string[])
 
   if (current !== root && hasGitMarker(current)) {
     results.push(current);
+
     return;
   }
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
+
     if (SKIP_DIRS.has(entry.name)) continue;
     collectWorkspaceRepos(root, resolve(current, entry.name), results);
   }
@@ -184,51 +202,66 @@ export function discoverWorkspaceRepoPaths(root: string): string[] {
   const resolvedRoot = resolve(root);
   const results: string[] = [];
   collectWorkspaceRepos(resolvedRoot, resolvedRoot, results);
+
   return results.sort();
 }
 
 function buildRepoLabel(root: string, cwd: string, used: Set<string>): string {
   const rel = normalizeWorkspacePath(relative(root, cwd));
   const preferred = rel && rel !== "" ? rel : basename(cwd);
+
   if (!used.has(preferred)) {
     used.add(preferred);
+
     return preferred;
   }
 
   const fallback = normalizeWorkspacePath(basename(cwd));
+
   if (!used.has(fallback)) {
     used.add(fallback);
+
     return fallback;
   }
 
   let counter = 2;
   let next = `${fallback}-${counter}`;
+
   while (used.has(next)) {
     counter += 1;
     next = `${fallback}-${counter}`;
   }
+
   used.add(next);
+
   return next;
 }
 
 export function buildWorkspaceRepoLabels(root: string, repoPaths: string[]): string[] {
   const resolvedRoot = resolve(root);
   const usedLabels = new Set<string>();
+
   return repoPaths.map((cwd) => buildRepoLabel(resolvedRoot, cwd, usedLabels));
 }
 
 export function aggregateWorkspacePatch(repos: WorkspacePatchEntry[]): WorkspacePatchAggregate {
   const selected = repos.filter((repo) => repo.selected);
-  const trimmedPatches = selected
-    .map((repo) => repo.rawPatch)
-    .filter((patch) => patch.trim().length > 0)
-    .map((patch) => patch.replace(/\n+$/, ""));
+
+  const trimmedPatches = selected.flatMap((repo) => {
+    if (repo.rawPatch.trim().length === 0) return [];
+
+    return [repo.rawPatch.replace(/\n+$/, "")];
+  });
+
   return {
     rawPatch: trimmedPatches.join("\n\n"),
     gitRef:
       selected
-        .map((repo) => repo.gitRef || repo.label)
-        .filter(Boolean)
+        .flatMap((repo) => {
+          const gitRef = repo.gitRef || repo.label;
+
+          return gitRef ? [gitRef] : [];
+        })
         .join(" | ") || "Workspace review",
     errors: repos.flatMap((repo) => (repo.error ? [`${repo.label}: ${repo.error}`] : [])),
   };

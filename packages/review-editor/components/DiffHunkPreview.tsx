@@ -30,6 +30,7 @@ function buildPierreCSS(
     const styles = getComputedStyle(document.documentElement);
     const bg = styles.getPropertyValue("--background").trim();
     const fg = styles.getPropertyValue("--foreground").trim();
+
     if (!bg || !fg) return "";
 
     const fontCSS =
@@ -80,6 +81,7 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
 
   const fileDiff = useMemo(() => {
     if (!hunk) return undefined;
+
     try {
       // Robustly handle all three hunk formats review comments might include:
       //   1. Full git diff: starts with "diff --git" — use as-is
@@ -90,6 +92,7 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
         : hunk.startsWith("--- ")
           ? `diff --git a/file b/file\n${hunk}`
           : `diff --git a/file b/file\n--- a/file\n+++ b/file\n${hunk}`;
+
       return getSingularPatch(patch);
     } catch {
       return undefined;
@@ -107,6 +110,7 @@ export const DiffHunkPreview: React.FC<DiffHunkPreviewProps> = ({
     const rafId = requestAnimationFrame(() => {
       setCss(buildPierreCSS(selection.type, state.fontFamily, state.fontSize, lineBgIntensity));
     });
+
     return () => cancelAnimationFrame(rafId);
   }, [selection.type, colorTheme, state.fontFamily, state.fontSize, lineBgIntensity]);
 

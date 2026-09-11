@@ -11,6 +11,7 @@ import { HtmlViewer } from "./HtmlViewer";
 const hasDom = globalThis.document !== undefined;
 
 type HookResult = ReturnType<typeof useHtmlAnnotation>;
+
 type DecodedBridgeMessage = NonNullable<ReturnType<typeof decodeHtmlBridgeMessage>>;
 
 interface HookResultRef {
@@ -33,6 +34,7 @@ function Harness({ resultRef, options }: HarnessProps) {
     mode: "selection",
     ...options,
   });
+
   return <iframe ref={iframeRef} title="bridge test" />;
 }
 
@@ -51,7 +53,9 @@ async function mountHook(options?: HarnessProps["options"]): Promise<MountedHook
     root.render(<Harness resultRef={result} options={options} />);
   });
   const iframe = host.querySelector("iframe");
+
   if (!iframe) throw new Error("HTML bridge test iframe did not mount");
+
   return {
     iframe,
     result,
@@ -132,6 +136,7 @@ describe("useHtmlAnnotation bridge messages", () => {
       if (!mounted.iframe.contentWindow) {
         throw new Error("HTML bridge test iframe has no contentWindow");
       }
+
       const source = mounted.iframe.contentWindow;
       await dispatchBridgeMessage(source, {
         type: "plannotator-bridge-selection",
@@ -173,6 +178,7 @@ describe("useHtmlAnnotation bridge messages", () => {
   test.skipIf(!hasDom)("handles mark clicks and finite resize messages", async () => {
     const selectedIds: (string | null)[] = [];
     const heights: number[] = [];
+
     const mounted = await mountHook({
       onSelectAnnotation: (id) => selectedIds.push(id),
       onResize: (height) => heights.push(height),
@@ -182,6 +188,7 @@ describe("useHtmlAnnotation bridge messages", () => {
       if (!mounted.iframe.contentWindow) {
         throw new Error("HTML bridge test iframe has no contentWindow");
       }
+
       const source = mounted.iframe.contentWindow;
       await dispatchBridgeMessage(source, {
         type: "plannotator-bridge-mark-click",
@@ -217,6 +224,7 @@ describe("useHtmlAnnotation bridge messages", () => {
       if (!mounted.iframe.contentWindow || !otherIframe.contentWindow) {
         throw new Error("HTML bridge test iframe has no contentWindow");
       }
+
       const message = { type: "plannotator-bridge-resize", height: 640 };
       await dispatchBridgeMessage(otherIframe.contentWindow, message);
       expect(heights).toEqual([]);
@@ -253,6 +261,7 @@ describe("HtmlViewer ready messages", () => {
         );
       });
       const iframe = host.querySelector("iframe");
+
       if (!iframe?.contentWindow || !otherIframe.contentWindow) {
         throw new Error("HTML viewer test iframe has no contentWindow");
       }
@@ -261,6 +270,7 @@ describe("HtmlViewer ready messages", () => {
       iframe.contentWindow.postMessage = () => {
         outboundMessageCount++;
       };
+
       const ready = { type: "plannotator-bridge-ready" };
       await dispatchBridgeMessage(otherIframe.contentWindow, ready);
       expect(outboundMessageCount).toBe(0);

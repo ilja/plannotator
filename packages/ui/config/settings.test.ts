@@ -96,10 +96,13 @@ describe("ConfigStore", () => {
   test("merges rapid writes across top-level and nested config namespaces", async () => {
     const originalFetch = globalThis.fetch;
     const requests: RequestInit[] = [];
+
     const fetchStub = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       requests.push(init ?? {});
+
       return new Response(null, { status: 204 });
     };
+
     fetchStub.preconnect = originalFetch.preconnect;
     globalThis.fetch = fetchStub;
 

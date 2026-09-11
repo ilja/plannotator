@@ -30,49 +30,64 @@ function rewriteRelativeRefs(
 
   root.querySelectorAll("img").forEach((img) => {
     const src = img.getAttribute("src");
+
     if (!src) return;
+
     if (/^(https?:|data:|blob:)/i.test(src)) return;
     img.setAttribute("src", getImageSrc(src, imageBaseDir));
   });
 
   root.querySelectorAll("a").forEach((a) => {
     const href = a.getAttribute("href");
+
     if (!href) return;
+
     // External http(s) links: open in a new tab and close the tab-nabbing
     // vector (opener reference back to the plannotator tab). Matches the
     // markdown renderer's behavior for [label](https://...).
     if (/^(https?:|\/\/)/i.test(href)) {
       a.setAttribute("target", "_blank");
       a.setAttribute("rel", "noopener noreferrer");
+
       return;
     }
+
     if (/^(mailto:|tel:)/i.test(href)) return;
+
     // In-page anchor: native browser jump doesn't target the scroll viewport,
     // so route through onNavigateAnchor to match InlineMarkdown's behavior.
     if (href.startsWith("#")) {
       if (!onNavigateAnchor) return;
+
       const handler = (e: Event) => {
         e.preventDefault();
         onNavigateAnchor(href);
       };
+
       a.addEventListener("click", handler);
       cleanups.push(() => a.removeEventListener("click", handler));
+
       return;
     }
+
     if (onOpenCodeFile && isCodeFilePath(href)) {
       const handler = (e: Event) => {
         e.preventDefault();
         onOpenCodeFile(href.replace(/#.*$/, ""));
       };
+
       a.addEventListener("click", handler);
       cleanups.push(() => a.removeEventListener("click", handler));
+
       return;
     }
+
     if (onOpenLinkedDoc && /\.(mdx?|txt|html?)(#.*)?$/i.test(href)) {
       const handler = (e: Event) => {
         e.preventDefault();
         onOpenLinkedDoc(href.replace(/#.*$/, ""));
       };
+
       a.addEventListener("click", handler);
       cleanups.push(() => a.removeEventListener("click", handler));
     }
@@ -98,9 +113,11 @@ const HtmlBlockImpl: React.FC<HtmlBlockProps> = ({
   const sanitized = React.useMemo(() => sanitizeBlockHtml(block.content), [block.content]);
   useEffect(() => {
     if (!ref.current) return;
+
     if (ref.current.innerHTML !== sanitized) {
       ref.current.innerHTML = sanitized;
     }
+
     const cleanup = rewriteRelativeRefs(
       ref.current,
       imageBaseDir,
@@ -108,8 +125,10 @@ const HtmlBlockImpl: React.FC<HtmlBlockProps> = ({
       onOpenCodeFile,
       onNavigateAnchor,
     );
+
     return cleanup;
   }, [sanitized, imageBaseDir, onOpenLinkedDoc, onOpenCodeFile, onNavigateAnchor]);
+
   return (
     <div
       ref={ref}
@@ -119,6 +138,7 @@ const HtmlBlockImpl: React.FC<HtmlBlockProps> = ({
     />
   );
 };
+
 export const HtmlBlock = React.memo(
   HtmlBlockImpl,
   (prev, next) =>

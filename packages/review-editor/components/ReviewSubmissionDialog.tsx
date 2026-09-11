@@ -58,26 +58,31 @@ interface ReviewSubmissionDialogProps {
 function buildAnnotationFileComments(
   annotations: CodeAnnotation[],
 ): SubmissionTarget["fileComments"] {
-  return annotations
-    .filter((a) => (a.scope ?? "line") === "line")
-    .map((ann) => {
-      const ccPrefix = formatConventionalPrefix(ann.conventionalLabel, ann.decorations);
-      let body = ccPrefix + (ann.text ?? "");
-      if (ann.suggestedCode) {
-        body += `\n\n\`\`\`suggestion\n${ann.suggestedCode}\n\`\`\``;
-      }
-      const side: "LEFT" | "RIGHT" = ann.side === "old" ? "LEFT" : "RIGHT";
-      const isMultiLine =
-        ann.lineStart != null && ann.lineEnd != null && ann.lineStart !== ann.lineEnd;
-      return {
-        path: ann.filePath,
-        line: ann.lineEnd ?? ann.lineStart,
-        side,
-        body: body.trim(),
-        ...(isMultiLine && { start_line: ann.lineStart, start_side: side }),
-      };
-    })
-    .filter((c) => c.body.length > 0);
+  return annotations.flatMap((ann) => {
+    if ((ann.scope ?? "line") !== "line") return [];
+
+    const ccPrefix = formatConventionalPrefix(ann.conventionalLabel, ann.decorations);
+    let body = ccPrefix + (ann.text ?? "");
+
+    if (ann.suggestedCode) {
+      body += `\n\n\`\`\`suggestion\n${ann.suggestedCode}\n\`\`\``;
+    }
+
+    const side: "LEFT" | "RIGHT" = ann.side === "old" ? "LEFT" : "RIGHT";
+
+    const isMultiLine =
+      ann.lineStart != null && ann.lineEnd != null && ann.lineStart !== ann.lineEnd;
+
+    const comment = {
+      path: ann.filePath,
+      line: ann.lineEnd ?? ann.lineStart,
+      side,
+      body: body.trim(),
+      ...(isMultiLine && { start_line: ann.lineStart, start_side: side }),
+    };
+
+    return comment.body.length > 0 ? [comment] : [];
+  });
 }
 
 // The review-level body: file-scoped comments (prefixed with their path) plus
@@ -85,16 +90,21 @@ function buildAnnotationFileComments(
 // neither is dropped from a PR submission.
 function buildFileScopedBody(annotations: CodeAnnotation[]): string {
   const parts: string[] = [];
+
   for (const a of annotations) {
     const scope = a.scope ?? "line";
+
     if (scope === "file" && a.text) parts.push(`**${a.filePath}:** ${a.text}`);
     else if (scope === "general" && a.text) parts.push(a.text);
   }
+
   return parts.join("\n\n");
 }
 
 type OrphanAnnotation = { reason: "full-stack" | "unmapped"; ann: CodeAnnotation };
+
 type AnnotationPartitions = [CodeAnnotation[], OrphanAnnotation[]];
+
 type EditorFileComments = [SubmissionTarget["fileComments"], Set<string>];
 
 function partitionAnnotations(annotations: CodeAnnotation[]): AnnotationPartitions {
@@ -118,15 +128,19 @@ function groupAnnotationsByPR(
   orphanAnnotations: OrphanAnnotation[],
 ): Map<string, CodeAnnotation[]> {
   const annotationsByPR = new Map<string, CodeAnnotation[]>();
+
   const hasMultiplePRs =
-    new Set(layerAnnotations.map((annotation) => annotation.prUrl).filter(Boolean)).size > 1;
+    new Set(layerAnnotations.flatMap((annotation) => (annotation.prUrl ? [annotation.prUrl] : [])))
+      .size > 1;
 
   for (const annotation of layerAnnotations) {
     const key = annotation.prUrl ?? currentPrUrl ?? "_current";
+
     if (!annotation.prUrl && hasMultiplePRs) {
       orphanAnnotations.push({ reason: "unmapped", ann: annotation });
       continue;
     }
+
     const group = annotationsByPR.get(key) || [];
     group.push(annotation);
     annotationsByPR.set(key, group);
@@ -150,9 +164,11 @@ function buildEditorFileComments(
 
   for (const annotation of editorAnnotations) {
     if (!currentDiffPaths.has(annotation.filePath)) continue;
+
     const body = annotation.comment
       ? `> ${annotation.selectedText}\n\n${annotation.comment}`
       : `> ${annotation.selectedText}`;
+
     if (!body.trim()) continue;
     const isMultiLine = annotation.lineStart !== annotation.lineEnd;
     fileComments.push({
@@ -171,14 +187,17 @@ function buildEditorFileComments(
 function buildOrphanedFindings(orphanAnnotations: OrphanAnnotation[]): OrphanedFindings[] {
   const reasons: OrphanedFindings["reason"][] = ["full-stack", "unmapped"];
   const orphans: OrphanedFindings[] = [];
+
   for (const reason of reasons) {
-    const annotations = orphanAnnotations
-      .filter((orphan) => orphan.reason === reason)
-      .map((orphan) => orphan.ann);
+    const annotations = orphanAnnotations.flatMap((orphan) =>
+      orphan.reason === reason ? [orphan.ann] : [],
+    );
+
     if (annotations.length > 0) {
       orphans.push({ reason, annotations, markdown: exportReviewFeedback(annotations) });
     }
   }
+
   return orphans;
 }
 
@@ -219,6 +238,7 @@ export function buildReviewSubmission(
 
     if (prUrl === currentKey && editorFileComments.length > 0) {
       fileComments.push(...editorFileComments);
+
       for (const f of editorFiles) uniqueFiles.add(f);
       editorCommentsAttached = true;
     }

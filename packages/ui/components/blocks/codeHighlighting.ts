@@ -60,10 +60,13 @@ const LANGUAGE_ALIASES = {
 export function normalizeLanguage(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined;
   const trimmed = raw.trim();
+
   if (trimmed === "") return undefined;
   const firstToken = trimmed.split(/\s+/)[0];
+
   if (!firstToken) return undefined;
   const lower = firstToken.toLowerCase();
+
   return LANGUAGE_ALIASES[lower] ?? lower;
 }
 
@@ -72,20 +75,25 @@ export function normalizeLanguage(raw: string | undefined): string | undefined {
 // ---------------------------------------------------------------------------
 
 export const MAX_BLOCK_CHARS = 100_000;
+
 export const MAX_LINE_CHARS = 20_000;
 
 export function checkSizeLimits(code: string): FallbackReason | null {
   if (code.length === 0) return "empty";
+
   if (code.length > MAX_BLOCK_CHARS) return "too-large";
   // Check line length without splitting huge string twice
   let lineStart = 0;
+
   for (let i = 0; i < code.length; i++) {
     if (code[i] === "\n") {
       if (i - lineStart > MAX_LINE_CHARS) return "too-large-line";
       lineStart = i + 1;
     }
   }
+
   if (code.length - lineStart > MAX_LINE_CHARS) return "too-large-line";
+
   return null;
 }
 
@@ -125,13 +133,18 @@ function mapShikiTokens(
   return shikiTokens.tokens.map((line) =>
     line.map((tok) => {
       const htmlStyleParts: string[] = [];
+
       if (tok.color) htmlStyleParts.push(`color:${tok.color}`);
+
       if (tok.fontStyle) {
         // fontStyle bits: 1 = italic, 2 = bold, 4 = underline (shiki)
         if (tok.fontStyle & 1) htmlStyleParts.push("font-style:italic");
+
         if (tok.fontStyle & 2) htmlStyleParts.push("font-weight:bold");
+
         if (tok.fontStyle & 4) htmlStyleParts.push("text-decoration:underline");
       }
+
       // SAFETY: Token shape matches Shiki's ThemedToken, validated by mapShikiTokens
       return {
         content: tok.content,
@@ -159,11 +172,7 @@ const INITIAL_LANGUAGES = [
   "json",
 ] as const;
 
-const INITIAL_THEMES = [
-  "github-dark",
-  "github-light",
-  framerLightSyntaxTheme,
-] as const;
+const INITIAL_THEMES = ["github-dark", "github-light", framerLightSyntaxTheme] as const;
 
 function createShikiHighlighter(): Promise<Highlighter> {
   return createHighlighter({
@@ -199,10 +208,13 @@ export const CodeHighlightingLive = Layer.effect(
       if (highlighter.getLoadedLanguages().includes(lang)) {
         return Promise.resolve();
       }
+
       const existing = languageLoadCache.get(lang);
+
       if (existing) return existing;
       // SAFETY: Shiki accepts string language names beyond BundledLanguage union at runtime
       const langParam = lang as never;
+
       const p = highlighter
         .loadLanguage(langParam)
         .then(() => {
@@ -212,7 +224,9 @@ export const CodeHighlightingLive = Layer.effect(
           languageLoadCache.delete(lang);
           throw e;
         });
+
       languageLoadCache.set(lang, p);
+
       return p;
     };
 
@@ -220,11 +234,15 @@ export const CodeHighlightingLive = Layer.effect(
       if (highlighter.getLoadedThemes().includes(theme)) {
         return Promise.resolve();
       }
+
       const existing = themeLoadCache.get(theme);
+
       if (existing) return existing;
       // SAFETY: custom theme names like plannotator-framer-light are registered at runtime
       const themeParam = theme as never;
-      const p = highlighter.loadTheme(themeParam)
+
+      const p = highlighter
+        .loadTheme(themeParam)
         .then(() => {
           themeLoadCache.delete(theme);
         })
@@ -232,7 +250,9 @@ export const CodeHighlightingLive = Layer.effect(
           themeLoadCache.delete(theme);
           throw e;
         });
+
       themeLoadCache.set(theme, p);
+
       return p;
     };
 
@@ -243,25 +263,30 @@ export const CodeHighlightingLive = Layer.effect(
           try: async () => {
             await ensureLanguage(key.normalizedLanguage);
             await ensureTheme(key.themeName);
+
             const shikiResult = highlighter.codeToTokens(key.code, {
               // SAFETY: normalizedLanguage/themeName validated by ensure* and Shiki runtime
               lang: key.normalizedLanguage as never,
               // SAFETY: themeName is a loaded theme name validated above
               theme: key.themeName as never,
             });
+
             return mapShikiTokens(shikiResult);
           },
           catch: (cause) => {
             const msg = String(cause);
             const lower = msg.toLowerCase();
+
             const isLanguageError =
               lower.includes("language") &&
               (lower.includes("not found") ||
                 lower.includes("not included") ||
                 lower.includes("unsupported"));
+
             if (isLanguageError) {
               return new UnsupportedLanguageError({ language: key.normalizedLanguage });
             }
+
             return new HighlightProviderError({ cause, message: msg });
           },
         }).pipe(
@@ -288,14 +313,17 @@ export const CodeHighlightingLive = Layer.effect(
           if (Exit.isSuccess(exit)) {
             // SAFETY: exit.value is HighlightResult per Cache<HighlightCacheKey, HighlightResult>
             const v = exit.value as HighlightResult;
+
             if (v._tag === "PlainText" && v.reason === "provider-error") {
               return Duration.millis(0);
             }
           }
+
           if (Exit.isFailure(exit)) {
             // Cache failures briefly then retry
             return Duration.millis(0);
           }
+
           return Duration.infinity;
         },
       },
@@ -306,19 +334,25 @@ export const CodeHighlightingLive = Layer.effect(
       input: HighlightInput,
     ) {
       const sizeReason = checkSizeLimits(input.code);
+
       if (sizeReason) {
         if (sizeReason === "empty") return { _tag: "PlainText", reason: "empty" } as const;
+
         return { _tag: "PlainText", reason: sizeReason } as const;
       }
+
       const normalized = normalizeLanguage(input.language);
+
       if (!normalized) {
         return { _tag: "PlainText", reason: "unlabelled" } as const;
       }
+
       const key = new HighlightCacheKey({
         code: input.code,
         normalizedLanguage: normalized,
         themeName: input.themeName,
       });
+
       return yield* Cache.get(cache, key);
     });
 
@@ -336,13 +370,16 @@ export const CodeHighlightingLive = Layer.effect(
                 input.language
               ) {
                 const n = normalizeLanguage(input.language);
+
                 if (n && !warnedLanguages.has(n)) {
                   warnedLanguages.add(n);
+
                   if (process.env.NODE_ENV !== "production") {
                     console.warn(`[codeHighlighting] unsupported language: ${n}`);
                   }
                 }
               }
+
               if (result._tag === "PlainText" && result.reason === "provider-error") {
                 if (process.env.NODE_ENV !== "production") {
                   console.warn(
