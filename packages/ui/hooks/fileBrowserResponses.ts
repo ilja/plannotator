@@ -29,18 +29,32 @@ const WorkspaceFileChangeSchema = Schema.Struct({
   unstaged: Schema.Boolean,
 });
 
-const WorkspaceStatusSchema = Schema.Struct({
-  available: Schema.Boolean,
-  rootPath: Schema.String,
-  repoRoot: Schema.optionalKey(Schema.String),
-  files: Schema.Record(Schema.String, WorkspaceFileChangeSchema),
-  totals: Schema.Struct({
-    files: Schema.Number,
-    additions: Schema.Number,
-    deletions: Schema.Number,
+const WorkspaceStatusSchema = Schema.Union([
+  Schema.Struct({
+    available: Schema.Literal(true),
+    rootPath: Schema.String,
+    repoRoot: Schema.optionalKey(Schema.String),
+    files: Schema.Record(Schema.String, WorkspaceFileChangeSchema),
+    totals: Schema.Struct({
+      files: Schema.Number,
+      additions: Schema.Number,
+      deletions: Schema.Number,
+    }),
+    error: Schema.optionalKey(Schema.Never),
   }),
-  error: Schema.optionalKey(Schema.String),
-});
+  Schema.Struct({
+    available: Schema.Literal(false),
+    rootPath: Schema.String,
+    repoRoot: Schema.optionalKey(Schema.String),
+    files: Schema.Record(Schema.String, WorkspaceFileChangeSchema),
+    totals: Schema.Struct({
+      files: Schema.Number,
+      additions: Schema.Number,
+      deletions: Schema.Number,
+    }),
+    error: Schema.String,
+  }),
+]);
 
 const FileBrowserSuccessEnvelopeSchema = Schema.Struct({
   tree: Schema.Array(Schema.Unknown),

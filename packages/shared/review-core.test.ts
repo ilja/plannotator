@@ -309,4 +309,13 @@ describe("review-core", () => {
     expect(canStageGitFiles("worktree:/tmp/feature:staged")).toBeFalse();
     expect(canStageGitFiles("last-commit")).toBeFalse();
   });
+
+  test("a bare worktree prefix is not a worktree location", () => {
+    // An empty path previously flowed through as cwd "" (beating the
+    // fallback) with staging enabled; now it parses to null so callers
+    // fall back or report a worktree error.
+    expect(parseWorktreeDiffType("worktree:")).toBeNull();
+    expect(resolveGitDiffCwd("worktree:", "/tmp/main")).toBe("/tmp/main");
+    expect(canStageGitFiles("worktree:")).toBeFalse();
+  });
 });

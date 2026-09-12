@@ -54,19 +54,18 @@ import {
   handleUploadRequest,
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
+import { CodeNavRequestSchema, OpenInRequestSchema } from "./request-schemas.js";
 import {
-  CodeNavRequestSchema,
   DiffSwitchRequestSchema,
   DiffTypeSchema,
-  decodeFeedbackRequest,
   GitAddRequestSchema,
-  OpenInRequestSchema,
   PrActionRequestSchema,
   PrDiffScopeRequestSchema,
   PrSwitchRequestSchema,
   PrViewedRequestSchema,
   WorkspaceDiffTypeSchema,
-} from "./request-schemas.js";
+} from "../generated/review-request.js";
+import { decodeReviewFeedbackRequest } from "../generated/feedback-request.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -1942,7 +1941,7 @@ export async function startReviewServer(options: {
         return;
       }
 
-      const request = decodeFeedbackRequest(parsedBody.value);
+      const request = decodeReviewFeedbackRequest(parsedBody.value);
 
       if (!request) {
         json(res, { error: "Invalid request" }, 400);

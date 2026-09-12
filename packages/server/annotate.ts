@@ -59,7 +59,7 @@ import { AI_QUERY_ENDPOINT, createAIRuntime } from "./ai-runtime";
 import type { AIEndpoints } from "@plannotator/ai";
 import { createHtmlAssetRegistry } from "./html-assets";
 import { createBunAgentTerminalBridge } from "./agent-terminal";
-import { FeedbackRequestSchema } from "./review-request-schemas";
+import { decodeAnnotateFeedbackRequest } from "@plannotator/shared/feedback-request";
 import {
   isAgentTerminalWsRoute,
   supportsAnnotateAgentTerminalMode,
@@ -680,9 +680,7 @@ export async function startAnnotateServer(
 
       const rawBody = parsedBody.value;
 
-      const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
-      );
+      const body = decodeAnnotateFeedbackRequest(rawBody);
 
       if (!body) {
         return Response.json({ error: "Invalid request" }, { status: 400 });

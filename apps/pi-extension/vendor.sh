@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 rm -rf generated
 mkdir -p generated generated/ai/providers
 
-for f in feedback-templates prompts review-core diff-paths diff-defaults cli-pagination review-args draft project pr-types pr-provider pr-stack pr-github integrations-common repo reference-common favicon code-file resolve-file annotate-reference-roots-node config external-annotation agent-terminal worktree worktree-pool html-to-markdown html-assets html-assets-node url-to-markdown annotate-args at-reference review-workspace-node review-workspace code-nav data-dir semantic-diff-types semantic-diff source-save source-save-node workspace-status open-in-apps; do
+for f in feedback-templates feedback-request prompts review-core diff-paths diff-defaults cli-pagination review-args review-request draft project pr-types pr-provider pr-stack pr-github integrations-common repo reference-common favicon code-file resolve-file annotate-reference-roots-node config external-annotation agent-terminal worktree worktree-pool html-to-markdown html-assets html-assets-node url-to-markdown annotate-args at-reference review-workspace-node review-workspace code-nav data-dir semantic-diff-types semantic-diff source-save source-save-node workspace-status open-in-apps; do
   src="../../packages/shared/$f.ts"
   printf '// @generated — DO NOT EDIT. Source: packages/shared/%s.ts\n' "$f" | cat - "$src" > "generated/$f.ts"
 done

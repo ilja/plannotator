@@ -25,18 +25,36 @@ export interface WorkspaceFileChange {
   unstaged: boolean;
 }
 
-export interface WorkspaceStatusPayload {
-  available: boolean;
-  rootPath: string;
-  repoRoot?: string;
-  files: Record<string, WorkspaceFileChange>;
-  totals: {
-    files: number;
-    additions: number;
-    deletions: number;
-  };
-  error?: string;
-}
+/**
+ * Workspace git status. A successful scan carries file data and no error; a
+ * failed scan carries an error code and empty aggregates — `available: true`
+ * with an `error` (or vice versa) is unrepresentable.
+ */
+export type WorkspaceStatusPayload =
+  | {
+      available: true;
+      rootPath: string;
+      repoRoot?: string;
+      files: Record<string, WorkspaceFileChange>;
+      totals: {
+        files: number;
+        additions: number;
+        deletions: number;
+      };
+      error?: never;
+    }
+  | {
+      available: false;
+      rootPath: string;
+      repoRoot?: string;
+      files: Record<string, WorkspaceFileChange>;
+      totals: {
+        files: number;
+        additions: number;
+        deletions: number;
+      };
+      error: string;
+    };
 
 export interface GitRepositoryInfo {
   repoRoot: string;

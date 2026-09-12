@@ -96,13 +96,13 @@ import type { LocalWorkspaceReview, WorkspaceDiffType } from "./review-workspace
 import { handleCodeNavResolve, extractChangedFiles } from "./code-nav";
 import {
   DiffSwitchRequestSchema,
-  FeedbackRequestSchema,
   GitAddRequestSchema,
   PrActionRequestSchema,
   PrDiffScopeRequestSchema,
   PrSwitchRequestSchema,
   PrViewedRequestSchema,
-} from "./review-request-schemas";
+} from "@plannotator/shared/review-request";
+import { decodeReviewFeedbackRequest } from "@plannotator/shared/feedback-request";
 
 // Re-export utilities
 export { isRemoteSession, getServerPort } from "./remote";
@@ -1595,9 +1595,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
 
         const rawBody = parsedBody.value;
 
-        const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
-        );
+        const body = decodeReviewFeedbackRequest(rawBody);
 
         if (!body) {
           return Response.json({ error: "Invalid request" }, { status: 400 });
@@ -1666,11 +1664,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         }
 
         console.error(
-          `[pr-action] ${body.action} with ${body.fileComments.length} file comment(s), target=${targetUrl}, headSha=${targetHeadSha}`,
+          `[pr-action] ${body.action} with ${body.fileComments?.length ?? 0} file comment(s), target=${targetUrl}, headSha=${targetHeadSha}`,
         );
 
         await submitPRReview(targetRef, targetHeadSha, body.action, body.body, [
-          ...body.fileComments,
+          ...(body.fileComments ?? []),
         ]);
 
         console.error(`[pr-action] Success`);

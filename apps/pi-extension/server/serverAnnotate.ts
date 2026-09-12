@@ -33,7 +33,8 @@ import {
   handleUploadRequest,
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
-import { decodeFeedbackRequest, OpenInRequestSchema } from "./request-schemas.js";
+import { OpenInRequestSchema } from "./request-schemas.js";
+import { decodeAnnotateFeedbackRequest } from "../generated/feedback-request.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -807,7 +808,7 @@ function createAnnotateRouteHandlers(
           return true;
         }
 
-        const request = decodeFeedbackRequest(parsedBody.value);
+        const request = decodeAnnotateFeedbackRequest(parsedBody.value);
 
         if (!request) {
           json(res, { error: "Invalid request" }, 400);

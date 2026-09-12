@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { Option, Schema } from "effect";
-import { EditorAnnotationRequestSchema } from "./request-schemas.js";
+import { EditorAnnotationRequestSchema } from "../generated/review-request.js";
 import { json, parseBody } from "./helpers";
 
 interface EditorAnnotation {
