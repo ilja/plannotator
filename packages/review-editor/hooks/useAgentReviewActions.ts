@@ -22,6 +22,8 @@ export interface AgentReviewActions {
   exitReview: () => Promise<void>;
 }
 
+type PendingAgentAction = "feedback" | "approve" | "exit";
+
 export function useAgentReviewActions({
   allAnnotations,
   editorAnnotations,
@@ -32,9 +34,9 @@ export function useAgentReviewActions({
   onFeedbackStatusChange,
   onNoAnnotations,
 }: UseAgentReviewActionsOptions): AgentReviewActions {
-  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
+  // One submission lifecycle: the three actions share it, so two of them
+  // can never be pending at once.
+  const [pendingAction, setPendingAction] = useState<PendingAgentAction | null>(null);
 
   const sendFeedback = useCallback(async (): Promise<void> => {
     if (totalAnnotationCount === 0) {
@@ -43,7 +45,7 @@ export function useAgentReviewActions({
       return;
     }
 
-    setIsSendingFeedback(true);
+    setPendingAction("feedback");
 
     try {
       const response = await fetch("/api/feedback", {
@@ -66,7 +68,7 @@ export function useAgentReviewActions({
       console.error("Failed to send feedback:", error);
       onFeedbackStatusChange("Failed to send");
       setTimeout(() => onFeedbackStatusChange(null), 2000);
-      setIsSendingFeedback(false);
+      setPendingAction(null);
     }
   }, [
     allAnnotations,
@@ -80,7 +82,7 @@ export function useAgentReviewActions({
   ]);
 
   const exitReview = useCallback(async (): Promise<void> => {
-    setIsExiting(true);
+    setPendingAction("exit");
 
     try {
       const response = await fetch(`/api/exit?draftGeneration=${getDraftGeneration()}`, {
@@ -94,12 +96,12 @@ export function useAgentReviewActions({
       }
     } catch (error) {
       console.error("Failed to exit review:", error);
-      setIsExiting(false);
+      setPendingAction(null);
     }
   }, [getDraftGeneration, onSubmitted]);
 
   const approveReview = useCallback(async (): Promise<void> => {
-    setIsApproving(true);
+    setPendingAction("approve");
 
     try {
       const response = await fetch("/api/feedback", {
@@ -122,14 +124,14 @@ export function useAgentReviewActions({
       console.error("Failed to approve:", error);
       onFeedbackStatusChange("Failed to send");
       setTimeout(() => onFeedbackStatusChange(null), 2000);
-      setIsApproving(false);
+      setPendingAction(null);
     }
   }, [getDraftGeneration, onFeedbackStatusChange, onSubmitted]);
 
   return {
-    isSendingFeedback,
-    isApproving,
-    isExiting,
+    isSendingFeedback: pendingAction === "feedback",
+    isApproving: pendingAction === "approve",
+    isExiting: pendingAction === "exit",
     sendFeedback,
     approveReview,
     exitReview,
