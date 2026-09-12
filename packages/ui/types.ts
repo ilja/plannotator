@@ -96,12 +96,6 @@ export interface Block {
   startLine: number; // 1-based line number in source
 }
 
-export interface DiffResult {
-  original: string;
-  modified: string;
-  diffText: string;
-}
-
 // Code Review Types
 export type CodeAnnotationType = "comment" | "suggestion" | "concern";
 
