@@ -27,18 +27,11 @@ import {
   type OpenInPlatform,
 } from "@plannotator/shared/open-in-apps";
 import { resolveOpenInTarget } from "@plannotator/shared/html-assets-node";
+import { OpenInRequestSchema, type OpenInRequest } from "@plannotator/shared/review-request";
 import { isRemoteSession } from "./remote";
 import { malformedJsonBody, readJsonBody } from "./request-body";
 
 export type OpenInLaunchResult = { ok: true } | { ok: false; error: string };
-
-const OpenInRequestSchema = Schema.Struct({
-  filePath: Schema.optionalKey(Schema.String),
-  base: Schema.optionalKey(Schema.String),
-  appId: Schema.optionalKey(Schema.String),
-});
-
-type OpenInRequest = Schema.Schema.Type<typeof OpenInRequestSchema>;
 
 function currentPlatform(): OpenInPlatform {
   switch (process.platform) {
@@ -378,11 +371,7 @@ export async function handleOpenIn(
     return Response.json({ ok: false, error: "Invalid request" }, { status: 400 });
   }
 
-  const filePath = body.filePath ?? "";
-
-  if (!filePath) {
-    return Response.json({ ok: false, error: "Missing filePath" }, { status: 400 });
-  }
+  const filePath = body.filePath;
 
   const base = body.base ?? null;
   const appId = body.appId;

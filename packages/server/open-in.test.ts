@@ -42,6 +42,25 @@ describe("resolveOpenInTarget — /api/open-in containment", () => {
     expect(await response.json()).toEqual({ ok: false, error: "Invalid request" });
   });
 
+  test("accepts the live client payload with an explicit null base", async () => {
+    // The UI sends base: null when it has no base directory; both schemas
+    // used to reject that, 400ing every no-base open attempt. /etc/passwd
+    // is outside every root, so a decoded request reaches the containment
+    // check (403) instead of failing validation (400) — with no launch
+    // attempted either way.
+    const response = await handleOpenIn(
+      new Request("http://localhost/api/open-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filePath: "/etc/passwd", base: null, appId: "reveal" }),
+      }),
+      { resolveRoot: () => makeDir() },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ ok: false, error: "Access denied" });
+  });
+
   test("a server root scopes opens: a file inside the root is allowed", () => {
     const root = makeDir();
     writeFileSync(join(root, "notes.md"), "x");

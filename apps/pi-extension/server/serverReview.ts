@@ -54,11 +54,12 @@ import {
   handleUploadRequest,
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
-import { CodeNavRequestSchema, OpenInRequestSchema } from "./request-schemas.js";
+import { CodeNavRequestSchema } from "./request-schemas.js";
 import {
   DiffSwitchRequestSchema,
   DiffTypeSchema,
   GitAddRequestSchema,
+  OpenInRequestSchema,
   PrActionRequestSchema,
   PrDiffScopeRequestSchema,
   PrSwitchRequestSchema,

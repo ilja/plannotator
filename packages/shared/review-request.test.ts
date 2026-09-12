@@ -5,6 +5,7 @@ import {
   DiffSwitchRequestSchema,
   DiffTypeSchema,
   EditorAnnotationRequestSchema,
+  OpenInRequestSchema,
   GitAddRequestSchema,
   PrActionRequestSchema,
   PrDiffScopeRequestSchema,
@@ -223,6 +224,28 @@ describe("review request schemas", () => {
     ).toBe("workspace-current");
     expect(
       Option.getOrUndefined(Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)("uncommitted")),
+    ).toBeUndefined();
+  });
+
+  test("OpenInRequestSchema accepts the live client payload with null base", () => {
+    // The UI sends base: null when it has no base directory.
+    expect(
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(OpenInRequestSchema)({
+          filePath: "a.ts",
+          base: null,
+          appId: "vscode",
+        }),
+      ),
+    ).toBeDefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(OpenInRequestSchema)({ filePath: "a.ts" })),
+    ).toBeDefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(OpenInRequestSchema)({})),
+    ).toBeUndefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(OpenInRequestSchema)({ filePath: "" })),
     ).toBeUndefined();
   });
 });

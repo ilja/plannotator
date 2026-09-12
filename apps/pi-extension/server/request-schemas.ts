@@ -10,13 +10,6 @@
 
 import { Schema } from "effect";
 
-/** Open-in-app request (annotate and review servers). */
-export const OpenInRequestSchema = Schema.Struct({
-  filePath: Schema.NonEmptyString,
-  appId: Schema.optionalKey(Schema.String),
-  base: Schema.optionalKey(Schema.String),
-});
-
 /** Code navigation request. */
 export const CodeNavRequestSchema = Schema.Struct({
   symbol: Schema.String,

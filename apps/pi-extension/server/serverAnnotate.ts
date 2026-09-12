@@ -33,8 +33,8 @@ import {
   handleUploadRequest,
 } from "./handlers.js";
 import { html, json, parseBody, requestUrl } from "./helpers.js";
-import { OpenInRequestSchema } from "./request-schemas.js";
 import { decodeAnnotateFeedbackRequest } from "../generated/feedback-request.js";
+import { OpenInRequestSchema } from "../generated/review-request.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
