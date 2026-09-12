@@ -1,10 +1,9 @@
+import type { DiskBanner } from "../appScreenPresentation";
+
 type WorkspaceBannersProps = {
   linkedDocumentError: string | null;
   onDismissLinkedDocumentError: () => void;
-  hasDiskConflict: boolean;
-  conflictedFileName: string;
-  hasMissingSourceFile: boolean;
-  missingFileName: string;
+  diskBanner: DiskBanner | null;
   isEditingMarkdown: boolean;
   canOverwriteDiskConflict: boolean;
   isSavingSourceFile: boolean;
@@ -17,10 +16,7 @@ type WorkspaceBannersProps = {
 export function WorkspaceBanners({
   linkedDocumentError,
   onDismissLinkedDocumentError,
-  hasDiskConflict,
-  conflictedFileName,
-  hasMissingSourceFile,
-  missingFileName,
+  diskBanner,
   isEditingMarkdown,
   canOverwriteDiskConflict,
   isSavingSourceFile,
@@ -43,11 +39,11 @@ export function WorkspaceBanners({
         </div>
       )}
 
-      {hasDiskConflict && (
+      {diskBanner?.kind === "conflict" && (
         <div className="bg-warning/10 border-b border-warning/25 px-4 py-2 flex items-center gap-3 flex-shrink-0">
           <span className="min-w-0 flex-1 text-xs text-warning-foreground">
-            {conflictedFileName} changed on disk{isEditingMarkdown ? " while you were editing" : ""}
-            .
+            {diskBanner.fileName} changed on disk
+            {isEditingMarkdown ? " while you were editing" : ""}.
           </span>
           {canOverwriteDiskConflict && (
             <button
@@ -68,10 +64,10 @@ export function WorkspaceBanners({
         </div>
       )}
 
-      {hasMissingSourceFile && (
+      {diskBanner?.kind === "missing" && (
         <div className="bg-warning/10 border-b border-warning/25 px-4 py-2 flex items-center gap-3 flex-shrink-0">
           <span className="min-w-0 flex-1 text-xs text-warning-foreground">
-            {missingFileName} no longer exists on disk. Save to recreate it.
+            {diskBanner.fileName} no longer exists on disk. Save to recreate it.
           </span>
           <button
             type="button"

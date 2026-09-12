@@ -41,12 +41,7 @@ describe("editor screen presentation", () => {
     });
 
     expect(generatedFeedback).toBe(false);
-    expect(presentation.banners).toEqual({
-      hasDiskConflict: false,
-      conflictedFileName: "",
-      hasMissingSourceFile: false,
-      missingFileName: "",
-    });
+    expect(presentation.banners).toEqual({ diskBanner: null });
     expect(presentation.document).toEqual({
       activeSourceSaveFileName: null,
       activeSourceDocumentKey: null,
@@ -82,10 +77,7 @@ describe("editor screen presentation", () => {
     });
 
     expect(presentation.banners).toEqual({
-      hasDiskConflict: true,
-      conflictedFileName: "plan.md",
-      hasMissingSourceFile: false,
-      missingFileName: "plan.md",
+      diskBanner: { kind: "conflict", fileName: "plan.md" },
     });
     expect(presentation.document).toEqual({
       activeSourceSaveFileName: "plan.md",
@@ -119,8 +111,22 @@ describe("editor screen presentation", () => {
       showLookAndFeelAnnouncement: true,
     });
 
-    expect(presentation.banners.hasMissingSourceFile).toBe(true);
+    expect(presentation.banners.diskBanner).toEqual({ kind: "missing", fileName: "deleted.md" });
     expect(presentation.document.showDemoBadge).toBe(false);
     expect(presentation.overlays.shouldShowLookAndFeelAnnouncement).toBe(false);
+  });
+
+  test("a conflict wins when both disk signals are present", () => {
+    const presentation = buildAppScreenPresentation({
+      ...baseInput,
+      activeSourceDocument: {
+        basename: "plan.md",
+        diskConflict: { text: "on-disk content" },
+        missingOnDisk: true,
+        key: "file:/repo/plan.md",
+      },
+    });
+
+    expect(presentation.banners.diskBanner).toEqual({ kind: "conflict", fileName: "plan.md" });
   });
 });
