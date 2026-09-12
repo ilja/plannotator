@@ -144,7 +144,7 @@ class PiProcess {
     }
   }
 
-  private routeMessage(input: PiJsonObject): void {
+  private routeMessage<Input>(input: Input): void {
     const msg = Option.getOrUndefined(Schema.decodeUnknownOption(PiJsonObjectSchema)(input));
 
     if (!msg) return;
