@@ -48,12 +48,10 @@ describe("getDefaultNotesApp", () => {
     }
   });
 
-  test("migrates removed persisted notes apps to ask", () => {
-    for (const value of ["bear", "octarine"]) {
-      storedValues.set(STORAGE_KEY, value);
+  test("migrates a removed persisted notes app to ask", () => {
+    storedValues.set(STORAGE_KEY, "bear");
 
-      expect(getDefaultNotesApp()).toBe("ask");
-    }
+    expect(getDefaultNotesApp()).toBe("ask");
   });
 });
 

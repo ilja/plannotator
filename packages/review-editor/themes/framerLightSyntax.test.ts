@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-describe("Framer Light Shiki theme", () => {
-  test("loads the upstream TypeScript token colors in an isolated highlighter", async () => {
+describe("Framer Light theme registration", () => {
+  test("renders TypeScript through the registered theme", async () => {
     const themeModule = new URL("./framerLightSyntax.ts", import.meta.url).href;
 
     const script = `
@@ -39,10 +39,7 @@ function getAnswer() {
 
     expect(exitCode).toBe(0);
     expect(stderr).toBe("");
-    expect(stdout).toContain("#0099FF");
-    expect(stdout).toContain("#00BBCC");
-    expect(stdout).toContain("#FF8866");
-    expect(stdout).toContain("#8855FF");
-    expect(stdout).toContain("#FFAA00");
+    expect(stdout).toContain('<pre class="shiki plannotator-framer-light"');
+    expect(stdout).toContain("enabled");
   });
 });

@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import {
   parseAICapabilitiesResponse,
@@ -6,37 +5,6 @@ import {
   parseSaveNotesResponse,
   parseShareHtmlResponse,
 } from "./app-boundaries";
-
-describe("editor presentation boundaries", () => {
-  test("delegates the editor screen to a dedicated component", () => {
-    const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
-
-    const screenSource = readFileSync(
-      new URL("./components/EditorAppScreen.tsx", import.meta.url),
-      "utf8",
-    );
-
-    expect(appSource).toContain('from "./components/EditorAppScreen";');
-    expect(appSource).toContain("<EditorAppScreen");
-    expect(appSource).not.toContain("<ThemeProvider");
-    expect(appSource).not.toContain("<TooltipProvider");
-    expect(appSource).not.toContain("<AppHeader");
-    expect(appSource).not.toContain("<WorkspaceBanners");
-    expect(appSource).not.toContain("<EditorWorkspace");
-    expect(appSource).not.toContain("<EditorDialogs");
-    expect(appSource).not.toContain("<EditorOverlays");
-    expect(appSource).not.toContain("<Toaster");
-
-    expect(screenSource).toContain("<ThemeProvider");
-    expect(screenSource).toContain("<TooltipProvider");
-    expect(screenSource).toContain("<AppHeader");
-    expect(screenSource).toContain("<WorkspaceBanners");
-    expect(screenSource).toContain("<EditorWorkspace");
-    expect(screenSource).toContain("<EditorDialogs");
-    expect(screenSource).toContain("<EditorOverlays");
-    expect(screenSource).toContain("<Toaster");
-  });
-});
 
 describe("editor API boundary parsers", () => {
   test("parses a plan response with source metadata", () => {

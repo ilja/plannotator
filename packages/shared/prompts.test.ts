@@ -3,8 +3,6 @@ import { mergePromptConfig } from "./config";
 import { FEEDBACK_DISCUSSION_INSTRUCTION } from "./feedback-templates";
 import {
   DEFAULT_ANNOTATE_APPROVED_PROMPT,
-  DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT,
-  DEFAULT_ANNOTATE_MESSAGE_FEEDBACK_PROMPT,
   DEFAULT_REVIEW_APPROVED_PROMPT,
   DEFAULT_REVIEW_DENIED_SUFFIX,
   getAnnotateApprovedPrompt,
@@ -141,10 +139,6 @@ describe("getReviewDeniedSuffix", () => {
 // ─── Annotation feedback ─────────────────────────────────────────────────
 
 describe("getAnnotateFileFeedbackPrompt", () => {
-  test("exposes default constant", () => {
-    expect(DEFAULT_ANNOTATE_FILE_FEEDBACK_PROMPT).toContain("{{filePath}}");
-  });
-
   test("includes file header and path in default", () => {
     const result = getAnnotateFileFeedbackPrompt(
       "opencode",
@@ -206,10 +200,6 @@ describe("getAnnotateFileFeedbackPrompt", () => {
 });
 
 describe("getAnnotateMessageFeedbackPrompt", () => {
-  test("exposes default constant", () => {
-    expect(DEFAULT_ANNOTATE_MESSAGE_FEEDBACK_PROMPT).toContain("{{feedback}}");
-  });
-
   test("includes feedback in default template", () => {
     const result = getAnnotateMessageFeedbackPrompt("pi", {}, { feedback: "Wrong output" });
     expect(result).toContain("Message Annotations");

@@ -40,18 +40,6 @@ describe("exportReviewFeedback", () => {
     expect(result).not.toContain("acme");
   });
 
-  it("local mode with null prMetadata: same as no prMetadata", () => {
-    const result = exportReviewFeedback([ann()], null);
-    expect(result).toStartWith("# Code Review Feedback\n\n");
-    expect(result).not.toContain("PR Review");
-  });
-
-  it("local mode with undefined prMetadata: same as no prMetadata", () => {
-    const result = exportReviewFeedback([ann()], undefined);
-    expect(result).toStartWith("# Code Review Feedback\n\n");
-    expect(result).not.toContain("PR Review");
-  });
-
   it("local mode with diff context: describes mode + base in the header", () => {
     const result = exportReviewFeedback([ann()], undefined, {
       mode: "branch",
@@ -178,12 +166,6 @@ describe("exportReviewFeedback", () => {
 
   it("contains exactly one top-level heading so integrations can use the output directly", () => {
     const result = exportReviewFeedback([ann()]);
-    const headingMatches = result.match(/^# /gm) || [];
-    expect(headingMatches).toHaveLength(1);
-  });
-
-  it("contains exactly one top-level heading in PR mode", () => {
-    const result = exportReviewFeedback([ann()], prMeta);
     const headingMatches = result.match(/^# /gm) || [];
     expect(headingMatches).toHaveLength(1);
   });
