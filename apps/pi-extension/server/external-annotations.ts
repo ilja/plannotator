@@ -18,7 +18,10 @@ import {
   type ExternalAnnotationEvent,
   decodeExternalAnnotationPatch,
 } from "../generated/external-annotation.js";
-import { json, parseBody, toWebRequest, type ParsedRequestBody } from "./helpers.js";
+import { Option, Schema } from "effect";
+import { json, parseBody, type ParsedRequestBody } from "./helpers.js";
+
+const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown));
 
 // ---------------------------------------------------------------------------
 // Route prefix
@@ -110,7 +113,23 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
 
   async function handleAddRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const result = addAnnotations(await parseBody(req));
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
+      const record = Option.getOrUndefined(decodeRecord(parsedBody.value));
+
+      if (!record) {
+        json(res, { error: "Invalid JSON" }, 400);
+
+        return;
+      }
+
+      const result = addAnnotations(record);
 
       if ("error" in result) {
         json(res, { error: result.error }, 400);
@@ -138,7 +157,15 @@ export function createExternalAnnotationHandler(mode: "plan" | "review") {
     }
 
     try {
-      const patch = decodeExternalAnnotationPatch(mode, await toWebRequest(req).json());
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
+      const patch = decodeExternalAnnotationPatch(mode, parsedBody.value);
 
       if (!patch) {
         json(res, { error: "Invalid JSON" }, 400);

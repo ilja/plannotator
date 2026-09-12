@@ -28,6 +28,7 @@ import {
 } from "@plannotator/shared/open-in-apps";
 import { resolveOpenInTarget } from "@plannotator/shared/html-assets-node";
 import { isRemoteSession } from "./remote";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 
 export type OpenInLaunchResult = { ok: true } | { ok: false; error: string };
 
@@ -368,7 +369,11 @@ export async function handleOpenIn(
   let body: OpenInRequest;
 
   try {
-    body = Schema.decodeUnknownSync(OpenInRequestSchema)(await req.json());
+    const parsedBody = await readJsonBody(req);
+
+    if (!parsedBody.ok) return malformedJsonBody();
+
+    body = Schema.decodeUnknownSync(OpenInRequestSchema)(parsedBody.value);
   } catch {
     return Response.json({ ok: false, error: "Invalid request" }, { status: 400 });
   }

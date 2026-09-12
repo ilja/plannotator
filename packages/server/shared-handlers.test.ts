@@ -170,6 +170,20 @@ describe("handleDraftSave", () => {
       expect(await handleDraftLoad("draft-boundary").json()).toEqual({
         annotations: [{ id: "updated" }],
       });
+
+      const unparseable = await handleDraftSave(
+        new Request("http://localhost/api/draft", {
+          method: "POST",
+          body: "not-json{",
+        }),
+        "draft-boundary",
+      );
+
+      expect(unparseable.status).toBe(400);
+      expect(await unparseable.json()).toEqual({ error: "Malformed JSON body" });
+      expect(await handleDraftLoad("draft-boundary").json()).toEqual({
+        annotations: [{ id: "updated" }],
+      });
     } finally {
       if (previousDataDir === undefined) delete process.env.PLANNOTATOR_DATA_DIR;
       else process.env.PLANNOTATOR_DATA_DIR = previousDataDir;
@@ -275,7 +289,7 @@ describe("handleSaveNotes", () => {
     expect(json.results.obsidian).toHaveProperty("error");
   });
 
-  test("an unparseable body returns a 500 JSON error (not SPA HTML)", async () => {
+  test("an unparseable body returns a 400 JSON error (not SPA HTML)", async () => {
     const badRequest = new Request("http://localhost/api/save-notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -284,10 +298,10 @@ describe("handleSaveNotes", () => {
 
     const response = await handleSaveNotes(badRequest);
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
     expect(response.headers.get("content-type")).toContain("application/json");
     const json = await response.json();
-    expect(json).toHaveProperty("error");
+    expect(json).toEqual({ error: "Malformed JSON body" });
   });
 });
 

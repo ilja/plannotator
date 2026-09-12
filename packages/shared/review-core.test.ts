@@ -171,11 +171,13 @@ describe("review-core", () => {
 
     const result = await runGitDiff(runtime, "branch", context.defaultBranch);
 
-    expect(result.patch).toBe("");
-    expect(result.label).toBe("Error: branch");
     // Error is derived from the argv — assert the meaningful parts rather
     // than the exact string so harmless argv reorders (e.g. --end-of-options)
     // don't break it.
+    if (!("error" in result)) throw new Error("expected a failed diff result");
+
+    expect(result.patch).toBe("");
+    expect(result.label).toBe("Error: branch");
     expect(result.error).toContain("git diff");
     expect(result.error).toContain("master..HEAD");
   });

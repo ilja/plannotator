@@ -615,7 +615,15 @@ export async function handleDocExistsRequest(
   let request: Schema.Schema.Type<typeof DocExistsRequestSchema>;
 
   try {
-    request = Schema.decodeUnknownSync(DocExistsRequestSchema)(await parseBody(req));
+    const parsedBody = await parseBody(req);
+
+    if (!parsedBody.ok) {
+      json(res, { error: "Malformed JSON body" }, 400);
+
+      return;
+    }
+
+    request = Schema.decodeUnknownSync(DocExistsRequestSchema)(parsedBody.value);
   } catch {
     json(res, { error: "Expected { paths: string[] }" }, 400);
 

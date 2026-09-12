@@ -79,11 +79,31 @@ export interface GitContext {
   recentCommits?: RecentCommit[];
 }
 
-export interface DiffResult {
+/**
+ * A successfully computed diff. `patch` may be empty (clean tree) — that is
+ * a valid result, not a failure. The `error` key is forbidden here (not
+ * merely optional), so an error with a patch is unrepresentable even through
+ * intermediate variables: use `"error" in result` to branch.
+ */
+export interface SuccessfulDiffResult {
   patch: string;
   label: string;
-  error?: string;
+  error?: never;
 }
+
+/** A diff that could not be computed. `patch` is always empty on failure. */
+export interface FailedDiffResult {
+  patch: "";
+  label: string;
+  error: string;
+}
+
+/**
+ * The outcome of computing a diff. An error with a non-empty patch is
+ * unrepresentable: partial failures surface as failures, never as usable
+ * diffs masquerading as success.
+ */
+export type DiffResult = SuccessfulDiffResult | FailedDiffResult;
 
 export interface GitCommandResult {
   stdout: string;

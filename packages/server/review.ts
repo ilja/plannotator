@@ -55,6 +55,7 @@ import {
   type PRDiffScope,
 } from "@plannotator/shared/pr-stack";
 import { getRepoInfo } from "./repo";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 import {
   handleImage,
   handleUpload,
@@ -799,7 +800,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       }
 
       try {
-        const rawBody = await req.json();
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const rawBody = parsedBody.value;
 
         const body = Option.getOrUndefined(
           Schema.decodeUnknownOption(DiffSwitchRequestSchema)(rawBody),
@@ -858,7 +863,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         currentDiffType = newDiffType;
         currentBase = base;
         baseEverSwitched = true;
-        currentError = result.error;
+        currentError = "error" in result ? result.error : undefined;
         captureDiffFingerprint();
 
         // Recompute gitContext for the effective cwd so the client's
@@ -933,7 +938,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
         const result = await runPRLayerLocalDiff(gitRuntime, upgradeMetadata, upgradeCwd);
 
         if (prMetadata === upgradeMetadata) {
-          if (!result.error) {
+          if (!("error" in result)) {
             originalPRPatch = result.patch;
             originalPRError = undefined;
             layerPatchIncomplete = false;
@@ -1003,7 +1008,7 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
 
     const result = await runPRFullStackDiff(gitRuntime, fullStackMetadata, fullStackCwd);
 
-    if (result.error) {
+    if ("error" in result && result.error !== undefined) {
       return Response.json({ error: result.error }, { status: 400 });
     }
 
@@ -1030,7 +1035,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       }
 
       try {
-        const rawBody = await req.json();
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const rawBody = parsedBody.value;
 
         const body = Option.getOrUndefined(
           Schema.decodeUnknownOption(PrDiffScopeRequestSchema)(rawBody),
@@ -1144,7 +1153,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       }
 
       try {
-        const rawBody = await req.json();
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const rawBody = parsedBody.value;
 
         const body = Option.getOrUndefined(
           Schema.decodeUnknownOption(PrSwitchRequestSchema)(rawBody),
@@ -1464,7 +1477,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     // API: Stage / unstage a file (disabled when Git doesn't support it)
     if (url.pathname === "/api/git-add" && req.method === "POST") {
       try {
-        const rawBody = await req.json();
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const rawBody = parsedBody.value;
 
         const body = Option.getOrUndefined(
           Schema.decodeUnknownOption(GitAddRequestSchema)(rawBody),
@@ -1518,7 +1535,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     // API: Update user config (write-back to ~/.plannotator/config.json)
     if (url.pathname === "/api/config" && req.method === "POST") {
       try {
-        const body = Schema.decodeUnknownSync(ConfigPatch)(await req.json());
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const body = Schema.decodeUnknownSync(ConfigPatch)(parsedBody.value);
 
         if (Object.keys(body).length > 0) saveConfig(body);
 
@@ -1568,7 +1589,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
     // API: Submit review feedback
     if (url.pathname === "/api/feedback" && req.method === "POST") {
       try {
-        const rawBody = await req.json();
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const rawBody = parsedBody.value;
 
         const body = Option.getOrUndefined(
           Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
@@ -1602,7 +1627,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       }
 
       try {
-        const rawBody = await req.json();
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const rawBody = parsedBody.value;
 
         const body = Option.getOrUndefined(
           Schema.decodeUnknownOption(PrActionRequestSchema)(rawBody),
@@ -1670,7 +1699,11 @@ export async function startReviewServer(options: ReviewServerOptions): Promise<R
       }
 
       try {
-        const rawBody = await req.json();
+        const parsedBody = await readJsonBody(req);
+
+        if (!parsedBody.ok) return malformedJsonBody();
+
+        const rawBody = parsedBody.value;
 
         const body = Option.getOrUndefined(
           Schema.decodeUnknownOption(PrViewedRequestSchema)(rawBody),

@@ -23,8 +23,13 @@ const AIChatStreamMessageSchema = Schema.Union([
     type: Schema.Literal("error"),
     error: Schema.String,
   }),
+  // Mirror of the canonical AIResultMessage: completions always report
+  // success (failures travel as `error` messages). `result` is absent when
+  // everything already streamed as deltas. Payloads without the success
+  // discriminant are rejected instead of completing the chat blindly.
   Schema.Struct({
     type: Schema.Literal("result"),
+    success: Schema.Literal(true),
     result: Schema.optionalKey(Schema.String),
   }),
   Schema.Struct({
@@ -57,4 +62,17 @@ export function decodeAIChatSessionId<Input>(value: Input): string | null {
 
 export function decodeAIChatStreamMessage<Input>(value: Input): AIChatStreamMessage | null {
   return Option.getOrNull(decodeMessage(value));
+}
+
+const decodePayloadType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
+
+/**
+ * True when an SSE payload claims to be a `result` but failed full message
+ * decoding — ending the stream with no completion and no error. Other
+ * undecodable traffic (e.g. tool updates, ignored by design) returns false.
+ */
+export function isMalformedResultPayload<Input>(value: Input): boolean {
+  if (decodeAIChatStreamMessage(value) !== null) return false;
+
+  return Option.getOrUndefined(decodePayloadType(value))?.type === "result";
 }

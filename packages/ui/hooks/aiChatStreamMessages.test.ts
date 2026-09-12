@@ -3,6 +3,7 @@ import {
   decodeAIChatError,
   decodeAIChatSessionId,
   decodeAIChatStreamMessage,
+  isMalformedResultPayload,
 } from "./aiChatStreamMessages";
 
 describe("decodeAIChatStreamMessage", () => {
@@ -19,10 +20,18 @@ describe("decodeAIChatStreamMessage", () => {
       type: "error",
       error: "Unavailable",
     });
-    expect(decodeAIChatStreamMessage({ type: "result", result: "Complete" })).toEqual({
+    expect(
+      decodeAIChatStreamMessage({ type: "result", success: true, result: "Complete" }),
+    ).toEqual({
       type: "result",
+      success: true,
       result: "Complete",
     });
+    expect(decodeAIChatStreamMessage({ type: "result", success: true })).toEqual({
+      type: "result",
+      success: true,
+    });
+    expect(decodeAIChatStreamMessage({ type: "result", result: "Complete" })).toBeNull();
     expect(
       decodeAIChatStreamMessage({
         type: "permission_request",
@@ -44,6 +53,13 @@ describe("decodeAIChatStreamMessage", () => {
       description: "Reads the current directory",
       toolUseId: "tool-1",
     });
+  });
+
+  test("isMalformedResultPayload flags only undecodable results", () => {
+    expect(isMalformedResultPayload({ type: "result", result: "orphan" })).toBe(true);
+    expect(isMalformedResultPayload({ type: "result", success: true })).toBe(false);
+    expect(isMalformedResultPayload({ type: "tool_use", toolName: "Bash" })).toBe(false);
+    expect(isMalformedResultPayload(null)).toBe(false);
   });
 
   test("decodes session identifiers and API error messages", () => {

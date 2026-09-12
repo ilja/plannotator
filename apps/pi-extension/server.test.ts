@@ -382,6 +382,18 @@ describe("pi annotate server", () => {
 
       const updated = await fetch(`${server.url}/api/draft`);
       expect(await updated.json()).toEqual({ annotations: [{ id: "updated" }] });
+
+      const unparseable = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not-json{",
+      });
+
+      expect(unparseable.status).toBe(400);
+      expect(await unparseable.json()).toEqual({ error: "Malformed JSON body" });
+
+      const preserved = await fetch(`${server.url}/api/draft`);
+      expect(await preserved.json()).toEqual({ annotations: [{ id: "updated" }] });
     } finally {
       server.stop();
     }

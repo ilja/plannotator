@@ -14,7 +14,7 @@ describe("handleCodeNavResolve", () => {
     const response = await handleCodeNavResolve(request("{"), process.cwd(), []);
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Invalid request body" });
+    expect(await response.json()).toEqual({ error: "Malformed JSON body" });
   });
 
   test("rejects one invalid request field through the HTTP boundary", async () => {

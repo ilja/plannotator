@@ -32,7 +32,7 @@ import {
   handleSaveNotesRequest,
   handleUploadRequest,
 } from "./handlers.js";
-import { html, json, parseBody, parseStrictBody, requestUrl, toWebRequest } from "./helpers.js";
+import { html, json, parseBody, requestUrl } from "./helpers.js";
 import { decodeFeedbackRequest, OpenInRequestSchema } from "./request-schemas.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
@@ -552,7 +552,15 @@ function createAnnotateRouteHandlers(
       if (url.pathname !== "/api/config" || req.method !== "POST") return false;
 
       try {
-        const body = Schema.decodeUnknownSync(ConfigPatch)(await parseStrictBody(req));
+        const parsedBody = await parseBody(req);
+
+        if (!parsedBody.ok) {
+          json(res, { error: "Malformed JSON body" }, 400);
+
+          return true;
+        }
+
+        const body = Schema.decodeUnknownSync(ConfigPatch)(parsedBody.value);
 
         if (Object.keys(body).length > 0) saveConfig(body);
         json(res, { ok: true });
@@ -602,8 +610,16 @@ function createAnnotateRouteHandlers(
       }
 
       try {
+        const parsedBody = await parseBody(req);
+
+        if (!parsedBody.ok) {
+          json(res, { error: "Malformed JSON body" }, 400);
+
+          return true;
+        }
+
         const body = Option.getOrUndefined(
-          Schema.decodeUnknownOption(OpenInRequestSchema)(await parseBody(req)),
+          Schema.decodeUnknownOption(OpenInRequestSchema)(parsedBody.value),
         );
 
         if (!body) {
@@ -673,8 +689,16 @@ function createAnnotateRouteHandlers(
     async (req, res, url) => {
       if (url.pathname !== "/api/source/save" || req.method !== "POST") return false;
 
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return true;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(SourceSaveRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(SourceSaveRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -775,7 +799,15 @@ function createAnnotateRouteHandlers(
       if (url.pathname !== "/api/feedback" || req.method !== "POST") return false;
 
       try {
-        const request = decodeFeedbackRequest(await toWebRequest(req).json());
+        const parsedBody = await parseBody(req);
+
+        if (!parsedBody.ok) {
+          json(res, { error: "Malformed JSON body" }, 400);
+
+          return true;
+        }
+
+        const request = decodeFeedbackRequest(parsedBody.value);
 
         if (!request) {
           json(res, { error: "Invalid request" }, 400);

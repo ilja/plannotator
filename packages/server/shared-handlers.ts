@@ -9,6 +9,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Option, Schema } from "effect";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 import { openBrowser as openBrowserImpl } from "./browser";
 import { validateImagePath, validateUploadExtension, UPLOAD_DIR } from "./image";
 import {
@@ -185,7 +186,11 @@ export async function handleAgents(opencodeClient?: OpencodeClient): Promise<Res
 /** Save annotation draft. Used by all 3 servers. */
 export async function handleDraftSave(req: Request, contentKey: string): Promise<Response> {
   try {
-    const body = decodeDraftEnvelope(await req.json());
+    const parsedBody = await readJsonBody(req);
+
+    if (!parsedBody.ok) return malformedJsonBody();
+
+    const body = decodeDraftEnvelope(parsedBody.value);
 
     if (body === null) {
       return Response.json({ error: "Invalid draft" }, { status: 400 });
@@ -327,7 +332,11 @@ export async function handleSaveNotes(req: Request): Promise<Response> {
   const results: SaveNotesResults = {};
 
   try {
-    const rawBody: unknown = await req.json();
+    const parsedBody = await readJsonBody(req);
+
+    if (!parsedBody.ok) return malformedJsonBody();
+
+    const rawBody: unknown = parsedBody.value;
     const body = Schema.decodeUnknownOption(SaveNotesBodySchema)(rawBody);
 
     if (Option.isNone(body)) {

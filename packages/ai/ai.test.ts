@@ -6,7 +6,9 @@ import { ProviderRegistry, registerProviderFactory, createProvider } from "./pro
 import {
   AICapabilitiesResponseSchema,
   AbortResponseSchema,
+  CreateSessionRequestSchema,
   CreateSessionResponseSchema,
+  QueryRequestSchema,
   SessionListResponseSchema,
   createAIEndpoints,
 } from "./endpoints.ts";
@@ -404,6 +406,70 @@ describe("Context builders", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Parse, don't validate — message and request shapes
+// ---------------------------------------------------------------------------
+
+describe("Parse-don't-validate shapes", () => {
+  test("agent_end carries no trailing text (deltas already streamed)", () => {
+    expect(mapPiEvent({ type: "agent_end" }, "s1")).toEqual([
+      { type: "result", sessionId: "s1", success: true },
+    ]);
+  });
+
+  test("query requests reject empty sessionId and prompt", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(QueryRequestSchema)({ sessionId: "", prompt: "hi" }),
+    ).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(QueryRequestSchema)({ sessionId: "s", prompt: "" }),
+    ).toThrow();
+  });
+
+  test("review contexts accept unscoped, file-scoped, and fully-scoped shapes", () => {
+    const unscoped = { mode: "code-review", review: { patch: "+x" } };
+    const fileScoped = { mode: "code-review", review: { patch: "+x", filePath: "a.ts" } };
+
+    const fullyScoped = {
+      mode: "code-review",
+      review: {
+        patch: "+x",
+        filePath: "a.ts",
+        lineRange: { start: 1, end: 2, side: "new" as const },
+      },
+    };
+
+    for (const context of [unscoped, fileScoped, fullyScoped]) {
+      expect(() => Schema.decodeUnknownSync(CreateSessionRequestSchema)({ context })).not.toThrow();
+    }
+  });
+
+  test("review lineRange without filePath is rejected", () => {
+    const context = {
+      mode: "code-review",
+      review: {
+        patch: "+x",
+        lineRange: { start: 1, end: 2, side: "new" as const },
+      },
+    };
+
+    expect(() => Schema.decodeUnknownSync(CreateSessionRequestSchema)({ context })).toThrow();
+  });
+
+  test("review lineRange with an empty filePath is rejected", () => {
+    const context = {
+      mode: "code-review",
+      review: {
+        patch: "+x",
+        filePath: "",
+        lineRange: { start: 1, end: 2, side: "new" as const },
+      },
+    };
+
+    expect(() => Schema.decodeUnknownSync(CreateSessionRequestSchema)({ context })).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // ProviderRegistry
 // ---------------------------------------------------------------------------
 
@@ -712,6 +778,63 @@ describe("AI endpoints", () => {
     expect(createRes.status).toBe(503);
     const data = await createRes.json();
     expect(data.error).toContain("nonexistent");
+  });
+
+  test("empty prompts and session IDs surface as HTTP 400", async () => {
+    const { reg, endpoints } = setup();
+    reg.register(mockProvider("mock"));
+
+    const createRes = await endpoints["/api/ai/session"](
+      new Request("http://localhost/api/ai/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: { mode: "code-review", review: { patch: "+x" } } }),
+      }),
+    );
+
+    const { sessionId } = Schema.decodeUnknownSync(CreateSessionResponseSchema)(
+      await createRes.json(),
+    );
+
+    const emptyPrompt = await endpoints["/api/ai/query"](
+      new Request("http://localhost/api/ai/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, prompt: "" }),
+      }),
+    );
+
+    expect(emptyPrompt.status).toBe(400);
+
+    const emptySession = await endpoints["/api/ai/query"](
+      new Request("http://localhost/api/ai/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: "", prompt: "hi" }),
+      }),
+    );
+
+    expect(emptySession.status).toBe(400);
+  });
+
+  test("lineRange without filePath surfaces as HTTP 400 on session creation", async () => {
+    const { reg, endpoints } = setup();
+    reg.register(mockProvider("mock"));
+
+    const res = await endpoints["/api/ai/session"](
+      new Request("http://localhost/api/ai/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: {
+            mode: "code-review",
+            review: { patch: "+x", lineRange: { start: 1, end: 2, side: "new" } },
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
   });
 
   test("query with context update prepends to prompt", async () => {

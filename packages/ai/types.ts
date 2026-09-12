@@ -24,21 +24,51 @@ export interface ParentSession {
 }
 
 /**
+ * A line range scoped to a file. Meaningless without `filePath`, so the
+ * context union below only allows it alongside one.
+ */
+export interface CodeReviewLineRange {
+  start: number;
+  end: number;
+  side: "old" | "new";
+}
+
+/**
  * Snapshot of code-review-specific context.
  * Passed when AIContextMode is "code-review".
+ *
+ * A line range without a file is unrepresentable: either the context is
+ * unscoped (whole patch, optionally narrowed to one file) or it is fully
+ * scoped (file plus the range being discussed).
  */
-export interface CodeReviewContext {
-  /** The unified diff patch. */
-  patch: string;
-  /** The specific file being discussed (if scoped). */
-  filePath?: string;
-  /** The line range being discussed (if scoped). */
-  lineRange?: { start: number; end: number; side: "old" | "new" };
-  /** The code snippet being discussed (if scoped). */
-  selectedCode?: string;
-  /** Summary of annotations the user has made. */
-  annotations?: string;
-}
+export type CodeReviewContext =
+  | {
+      /** The unified diff patch. */
+      patch: string;
+      /** The specific file being discussed (if narrowed). */
+      filePath?: string;
+      /**
+       * Never present without `filePath` — the boundary schema rejects it,
+       * and this field keeps variable-mediated assignments honest too.
+       */
+      lineRange?: never;
+      /** The code snippet being discussed (if narrowed). */
+      selectedCode?: string;
+      /** Summary of annotations the user has made. */
+      annotations?: string;
+    }
+  | {
+      /** The unified diff patch. */
+      patch: string;
+      /** The specific file being discussed. */
+      filePath: string;
+      /** The line range being discussed. */
+      lineRange: CodeReviewLineRange;
+      /** The code snippet being discussed (if narrowed). */
+      selectedCode?: string;
+      /** Summary of annotations the user has made. */
+      annotations?: string;
+    };
 
 /**
  * Snapshot of annotate-mode context.
@@ -102,21 +132,39 @@ export interface AIToolUseMessage {
 
 export interface AIToolResultMessage {
   type: "tool_result";
-  toolUseId?: string;
+  /** Correlates the result with its `tool_use` request. Always present. */
+  toolUseId: string;
   result: string;
 }
+
+/** Machine-readable error codes produced by the AI layer. */
+export type AIErrorCode =
+  | "session_busy"
+  | "stream_error"
+  | "pi_stream_error"
+  | "pi_process_exit"
+  | "pi_startup_error"
+  | "pi_prompt_rejected"
+  | "provider_error";
 
 export interface AIErrorMessage {
   type: "error";
   error: string;
-  code?: string;
+  code?: AIErrorCode;
 }
 
 export interface AIResultMessage {
   type: "result";
   sessionId: string;
-  success: boolean;
-  /** The final text result (if success). */
+  /**
+   * Always true: failures travel as `type: "error"` messages, never here.
+   * The literal keeps a `success: false` result unrepresentable.
+   */
+  success: true;
+  /**
+   * The final text result. Absent when everything already streamed as
+   * deltas — a completion with no trailing text is a valid state.
+   */
   result?: string;
   /** Total cost in USD (if available). */
   costUsd?: number;

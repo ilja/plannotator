@@ -6,6 +6,7 @@ import {
   decodeAIChatError,
   decodeAIChatSessionId,
   decodeAIChatStreamMessage,
+  isMalformedResultPayload,
 } from "./aiChatStreamMessages";
 
 export interface AIChatEntry {
@@ -128,7 +129,7 @@ type PermissionUpdater = (
   updater: (permissions: PendingPermission[]) => PendingPermission[],
 ) => void;
 
-interface StreamMessageHandlers {
+export interface StreamMessageHandlers {
   questionId: string;
   updateMessages: StreamMessageUpdater;
   updatePermissions: PermissionUpdater;
@@ -218,7 +219,11 @@ function handleAIChatStreamMessage(
   }
 }
 
-async function processAIChatStream(
+/**
+ * Drain an SSE chat stream into message handlers. Exported for testing;
+ * production callers go through `useAIChat`.
+ */
+export async function processAIChatStream(
   response: Response,
   handlers: StreamMessageHandlers,
 ): Promise<void> {
@@ -242,7 +247,20 @@ async function processAIChatStream(
       if (!line.startsWith("data: ") || line.slice(6) === "[DONE]") continue;
 
       try {
-        handleAIChatStreamMessage(decodeAIChatStreamMessage(JSON.parse(line.slice(6))), handlers);
+        const parsed: unknown = JSON.parse(line.slice(6));
+        const message = decodeAIChatStreamMessage(parsed);
+
+        if (!message) {
+          // Tool traffic is ignored by design, but a malformed `result`
+          // would otherwise end the stream with no completion and no error.
+          if (isMalformedResultPayload(parsed)) {
+            handlers.setError("AI session response was malformed");
+          }
+
+          continue;
+        }
+
+        handleAIChatStreamMessage(message, handlers);
       } catch {
         // Ignore malformed SSE lines.
       }

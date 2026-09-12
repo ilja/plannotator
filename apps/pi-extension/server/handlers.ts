@@ -17,7 +17,7 @@ import {
 } from "../generated/draft.js";
 import { FAVICON_SVG } from "../generated/favicon.js";
 
-import { json, send, toWebRequest } from "./helpers";
+import { json, parseBody, send, toWebRequest } from "./helpers";
 import { type IntegrationResult, saveToObsidian } from "./integrations.js";
 import { Option, Schema } from "effect";
 
@@ -204,11 +204,17 @@ export function handleDraftRequest(
   draftKey: string,
 ): Promise<void> | void {
   if (req.method === "POST") {
-    return toWebRequest(req)
-      .json()
-      .catch(() => ({}))
-      .then((rawBody) => {
-        const body = decodeDraftEnvelope(rawBody);
+    return (async () => {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
+      try {
+        const body = decodeDraftEnvelope(parsedBody.value);
 
         if (body === null) {
           json(res, { error: "Invalid draft" }, 400);
@@ -218,12 +224,12 @@ export function handleDraftRequest(
 
         saveDraft(draftKey, body);
         json(res, { ok: true });
-      })
-      .catch((err: Error) => {
+      } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to save draft";
         console.error(`[draft] save failed: ${message}`);
         json(res, { error: message }, 500);
-      });
+      }
+    })();
   } else if (req.method === "DELETE") {
     deleteDraft(draftKey, readDraftGenerationFromUrl(req));
     json(res, { ok: true });
@@ -282,8 +288,16 @@ export async function handleSaveNotesRequest(req: IncomingMessage, res: Res): Pr
   const results: SaveNotesResults = {};
 
   try {
+    const parsedBody = await parseBody(req);
+
+    if (!parsedBody.ok) {
+      json(res, { error: "Malformed JSON body" }, 400);
+
+      return;
+    }
+
     const body = Option.getOrUndefined(
-      Schema.decodeUnknownOption(SaveNotesBodySchema)(await toWebRequest(req).json()),
+      Schema.decodeUnknownOption(SaveNotesBodySchema)(parsedBody.value),
     );
 
     if (!body) {
