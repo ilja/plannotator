@@ -275,9 +275,10 @@ describe("review-core", () => {
     const runtime = makeRuntime(repoDir);
     const context = await getGitContext(runtime, repoDir);
 
-    expect(context.recentCommits).toBeDefined();
-    expect(context.recentCommits!.length).toBe(2);
-    expect(context.recentCommits![0].subject).toBe("second commit");
+    expect(context.recentCommits?.map((commit) => commit.subject)).toEqual([
+      "second commit",
+      "initial",
+    ]);
   });
 
   test("parseWorktreeDiffType recognises every DiffType suffix, including merge-base", () => {
