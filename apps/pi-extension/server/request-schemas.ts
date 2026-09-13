@@ -1,12 +1,4 @@
-/**
- * Node-only HTTP request-boundary schemas.
- *
- * The shared review request schemas live in `@plannotator/shared/review-request`
- * (consumed here via the `generated/` vendor copy). Only schemas whose wire
- * shape genuinely differs per runtime stay here: Bun's open-in body allows an
- * absent `filePath` while Node's requires one, and code navigation already
- * has its own shared module on the Bun side.
- */
+/** Schemas whose wire shape differs per runtime; shared ones live in `@plannotator/shared/review-request`. */
 
 import { Schema } from "effect";
 

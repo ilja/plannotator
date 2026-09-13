@@ -94,13 +94,11 @@ describe("review request schemas", () => {
     );
 
     expect(valid?.action).toBe("approve");
-    // absent fileComments decodes; handlers default it to []
     expect(
       Option.getOrUndefined(
         Schema.decodeUnknownOption(PrActionRequestSchema)({ action: "approve", body: "hi" }),
       ),
     ).toBeDefined();
-    // invalid action
     expect(
       Option.getOrUndefined(
         Schema.decodeUnknownOption(PrActionRequestSchema)({
@@ -110,7 +108,6 @@ describe("review request schemas", () => {
         }),
       ),
     ).toBeUndefined();
-    // fileComments wrong shape
     expect(
       Option.getOrUndefined(
         Schema.decodeUnknownOption(PrActionRequestSchema)({
@@ -228,7 +225,6 @@ describe("review request schemas", () => {
   });
 
   test("OpenInRequestSchema accepts the live client payload with null base", () => {
-    // The UI sends base: null when it has no base directory.
     expect(
       Option.getOrUndefined(
         Schema.decodeUnknownOption(OpenInRequestSchema)({

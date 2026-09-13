@@ -10,11 +10,7 @@ export interface AppScreenSourceDocument {
   readonly key: string;
 }
 
-/**
- * Disk-state banner: a conflict and a disappearance are mutually exclusive —
- * the builder shows the conflict when both signals are present — so they
- * share one nullable union instead of two boolean+payload pairs.
- */
+/** Conflict takes precedence when both signals are present. */
 export type DiskBanner =
   | { readonly kind: "conflict"; readonly fileName: string }
   | { readonly kind: "missing"; readonly fileName: string };

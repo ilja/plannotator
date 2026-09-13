@@ -49,11 +49,7 @@ function isScopedReviewContext(value: LooseCodeReviewContext): value is CodeRevi
   return value.filePath !== undefined && value.filePath !== "";
 }
 
-/**
- * A line range without a file is rejected here — not stripped, not coerced —
- * so malformed clients get a 400 instead of silent degradation. Decodes
- * directly to the `CodeReviewContext` union the core trusts.
- */
+/** `lineRange` without `filePath` is rejected (400), not stripped or coerced. */
 const CodeReviewContextSchema = LooseCodeReviewContextSchema.pipe(
   Schema.refine(isScopedReviewContext, {
     message: "lineRange requires filePath",

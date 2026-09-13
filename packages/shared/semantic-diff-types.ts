@@ -141,11 +141,6 @@ export const decodeSemanticDiffResponse = flow(
   retainValidSemanticDiffEntries,
 );
 
-/**
- * Semantic-diff availability. A ready binary carries version metadata and no
- * failure fields; a missing binary carries a reason and no version fields —
- * `available: true` with a `reason` (or vice versa) is unrepresentable.
- */
 export type SemanticDiffAvailability =
   | {
       available: true;

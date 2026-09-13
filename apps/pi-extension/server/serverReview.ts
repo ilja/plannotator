@@ -189,10 +189,6 @@ export interface ReviewServerResult {
   stop: () => void;
 }
 
-/**
- * Parse a PR-switch request body. Returns the decoded request, or null after
- * responding 400 when the bytes are unparseable or the shape is wrong.
- */
 async function parsePrSwitchBody(
   req: IncomingMessage,
   res: ServerResponse,

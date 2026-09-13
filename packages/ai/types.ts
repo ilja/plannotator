@@ -23,10 +23,7 @@ export interface ParentSession {
   cwd: string;
 }
 
-/**
- * A line range scoped to a file. Meaningless without `filePath`, so the
- * context union below only allows it alongside one.
- */
+/** A line range within a file; only allowed alongside `filePath`. */
 export interface CodeReviewLineRange {
   start: number;
   end: number;
@@ -36,29 +33,16 @@ export interface CodeReviewLineRange {
 /**
  * Snapshot of code-review-specific context.
  * Passed when AIContextMode is "code-review".
- *
- * A line range without a file is unrepresentable: either the context is
- * unscoped (whole patch, optionally narrowed to one file) or it is fully
- * scoped (file plus the range being discussed).
  */
 export type CodeReviewContext =
   | {
-      /** The unified diff patch. */
       patch: string;
-      /** The specific file being discussed (if narrowed). */
       filePath?: string;
-      /**
-       * Never present without `filePath` — the boundary schema rejects it,
-       * and this field keeps variable-mediated assignments honest too.
-       */
       lineRange?: never;
-      /** The code snippet being discussed (if narrowed). */
       selectedCode?: string;
-      /** Summary of annotations the user has made. */
       annotations?: string;
     }
   | {
-      /** The unified diff patch. */
       patch: string;
       /**
        * The specific file being discussed. HTTP session creation validates
@@ -67,11 +51,8 @@ export type CodeReviewContext =
        * the type itself still permits `""`.
        */
       filePath: string;
-      /** The line range being discussed. */
       lineRange: CodeReviewLineRange;
-      /** The code snippet being discussed (if narrowed). */
       selectedCode?: string;
-      /** Summary of annotations the user has made. */
       annotations?: string;
     };
 
@@ -137,12 +118,10 @@ export interface AIToolUseMessage {
 
 export interface AIToolResultMessage {
   type: "tool_result";
-  /** Correlates the result with its `tool_use` request. Always present. */
   toolUseId: string;
   result: string;
 }
 
-/** Machine-readable error codes produced by the AI layer. */
 export type AIErrorCode =
   | "session_busy"
   | "stream_error"
@@ -161,15 +140,9 @@ export interface AIErrorMessage {
 export interface AIResultMessage {
   type: "result";
   sessionId: string;
-  /**
-   * Always true: failures travel as `type: "error"` messages, never here.
-   * The literal keeps a `success: false` result unrepresentable.
-   */
+  /** Always true; failures travel as `type: "error"` messages. */
   success: true;
-  /**
-   * The final text result. Absent when everything already streamed as
-   * deltas — a completion with no trailing text is a valid state.
-   */
+  /** Absent when everything already streamed as deltas. */
   result?: string;
   /** Total cost in USD (if available). */
   costUsd?: number;

@@ -9,37 +9,19 @@ export type { ValidationEntry } from "./codePathValidationResponse";
 
 export type ValidatedMap = Map<string, ValidationEntry>;
 
-/**
- * Extracts code-file path candidates from `markdown` and posts them to
- * `/api/doc/exists` once per markdown change. The server has typically
- * pre-warmed the file walk at plan/annotate load, so the response is fast.
- *
- * There is no map until `ready`: the hook returns a `pending` state with no
- * `validated` key, and every terminal path (validated response, non-OK,
- * malformed, thrown) lands `ready` with a map — empty when validation
- * produced nothing. The renderer dispatches on status — see InlineMarkdown.
- *
- * Empty candidate set short-circuits — no fetch, ready: true immediately.
- *
- * `baseDir` is the directory the active document lives in (linked-doc parent
- * or the annotate source file's parent). When set, the server tries
- * `<baseDir>/<input>` literal-resolve before its cwd walk so out-of-tree
- * relative references (e.g. `../script.ts` in `~/notes/foo.md`) don't get
- * demoted to plain text.
- */
-/**
- * Validation lifecycle: no map exists before ready, so consumers narrow on
- * status instead of reading a possibly-empty map behind a boolean.
- */
 export type CodePathValidation =
   | { status: "pending" }
   | { status: "ready"; validated: ValidatedMap };
 
+/**
+ * Posts path candidates from `markdown` to `/api/doc/exists` once per change.
+ * Empty candidate set short-circuits with no fetch.
+ *
+ * `baseDir` is the active document's directory; when set, the server tries
+ * `<baseDir>/<input>` before its cwd walk.
+ */
 export function useValidatedCodePaths(markdown: string, baseDir?: string): CodePathValidation {
-  // One state: every terminal path lands ready, so ready-without-a-map and
-  // map-without-ready are unrepresentable. The state object itself is the
-  // provider value, so its identity only changes on transitions and context
-  // consumers (every InlineMarkdown) don't re-render spuriously.
+  // The state object is the provider value: its identity only changes on transitions.
   const [validation, setValidation] = useState<CodePathValidation>({ status: "pending" });
 
   useEffect(() => {

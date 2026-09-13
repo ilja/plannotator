@@ -44,9 +44,6 @@ function toFailedPopout(codePath: string, error: string): FailedPopout {
 
 export function useCodeFilePopout(options: UseCodeFilePopoutOptions): UseCodeFilePopoutReturn {
   const { buildUrl } = options;
-  // One request lifecycle: loading carries no content, so the popover never
-  // shows a stale file while its replacement loads, and a failure carries
-  // no contents. The previous isLoading flag had no readers.
   const [state, setState] = useState<PopoutState>({ status: "closed" });
 
   const close = useCallback(() => {

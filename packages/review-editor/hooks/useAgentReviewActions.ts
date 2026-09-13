@@ -34,8 +34,6 @@ export function useAgentReviewActions({
   onFeedbackStatusChange,
   onNoAnnotations,
 }: UseAgentReviewActionsOptions): AgentReviewActions {
-  // One submission lifecycle: the three actions share it, so two of them
-  // can never be pending at once.
   const [pendingAction, setPendingAction] = useState<PendingAgentAction | null>(null);
 
   const sendFeedback = useCallback(async (): Promise<void> => {

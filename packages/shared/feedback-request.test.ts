@@ -52,8 +52,7 @@ describe("decodeReviewFeedbackRequest", () => {
 
 describe("decodeAnnotateFeedbackRequest", () => {
   test("accepts the live editor payload (text plus optional scope)", () => {
-    // codeAnnotations is tolerated excess (stripped, as before) so the live
-    // editor payload keeps decoding.
+    // `codeAnnotations` arrives as stripped excess keys.
     expect(
       decodeAnnotateFeedbackRequest({
         draftGeneration: 1,

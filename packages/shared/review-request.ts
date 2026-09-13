@@ -3,12 +3,6 @@ import { Schema } from "effect";
 /**
  * HTTP request-boundary schemas shared by the Bun and Node review servers
  * (Node consumes them via the `generated/` vendor copy).
- *
- * Each schema owns the wire representation of one endpoint request body;
- * handlers decode with them instead of narrowing parsed JSON manually.
- * The code-nav schemas stay per runtime: Bun's are deliberately loose
- * (validation-deferring) while Node's are strict — unifying them is a
- * behavior project of its own.
  */
 
 /** DiffType wire union used by review payloads. */
@@ -59,11 +53,6 @@ const PRReviewFileCommentSchema = Schema.Struct({
   start_side: Schema.optionalKey(Schema.Literals(["LEFT", "RIGHT"])),
 });
 
-/**
- * PR review submission request. `fileComments` is optional: handlers default
- * an absent list to `[]`, so both runtimes accept submissions without
- * per-file comments.
- */
 export const PrActionRequestSchema = Schema.Struct({
   action: Schema.Literals(["approve", "comment"]),
   body: Schema.String,
@@ -84,7 +73,6 @@ export const GitAddRequestSchema = Schema.Struct({
 });
 
 /** Editor annotation request from a VS Code integration. */
-/** Editor annotation request from a VS Code integration. */
 export const EditorAnnotationRequestSchema = Schema.Struct({
   filePath: Schema.String,
   selectedText: Schema.String,
@@ -92,11 +80,7 @@ export const EditorAnnotationRequestSchema = Schema.Struct({
   lineEnd: Schema.Number,
 });
 
-/**
- * Open-in-app request. `filePath` is always required (the UI disables the
- * button without one); `base` is explicitly null when the client has no
- * base directory, so both absent and null decode.
- */
+/** `base` is null when the client has no base directory. */
 export const OpenInRequestSchema = Schema.Struct({
   filePath: Schema.NonEmptyString,
   appId: Schema.optionalKey(Schema.String),

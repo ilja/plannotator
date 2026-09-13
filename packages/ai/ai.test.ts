@@ -405,10 +405,6 @@ describe("Context builders", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Parse, don't validate — message and request shapes
-// ---------------------------------------------------------------------------
-
 describe("Parse-don't-validate shapes", () => {
   test("agent_end carries no trailing text (deltas already streamed)", () => {
     expect(mapPiEvent({ type: "agent_end" }, "s1")).toEqual([

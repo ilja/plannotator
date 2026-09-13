@@ -40,7 +40,6 @@ export const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
   showRemove = true,
   className = "",
 }) => {
-  // Loading and failure are mutually exclusive phases of one load.
   const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
 
   const sizeClass = SIZES[size];

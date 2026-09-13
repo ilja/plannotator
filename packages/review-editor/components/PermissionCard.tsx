@@ -89,8 +89,6 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   const [decided, setDecided] = useState<"allow" | "deny" | null>(null);
 
   const handleDecision = (allow: boolean) => {
-    // Deciding unmounts the buttons below, so no separate loading flag is
-    // needed: decided alone drives the decided UI.
     setDecided(allow ? "allow" : "deny");
     onRespond(requestId, allow);
   };

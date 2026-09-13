@@ -1,16 +1,12 @@
 /**
- * Compile-time invariants for `DiffResult`.
- *
- * This module is intentionally not a `*.test.ts` file: test files are
- * excluded from `tsc --noEmit`, while these `@ts-expect-error` assertions
- * must be compiler-checked to mean anything. It is never imported at
- * runtime.
+ * Compile-time invariants for `DiffResult` (never imported at runtime).
+ * Not a `*.test.ts` file so the `@ts-expect-error` assertions stay
+ * compiler-checked.
  */
 
 import type { DiffResult } from "./review-core.ts";
 
-// An error with a non-empty patch is unrepresentable, even when smuggled
-// through an intermediate variable (structural, not just literal, check).
+// Also rejects variable-mediated assignments, not just literals.
 
 const _smuggled = { patch: "diff --git", label: "L", error: "boom" };
 
@@ -24,8 +20,6 @@ const _badLiteral: DiffResult = { patch: "diff --git", label: "L", error: "boom"
 // exactOptionalPropertyTypes), so the two 400-response sites guard with
 // `result.error !== undefined` as well as `"error" in result`. No producer
 // emits that shape; the guard is defense in depth.
-
-// Valid states still constructible.
 
 const _okEmpty: DiffResult = { patch: "", label: "Clean" };
 

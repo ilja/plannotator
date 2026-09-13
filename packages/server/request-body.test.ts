@@ -12,7 +12,6 @@ describe("readJsonBody", () => {
 
     expect(object).toEqual({ ok: true, value: { diffType: "uncommitted" } });
 
-    // Transport parsing accepts any JSON; domain schemas decide validity.
     const array = await readJsonBody(
       new Request("http://localhost/api/x", { method: "POST", body: "[1,2]" }),
     );

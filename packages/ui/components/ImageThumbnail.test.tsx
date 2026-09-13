@@ -14,13 +14,9 @@ async function flushAsyncWork(): Promise<void> {
 }
 
 /**
- * Mounts the thumbnail with its synthetic resource error gated.
- *
- * happy-dom fires a resource `error` for every image (no network), so ungated
- * the component lands in `failed` during commit and the loading/loaded arms
- * are unobservable. The gate is a capture listener scoped to the mounted host
- * that swallows that synthetic error before React's container listener sees
- * it. Callers ungate and then drive `loaded`/`failed` with manual dispatches.
+ * happy-dom fires a synthetic resource `error` for every image; the gate
+ * swallows it so the loading/loaded arms stay observable. Callers ungate,
+ * then drive `loaded`/`failed` with manual dispatches.
  */
 async function mountThumbnail(): Promise<{ host: HTMLDivElement; ungate: () => void }> {
   const host = document.createElement("div");

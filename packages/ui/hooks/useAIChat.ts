@@ -219,10 +219,7 @@ function handleAIChatStreamMessage(
   }
 }
 
-/**
- * Drain an SSE chat stream into message handlers. Exported for testing;
- * production callers go through `useAIChat`.
- */
+/** Exported for testing; production callers use `useAIChat`. */
 export async function processAIChatStream(
   response: Response,
   handlers: StreamMessageHandlers,
@@ -251,8 +248,6 @@ export async function processAIChatStream(
         const message = decodeAIChatStreamMessage(parsed);
 
         if (!message) {
-          // Tool traffic is ignored by design, but a malformed `result`
-          // would otherwise end the stream with no completion and no error.
           if (isMalformedResultPayload(parsed)) {
             handlers.setError("AI session response was malformed");
           }

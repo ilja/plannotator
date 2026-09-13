@@ -3,19 +3,10 @@ import { Option, Schema } from "effect";
 /**
  * Feedback request bodies, split per endpoint.
  *
- * Review and annotate feedback used to share one all-optional struct, which
- * made two impossible states representable: a contentless `{}` resolved a
- * decision that decided nothing (defaults filled approved=false and empty
- * feedback), and each endpoint silently stripped the other endpoint's fields
- * (`approved` on annotate, `selectedMessageId`/`feedbackScope` on review).
- * Clients always send full payloads, so the unions below accept every live
- * payload while rejecting contentless and cross-endpoint bodies.
- *
- * Boundary policy: unknown excess keys are stripped (Effect default) rather
- * than rejected, so newer client fields never break older servers — while the
- * cross-endpoint keys above are rejected via `Never` arms. Decoding uses
- * `decodeUnknownOption` deliberately: mismatch details are discarded because
- * every route maps failure to the same 400.
+ * Unknown excess keys are stripped (Effect default) so newer client fields
+ * never break older servers, while cross-endpoint keys are rejected via
+ * `Never` arms. Decoding discards mismatch details: every route maps
+ * failure to the same 400.
  */
 
 const DraftGenerationField = Schema.optionalKey(Schema.Natural);
@@ -31,7 +22,6 @@ const NoApproval = {
   approved: Schema.optionalKey(Schema.Never),
 } as const;
 
-/** Review approval: the decision is the approval; text and annotations are extras. */
 const ReviewApprovalSchema = Schema.Struct({
   approved: Schema.Literal(true),
   feedback: Schema.optionalKey(Schema.String),
@@ -40,7 +30,6 @@ const ReviewApprovalSchema = Schema.Struct({
   ...NoReviewScope,
 });
 
-/** Review comment: without approval, the body must say something. */
 const ReviewCommentSchema = Schema.Struct({
   approved: Schema.optionalKey(Schema.Literal(false)),
   feedback: Schema.NonEmptyString,
@@ -49,7 +38,6 @@ const ReviewCommentSchema = Schema.Struct({
   ...NoReviewScope,
 });
 
-/** Review annotations-only feedback: the annotations are the content. */
 const ReviewAnnotatedSchema = Schema.Struct({
   approved: Schema.optionalKey(Schema.Literal(false)),
   feedback: Schema.optionalKey(Schema.String),
@@ -66,7 +54,6 @@ export const ReviewFeedbackRequestSchema = Schema.Union([
 
 export type ReviewFeedbackRequest = Schema.Schema.Type<typeof ReviewFeedbackRequestSchema>;
 
-/** Annotate feedback with words; scope fields stay optional modifiers. */
 const AnnotateCommentSchema = Schema.Struct({
   feedback: Schema.NonEmptyString,
   annotations: AnnotationsField,
@@ -76,7 +63,6 @@ const AnnotateCommentSchema = Schema.Struct({
   ...NoApproval,
 });
 
-/** Annotate annotations-only feedback; scope fields stay optional modifiers. */
 const AnnotateAnnotatedSchema = Schema.Struct({
   feedback: Schema.optionalKey(Schema.String),
   annotations: Schema.NonEmptyArray(Schema.Unknown),
@@ -93,14 +79,12 @@ export const AnnotateFeedbackRequestSchema = Schema.Union([
 
 export type AnnotateFeedbackRequest = Schema.Schema.Type<typeof AnnotateFeedbackRequestSchema>;
 
-/** Decode a review `/api/feedback` body; undefined means 400 Invalid request. */
 export function decodeReviewFeedbackRequest<Input>(
   value: Input,
 ): ReviewFeedbackRequest | undefined {
   return Option.getOrUndefined(Schema.decodeUnknownOption(ReviewFeedbackRequestSchema)(value));
 }
 
-/** Decode an annotate `/api/feedback` body; undefined means 400 Invalid request. */
 export function decodeAnnotateFeedbackRequest<Input>(
   value: Input,
 ): AnnotateFeedbackRequest | undefined {

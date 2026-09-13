@@ -43,11 +43,7 @@ describe("resolveOpenInTarget — /api/open-in containment", () => {
   });
 
   test("accepts the live client payload with an explicit null base", async () => {
-    // The UI sends base: null when it has no base directory; both schemas
-    // used to reject that, 400ing every no-base open attempt. /etc/passwd
-    // is outside every root, so a decoded request reaches the containment
-    // check (403) instead of failing validation (400) — with no launch
-    // attempted either way.
+    // Null base decodes; /etc/passwd outside every root reaches the containment check (403).
     const response = await handleOpenIn(
       new Request("http://localhost/api/open-in", {
         method: "POST",

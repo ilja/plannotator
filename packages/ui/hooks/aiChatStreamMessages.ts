@@ -7,10 +7,8 @@ const AIChatSessionSchema = Schema.Struct({
 });
 
 /**
- * Transport error shape. `code` is deliberately absent: the chat UI consumes
- * only the message, and decoding a strict code union would make the entire
- * error undecodable when the server adds a future code — dropping the
- * message along with it. Unknown codes arrive as excess keys and are stripped.
+ * Transport error shape. `code` is absent: decoding a strict code union
+ * would drop the message when the server adds a future code.
  */
 const AIChatErrorSchema = Schema.Struct({
   error: Schema.String,
@@ -27,13 +25,8 @@ const AIChatStreamMessageSchema = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("error"),
-    // Same `code` policy as AIChatErrorSchema above: message-only, tolerant.
     error: Schema.String,
   }),
-  // Mirror of the canonical AIResultMessage: completions always report
-  // success (failures travel as `error` messages). `result` is absent when
-  // everything already streamed as deltas. Payloads without the success
-  // discriminant are rejected instead of completing the chat blindly.
   Schema.Struct({
     type: Schema.Literal("result"),
     success: Schema.Literal(true),
@@ -73,11 +66,7 @@ export function decodeAIChatStreamMessage<Input>(value: Input): AIChatStreamMess
 
 const decodePayloadType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
 
-/**
- * True when an SSE payload claims to be a `result` but failed full message
- * decoding — ending the stream with no completion and no error. Other
- * undecodable traffic (e.g. tool updates, ignored by design) returns false.
- */
+/** True for undecodable `result` payloads; other undecodable traffic returns false. */
 export function isMalformedResultPayload<Input>(value: Input): boolean {
   if (decodeAIChatStreamMessage(value) !== null) return false;
 

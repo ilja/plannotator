@@ -70,8 +70,8 @@ describe("decodeAIChatStreamMessage", () => {
   });
 
   test("tolerates unknown error codes without dropping the message", () => {
-    // `code` is intentionally not decoded: a future server code must never
-    // make the whole error undecodable (see AIChatErrorSchema policy).
+    // `code` is intentionally not decoded so a future server code never
+    // makes the whole error undecodable.
     expect(
       decodeAIChatStreamMessage({ type: "error", error: "boom", code: "future_code" }),
     ).toEqual({ type: "error", error: "boom" });

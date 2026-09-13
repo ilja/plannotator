@@ -133,7 +133,6 @@ describe("useAgentReviewActions pending action", () => {
 
     await click(host, "Approve");
 
-    // The union holds one action: two pending flags are unrepresentable.
     const output = getOutput(host);
 
     const pending = [

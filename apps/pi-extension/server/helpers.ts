@@ -16,31 +16,18 @@ const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
 
 export type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
 
-/**
- * Minimal stream surface `parseBody` reads from. `IncomingMessage` satisfies
- * this structurally; tests substitute a plain emitter.
- */
+/** Stream surface `parseBody` reads from; `IncomingMessage` satisfies this structurally. */
 export interface RequestBodyStream {
   on(event: "data", listener: (chunk: string) => void): void;
   on(event: "end", listener: () => void): void;
 }
 
-/**
- * Transport-level parse result. Mirrors the Bun `JsonBody` union: `ok`
- * answers only "was this parseable JSON?" — shape validation belongs to
- * each route's schema. In particular, valid JSON with the wrong shape
- * (`[]`, `42`, `null`) decodes downstream to a schema 400, never to
- * "Malformed JSON body".
- */
+/** Parse result: `ok` answers only "was this parseable JSON?". */
 export type RawRequestBody =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false };
 
-/**
- * Read a JSON request body. Unparseable bytes resolve to `{ ok: false }` —
- * callers map that to `400 Malformed JSON body`. Unparseable input never
- * becomes a fake `{}`.
- */
+/** Unparseable bytes resolve to `{ ok: false }`, never to a fake `{}`. */
 export function parseBody(req: RequestBodyStream): Promise<RawRequestBody> {
   return new Promise((resolve) => {
     let data = "";

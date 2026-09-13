@@ -26,16 +26,8 @@ export interface WorkspaceFileChange {
 }
 
 /**
- * Workspace git status. A successful scan carries file data and no error; a
- * failed scan carries an error code and empty aggregates — `available: true`
- * with an `error` (or vice versa) is unrepresentable.
- *
- * The failure arm keeps `files`/`totals` by producer convention (the inspected
- * failure constructor `unavailableWorkspaceStatus` emits canonical empties)
- * and by retained wire contract — see `WorkspaceStatusSchema` in
- * `ui/hooks/fileBrowserResponses.ts`, decoded from both server runtimes.
- * Neither the type nor the decoder guarantees emptiness, so narrow on
- * `available` before treating aggregates as data.
+ * Workspace git status. Failed scans carry empty aggregates by convention;
+ * narrow on `available` before treating files/totals as data.
  */
 export type WorkspaceStatusPayload =
   | {

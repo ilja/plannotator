@@ -36,9 +36,6 @@ export function PRSelector({
   onSelect,
   disabled,
 }: PRSelectorProps) {
-  // One fetch lifecycle: the list only exists when loaded, so
-  // fetched-without-a-list and list-without-fetched are unrepresentable.
-  // Reopening a loaded list reuses it; reopening a failed one retries.
   const [listState, setListState] = useState<
     | { readonly status: "idle" }
     | { readonly status: "loading" }
