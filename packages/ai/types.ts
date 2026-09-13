@@ -60,7 +60,12 @@ export type CodeReviewContext =
   | {
       /** The unified diff patch. */
       patch: string;
-      /** The specific file being discussed. */
+      /**
+       * The specific file being discussed. HTTP session creation validates
+       * this is non-empty (`isScopedReviewContext` in `ai/endpoints.ts`);
+       * trusted in-process callers must supply a non-empty `filePath` too —
+       * the type itself still permits `""`.
+       */
       filePath: string;
       /** The line range being discussed. */
       lineRange: CodeReviewLineRange;
