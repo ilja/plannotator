@@ -6,6 +6,12 @@ const AIChatSessionSchema = Schema.Struct({
   sessionId: Schema.String,
 });
 
+/**
+ * Transport error shape. `code` is deliberately absent: the chat UI consumes
+ * only the message, and decoding a strict code union would make the entire
+ * error undecodable when the server adds a future code — dropping the
+ * message along with it. Unknown codes arrive as excess keys and are stripped.
+ */
 const AIChatErrorSchema = Schema.Struct({
   error: Schema.String,
 });
@@ -21,6 +27,7 @@ const AIChatStreamMessageSchema = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("error"),
+    // Same `code` policy as AIChatErrorSchema above: message-only, tolerant.
     error: Schema.String,
   }),
   // Mirror of the canonical AIResultMessage: completions always report

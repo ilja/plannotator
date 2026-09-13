@@ -10,6 +10,12 @@ import { Option, Schema } from "effect";
  * (`approved` on annotate, `selectedMessageId`/`feedbackScope` on review).
  * Clients always send full payloads, so the unions below accept every live
  * payload while rejecting contentless and cross-endpoint bodies.
+ *
+ * Boundary policy: unknown excess keys are stripped (Effect default) rather
+ * than rejected, so newer client fields never break older servers — while the
+ * cross-endpoint keys above are rejected via `Never` arms. Decoding uses
+ * `decodeUnknownOption` deliberately: mismatch details are discarded because
+ * every route maps failure to the same 400.
  */
 
 const DraftGenerationField = Schema.optionalKey(Schema.Natural);

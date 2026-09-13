@@ -13,6 +13,8 @@ let latest: AgentReviewActions | null = null;
 
 const submitted: Array<"approved" | "feedback" | "exited"> = [];
 
+const feedbackStatuses: Array<string | null> = [];
+
 function HookHarness({ count }: { count: number }): React.JSX.Element {
   latest = useAgentReviewActions({
     allAnnotations: [],
@@ -21,7 +23,7 @@ function HookHarness({ count }: { count: number }): React.JSX.Element {
     totalAnnotationCount: count,
     getDraftGeneration: () => 1,
     onSubmitted: (submission) => submitted.push(submission),
-    onFeedbackStatusChange: () => {},
+    onFeedbackStatusChange: (status) => feedbackStatuses.push(status),
     onNoAnnotations: () => {},
   });
 
@@ -32,6 +34,9 @@ function HookHarness({ count }: { count: number }): React.JSX.Element {
       </button>
       <button type="button" onClick={() => void latest?.approveReview()}>
         Approve
+      </button>
+      <button type="button" onClick={() => void latest?.exitReview()}>
+        Exit
       </button>
       <output
         data-sending={String(latest.isSendingFeedback)}
@@ -88,6 +93,7 @@ afterEach(async () => {
 
   globalThis.fetch = realFetch;
   submitted.length = 0;
+  feedbackStatuses.length = 0;
   latest = null;
 });
 
@@ -142,5 +148,61 @@ describe("useAgentReviewActions pending action", () => {
       release();
       await flushAsyncWork();
     });
+  });
+
+  test.skipIf(!hasDom)(
+    "a rejected approve clears the pending flag without submitting",
+    async () => {
+      let reject!: (cause: unknown) => void;
+
+      const gate = new Promise<Response>((_resolve, rejectFn) => {
+        reject = rejectFn;
+      });
+
+      globalThis.fetch = Object.assign(async () => gate, { preconnect: (): void => {} });
+
+      const host = await mountHarness(1);
+      await click(host, "Approve");
+
+      expect(getOutput(host).dataset.approving).toBe("true");
+
+      await act(async () => {
+        reject(new Error("network down"));
+        await flushAsyncWork();
+      });
+
+      const output = getOutput(host);
+      expect(output.dataset.sending).toBe("false");
+      expect(output.dataset.approving).toBe("false");
+      expect(output.dataset.exiting).toBe("false");
+      expect(submitted).toEqual([]);
+      expect(feedbackStatuses).toEqual(["Failed to send"]);
+    },
+  );
+
+  test.skipIf(!hasDom)("a failed exit clears the pending flag without submitting", async () => {
+    let release!: (response: Response) => void;
+
+    const gate = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+
+    globalThis.fetch = Object.assign(async () => gate, { preconnect: (): void => {} });
+
+    const host = await mountHarness(1);
+    await click(host, "Exit");
+
+    expect(getOutput(host).dataset.exiting).toBe("true");
+
+    await act(async () => {
+      release(new Response(null, { status: 500 }));
+      await flushAsyncWork();
+    });
+
+    const output = getOutput(host);
+    expect(output.dataset.sending).toBe("false");
+    expect(output.dataset.approving).toBe("false");
+    expect(output.dataset.exiting).toBe("false");
+    expect(submitted).toEqual([]);
   });
 });

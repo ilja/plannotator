@@ -2,23 +2,23 @@ import { useState, useCallback } from "react";
 import { decodeCodeFileErrorResponse, decodeCodeFileSuccessResponse } from "../codeFileResponse";
 
 interface LoadedPopout {
-  filepath: string;
-  contents: string;
-  prerenderedHTML?: string;
+  readonly filepath: string;
+  readonly contents: string;
+  readonly prerenderedHTML?: string;
 }
 
 interface FailedPopout {
-  filepath: string;
-  contents: "";
-  error: string;
-  requestedPath: string;
+  readonly filepath: string;
+  readonly contents: "";
+  readonly error: string;
+  readonly requestedPath: string;
 }
 
 type PopoutState =
-  | { status: "closed" }
-  | { status: "loading" }
-  | { status: "loaded"; popout: LoadedPopout }
-  | { status: "failed"; popout: FailedPopout };
+  | { readonly status: "closed" }
+  | { readonly status: "loading" }
+  | { readonly status: "loaded"; readonly popout: LoadedPopout }
+  | { readonly status: "failed"; readonly popout: FailedPopout };
 
 interface UseCodeFilePopoutOptions {
   buildUrl: (codePath: string) => string;

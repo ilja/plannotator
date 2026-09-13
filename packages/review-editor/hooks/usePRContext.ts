@@ -19,16 +19,27 @@ export async function readPRContextResponse(res: Response): Promise<PRContext> {
   return decodePRContextResponse(await res.json());
 }
 
-export function usePRContext(prMetadata: PRMetadata | null) {
+/**
+ * Read-only view of the PR-context lifecycle. At most one of `prContext` and
+ * `error` is non-null, and both are null while `isLoading` is true.
+ */
+export interface UsePRContextReturn {
+  readonly prContext: PRContext | null;
+  readonly isLoading: boolean;
+  readonly error: string | null;
+  readonly fetchContext: () => Promise<void>;
+}
+
+export function usePRContext(prMetadata: PRMetadata | null): UsePRContextReturn {
   // One async lifecycle: context and error are never set together, and
   // neither is set while loading. A failed fetch leaves no stale context
   // behind — retries start from idle, exactly as the three-state version did
   // (it only ever failed while the context was still null).
   const [state, setState] = useState<
-    | { status: "idle" }
-    | { status: "loading" }
-    | { status: "ready"; context: PRContext }
-    | { status: "failed"; error: string }
+    | { readonly status: "idle" }
+    | { readonly status: "loading" }
+    | { readonly status: "ready"; readonly context: PRContext }
+    | { readonly status: "failed"; readonly error: string }
   >({ status: "idle" });
 
   const fetched = useRef(false);

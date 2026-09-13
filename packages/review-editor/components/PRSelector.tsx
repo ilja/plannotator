@@ -40,10 +40,10 @@ export function PRSelector({
   // fetched-without-a-list and list-without-fetched are unrepresentable.
   // Reopening a loaded list reuses it; reopening a failed one retries.
   const [listState, setListState] = useState<
-    | { status: "idle" }
-    | { status: "loading" }
-    | { status: "loaded"; prs: PRItem[] }
-    | { status: "failed" }
+    | { readonly status: "idle" }
+    | { readonly status: "loading" }
+    | { readonly status: "loaded"; readonly prs: ReadonlyArray<PRItem> }
+    | { readonly status: "failed" }
   >({ status: "idle" });
 
   const [hideMerged, setHideMerged] = useState(() => getItem(HIDE_MERGED_PR_KEY) === "true");

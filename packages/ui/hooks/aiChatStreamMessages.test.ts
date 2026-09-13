@@ -69,6 +69,18 @@ describe("decodeAIChatStreamMessage", () => {
     expect(decodeAIChatError({ error: 503 })).toBeNull();
   });
 
+  test("tolerates unknown error codes without dropping the message", () => {
+    // `code` is intentionally not decoded: a future server code must never
+    // make the whole error undecodable (see AIChatErrorSchema policy).
+    expect(
+      decodeAIChatStreamMessage({ type: "error", error: "boom", code: "future_code" }),
+    ).toEqual({ type: "error", error: "boom" });
+    expect(decodeAIChatError({ error: "boom", code: "future_code" })).toBe("boom");
+    expect(isMalformedResultPayload({ type: "error", error: "boom", code: "future_code" })).toBe(
+      false,
+    );
+  });
+
   test("rejects unknown variants and malformed nested permission requests", () => {
     expect(decodeAIChatStreamMessage({ type: "tool_use", toolName: "Bash" })).toBeNull();
     expect(decodeAIChatStreamMessage({ type: "text_delta", delta: 1 })).toBeNull();
