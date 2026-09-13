@@ -36,12 +36,21 @@ export function PRSelector({
   onSelect,
   disabled,
 }: PRSelectorProps) {
-  const [prs, setPrs] = useState<PRItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetched, setFetched] = useState(false);
+  // One fetch lifecycle: the list only exists when loaded, so
+  // fetched-without-a-list and list-without-fetched are unrepresentable.
+  // Reopening a loaded list reuses it; reopening a failed one retries.
+  const [listState, setListState] = useState<
+    | { status: "idle" }
+    | { status: "loading" }
+    | { status: "loaded"; prs: PRItem[] }
+    | { status: "failed" }
+  >({ status: "idle" });
+
   const [hideMerged, setHideMerged] = useState(() => getItem(HIDE_MERGED_PR_KEY) === "true");
 
   const selectedId = String(currentNumber);
+  const loading = listState.status === "loading";
+  const prs = listState.status === "loaded" ? listState.prs : [];
 
   const visiblePrs = useMemo(
     () => (hideMerged ? prs.filter((pr) => pr.state === "open") : prs),
@@ -58,14 +67,13 @@ export function PRSelector({
   }
 
   useEffect(() => {
-    setPrs([]);
-    setFetched(false);
+    setListState({ status: "idle" });
   }, [currentNumber]);
 
   const handleOpen = useCallback(
     (open: boolean) => {
-      if (open && !fetched) {
-        setLoading(true);
+      if (open && listState.status !== "loading" && listState.status !== "loaded") {
+        setListState({ status: "loading" });
         fetch("/api/pr-list")
           .then((res) => {
             if (!res.ok) throw new Error("Failed to fetch");
@@ -76,14 +84,12 @@ export function PRSelector({
             const decoded = decodePRListResponse(data);
 
             if (Result.isFailure(decoded)) throw decoded.failure;
-            setPrs(decoded.success);
-            setFetched(true);
+            setListState({ status: "loaded", prs: decoded.success });
           })
-          .catch(() => setPrs([]))
-          .finally(() => setLoading(false));
+          .catch(() => setListState({ status: "failed" }));
       }
     },
-    [fetched],
+    [listState.status],
   );
 
   return (
