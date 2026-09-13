@@ -40,16 +40,18 @@ export const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
   showRemove = true,
   className = "",
 }) => {
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // Loading and failure are mutually exclusive phases of one load.
+  const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
 
   const sizeClass = SIZES[size];
 
   return (
     <div className={`group relative ${sizeClass} ${className}`}>
-      {loading && !error && <div className={`absolute inset-0 bg-muted rounded animate-pulse`} />}
+      {status === "loading" && (
+        <div className={`absolute inset-0 bg-muted rounded animate-pulse`} />
+      )}
 
-      {error ? (
+      {status === "failed" ? (
         <div
           className={`${sizeClass} rounded bg-muted flex items-center justify-center text-muted-foreground`}
         >
@@ -73,10 +75,9 @@ export const ImageThumbnail: React.FC<ImageThumbnailProps> = ({
           alt="Attachment"
           loading="lazy"
           onClick={onClick}
-          onLoad={() => setLoading(false)}
+          onLoad={() => setStatus("loaded")}
           onError={() => {
-            setError(true);
-            setLoading(false);
+            setStatus("failed");
           }}
           className={`${sizeClass} rounded object-cover border border-border ${onClick ? "cursor-pointer hover:opacity-80" : ""}`}
         />

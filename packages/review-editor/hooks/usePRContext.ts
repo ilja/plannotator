@@ -20,9 +20,17 @@ export async function readPRContextResponse(res: Response): Promise<PRContext> {
 }
 
 export function usePRContext(prMetadata: PRMetadata | null) {
-  const [prContext, setPRContext] = useState<PRContext | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // One async lifecycle: context and error are never set together, and
+  // neither is set while loading. A failed fetch leaves no stale context
+  // behind — retries start from idle, exactly as the three-state version did
+  // (it only ever failed while the context was still null).
+  const [state, setState] = useState<
+    | { status: "idle" }
+    | { status: "loading" }
+    | { status: "ready"; context: PRContext }
+    | { status: "failed"; error: string }
+  >({ status: "idle" });
+
   const fetched = useRef(false);
   const lastUrl = useRef<string | undefined>(undefined);
 
@@ -32,9 +40,7 @@ export function usePRContext(prMetadata: PRMetadata | null) {
     if (url !== lastUrl.current) {
       lastUrl.current = url;
       fetched.current = false;
-      setPRContext(null);
-      setIsLoading(false);
-      setError(null);
+      setState({ status: "idle" });
     }
   }, [prMetadata?.url]);
 
@@ -42,8 +48,7 @@ export function usePRContext(prMetadata: PRMetadata | null) {
     if (!prMetadata || fetched.current) return;
     const requestUrl = prMetadata.url;
     fetched.current = true;
-    setIsLoading(true);
-    setError(null);
+    setState({ status: "loading" });
 
     try {
       const res = await fetch("/api/pr-context");
@@ -52,16 +57,19 @@ export function usePRContext(prMetadata: PRMetadata | null) {
       const context = await readPRContextResponse(res);
 
       if (requestUrl !== lastUrl.current) return;
-      setPRContext(context);
+      setState({ status: "ready", context });
     } catch (err) {
       if (requestUrl !== lastUrl.current) return;
       const message = err instanceof Error ? err.message : "Failed to load PR context";
-      setError(message);
+      setState({ status: "failed", error: message });
       fetched.current = false;
-    } finally {
-      if (requestUrl === lastUrl.current) setIsLoading(false);
     }
   }, [prMetadata]);
 
-  return { prContext, isLoading, error, fetchContext };
+  return {
+    prContext: state.status === "ready" ? state.context : null,
+    isLoading: state.status === "loading",
+    error: state.status === "failed" ? state.error : null,
+    fetchContext,
+  };
 }
