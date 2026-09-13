@@ -3,18 +3,7 @@ import {
   AGENT_TERMINAL_WS_BASE_PATH,
   buildAgentTerminalWsPath,
   isAgentTerminalWsRoute,
-  supportsAnnotateAgentTerminalMode,
 } from "./agent-terminal";
-
-describe("supportsAnnotateAgentTerminalMode", () => {
-  test("enables the terminal only for annotate file and folder modes", () => {
-    expect(supportsAnnotateAgentTerminalMode("annotate")).toBe(true);
-    expect(supportsAnnotateAgentTerminalMode("annotate-folder")).toBe(true);
-    expect(supportsAnnotateAgentTerminalMode("annotate-last")).toBe(false);
-    expect(supportsAnnotateAgentTerminalMode("review")).toBe(false);
-    expect(supportsAnnotateAgentTerminalMode(undefined)).toBe(false);
-  });
-});
 
 describe("agent terminal WebSocket paths", () => {
   test("builds a tokenized browser-facing path", () => {

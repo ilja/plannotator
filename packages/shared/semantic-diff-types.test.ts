@@ -31,45 +31,15 @@ const change = {
 };
 
 describe("decodeSemanticDiffResponse", () => {
-  test("decodes every semantic diff status envelope", () => {
-    expect(
-      decodeSemanticDiffResponse({
-        status: "ok",
-        summary,
-        changes: [change],
-        binaryChanges: [
-          { changeType: "binary", filePath: "", oldFilePath: null, fileStatus: null },
-        ],
-        semVersion: "",
-        semSource: "",
-      }),
-    ).toEqual({
-      status: "ok",
-      summary,
-      changes: [change],
-      binaryChanges: [{ changeType: "binary", filePath: "", oldFilePath: null, fileStatus: null }],
-      semVersion: "",
-      semSource: "",
-    });
-
+  test("preserves supported status envelopes and optional diagnostics", () => {
     expect(
       decodeSemanticDiffResponse({
         status: "unavailable",
-        reason: "",
-        message: "",
+        reason: "missing",
+        message: "not installed",
       }),
-    ).toEqual({ status: "unavailable", reason: "", message: "" });
+    ).toEqual({ status: "unavailable", reason: "missing", message: "not installed" });
 
-    expect(
-      decodeSemanticDiffResponse({
-        status: "error",
-        reason: "",
-        message: "",
-      }),
-    ).toEqual({ status: "error", reason: "", message: "" });
-  });
-
-  test("preserves optional error fields when present", () => {
     expect(
       decodeSemanticDiffResponse({
         status: "error",

@@ -65,14 +65,14 @@ const AssistantTextBlock = Schema.Struct({
 type AssistantTextBlock = Schema.Schema.Type<typeof AssistantTextBlock>;
 
 /** Assistant message contract for session entries; decodes at the branch boundary. */
-export const AssistantMessage = Schema.Struct({
+const AssistantMessage = Schema.Struct({
   role: Schema.Literal("assistant"),
   content: Schema.Array(AssistantTextBlock),
 });
 
-export type AssistantMessage = Schema.Schema.Type<typeof AssistantMessage>;
+type AssistantMessage = Schema.Schema.Type<typeof AssistantMessage>;
 
-export function getAssistantMessageText(message: AssistantMessage): string | null {
+function getAssistantMessageText(message: AssistantMessage): string | null {
   const text = message.content
     .filter((block) => block.type === "text")
     .map((block) => block.text ?? "")

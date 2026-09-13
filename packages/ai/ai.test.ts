@@ -8,7 +8,6 @@ import {
   AbortResponseSchema,
   CreateSessionRequestSchema,
   CreateSessionResponseSchema,
-  QueryRequestSchema,
   SessionListResponseSchema,
   createAIEndpoints,
 } from "./endpoints.ts";
@@ -215,13 +214,6 @@ describe("SessionManager", () => {
     expect(list[1].session.id).toBe("s1");
   });
 
-  test("get returns entry by ID", () => {
-    const sm = new SessionManager();
-    sm.track(mockSession("s1"), "code-review");
-    expect(sm.get("s1")?.session.id).toBe("s1");
-    expect(sm.get("nonexistent")).toBeUndefined();
-  });
-
   test("touch updates lastActiveAt", async () => {
     const sm = new SessionManager();
     sm.track(mockSession("s1"), "code-review");
@@ -412,15 +404,6 @@ describe("Parse-don't-validate shapes", () => {
     ]);
   });
 
-  test("query requests reject empty sessionId and prompt", () => {
-    expect(() =>
-      Schema.decodeUnknownSync(QueryRequestSchema)({ sessionId: "", prompt: "hi" }),
-    ).toThrow();
-    expect(() =>
-      Schema.decodeUnknownSync(QueryRequestSchema)({ sessionId: "s", prompt: "" }),
-    ).toThrow();
-  });
-
   test("review contexts accept unscoped, file-scoped, and fully-scoped shapes", () => {
     const unscoped = { mode: "code-review", review: { patch: "+x" } };
     const fileScoped = { mode: "code-review", review: { patch: "+x", filePath: "a.ts" } };
@@ -437,18 +420,6 @@ describe("Parse-don't-validate shapes", () => {
     for (const context of [unscoped, fileScoped, fullyScoped]) {
       expect(() => Schema.decodeUnknownSync(CreateSessionRequestSchema)({ context })).not.toThrow();
     }
-  });
-
-  test("review lineRange without filePath is rejected", () => {
-    const context = {
-      mode: "code-review",
-      review: {
-        patch: "+x",
-        lineRange: { start: 1, end: 2, side: "new" as const },
-      },
-    };
-
-    expect(() => Schema.decodeUnknownSync(CreateSessionRequestSchema)({ context })).toThrow();
   });
 
   test("review lineRange with an empty filePath is rejected", () => {

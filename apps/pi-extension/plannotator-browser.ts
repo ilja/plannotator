@@ -148,10 +148,6 @@ function startBrowserDecisionSession<T>(
   };
 }
 
-export function shouldUseLocalPrCheckout(options: { useLocal?: boolean }): boolean {
-  return options.useLocal !== false;
-}
-
 type PrMetadata = NonNullable<Awaited<ReturnType<typeof fetchPR>>["metadata"]>;
 
 interface PreparedReview {
@@ -572,7 +568,7 @@ export async function startCodeReviewBrowserSession(
 
   const review =
     isPRMode && urlArg
-      ? await preparePrReview(urlArg, shouldUseLocalPrCheckout(options), options.cwd ?? ctx.cwd)
+      ? await preparePrReview(urlArg, options.useLocal !== false, options.cwd ?? ctx.cwd)
       : await prepareLocalReview(options.cwd ?? ctx.cwd, options.diffType, options.defaultBranch);
 
   const server = await startReviewServer({

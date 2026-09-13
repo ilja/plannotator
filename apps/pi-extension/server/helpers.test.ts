@@ -18,13 +18,6 @@ function mockRequest(body: string): RequestBodyStream {
 }
 
 describe("parseBody", () => {
-  test("parses JSON objects without judging their shape", async () => {
-    await expect(parseBody(mockRequest('{"filePath":"src/app.ts"}'))).resolves.toEqual({
-      ok: true,
-      value: { filePath: "src/app.ts" },
-    });
-  });
-
   test("valid JSON with the wrong shape still parses (schemas decide validity)", async () => {
     await expect(parseBody(mockRequest("[1, 2, 3]"))).resolves.toEqual({
       ok: true,

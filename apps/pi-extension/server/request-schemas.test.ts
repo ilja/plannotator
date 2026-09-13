@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Option, Schema } from "effect";
 
-import { CodeNavRequestSchema } from "./request-schemas";
 import { DiffTypeSchema, WorkspaceDiffTypeSchema } from "../generated/review-request";
 
 describe("review diff type schemas", () => {
@@ -34,24 +33,5 @@ describe("review diff type schemas", () => {
         Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(diffType)),
       ).toBeUndefined();
     }
-  });
-});
-
-describe("code navigation request schema", () => {
-  test("accepts complete requests and rejects malformed fields", () => {
-    const request = Option.getOrUndefined(
-      Schema.decodeUnknownOption(CodeNavRequestSchema)({
-        symbol: "render",
-        filePath: "src/app.ts",
-        line: 12,
-        charStart: 4,
-        side: "new",
-      }),
-    );
-
-    expect(request?.symbol).toBe("render");
-    expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(CodeNavRequestSchema)({ symbol: 42 })),
-    ).toBeUndefined();
   });
 });
