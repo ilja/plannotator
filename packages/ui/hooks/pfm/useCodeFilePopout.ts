@@ -1,16 +1,24 @@
 import { useState, useCallback } from "react";
-import { parseCodePath } from "@plannotator/shared/code-file";
 import { decodeCodeFileErrorResponse, decodeCodeFileSuccessResponse } from "../codeFileResponse";
 
-interface CodeFileState {
+interface LoadedPopout {
   filepath: string;
   contents: string;
   prerenderedHTML?: string;
-  error?: string;
-  requestedPath?: string;
-  line?: number;
-  lineEnd?: number;
 }
+
+interface FailedPopout {
+  filepath: string;
+  contents: "";
+  error: string;
+  requestedPath: string;
+}
+
+type PopoutState =
+  | { status: "closed" }
+  | { status: "loading" }
+  | { status: "loaded"; popout: LoadedPopout }
+  | { status: "failed"; popout: FailedPopout };
 
 interface UseCodeFilePopoutOptions {
   buildUrl: (codePath: string) => string;
@@ -19,7 +27,6 @@ interface UseCodeFilePopoutOptions {
 export interface UseCodeFilePopoutReturn {
   open: (codePath: string) => void;
   close: () => void;
-  isLoading: boolean;
   popoutProps: {
     open: boolean;
     onClose: () => void;
@@ -28,25 +35,27 @@ export interface UseCodeFilePopoutReturn {
     prerenderedHTML?: string;
     error?: string;
     requestedPath?: string;
-    line?: number;
-    lineEnd?: number;
   } | null;
+}
+
+function toFailedPopout(codePath: string, error: string): FailedPopout {
+  return { filepath: codePath, contents: "", error, requestedPath: codePath };
 }
 
 export function useCodeFilePopout(options: UseCodeFilePopoutOptions): UseCodeFilePopoutReturn {
   const { buildUrl } = options;
-  const [state, setState] = useState<CodeFileState | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // One request lifecycle: loading carries no content, so the popover never
+  // shows a stale file while its replacement loads, and a failure carries
+  // no contents. The previous isLoading flag had no readers.
+  const [state, setState] = useState<PopoutState>({ status: "closed" });
 
   const close = useCallback(() => {
-    setState(null);
-    setIsLoading(false);
+    setState({ status: "closed" });
   }, []);
 
   const open = useCallback(
     async (codePath: string) => {
-      setIsLoading(true);
-      const parsed = parseCodePath(codePath);
+      setState({ status: "loading" });
 
       try {
         const res = await fetch(buildUrl(codePath));
@@ -56,53 +65,38 @@ export function useCodeFilePopout(options: UseCodeFilePopoutOptions): UseCodeFil
 
         if (!res.ok || error || !data || data.codeFile !== true) {
           setState({
-            filepath: codePath,
-            contents: "",
-            error: error ?? `File not found in repo: ${codePath}`,
-            requestedPath: codePath,
+            status: "failed",
+            popout: toFailedPopout(codePath, error ?? `File not found in repo: ${codePath}`),
           });
-          setIsLoading(false);
 
           return;
         }
 
         setState({
-          filepath: data.filepath,
-          contents: data.contents,
-          prerenderedHTML: data.prerenderedHTML,
-          line: data.line ?? parsed.line,
-          lineEnd: data.lineEnd ?? parsed.lineEnd,
+          status: "loaded",
+          popout: {
+            filepath: data.filepath,
+            contents: data.contents,
+            prerenderedHTML: data.prerenderedHTML,
+          },
         });
-        setIsLoading(false);
       } catch {
         setState({
-          filepath: codePath,
-          contents: "",
-          error: `Failed to load: ${codePath}`,
-          requestedPath: codePath,
+          status: "failed",
+          popout: toFailedPopout(codePath, `Failed to load: ${codePath}`),
         });
-        setIsLoading(false);
       }
     },
     [buildUrl],
   );
 
+  if (state.status === "closed" || state.status === "loading") {
+    return { open, close, popoutProps: null };
+  }
+
   return {
     open,
     close,
-    isLoading,
-    popoutProps: state
-      ? {
-          open: true,
-          onClose: close,
-          filepath: state.filepath,
-          contents: state.contents,
-          prerenderedHTML: state.prerenderedHTML,
-          error: state.error,
-          requestedPath: state.requestedPath,
-          line: state.line,
-          lineEnd: state.lineEnd,
-        }
-      : null,
+    popoutProps: { open: true, onClose: close, ...state.popout },
   };
 }
