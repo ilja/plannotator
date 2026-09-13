@@ -87,10 +87,10 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   onRespond,
 }) => {
   const [decided, setDecided] = useState<"allow" | "deny" | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const handleDecision = (allow: boolean) => {
-    setLoading(true);
+    // Deciding unmounts the buttons below, so no separate loading flag is
+    // needed: decided alone drives the decided UI.
     setDecided(allow ? "allow" : "deny");
     onRespond(requestId, allow);
   };
@@ -164,14 +164,12 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
         <div className="flex gap-2 mt-2">
           <button
             onClick={() => handleDecision(true)}
-            disabled={loading}
             className="review-toolbar-btn primary disabled:opacity-50 flex-1 text-[10px]"
           >
             Allow
           </button>
           <button
             onClick={() => handleDecision(false)}
-            disabled={loading}
             className="review-toolbar-btn flex-1 text-[10px]"
           >
             Deny

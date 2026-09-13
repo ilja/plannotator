@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { extractCandidateCodePaths } from "@plannotator/shared/extract-code-paths";
 import {
   decodeCodePathValidationResponse,
@@ -14,9 +14,10 @@ export type ValidatedMap = Map<string, ValidationEntry>;
  * `/api/doc/exists` once per markdown change. The server has typically
  * pre-warmed the file walk at plan/annotate load, so the response is fast.
  *
- * `validated` is empty until `ready` flips to true, at which point it holds
- * an entry for every candidate (including missing/unavailable ones). The
- * renderer dispatches on status — see InlineMarkdown.
+ * There is no map until `ready`: the hook returns a `pending` state with no
+ * `validated` key, and every terminal path (validated response, non-OK,
+ * malformed, thrown) lands `ready` with a map — empty when validation
+ * produced nothing. The renderer dispatches on status — see InlineMarkdown.
  *
  * Empty candidate set short-circuits — no fetch, ready: true immediately.
  *
@@ -26,21 +27,28 @@ export type ValidatedMap = Map<string, ValidationEntry>;
  * relative references (e.g. `../script.ts` in `~/notes/foo.md`) don't get
  * demoted to plain text.
  */
-export function useValidatedCodePaths(
-  markdown: string,
-  baseDir?: string,
-): { validated: ValidatedMap; ready: boolean } {
-  const [validated, setValidated] = useState<ValidatedMap>(new Map());
-  const [ready, setReady] = useState<boolean>(false);
+/**
+ * Validation lifecycle: no map exists before ready, so consumers narrow on
+ * status instead of reading a possibly-empty map behind a boolean.
+ */
+export type CodePathValidation =
+  | { status: "pending" }
+  | { status: "ready"; validated: ValidatedMap };
+
+export function useValidatedCodePaths(markdown: string, baseDir?: string): CodePathValidation {
+  // One state: every terminal path lands ready, so ready-without-a-map and
+  // map-without-ready are unrepresentable. The state object itself is the
+  // provider value, so its identity only changes on transitions and context
+  // consumers (every InlineMarkdown) don't re-render spuriously.
+  const [validation, setValidation] = useState<CodePathValidation>({ status: "pending" });
 
   useEffect(() => {
-    setValidated(new Map());
-    setReady(false);
+    setValidation({ status: "pending" });
 
     const candidates = extractCandidateCodePaths(markdown);
 
     if (candidates.length === 0) {
-      setReady(true);
+      setValidation({ status: "ready", validated: new Map() });
 
       return;
     }
@@ -59,7 +67,7 @@ export function useValidatedCodePaths(
         if (cancelled) return;
 
         if (!res.ok) {
-          setReady(true);
+          setValidation({ status: "ready", validated: new Map() });
 
           return;
         }
@@ -67,10 +75,9 @@ export function useValidatedCodePaths(
         const data: unknown = await res.json();
 
         if (cancelled) return;
-        setValidated(decodeCodePathValidationResponse(data));
-        setReady(true);
+        setValidation({ status: "ready", validated: decodeCodePathValidationResponse(data) });
       } catch {
-        if (!cancelled) setReady(true);
+        if (!cancelled) setValidation({ status: "ready", validated: new Map() });
       }
     })();
 
@@ -79,8 +86,5 @@ export function useValidatedCodePaths(
     };
   }, [markdown, baseDir]);
 
-  // Stable reference: only changes when validated/ready actually change.
-  // Without memoization, the parent provider's value is a fresh object every
-  // render, forcing all context consumers (every InlineMarkdown) to re-render.
-  return useMemo(() => ({ validated, ready }), [validated, ready]);
+  return validation;
 }
