@@ -1094,6 +1094,21 @@ describe("review-workspace", () => {
         expect(feedbackMalformed.status).toBe(400);
         expect(await feedbackMalformed.json()).toEqual({ error: "Invalid request" });
 
+        for (const body of [
+          {},
+          { approved: false },
+          { approved: true, feedbackScope: "message" },
+        ]) {
+          const feedbackEmpty = await fetch(`${server.url}/api/feedback`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+
+          expect(feedbackEmpty.status).toBe(400);
+          expect(await feedbackEmpty.json()).toEqual({ error: "Invalid request" });
+        }
+
         // Valid git-add still works after malformed requests (state not corrupted)
         const validGitAdd = await fetch(`${server.url}/api/git-add`, {
           method: "POST",

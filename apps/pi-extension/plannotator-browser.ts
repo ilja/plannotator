@@ -499,7 +499,7 @@ async function prepareLocalReview(
     return {
       rawPatch: result.patch,
       gitRef: result.label,
-      diffError: result.error,
+      diffError: "error" in result ? result.error : undefined,
       diffType,
       gitContext,
       initialBase: base,

@@ -13,7 +13,7 @@
  *   GET  /api/ai/capabilities  — Check if AI features are available
  */
 
-import type { AIMessage, CreateSessionOptions } from "./types.ts";
+import type { AIMessage, CodeReviewContext, CreateSessionOptions } from "./types.ts";
 import type { ProviderRegistry } from "./provider.ts";
 import type { SessionManager } from "./session-manager.ts";
 import { Schema } from "effect";
@@ -27,19 +27,34 @@ const ParentSessionSchema = Schema.Struct({
   cwd: Schema.String,
 });
 
-const CodeReviewContextSchema = Schema.Struct({
+const CodeReviewLineRangeSchema = Schema.Struct({
+  start: Schema.Number,
+  end: Schema.Number,
+  side: Schema.Literals(["old", "new"]),
+});
+
+const LooseCodeReviewContextSchema = Schema.Struct({
   patch: Schema.String,
   filePath: Schema.optionalKey(Schema.String),
-  lineRange: Schema.optionalKey(
-    Schema.Struct({
-      start: Schema.Number,
-      end: Schema.Number,
-      side: Schema.Literals(["old", "new"]),
-    }),
-  ),
+  lineRange: Schema.optionalKey(CodeReviewLineRangeSchema),
   selectedCode: Schema.optionalKey(Schema.String),
   annotations: Schema.optionalKey(Schema.String),
 });
+
+type LooseCodeReviewContext = Schema.Schema.Type<typeof LooseCodeReviewContextSchema>;
+
+function isScopedReviewContext(value: LooseCodeReviewContext): value is CodeReviewContext {
+  if (value.lineRange === undefined) return true;
+
+  return value.filePath !== undefined && value.filePath !== "";
+}
+
+/** `lineRange` without `filePath` is rejected (400), not stripped or coerced. */
+const CodeReviewContextSchema = LooseCodeReviewContextSchema.pipe(
+  Schema.refine(isScopedReviewContext, {
+    message: "lineRange requires filePath",
+  }),
+);
 
 const AnnotateContextSchema = Schema.Struct({
   content: Schema.String,
@@ -72,18 +87,18 @@ export const CreateSessionRequestSchema = Schema.Struct({
 });
 
 export const QueryRequestSchema = Schema.Struct({
-  sessionId: Schema.String,
-  prompt: Schema.String,
+  sessionId: Schema.NonEmptyString,
+  prompt: Schema.NonEmptyString,
   contextUpdate: Schema.optionalKey(Schema.String),
 });
 
 export const AbortRequestSchema = Schema.Struct({
-  sessionId: Schema.String,
+  sessionId: Schema.NonEmptyString,
 });
 
 export const PermissionRequestSchema = Schema.Struct({
-  sessionId: Schema.String,
-  requestId: Schema.String,
+  sessionId: Schema.NonEmptyString,
+  requestId: Schema.NonEmptyString,
   allow: Schema.Boolean,
   message: Schema.optionalKey(Schema.String),
 });
@@ -233,10 +248,6 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
 
       const { context, providerId, model, maxTurns, maxBudgetUsd } = body;
 
-      if (!context?.mode) {
-        return Response.json({ error: "Missing context.mode" }, { status: 400 });
-      }
-
       // Resolve provider: by ID, or default
       const provider = providerId ? registry.get(providerId) : registry.getDefault()?.provider;
 
@@ -300,10 +311,6 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
       }
 
       const { sessionId, prompt, contextUpdate } = body;
-
-      if (!sessionId || !prompt) {
-        return Response.json({ error: "Missing sessionId or prompt" }, { status: 400 });
-      }
 
       const entry = sessionManager.get(sessionId);
 
@@ -393,10 +400,6 @@ export function createAIEndpoints(deps: AIEndpointDeps) {
         body = Schema.decodeUnknownSync(PermissionRequestSchema)(await req.json());
       } catch {
         return invalidRequest();
-      }
-
-      if (!body.sessionId || !body.requestId) {
-        return Response.json({ error: "Missing sessionId or requestId" }, { status: 400 });
       }
 
       const entry = sessionManager.get(body.sessionId);

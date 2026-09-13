@@ -10,6 +10,7 @@
  */
 
 import { Option, Schema } from "effect";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 import {
   createAnnotationStore,
   transformPlanInput,
@@ -142,8 +143,12 @@ export function createExternalAnnotationHandler(
 
   const handleCreate = async (req: Request): Promise<Response> => {
     try {
+      const parsedBody = await readJsonBody(req);
+
+      if (!parsedBody.ok) return malformedJsonBody();
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(ParsedRequestBodySchema)(await req.json()),
+        Schema.decodeUnknownOption(ParsedRequestBodySchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -172,7 +177,11 @@ export function createExternalAnnotationHandler(
     }
 
     try {
-      const patch = decodeExternalAnnotationPatch(mode, await req.json());
+      const parsedBody = await readJsonBody(req);
+
+      if (!parsedBody.ok) return malformedJsonBody();
+
+      const patch = decodeExternalAnnotationPatch(mode, parsedBody.value);
 
       if (!patch) {
         return Response.json({ error: "Invalid JSON" }, { status: 400 });

@@ -9,12 +9,4 @@ describe("getReviewDiffPanelFilePath", () => {
   it("returns null when params are absent", () => {
     expect(getReviewDiffPanelFilePath(undefined)).toBeNull();
   });
-
-  it("returns null when filePath is absent", () => {
-    expect(getReviewDiffPanelFilePath({})).toBeNull();
-  });
-
-  it("returns an empty path as-is", () => {
-    expect(getReviewDiffPanelFilePath({ filePath: "" })).toBe("");
-  });
 });

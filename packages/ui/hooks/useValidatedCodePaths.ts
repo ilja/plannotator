@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { extractCandidateCodePaths } from "@plannotator/shared/extract-code-paths";
 import {
   decodeCodePathValidationResponse,
@@ -9,38 +9,28 @@ export type { ValidationEntry } from "./codePathValidationResponse";
 
 export type ValidatedMap = Map<string, ValidationEntry>;
 
+export type CodePathValidation =
+  | { status: "pending" }
+  | { status: "ready"; validated: ValidatedMap };
+
 /**
- * Extracts code-file path candidates from `markdown` and posts them to
- * `/api/doc/exists` once per markdown change. The server has typically
- * pre-warmed the file walk at plan/annotate load, so the response is fast.
+ * Posts path candidates from `markdown` to `/api/doc/exists` once per change.
+ * Empty candidate set short-circuits with no fetch.
  *
- * `validated` is empty until `ready` flips to true, at which point it holds
- * an entry for every candidate (including missing/unavailable ones). The
- * renderer dispatches on status — see InlineMarkdown.
- *
- * Empty candidate set short-circuits — no fetch, ready: true immediately.
- *
- * `baseDir` is the directory the active document lives in (linked-doc parent
- * or the annotate source file's parent). When set, the server tries
- * `<baseDir>/<input>` literal-resolve before its cwd walk so out-of-tree
- * relative references (e.g. `../script.ts` in `~/notes/foo.md`) don't get
- * demoted to plain text.
+ * `baseDir` is the active document's directory; when set, the server tries
+ * `<baseDir>/<input>` before its cwd walk.
  */
-export function useValidatedCodePaths(
-  markdown: string,
-  baseDir?: string,
-): { validated: ValidatedMap; ready: boolean } {
-  const [validated, setValidated] = useState<ValidatedMap>(new Map());
-  const [ready, setReady] = useState<boolean>(false);
+export function useValidatedCodePaths(markdown: string, baseDir?: string): CodePathValidation {
+  // The state object is the provider value: its identity only changes on transitions.
+  const [validation, setValidation] = useState<CodePathValidation>({ status: "pending" });
 
   useEffect(() => {
-    setValidated(new Map());
-    setReady(false);
+    setValidation({ status: "pending" });
 
     const candidates = extractCandidateCodePaths(markdown);
 
     if (candidates.length === 0) {
-      setReady(true);
+      setValidation({ status: "ready", validated: new Map() });
 
       return;
     }
@@ -59,7 +49,7 @@ export function useValidatedCodePaths(
         if (cancelled) return;
 
         if (!res.ok) {
-          setReady(true);
+          setValidation({ status: "ready", validated: new Map() });
 
           return;
         }
@@ -67,10 +57,9 @@ export function useValidatedCodePaths(
         const data: unknown = await res.json();
 
         if (cancelled) return;
-        setValidated(decodeCodePathValidationResponse(data));
-        setReady(true);
+        setValidation({ status: "ready", validated: decodeCodePathValidationResponse(data) });
       } catch {
-        if (!cancelled) setReady(true);
+        if (!cancelled) setValidation({ status: "ready", validated: new Map() });
       }
     })();
 
@@ -79,8 +68,5 @@ export function useValidatedCodePaths(
     };
   }, [markdown, baseDir]);
 
-  // Stable reference: only changes when validated/ready actually change.
-  // Without memoization, the parent provider's value is a fresh object every
-  // render, forcing all context consumers (every InlineMarkdown) to re-render.
-  return useMemo(() => ({ validated, ready }), [validated, ready]);
+  return validation;
 }

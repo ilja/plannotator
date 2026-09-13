@@ -13,6 +13,7 @@ import {
   extractChangedFiles,
 } from "@plannotator/shared/code-nav";
 import { Option, Predicate, Schema } from "effect";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 
 export type { CodeNavRequest, CodeNavResponse };
 
@@ -55,11 +56,11 @@ export async function handleCodeNavResolve(
 ): Promise<Response> {
   let body: unknown;
 
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid request body" }, { status: 400 });
-  }
+  const parsedBody = await readJsonBody(req);
+
+  if (!parsedBody.ok) return malformedJsonBody();
+
+  body = parsedBody.value;
 
   const decodedRequest = Option.getOrUndefined(decodeCodeNavRequest(body));
 

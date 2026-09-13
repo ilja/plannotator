@@ -5,7 +5,7 @@
 
 import type { IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
-import { Option, Schema } from "effect";
+import { Schema } from "effect";
 
 /**
  * Parsed JSON request body before endpoint-level schema decoding.
@@ -16,37 +16,29 @@ const ParsedRequestBodySchema = Schema.Record(Schema.String, Schema.Unknown);
 
 export type ParsedRequestBody = Schema.Schema.Type<typeof ParsedRequestBodySchema>;
 
-/** Parse a JSON request body and return null for malformed or non-object payloads. */
-export function parseStrictRequestBody(rawBody: string): ParsedRequestBody | null {
-  try {
-    return (
-      Option.getOrUndefined(
-        Schema.decodeUnknownOption(ParsedRequestBodySchema)(JSON.parse(rawBody)),
-      ) ?? null
-    );
-  } catch {
-    return null;
-  }
+/** Stream surface `parseBody` reads from; `IncomingMessage` satisfies this structurally. */
+export interface RequestBodyStream {
+  on(event: "data", listener: (chunk: string) => void): void;
+  on(event: "end", listener: () => void): void;
 }
 
-/** Parse a JSON request body and normalize non-object payloads to an empty object. */
-export function parseRequestBody(rawBody: string): ParsedRequestBody {
-  return parseStrictRequestBody(rawBody) ?? {};
-}
+/** Parse result: `ok` answers only "was this parseable JSON?". */
+export type RawRequestBody =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false };
 
-export function parseBody(req: IncomingMessage): Promise<ParsedRequestBody> {
+/** Unparseable bytes resolve to `{ ok: false }`, never to a fake `{}`. */
+export function parseBody(req: RequestBodyStream): Promise<RawRequestBody> {
   return new Promise((resolve) => {
     let data = "";
     req.on("data", (chunk: string) => (data += chunk));
-    req.on("end", () => resolve(parseRequestBody(data)));
-  });
-}
-
-export function parseStrictBody(req: IncomingMessage): Promise<ParsedRequestBody | null> {
-  return new Promise((resolve) => {
-    let data = "";
-    req.on("data", (chunk: string) => (data += chunk));
-    req.on("end", () => resolve(parseStrictRequestBody(data)));
+    req.on("end", () => {
+      try {
+        resolve({ ok: true, value: JSON.parse(data) });
+      } catch {
+        resolve({ ok: false });
+      }
+    });
   });
 }
 

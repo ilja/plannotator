@@ -3,6 +3,7 @@ import {
   decodeAIChatError,
   decodeAIChatSessionId,
   decodeAIChatStreamMessage,
+  isMalformedResultPayload,
 } from "./aiChatStreamMessages";
 
 describe("decodeAIChatStreamMessage", () => {
@@ -19,10 +20,18 @@ describe("decodeAIChatStreamMessage", () => {
       type: "error",
       error: "Unavailable",
     });
-    expect(decodeAIChatStreamMessage({ type: "result", result: "Complete" })).toEqual({
+    expect(
+      decodeAIChatStreamMessage({ type: "result", success: true, result: "Complete" }),
+    ).toEqual({
       type: "result",
+      success: true,
       result: "Complete",
     });
+    expect(decodeAIChatStreamMessage({ type: "result", success: true })).toEqual({
+      type: "result",
+      success: true,
+    });
+    expect(decodeAIChatStreamMessage({ type: "result", result: "Complete" })).toBeNull();
     expect(
       decodeAIChatStreamMessage({
         type: "permission_request",
@@ -46,11 +55,30 @@ describe("decodeAIChatStreamMessage", () => {
     });
   });
 
+  test("isMalformedResultPayload flags only undecodable results", () => {
+    expect(isMalformedResultPayload({ type: "result", result: "orphan" })).toBe(true);
+    expect(isMalformedResultPayload({ type: "result", success: true })).toBe(false);
+    expect(isMalformedResultPayload({ type: "tool_use", toolName: "Bash" })).toBe(false);
+    expect(isMalformedResultPayload(null)).toBe(false);
+  });
+
   test("decodes session identifiers and API error messages", () => {
     expect(decodeAIChatSessionId({ sessionId: "session-1" })).toBe("session-1");
     expect(decodeAIChatSessionId({ sessionId: 1 })).toBeNull();
     expect(decodeAIChatError({ error: "Unavailable" })).toBe("Unavailable");
     expect(decodeAIChatError({ error: 503 })).toBeNull();
+  });
+
+  test("tolerates unknown error codes without dropping the message", () => {
+    // `code` is intentionally not decoded so a future server code never
+    // makes the whole error undecodable.
+    expect(
+      decodeAIChatStreamMessage({ type: "error", error: "boom", code: "future_code" }),
+    ).toEqual({ type: "error", error: "boom" });
+    expect(decodeAIChatError({ error: "boom", code: "future_code" })).toBe("boom");
+    expect(isMalformedResultPayload({ type: "error", error: "boom", code: "future_code" })).toBe(
+      false,
+    );
   });
 
   test("rejects unknown variants and malformed nested permission requests", () => {

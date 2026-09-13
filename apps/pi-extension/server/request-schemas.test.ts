@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Option, Schema } from "effect";
 
-import { CodeNavRequestSchema, DiffTypeSchema, WorkspaceDiffTypeSchema } from "./request-schemas";
+import { CodeNavRequestSchema } from "./request-schemas";
+import { DiffTypeSchema, WorkspaceDiffTypeSchema } from "../generated/review-request";
 
 describe("review diff type schemas", () => {
   test("separates workspace diff types from local Git diff types", () => {

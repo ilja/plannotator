@@ -16,13 +16,12 @@ import {
   type EditorOverlaysModel,
 } from "./EditorOverlays";
 
+import type { DiskBanner } from "../appScreenPresentation";
+
 /** Read-only display state for workspace banners. */
 export interface EditorAppScreenBannersModel {
   readonly linkedDocumentError: string | null;
-  readonly hasDiskConflict: boolean;
-  readonly conflictedFileName: string;
-  readonly hasMissingSourceFile: boolean;
-  readonly missingFileName: string;
+  readonly diskBanner: DiskBanner | null;
   readonly isEditingMarkdown: boolean;
   readonly canOverwriteDiskConflict: boolean;
   readonly isSavingSourceFile: boolean;

@@ -13,6 +13,7 @@
 
 import { isRemoteSession, getServerHostname, getServerPort } from "./remote";
 import { getRepoInfo } from "./repo";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 import type { Origin } from "@plannotator/shared/agents";
 import {
   handleImage,
@@ -58,7 +59,7 @@ import { AI_QUERY_ENDPOINT, createAIRuntime } from "./ai-runtime";
 import type { AIEndpoints } from "@plannotator/ai";
 import { createHtmlAssetRegistry } from "./html-assets";
 import { createBunAgentTerminalBridge } from "./agent-terminal";
-import { FeedbackRequestSchema } from "./review-request-schemas";
+import { decodeAnnotateFeedbackRequest } from "@plannotator/shared/feedback-request";
 import {
   isAgentTerminalWsRoute,
   supportsAnnotateAgentTerminalMode,
@@ -459,7 +460,11 @@ export async function startAnnotateServer(
     if (url.pathname !== "/api/config" || req.method !== "POST") return null;
 
     try {
-      const patch = Schema.decodeUnknownSync(ConfigPatch)(await req.json());
+      const parsedBody = await readJsonBody(req);
+
+      if (!parsedBody.ok) return malformedJsonBody();
+
+      const patch = Schema.decodeUnknownSync(ConfigPatch)(parsedBody.value);
 
       if (Object.keys(patch).length > 0) saveConfig(patch);
 
@@ -512,8 +517,12 @@ export async function startAnnotateServer(
   const handleSourceSaveRoute: AnnotateRouteHandler = async (req, url) => {
     if (url.pathname !== "/api/source/save" || req.method !== "POST") return null;
 
+    const parsedBody = await readJsonBody(req);
+
+    if (!parsedBody.ok) return malformedJsonBody();
+
     const body = Option.getOrUndefined(
-      Schema.decodeUnknownOption(SourceSaveRequestSchema)(await req.json()),
+      Schema.decodeUnknownOption(SourceSaveRequestSchema)(parsedBody.value),
     );
 
     if (!body) {
@@ -665,11 +674,13 @@ export async function startAnnotateServer(
     if (url.pathname !== "/api/feedback" || req.method !== "POST") return null;
 
     try {
-      const rawBody = await req.json();
+      const parsedBody = await readJsonBody(req);
 
-      const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(FeedbackRequestSchema)(rawBody),
-      );
+      if (!parsedBody.ok) return malformedJsonBody();
+
+      const rawBody = parsedBody.value;
+
+      const body = decodeAnnotateFeedbackRequest(rawBody);
 
       if (!body) {
         return Response.json({ error: "Invalid request" }, { status: 400 });

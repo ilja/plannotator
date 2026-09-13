@@ -362,7 +362,7 @@ export class WorkspaceReviewSession implements WorkspaceReviewState {
             diffType: repoDiffType,
             rawPatch: prefixWorkspacePatchPaths(diff.patch, repo.label),
             gitRef: diff.label,
-            error: diff.error,
+            error: "error" in diff ? diff.error : undefined,
           };
         } catch (error) {
           return {

@@ -23,7 +23,6 @@ const workspaceStatus = {
     },
   },
   totals: { files: 1, additions: 3, deletions: 1 },
-  error: "",
 } satisfies WorkspaceStatusPayload;
 
 describe("decodeFileBrowserSuccessResponse", () => {
@@ -166,6 +165,36 @@ describe("decodeFileBrowserSuccessResponse", () => {
       }),
     ).toEqual({
       tree: [{ name: "plan.md", path: "plan.md", type: "file" }],
+    });
+  });
+
+  test("drops a workspace status that mixes availability with an error", () => {
+    expect(
+      decodeFileBrowserSuccessResponse({
+        tree: [],
+        workspaceStatus: { ...workspaceStatus, error: "stale" },
+      }),
+    ).toEqual({ tree: [] });
+    expect(
+      decodeFileBrowserSuccessResponse({
+        tree: [],
+        workspaceStatus: {
+          available: false,
+          rootPath: "/workspace",
+          files: {},
+          totals: { files: 0, additions: 0, deletions: 0 },
+          error: "not-a-git-repo",
+        },
+      }),
+    ).toEqual({
+      tree: [],
+      workspaceStatus: {
+        available: false,
+        rootPath: "/workspace",
+        files: {},
+        totals: { files: 0, additions: 0, deletions: 0 },
+        error: "not-a-git-repo",
+      },
     });
   });
 });

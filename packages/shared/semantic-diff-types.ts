@@ -141,15 +141,24 @@ export const decodeSemanticDiffResponse = flow(
   retainValidSemanticDiffEntries,
 );
 
-export interface SemanticDiffAvailability {
+export type SemanticDiffAvailability =
+  | {
+      available: true;
+      reason?: never;
+      message?: never;
+      semVersion?: string;
+      semSource?: string;
+    }
+  | {
+      available: false;
+      reason: string;
+      message: string;
+      semVersion?: never;
+      semSource?: never;
+    };
+
+export interface SemanticDiffAdvert {
   available: boolean;
-  reason?: string;
-  message?: string;
   semVersion?: string;
   semSource?: string;
 }
-
-export type SemanticDiffAdvert = Pick<
-  SemanticDiffAvailability,
-  "available" | "semVersion" | "semSource"
->;

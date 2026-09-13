@@ -175,6 +175,17 @@ describe("annotate server: /api/save-notes wiring", () => {
       expect(malformed.status).toBe(400);
       expect(await malformed.json()).toEqual({ error: "Invalid request" });
 
+      for (const body of [{}, { draftGeneration: 1 }, { approved: false, feedback: "no" }]) {
+        const rejected = await fetch(`${server.url}/api/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        expect(rejected.status).toBe(400);
+        expect(await rejected.json()).toEqual({ error: "Invalid request" });
+      }
+
       const validAnnotations = [null, { type: "unknown", value: "preserved" }];
 
       const valid = await fetch(`${server.url}/api/feedback`, {

@@ -68,7 +68,7 @@ describe("editor annotation handler", () => {
     const handler = createEditorAnnotationHandler();
     const invalidJson = await handlePost(handler, "{invalid-json");
     expect(invalidJson.status).toBe(400);
-    expect(await responseJson(invalidJson)).toEqual({ error: "Invalid JSON" });
+    expect(await responseJson(invalidJson)).toEqual({ error: "Malformed JSON body" });
 
     for (const body of [
       {},

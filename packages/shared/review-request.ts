@@ -1,14 +1,9 @@
-/**
- * Bun review request-boundary schemas.
- *
- * Mirrors the verified Effect v4 forms from
- * `apps/pi-extension/server/request-schemas.ts` — do not import that
- * app-local module from this package; the dependency direction forbids it.
- * Each schema owns the wire representation of one endpoint request body;
- * handlers decode with them instead of narrowing parsed JSON manually.
- */
-
 import { Schema } from "effect";
+
+/**
+ * HTTP request-boundary schemas shared by the Bun and Node review servers
+ * (Node consumes them via the `generated/` vendor copy).
+ */
 
 /** DiffType wire union used by review payloads. */
 export const DiffTypeSchema = Schema.Union([
@@ -49,7 +44,6 @@ export const PrSwitchRequestSchema = Schema.Struct({
   url: Schema.NonEmptyString,
 });
 
-/** Single PR review file comment — mirrors `PRReviewFileComment` fields. */
 const PRReviewFileCommentSchema = Schema.Struct({
   path: Schema.String,
   line: Schema.Number,
@@ -59,22 +53,11 @@ const PRReviewFileCommentSchema = Schema.Struct({
   start_side: Schema.optionalKey(Schema.Literals(["LEFT", "RIGHT"])),
 });
 
-/** PR review submission request — fileComments is required on Bun. */
 export const PrActionRequestSchema = Schema.Struct({
   action: Schema.Literals(["approve", "comment"]),
   body: Schema.String,
-  fileComments: Schema.Array(PRReviewFileCommentSchema),
+  fileComments: Schema.optionalKey(Schema.Array(PRReviewFileCommentSchema)),
   targetPrUrl: Schema.optionalKey(Schema.String),
-});
-
-/** Feedback request (review server). */
-export const FeedbackRequestSchema = Schema.Struct({
-  feedback: Schema.optionalKey(Schema.String),
-  annotations: Schema.optionalKey(Schema.Array(Schema.Unknown)),
-  approved: Schema.optionalKey(Schema.Boolean),
-  selectedMessageId: Schema.optionalKey(Schema.String),
-  feedbackScope: Schema.optionalKey(Schema.Literals(["message", "messages"])),
-  draftGeneration: Schema.optionalKey(Schema.Natural),
 });
 
 /** Viewed-file synchronization request. */
@@ -88,3 +71,20 @@ export const GitAddRequestSchema = Schema.Struct({
   filePath: Schema.NonEmptyString,
   undo: Schema.optionalKey(Schema.Boolean),
 });
+
+/** Editor annotation request from a VS Code integration. */
+export const EditorAnnotationRequestSchema = Schema.Struct({
+  filePath: Schema.String,
+  selectedText: Schema.String,
+  lineStart: Schema.Number,
+  lineEnd: Schema.Number,
+});
+
+/** `base` is null when the client has no base directory. */
+export const OpenInRequestSchema = Schema.Struct({
+  filePath: Schema.NonEmptyString,
+  appId: Schema.optionalKey(Schema.String),
+  base: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+
+export type OpenInRequest = Schema.Schema.Type<typeof OpenInRequestSchema>;

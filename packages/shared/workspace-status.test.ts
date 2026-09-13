@@ -332,4 +332,16 @@ describe("workspace status", () => {
     expect(retried.available).toBe(true);
     expect(retried.totals.files).toBe(0);
   });
+
+  test("unavailable statuses carry an error and empty aggregates", async () => {
+    const repo = tempRepo();
+    const status = await getWorkspaceStatusForDirectory(join(repo, "missing"));
+
+    expect(status.available).toBe(false);
+
+    if (!status.available) expect(status.error).toBe("invalid-directory");
+    expect(status.files).toEqual({});
+    expect(status.totals).toEqual({ files: 0, additions: 0, deletions: 0 });
+    expect("error" in (await getWorkspaceStatusForDirectory(repo))).toBe(false);
+  });
 });

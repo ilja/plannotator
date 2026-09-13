@@ -53,12 +53,11 @@ import {
   readDraftGenerationFromUrl,
   handleUploadRequest,
 } from "./handlers.js";
-import { html, json, parseBody, parseStrictBody, requestUrl, toWebRequest } from "./helpers.js";
+import { html, json, parseBody, requestUrl } from "./helpers.js";
+import { CodeNavRequestSchema } from "./request-schemas.js";
 import {
-  CodeNavRequestSchema,
   DiffSwitchRequestSchema,
   DiffTypeSchema,
-  decodeFeedbackRequest,
   GitAddRequestSchema,
   OpenInRequestSchema,
   PrActionRequestSchema,
@@ -66,7 +65,8 @@ import {
   PrSwitchRequestSchema,
   PrViewedRequestSchema,
   WorkspaceDiffTypeSchema,
-} from "./request-schemas.js";
+} from "../generated/review-request.js";
+import { decodeReviewFeedbackRequest } from "../generated/feedback-request.js";
 import { createPiAIRuntime, handlePiAIRequest } from "./ai-runtime.js";
 
 import { isRemoteSession, listenOnPort } from "./network.js";
@@ -187,6 +187,31 @@ export interface ReviewServerResult {
     exit?: boolean;
   }>;
   stop: () => void;
+}
+
+async function parsePrSwitchBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<Schema.Schema.Type<typeof PrSwitchRequestSchema> | null> {
+  const parsedBody = await parseBody(req);
+
+  if (!parsedBody.ok) {
+    json(res, { error: "Malformed JSON body" }, 400);
+
+    return null;
+  }
+
+  const body = Option.getOrUndefined(
+    Schema.decodeUnknownOption(PrSwitchRequestSchema)(parsedBody.value),
+  );
+
+  if (!body) {
+    json(res, { error: "Missing PR URL" }, 400);
+
+    return null;
+  }
+
+  return body;
 }
 
 export async function startReviewServer(options: {
@@ -719,8 +744,16 @@ export async function startReviewServer(options: {
     if (!(url.pathname === "/api/open-in" && req.method === "POST")) return false;
 
     try {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(OpenInRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(OpenInRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -815,8 +848,16 @@ export async function startReviewServer(options: {
     }
 
     try {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(DiffSwitchRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(DiffSwitchRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -890,7 +931,7 @@ export async function startReviewServer(options: {
       currentDiffType = gitDiffType;
       currentBase = base;
       baseEverSwitched = true;
-      currentError = result.error;
+      currentError = "error" in result ? result.error : undefined;
       captureDiffFingerprint();
 
       // Recompute gitContext for the effective cwd so the client's
@@ -944,8 +985,16 @@ export async function startReviewServer(options: {
     }
 
     try {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrDiffScopeRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(PrDiffScopeRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -1008,7 +1057,7 @@ export async function startReviewServer(options: {
             const result = await runPRLayerLocalDiff(reviewRuntime, upgradeMeta, upgradeCwd);
 
             if (prMeta === upgradeMeta) {
-              if (!result.error) {
+              if (!("error" in result)) {
                 originalPRPatch = result.patch;
                 originalPRError = undefined;
                 layerPatchIncomplete = false;
@@ -1070,7 +1119,7 @@ export async function startReviewServer(options: {
 
         const result = await runPRFullStackDiff(reviewRuntime, scopePrMetadata, fullStackCwd);
 
-        if (result.error) {
+        if ("error" in result && result.error !== undefined) {
           json(res, { error: result.error }, 400);
 
           return;
@@ -1112,11 +1161,9 @@ export async function startReviewServer(options: {
     }
 
     try {
-      const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrSwitchRequestSchema)(await parseBody(req)),
-      );
+      const body = await parsePrSwitchBody(req, res);
 
-      if (!body) return json(res, { error: "Missing PR URL" }, 400);
+      if (!body) return;
       const switchRequest = body;
       const newRef = parsePRUrl(switchRequest.url);
 
@@ -1321,8 +1368,16 @@ export async function startReviewServer(options: {
     }
 
     try {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrActionRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(PrActionRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -1391,8 +1446,16 @@ export async function startReviewServer(options: {
     }
 
     try {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrViewedRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(PrViewedRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -1600,8 +1663,16 @@ export async function startReviewServer(options: {
     }
 
     try {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(CodeNavRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(CodeNavRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -1676,8 +1747,16 @@ export async function startReviewServer(options: {
     if (!(url.pathname === "/api/git-add" && req.method === "POST")) return false;
 
     try {
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
       const body = Option.getOrUndefined(
-        Schema.decodeUnknownOption(GitAddRequestSchema)(await parseBody(req)),
+        Schema.decodeUnknownOption(GitAddRequestSchema)(parsedBody.value),
       );
 
       if (!body) {
@@ -1747,7 +1826,15 @@ export async function startReviewServer(options: {
     if (!(url.pathname === "/api/config" && req.method === "POST")) return false;
 
     try {
-      const body = Schema.decodeUnknownSync(ConfigPatch)(await parseStrictBody(req));
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
+      const body = Schema.decodeUnknownSync(ConfigPatch)(parsedBody.value);
 
       if (Object.keys(body).length > 0) saveConfig(body);
       json(res, { ok: true });
@@ -1843,7 +1930,15 @@ export async function startReviewServer(options: {
     if (!(url.pathname === "/api/feedback" && req.method === "POST")) return false;
 
     try {
-      const request = decodeFeedbackRequest(await toWebRequest(req).json());
+      const parsedBody = await parseBody(req);
+
+      if (!parsedBody.ok) {
+        json(res, { error: "Malformed JSON body" }, 400);
+
+        return;
+      }
+
+      const request = decodeReviewFeedbackRequest(parsedBody.value);
 
       if (!request) {
         json(res, { error: "Invalid request" }, 400);

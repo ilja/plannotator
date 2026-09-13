@@ -7,6 +7,7 @@
  */
 
 import { Option, Schema } from "effect";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 import type { EditorAnnotation } from "@plannotator/shared/types";
 
 export type { EditorAnnotation };
@@ -41,7 +42,11 @@ export function createEditorAnnotationHandler(): EditorAnnotationHandler {
       // POST /api/editor-annotation — add one
       if (url.pathname === "/api/editor-annotation" && req.method === "POST") {
         try {
-          const body = await req.json();
+          const parsedBody = await readJsonBody(req);
+
+          if (!parsedBody.ok) return malformedJsonBody();
+
+          const body = parsedBody.value;
           const decoded = Option.getOrUndefined(decodeEditorAnnotationRequest(body));
 
           if (

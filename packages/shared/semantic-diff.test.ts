@@ -70,10 +70,14 @@ describe("semantic diff runner", () => {
 
   test("reports unavailable when sem cannot be resolved", async () => {
     const runtime = makeRuntime();
-    await expect(getSemanticDiffAvailability(runtime)).resolves.toMatchObject({
+    const availability = await getSemanticDiffAvailability(runtime);
+
+    await expect(availability).toMatchObject({
       available: false,
       reason: "sem-not-found",
     });
+    expect("semVersion" in availability).toBe(false);
+    expect("semSource" in availability).toBe(false);
   });
 
   test("validates PLANNOTATOR_SEM_PATH before using it", async () => {
@@ -256,11 +260,15 @@ describe("semantic diff runner", () => {
       },
     });
 
-    await expect(getSemanticDiffAvailability(runtime)).resolves.toMatchObject({
+    const availability = await getSemanticDiffAvailability(runtime);
+
+    await expect(availability).toMatchObject({
       available: true,
       semVersion: "0.8.0",
       semSource: "managed",
     });
+    expect("reason" in availability).toBe(false);
+    expect("message" in availability).toBe(false);
     expect(runtime.calls[0].command).toBe(managed);
   });
 

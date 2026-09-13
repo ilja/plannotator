@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { Option, Schema } from "effect";
-import { EditorAnnotationRequestSchema } from "./request-schemas.js";
+import { EditorAnnotationRequestSchema } from "../generated/review-request.js";
 import { json, parseBody } from "./helpers";
 
 interface EditorAnnotation {
@@ -42,7 +42,15 @@ export function createEditorAnnotationHandler() {
 
       if (url.pathname === "/api/editor-annotation" && req.method === "POST") {
         try {
-          const body = await parseBody(req);
+          const parsedBody = await parseBody(req);
+
+          if (!parsedBody.ok) {
+            json(res, { error: "Malformed JSON body" }, 400);
+
+            return true;
+          }
+
+          const body = parsedBody.value;
           const decoded = Option.getOrUndefined(decodeEditorAnnotationRequest(body));
 
           if (

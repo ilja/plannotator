@@ -79,11 +79,20 @@ export interface GitContext {
   recentCommits?: RecentCommit[];
 }
 
-export interface DiffResult {
+/** Empty `patch` is a valid result (clean tree), not a failure. */
+export interface SuccessfulDiffResult {
   patch: string;
   label: string;
-  error?: string;
+  error?: never;
 }
+
+export interface FailedDiffResult {
+  patch: "";
+  label: string;
+  error: string;
+}
+
+export type DiffResult = SuccessfulDiffResult | FailedDiffResult;
 
 export interface GitCommandResult {
   stdout: string;
@@ -460,6 +469,9 @@ export function parseWorktreeDiffType(diffType: string): { path: string; subType
   if (!diffType.startsWith("worktree:")) return null;
 
   const rest = diffType.slice("worktree:".length);
+
+  if (rest === "") return null;
+
   const lastColon = rest.lastIndexOf(":");
 
   if (lastColon !== -1) {
@@ -891,8 +903,7 @@ export async function getFileContentsForDiff(
 ): Promise<{ oldContent: string | null; newContent: string | null }> {
   const oldFilePath = oldPath || filePath;
 
-  // SAFETY: DiffType is a string union; widening to string for worktree prefix check is intentional
-  let effectiveDiffType = diffType as string;
+  let effectiveDiffType: string = diffType;
 
   if (diffType.startsWith("worktree:")) {
     const parsed = parseWorktreeDiffType(diffType);

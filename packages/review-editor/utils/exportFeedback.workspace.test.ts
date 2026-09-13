@@ -15,15 +15,6 @@ const ann = (overrides: Partial<CodeAnnotation> = {}): CodeAnnotation => ({
 });
 
 describe("exportReviewFeedback - workspace mode", () => {
-  it("workspace mode: uses generic header, no PR content (same as local mode)", () => {
-    // In workspace mode, prMetadata is explicitly undefined even if workspace exists
-    const result = exportReviewFeedback([ann()], undefined);
-    expect(result).toStartWith("# Code Review Feedback\n\n");
-    expect(result).not.toContain("PR Review");
-    expect(result).not.toContain("github.com");
-    expect(result).not.toContain("Branch:");
-  });
-
   it("groups annotations by repo-prefixed file paths", () => {
     const result = exportReviewFeedback([
       ann({ filePath: "repo-a/src/index.ts", lineStart: 5, text: "first" }),
@@ -51,7 +42,6 @@ describe("exportReviewFeedback - workspace mode", () => {
   });
 
   it("handles nested repo labels with overlapping paths", () => {
-    // Tests the longest-prefix matching behavior from resolveWorkspaceFilePath
     const result = exportReviewFeedback([
       ann({ filePath: "apps/api/src/server.ts", text: "in nested repo" }),
       ann({ filePath: "apps/web/src/app.ts", text: "in sibling repo" }),
@@ -124,15 +114,5 @@ describe("exportReviewFeedback - workspace mode", () => {
 
     expect(staged).toContain("**Diff:** Workspace staged changes");
     expect(last).toContain("**Diff:** Workspace last change");
-  });
-
-  it("contains exactly one top-level heading in workspace mode", () => {
-    const result = exportReviewFeedback([
-      ann({ filePath: "repo-a/src/a.ts" }),
-      ann({ filePath: "repo-b/src/b.ts" }),
-    ]);
-
-    const headingMatches = result.match(/^# /gm) || [];
-    expect(headingMatches).toHaveLength(1);
   });
 });

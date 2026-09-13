@@ -6,6 +6,10 @@ const AIChatSessionSchema = Schema.Struct({
   sessionId: Schema.String,
 });
 
+/**
+ * Transport error shape. `code` is absent: decoding a strict code union
+ * would drop the message when the server adds a future code.
+ */
 const AIChatErrorSchema = Schema.Struct({
   error: Schema.String,
 });
@@ -25,6 +29,7 @@ const AIChatStreamMessageSchema = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("result"),
+    success: Schema.Literal(true),
     result: Schema.optionalKey(Schema.String),
   }),
   Schema.Struct({
@@ -57,4 +62,13 @@ export function decodeAIChatSessionId<Input>(value: Input): string | null {
 
 export function decodeAIChatStreamMessage<Input>(value: Input): AIChatStreamMessage | null {
   return Option.getOrNull(decodeMessage(value));
+}
+
+const decodePayloadType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
+
+/** True for undecodable `result` payloads; other undecodable traffic returns false. */
+export function isMalformedResultPayload<Input>(value: Input): boolean {
+  if (decodeAIChatStreamMessage(value) !== null) return false;
+
+  return Option.getOrUndefined(decodePayloadType(value))?.type === "result";
 }

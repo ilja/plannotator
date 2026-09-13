@@ -10,6 +10,11 @@ export interface AppScreenSourceDocument {
   readonly key: string;
 }
 
+/** Conflict takes precedence when both signals are present. */
+export type DiskBanner =
+  | { readonly kind: "conflict"; readonly fileName: string }
+  | { readonly kind: "missing"; readonly fileName: string };
+
 /** Immutable App state required to derive screen-level display values. */
 export interface BuildAppScreenPresentationInput {
   readonly activeSourceDocument: AppScreenSourceDocument | null;
@@ -36,10 +41,7 @@ export interface BuildAppScreenPresentationInput {
 /** Read-only screen values grouped by their unchanged EditorAppScreen section. */
 export interface AppScreenPresentation {
   readonly banners: {
-    readonly hasDiskConflict: boolean;
-    readonly conflictedFileName: string;
-    readonly hasMissingSourceFile: boolean;
-    readonly missingFileName: string;
+    readonly diskBanner: DiskBanner | null;
   };
   readonly document: {
     readonly activeSourceSaveFileName: string | null;
@@ -91,14 +93,16 @@ export function buildAppScreenPresentation(
   input: BuildAppScreenPresentationInput,
 ): AppScreenPresentation {
   const activeDocument = input.activeSourceDocument;
-  const hasDiskConflict = Boolean(activeDocument?.diskConflict);
+
+  const diskBanner: DiskBanner | null = activeDocument?.diskConflict
+    ? { kind: "conflict", fileName: activeDocument.basename }
+    : activeDocument?.missingOnDisk === true
+      ? { kind: "missing", fileName: activeDocument.basename }
+      : null;
 
   return {
     banners: {
-      hasDiskConflict,
-      conflictedFileName: activeDocument?.basename ?? "",
-      hasMissingSourceFile: activeDocument?.missingOnDisk === true && !hasDiskConflict,
-      missingFileName: activeDocument?.basename ?? "",
+      diskBanner,
     },
     document: {
       activeSourceSaveFileName: input.activeSourceSave?.basename ?? null,

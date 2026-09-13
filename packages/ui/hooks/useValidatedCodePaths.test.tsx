@@ -23,7 +23,8 @@ function HookHarness({
   initialMarkdown?: string;
 }): React.JSX.Element {
   const [markdown, setMarkdown] = useState(initialMarkdown);
-  const { validated, ready } = useValidatedCodePaths(markdown);
+  const validation = useValidatedCodePaths(markdown);
+  const validated = validation.status === "ready" ? validation.validated : undefined;
 
   return (
     <div>
@@ -38,10 +39,10 @@ function HookHarness({
         Switch
       </button>
       <output
-        data-ready={String(ready)}
-        data-keys={[...validated.keys()].join("|")}
-        data-status={validated.get("src/example.ts")?.status ?? ""}
-        data-other-status={validated.get("src/other.ts")?.status ?? ""}
+        data-ready={String(validation.status === "ready")}
+        data-keys={validated ? [...validated.keys()].join("|") : ""}
+        data-status={validated?.get("src/example.ts")?.status ?? ""}
+        data-other-status={validated?.get("src/other.ts")?.status ?? ""}
       />
     </div>
   );

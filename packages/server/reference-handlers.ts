@@ -18,6 +18,7 @@ import {
 } from "@plannotator/shared/workspace-status";
 import { parseCodePath } from "@plannotator/shared/code-file";
 import { detectObsidianVaults } from "./integrations";
+import { malformedJsonBody, readJsonBody } from "./request-body";
 import {
   isAbsoluteUserPath,
   isCodeFilePath,
@@ -541,11 +542,11 @@ export async function handleDocExists(
 ): Promise<Response> {
   let body: unknown;
 
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const parsedBody = await readJsonBody(req);
+
+  if (!parsedBody.ok) return malformedJsonBody();
+
+  body = parsedBody.value;
 
   const parsed = Schema.decodeUnknownOption(DocExistsRequestSchema)(body);
 

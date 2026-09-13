@@ -2,7 +2,7 @@ import { Option, Schema } from "effect";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { DiffType } from "./server.js";
 import { getRecentAssistantMessages } from "./assistant-message.js";
-import { DiffTypeSchema } from "./server/request-schemas.js";
+import { DiffTypeSchema } from "./generated/review-request.js";
 import {
   getLastAssistantMessageText,
   getStartupErrorMessage,

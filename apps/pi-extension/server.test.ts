@@ -382,6 +382,18 @@ describe("pi annotate server", () => {
 
       const updated = await fetch(`${server.url}/api/draft`);
       expect(await updated.json()).toEqual({ annotations: [{ id: "updated" }] });
+
+      const unparseable = await fetch(`${server.url}/api/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not-json{",
+      });
+
+      expect(unparseable.status).toBe(400);
+      expect(await unparseable.json()).toEqual({ error: "Malformed JSON body" });
+
+      const preserved = await fetch(`${server.url}/api/draft`);
+      expect(await preserved.json()).toEqual({ annotations: [{ id: "updated" }] });
     } finally {
       server.stop();
     }
@@ -461,6 +473,17 @@ describe("pi annotate server", () => {
 
       expect(malformed.status).toBe(400);
       expect(await malformed.json()).toEqual({ error: "Invalid request" });
+
+      for (const body of [{}, { draftGeneration: 3 }, { approved: true, feedback: "LGTM" }]) {
+        const rejected = await fetch(`${server.url}/api/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        expect(rejected.status).toBe(400);
+        expect(await rejected.json()).toEqual({ error: "Invalid request" });
+      }
 
       const valid = await fetch(`${server.url}/api/feedback`, {
         method: "POST",
@@ -1040,6 +1063,16 @@ describe("pi review server", () => {
       });
 
       expect(invalidReviewFeedback.status).toBe(400);
+
+      for (const body of [{}, { draftGeneration: 5 }, { approved: false }]) {
+        const empty = await fetch(`${server.url}/api/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        expect(empty.status).toBe(400);
+      }
 
       const feedbackResponse = await fetch(`${server.url}/api/feedback`, {
         method: "POST",

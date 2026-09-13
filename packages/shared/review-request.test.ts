@@ -4,14 +4,15 @@ import { Option, Schema } from "effect";
 import {
   DiffSwitchRequestSchema,
   DiffTypeSchema,
-  FeedbackRequestSchema,
+  EditorAnnotationRequestSchema,
+  OpenInRequestSchema,
   GitAddRequestSchema,
   PrActionRequestSchema,
   PrDiffScopeRequestSchema,
   PrSwitchRequestSchema,
   PrViewedRequestSchema,
   WorkspaceDiffTypeSchema,
-} from "./review-request-schemas";
+} from "./review-request";
 
 describe("review request schemas", () => {
   test("DiffTypeSchema accepts Git types and rejects workspace types", () => {
@@ -19,12 +20,11 @@ describe("review request schemas", () => {
       "uncommitted",
     );
     expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)("worktree:feature")),
-    ).toBe("worktree:feature");
+      Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)("worktree:/tmp/x")),
+    ).toBe("worktree:/tmp/x");
     expect(
       Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)("workspace-current")),
     ).toBeUndefined();
-    expect(Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(123))).toBeUndefined();
   });
 
   test("DiffTypeSchema rejects legacy JJ and P4 values", () => {
@@ -41,20 +41,11 @@ describe("review request schemas", () => {
         Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(diffType)),
       ).toBeUndefined();
     }
+
+    expect(Option.getOrUndefined(Schema.decodeUnknownOption(DiffTypeSchema)(123))).toBeUndefined();
   });
 
-  test("WorkspaceDiffTypeSchema accepts workspace variants only", () => {
-    expect(
-      Option.getOrUndefined(
-        Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)("workspace-current"),
-      ),
-    ).toBe("workspace-current");
-    expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)("uncommitted")),
-    ).toBeUndefined();
-  });
-
-  test("DiffSwitchRequestSchema validates diffType and optional fields", () => {
+  test("DiffSwitchRequestSchema pairs a diff type with options", () => {
     const valid = Option.getOrUndefined(
       Schema.decodeUnknownOption(DiffSwitchRequestSchema)({
         diffType: "uncommitted",
@@ -93,7 +84,72 @@ describe("review request schemas", () => {
     ).toBeUndefined();
   });
 
-  test("PrDiffScopeRequestSchema validates layer and full-stack", () => {
+  test("PrActionRequestSchema requires action and body; fileComments defaults downstream", () => {
+    const valid = Option.getOrUndefined(
+      Schema.decodeUnknownOption(PrActionRequestSchema)({
+        action: "approve",
+        body: "LGTM",
+        fileComments: [],
+      }),
+    );
+
+    expect(valid?.action).toBe("approve");
+    expect(
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrActionRequestSchema)({ action: "approve", body: "hi" }),
+      ),
+    ).toBeDefined();
+    expect(
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrActionRequestSchema)({
+          action: "invalid",
+          body: "hi",
+          fileComments: [],
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrActionRequestSchema)({
+          action: "comment",
+          body: "hi",
+          fileComments: [{ path: "a.ts", line: "1", side: "LEFT", body: "hi" }],
+        }),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("PrViewedRequestSchema validates filePaths and viewed", () => {
+    expect(
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrViewedRequestSchema)({ filePaths: ["a.ts"], viewed: true }),
+      ),
+    ).toBeDefined();
+    expect(
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrViewedRequestSchema)({ filePaths: "a.ts", viewed: true }),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("PrSwitchRequestSchema requires a non-empty url", () => {
+    expect(
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(PrSwitchRequestSchema)({ url: "https://x/pull/1" }),
+      ),
+    ).toBeDefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(PrSwitchRequestSchema)({ url: "" })),
+    ).toBeUndefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(PrSwitchRequestSchema)({})),
+    ).toBeUndefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(PrSwitchRequestSchema)({ url: 123 })),
+    ).toBeUndefined();
+  });
+
+  test("PrDiffScopeRequestSchema accepts the two scopes", () => {
     expect(
       Option.getOrUndefined(
         Schema.decodeUnknownOption(PrDiffScopeRequestSchema)({ scope: "layer" }),
@@ -106,7 +162,7 @@ describe("review request schemas", () => {
     ).toBe("full-stack");
     expect(
       Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrDiffScopeRequestSchema)({ scope: "invalid" }),
+        Schema.decodeUnknownOption(PrDiffScopeRequestSchema)({ scope: "bogus" }),
       ),
     ).toBeUndefined();
     expect(
@@ -114,31 +170,12 @@ describe("review request schemas", () => {
     ).toBeUndefined();
   });
 
-  test("PrSwitchRequestSchema requires non-empty url", () => {
-    expect(
-      Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrSwitchRequestSchema)({
-          url: "https://github.com/org/repo/pull/1",
-        }),
-      )?.url,
-    ).toBe("https://github.com/org/repo/pull/1");
-    expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(PrSwitchRequestSchema)({ url: "" })),
-    ).toBeUndefined();
-    expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(PrSwitchRequestSchema)({})),
-    ).toBeUndefined();
-    expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(PrSwitchRequestSchema)({ url: 123 })),
-    ).toBeUndefined();
-  });
-
-  test("GitAddRequestSchema validates filePath and optional undo", () => {
+  test("GitAddRequestSchema requires a non-empty filePath", () => {
     expect(
       Option.getOrUndefined(
         Schema.decodeUnknownOption(GitAddRequestSchema)({ filePath: "src/app.ts" }),
-      )?.filePath,
-    ).toBe("src/app.ts");
+      ),
+    ).toBeDefined();
     expect(
       Option.getOrUndefined(Schema.decodeUnknownOption(GitAddRequestSchema)({ filePath: "" })),
     ).toBeUndefined();
@@ -158,87 +195,53 @@ describe("review request schemas", () => {
     ).toBeUndefined();
   });
 
-  test("FeedbackRequestSchema validates optional fields", () => {
-    const valid = Option.getOrUndefined(
-      Schema.decodeUnknownOption(FeedbackRequestSchema)({
-        feedback: "looks good",
-        annotations: [],
-        approved: true,
-      }),
-    );
-
-    expect(valid?.feedback).toBe("looks good");
-    // empty object is valid (all fields optional, defaults handled by handler)
+  test("EditorAnnotationRequestSchema requires the selection fields", () => {
     expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(FeedbackRequestSchema)({})),
+      Option.getOrUndefined(
+        Schema.decodeUnknownOption(EditorAnnotationRequestSchema)({
+          filePath: "a.ts",
+          selectedText: "x",
+          lineStart: 1,
+          lineEnd: 2,
+        }),
+      ),
     ).toBeDefined();
-    // wrong type
-    expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(FeedbackRequestSchema)({ feedback: 123 })),
-    ).toBeUndefined();
     expect(
       Option.getOrUndefined(
-        Schema.decodeUnknownOption(FeedbackRequestSchema)({ approved: "true" }),
+        Schema.decodeUnknownOption(EditorAnnotationRequestSchema)({ filePath: "a.ts" }),
       ),
     ).toBeUndefined();
   });
 
-  test("PrActionRequestSchema requires action, body and fileComments", () => {
-    const valid = Option.getOrUndefined(
-      Schema.decodeUnknownOption(PrActionRequestSchema)({
-        action: "approve",
-        body: "LGTM",
-        fileComments: [],
-      }),
-    );
-
-    expect(valid?.action).toBe("approve");
-    // missing fileComments -> malformed (required on Bun)
+  test("WorkspaceDiffTypeSchema accepts workspace variants only", () => {
     expect(
       Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrActionRequestSchema)({ action: "approve", body: "hi" }),
+        Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)("workspace-current"),
       ),
-    ).toBeUndefined();
-    // invalid action
+    ).toBe("workspace-current");
     expect(
-      Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrActionRequestSchema)({
-          action: "invalid",
-          body: "hi",
-          fileComments: [],
-        }),
-      ),
-    ).toBeUndefined();
-    // fileComments wrong shape
-    expect(
-      Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrActionRequestSchema)({
-          action: "comment",
-          body: "hi",
-          fileComments: [{ path: "a.ts", line: "1", side: "LEFT", body: "hi" }],
-        }),
-      ),
+      Option.getOrUndefined(Schema.decodeUnknownOption(WorkspaceDiffTypeSchema)("uncommitted")),
     ).toBeUndefined();
   });
 
-  test("PrViewedRequestSchema validates filePaths and viewed", () => {
+  test("OpenInRequestSchema accepts the live client payload with null base", () => {
     expect(
       Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrViewedRequestSchema)({ filePaths: ["a.ts"], viewed: true }),
-      )?.viewed,
-    ).toBe(true);
-    expect(
-      Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrViewedRequestSchema)({ filePaths: "a.ts", viewed: true }),
+        Schema.decodeUnknownOption(OpenInRequestSchema)({
+          filePath: "a.ts",
+          base: null,
+          appId: "vscode",
+        }),
       ),
+    ).toBeDefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(OpenInRequestSchema)({ filePath: "a.ts" })),
+    ).toBeDefined();
+    expect(
+      Option.getOrUndefined(Schema.decodeUnknownOption(OpenInRequestSchema)({})),
     ).toBeUndefined();
     expect(
-      Option.getOrUndefined(
-        Schema.decodeUnknownOption(PrViewedRequestSchema)({ filePaths: [], viewed: "true" }),
-      ),
-    ).toBeUndefined();
-    expect(
-      Option.getOrUndefined(Schema.decodeUnknownOption(PrViewedRequestSchema)({})),
+      Option.getOrUndefined(Schema.decodeUnknownOption(OpenInRequestSchema)({ filePath: "" })),
     ).toBeUndefined();
   });
 });

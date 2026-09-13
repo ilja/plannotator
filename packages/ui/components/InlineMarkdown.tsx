@@ -36,7 +36,7 @@ function gateCodePath(
   | { render: "link"; resolved?: string }
   | { render: "ambiguous-link"; matches: string[] }
   | { render: "plain" } {
-  if (!validation || !validation.ready) return { render: "link" };
+  if (!validation || validation.status !== "ready") return { render: "link" };
   const entry = validation.validated.get(candidate);
 
   // If the validator is ready but has no entry for this candidate, the

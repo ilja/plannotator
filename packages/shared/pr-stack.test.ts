@@ -105,7 +105,10 @@ describe("runPRFullStackDiff", () => {
 
     expect(diff.patch).toBe("");
     expect(diff.label).toBe("Full stack diff unavailable");
-    expect(diff.error).toContain("Could not find origin/main or local main");
+    expect(diff).toMatchObject({
+      patch: "",
+      error: expect.stringContaining("Could not find origin/main or local main"),
+    });
   });
 });
 
@@ -178,7 +181,7 @@ describe("runPRLayerLocalDiff", () => {
     const { runtime, calls } = layerRuntime({});
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
-    expect(diff.error).toBeUndefined();
+    expect("error" in diff).toBe(false);
     expect(diff.patch).toBe("diff --git a/x.ts b/x.ts\n");
     expect(calls.at(-1)).toEqual([
       "diff",
@@ -201,7 +204,7 @@ describe("runPRLayerLocalDiff", () => {
 
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
-    expect(diff.error).toBeUndefined();
+    expect("error" in diff).toBe(false);
     expect(calls.some((c) => c[0] === "fetch" && c.at(-1) === MERGE_BASE)).toBe(true);
     expect(calls.at(-1)?.slice(-2)).toEqual([MERGE_BASE, HEAD]);
   });
@@ -210,7 +213,7 @@ describe("runPRLayerLocalDiff", () => {
     const { runtime, calls } = layerRuntime({ missingObjects: new Set([MERGE_BASE]) });
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
-    expect(diff.error).toBeUndefined();
+    expect("error" in diff).toBe(false);
     expect(calls.at(-1)?.at(-1)).toBe(`${BASE}...${HEAD}`);
   });
 
@@ -224,7 +227,7 @@ describe("runPRLayerLocalDiff", () => {
     delete noMergeBase.mergeBaseSha;
     const diff = await runPRLayerLocalDiff(runtime, noMergeBase, "/tmp/checkout");
 
-    expect(diff.error).toBeUndefined();
+    expect("error" in diff).toBe(false);
     expect(calls.at(-1)?.at(-1)).toBe(`${BASE}...${HEAD}`);
   });
 
@@ -232,31 +235,34 @@ describe("runPRLayerLocalDiff", () => {
     const { runtime } = layerRuntime({ missingObjects: new Set([HEAD]) });
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
-    expect(diff.patch).toBe("");
-    expect(diff.error).toContain("not available in the local checkout");
+    expect(diff).toMatchObject({
+      patch: "",
+      error: expect.stringContaining("not available in the local checkout"),
+    });
   });
 
   test("errors when neither merge-base nor baseSha resolve locally", async () => {
     const { runtime } = layerRuntime({ missingObjects: new Set([MERGE_BASE, BASE]) });
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
-    expect(diff.patch).toBe("");
-    expect(diff.error).toContain("Could not resolve the PR base commit");
+    expect(diff).toMatchObject({
+      patch: "",
+      error: expect.stringContaining("Could not resolve the PR base commit"),
+    });
   });
 
   test("surfaces git diff failures and never returns a partial patch", async () => {
     const { runtime } = layerRuntime({ diffExitCode: 128, diffStderr: "fatal: bad object\nmore" });
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
-    expect(diff.patch).toBe("");
-    expect(diff.error).toBe("fatal: bad object");
+    expect(diff).toMatchObject({ patch: "", error: "fatal: bad object" });
   });
 
   test("treats an empty recompute as an error (must not blank a working review)", async () => {
     const { runtime } = layerRuntime({ diffStdout: "" });
     const diff = await runPRLayerLocalDiff(runtime, layerMetadata, "/tmp/checkout");
 
-    expect(diff.error).toContain("empty diff");
+    expect(diff).toMatchObject({ patch: "", error: expect.stringContaining("empty diff") });
   });
 
   test("rejects an invalid head SHA without running git", async () => {
@@ -264,7 +270,10 @@ describe("runPRLayerLocalDiff", () => {
     const bad: PRMetadata = { ...layerMetadata, headSha: "HEAD; rm -rf /" };
     const diff = await runPRLayerLocalDiff(runtime, bad, "/tmp/checkout");
 
-    expect(diff.error).toContain("Invalid PR head SHA");
+    expect(diff).toMatchObject({
+      patch: "",
+      error: expect.stringContaining("Invalid PR head SHA"),
+    });
     expect(calls.length).toBe(0);
   });
 });

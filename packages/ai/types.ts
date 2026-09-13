@@ -23,22 +23,38 @@ export interface ParentSession {
   cwd: string;
 }
 
+/** A line range within a file; only allowed alongside `filePath`. */
+export interface CodeReviewLineRange {
+  start: number;
+  end: number;
+  side: "old" | "new";
+}
+
 /**
  * Snapshot of code-review-specific context.
  * Passed when AIContextMode is "code-review".
  */
-export interface CodeReviewContext {
-  /** The unified diff patch. */
-  patch: string;
-  /** The specific file being discussed (if scoped). */
-  filePath?: string;
-  /** The line range being discussed (if scoped). */
-  lineRange?: { start: number; end: number; side: "old" | "new" };
-  /** The code snippet being discussed (if scoped). */
-  selectedCode?: string;
-  /** Summary of annotations the user has made. */
-  annotations?: string;
-}
+export type CodeReviewContext =
+  | {
+      patch: string;
+      filePath?: string;
+      lineRange?: never;
+      selectedCode?: string;
+      annotations?: string;
+    }
+  | {
+      patch: string;
+      /**
+       * The specific file being discussed. HTTP session creation validates
+       * this is non-empty (`isScopedReviewContext` in `ai/endpoints.ts`);
+       * trusted in-process callers must supply a non-empty `filePath` too —
+       * the type itself still permits `""`.
+       */
+      filePath: string;
+      lineRange: CodeReviewLineRange;
+      selectedCode?: string;
+      annotations?: string;
+    };
 
 /**
  * Snapshot of annotate-mode context.
@@ -102,21 +118,31 @@ export interface AIToolUseMessage {
 
 export interface AIToolResultMessage {
   type: "tool_result";
-  toolUseId?: string;
+  toolUseId: string;
   result: string;
 }
+
+export type AIErrorCode =
+  | "session_busy"
+  | "stream_error"
+  | "pi_stream_error"
+  | "pi_process_exit"
+  | "pi_startup_error"
+  | "pi_prompt_rejected"
+  | "provider_error";
 
 export interface AIErrorMessage {
   type: "error";
   error: string;
-  code?: string;
+  code?: AIErrorCode;
 }
 
 export interface AIResultMessage {
   type: "result";
   sessionId: string;
-  success: boolean;
-  /** The final text result (if success). */
+  /** Always true; failures travel as `type: "error"` messages. */
+  success: true;
+  /** Absent when everything already streamed as deltas. */
   result?: string;
   /** Total cost in USD (if available). */
   costUsd?: number;
